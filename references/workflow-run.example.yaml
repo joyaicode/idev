@@ -1,0 +1,26 @@
+schema_version: 1
+workflow_id: dev-selftest
+feature: example-feature
+status: running
+params:
+  mode: selftest
+steps:
+  - id: code-pass
+    kind: deliver.code_pass
+    status: PASS
+    evidence: docs/task/example-feature/review.md
+  - id: plan
+    kind: verify.plan
+    status: BLOCKED
+    evidence: docs/task/example-feature/verify/plan.yaml
+  - id: gate-plan
+    kind: human.gate
+    status: BLOCKED
+  - id: run
+    kind: verify.run
+    status: UNPROVEN
+revisions: []
+feedback:
+  status: pending
+  tags: []
+  note: ""

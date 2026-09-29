@@ -1,0 +1,90 @@
+schema_version: 2
+at: "2026-09-29T23:50:00+08:00"
+feature: "-"
+intent: "再次审查 idev 内核内聚与产线 .idev 扩展在生命周期里是否真被参考。"
+invoke:
+  trigger: "再次审查现存问题和改进建议"
+  matched: "分析论证 / 综合评审导体 → S4 conventions"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+route:
+  module: conventions
+  convention_class: evidence
+  stage: ""
+  risk_tier: P1
+  scenario: S4
+  why: "审查内核与产线扩展的实现是否对上使用说明；不改 goal、不进交付阶段机。"
+rejected:
+  - module: deliver
+    why: "没有当前票要推进"
+  - module: verify
+    why: "不是红绿或 promote"
+  - module: ops
+    why: "没有线上或联调现象"
+thinking:
+  summary: "用户要再审内核内聚和 .idev 阶段参考。这是对导体的分析，走 S4。排除 S8 代码审查和交付推进。用仓解析和预检命令证明扩展在兄弟交付仓上读不到，全量 UI 配方被票挡住。"
+  signals:
+    - "工作区是 idev 内核"
+    - "用户要求再次审查重构后的现存问题"
+    - "P4 已落地 stage-extensions，需验证是否接到真实交付仓"
+  excluded:
+    - "S8 code-review：用户要的是导体审查，不是仓内规范审查"
+    - "S2 推进票：没有点名 feature"
+  uncertainty: "elasticsearch-project 无 .git，未把它算进无 marker 的交付仓"
+  steps:
+    - n: 1
+      do: "对照 scope、stage-extensions、check-feature、agent-brief"
+      so: "列出页的脚本在，消费页的入口不齐"
+    - n: 2
+      do: "从 kafka-project 跑 product_sink 与 stage-extensions code"
+      so: "解析到该仓且 no idev marker"
+    - n: 3
+      do: "在 joypaas 跑 s8-preflight ui-lifecycle-full"
+      so: "BLOCKED 缺 deliver.yaml，exit 2"
+opened:
+  - "SKILL.md"
+  - "references/agent-brief.md"
+  - "conventions/scope.md"
+  - "deliver/SKILL.md"
+  - "verify/SKILL.md"
+  - "ops/SKILL.md"
+  - "scripts/stage-extensions.py"
+  - "scripts/lib/product_sink.py"
+  - "scripts/s8-preflight.sh"
+  - "joypaas/.idev/extensions.yaml"
+  - "joypaas/.idev/workflows/ui-lifecycle-full.yaml"
+calls:
+  - kind: script
+    name: product_sink.py
+    args: "--print-repo cwd=kafka-project"
+    result: "/Users/wangwei794/go/src/coding.jd.com/kafka-project"
+  - kind: script
+    name: stage-extensions.py
+    args: "code --repo kafka-project"
+    result: "OK no idev marker"
+  - kind: script
+    name: s8-preflight.sh
+    args: "kafka-ui-automation ui-lifecycle-full cwd=joypaas"
+    result: "BLOCKED missing deliver.yaml exit 2"
+  - kind: script
+    name: s8-preflight.sh
+    args: "unused localdev-start cwd=joypaas"
+    result: "RESULT OK"
+  - kind: module
+    name: conventions/SKILL.md
+    result: "S4 evidence"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "导体审查归 S4，不走 S8 code-review"
+  - kind: open
+    chose: "stage-extensions 与兄弟仓 marker"
+    why: "要证明生命周期会不会读到产线页"
+stop: ""
+next: "人确认后按审查顺序改扩展根解析与阶段打开闭环"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

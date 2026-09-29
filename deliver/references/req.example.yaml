@@ -1,0 +1,27 @@
+schema_version: 2
+feature: example-change
+revision: 1
+baseline_revision: 1
+accepted: false
+by: ""
+slices:
+  - id: skip-when-disabled
+    baseline_item_id: B1
+    must: "enabled=false → method body executes; no ticket side effect."
+    must_not: "Do not skip when enabled=true."
+    accept_hint: "IT with approval.enabled=false vs existing enabled IT stays green."
+  - id: keep-enabled
+    baseline_item_id: B2
+    must: "enabled=true keeps current intercept-and-ticket behavior."
+    must_not: "Do not weaken the enabled path."
+    accept_hint: "Existing ApprovalAnnotationIT stays green."
+  - id: no-replay-change
+    baseline_item_id: B3
+    must: "Do not change Replay or ticket field filling."
+    must_not: "Do not add a second ticket client."
+    accept_hint: "Existing ticket filler tests stay green or UNPROVEN if none."
+open_questions: []
+human_signoff:
+  - id: req
+    status: PENDING
+    by: ""

@@ -1,0 +1,23 @@
+schema_version: 2
+feature: example-change
+revision: 1
+sealed: false
+goal: "When approval.enabled is false, annotated methods run without creating a ticket."
+non_goal: "Do not change Replay, ticket fields, or OMI channels."
+items:
+  - id: B1
+    must: "enabled=false → method body executes; no ticket side effect."
+  - id: B2
+    must: "enabled=true keeps current intercept-and-ticket behavior."
+  - id: B3
+    must_not: "Do not change Replay or ticket field filling."
+boundaries:
+  - "Toggle is approval.enabled only."
+details:
+  - "Local @RequiresApproval path; YAML-only routes out of scope."
+review_questions: []
+objections: []
+human_signoff:
+  - id: req-review
+    status: PENDING
+    by: ""

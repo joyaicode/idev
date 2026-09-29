@@ -1,0 +1,32 @@
+schema_version: 2
+feature: example-change
+revision: 1
+baseline_revision: 1
+req_revision: 1
+accepted: false
+by: ""
+approach: "Interceptor returns proceed() when approval.enabled is false; no ticket gateway call."
+non_approach: "Do not remove the annotation; do not change Replay."
+impact_candidates:
+  - path: service-starter/src/main/java/com/example/approval/ApprovalMethodInterceptor.java
+    hop: 0
+    include: true
+  - path: service-starter/src/test/java/com/example/approval/ApprovalAnnotationIT.java
+    hop: 1
+    include: true
+case_intents:
+  - id: disabled-executes
+    slice_id: skip-when-disabled
+    baseline_item_id: B1
+    dimension: correctness
+    hint: "IT with approval.enabled=false"
+  - id: enabled-still-intercepts
+    slice_id: keep-enabled
+    baseline_item_id: B2
+    dimension: compat
+    hint: "Existing ApprovalAnnotationIT stays green"
+  - id: replay-untouched
+    slice_id: no-replay-change
+    baseline_item_id: B3
+    dimension: compat
+    hint: "No Replay or TicketFieldFiller edits"

@@ -1,0 +1,37 @@
+schema_version: 1
+id: dev-selftest
+aliases: ["跑自测", "自测一键", "dev selftest", "对这个 diff 跑自测"]
+summary: 编码纪律扫一遍后，按 selftest 起草/确认 plan 并跑勾选用例。
+risk_tier: P1
+params:
+  - name: feature
+    required: true
+    from: user
+  - name: mode
+    required: false
+    from: default
+    default: selftest
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: preflight
+    kind: preflight.inputs
+    label: 前置探针（票/路径/配方依赖可读；缺则 BLOCKED）
+  - id: code-pass
+    kind: deliver.code_pass
+    label: 编码纪律与 review
+  - id: plan
+    kind: verify.plan
+    with: { mode: selftest }
+    label: 起草或确认 selftest plan
+  - id: gate-plan
+    kind: human.gate
+    label: 人 accepted plan（已 accepted 且未改则跳过）
+    with:
+      will_write: ["verify/plan.yaml accepted"]
+      proof: "verify-plan 门禁结果 / case 数"
+  - id: run
+    kind: verify.run
+    with: { mode: selftest }
+    label: 跑已勾选 cases

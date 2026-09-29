@@ -1,0 +1,47 @@
+schema_version: 1
+id: code-review
+aliases:
+  - 代码审查
+  - 规范审查
+  - 审查当前仓
+summary: >-
+  识别当前仓语言，按对应规约出整仓审查报告；人签收正式发现后先设计 selftest 用例，再修，再验收。
+  只审产品仓。综合评审 skill/导体走 S4，不要用本配方。
+risk_tier: P1
+params:
+  - name: feature
+    required: false
+    from: default
+    default: code-review
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: report
+    kind: review.report
+    label: 识别语言并出报告（不改代码）
+  - id: gate-report
+    kind: human.gate
+    label: 人签收修复清单（无 I* 则跳过）
+    with:
+      will_write: ["review.md 已签收 I*（待签收 → 已签收）"]
+      proof: "review.md 命中数 / I* 清单"
+  - id: plan
+    kind: verify.plan
+    with:
+      mode: selftest
+    label: 为已签收项起草 selftest plan
+  - id: gate-plan
+    kind: human.gate
+    label: 人 accepted plan
+    with:
+      will_write: ["verify/plan.yaml accepted"]
+      proof: "verify-plan 门禁结果 / case 数"
+  - id: fix
+    kind: review.fix
+    label: 只改已签收 I*（及显式纳入的 O*）
+  - id: run
+    kind: verify.run
+    with:
+      mode: selftest
+    label: 跑已勾选验收用例

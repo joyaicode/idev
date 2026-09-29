@@ -1,0 +1,33 @@
+schema_version: 1
+id: self-evolve-review
+aliases:
+  - 自进化
+  - 进化复盘
+  - evolve review
+  - hermes 复盘
+  - 自进化复盘
+summary: 从 traces/inbox/reviews 挖信号并写出提案草稿（不改 Skill；须人 grill+确认才 land）。
+risk_tier: P2
+params: []
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: review
+    kind: shell.confirmed
+    with:
+      cmd: bash ~/.cursor/skills/idev/scripts/evolve-review.sh
+    label: 跑 evolve-review.sh（写 state/proposals 草稿或无信号收据）
+  - id: curator
+    kind: shell.confirmed
+    with:
+      cmd: bash ~/.cursor/skills/idev/scripts/evolve-curator.sh --days 30
+    label: 列出超龄未落地提案（默认不 --apply）
+  - id: gate
+    kind: human.gate
+    with:
+      will_write:
+        - "若人确认某条 draft：按 evolve.md grill 后 land 真源（不在本步自动改）"
+        - "若人确认归档：再跑 evolve-curator.sh --apply"
+      proof: "evolve-review 输出的 draft 路径 + HARD_COUNT / hot_tags"
+    label: 人决定：补全并拷问落地 / 归档 / 或什么都不做（禁止未确认改 SKILL）

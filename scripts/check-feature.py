@@ -1,0 +1,905 @@
+#!/usr/bin/env python3
+"""Structural gates for idev deliver / verify / ops modules.
+
+Parses ticket YAML with PyYAML (see ticket_yaml.py). Locks slice.must
+to the baseline item text, recorded semantic_gate, test-surface coverage,
+and outbound handoff Skills. Still does not judge whether a slogan item
+is falsifiable. Structure-green is not a semantic lock; humans still own
+semantic-gate.
+Exit 0 = no FAIL; 1 = at least one FAIL.
+
+verify-plan is an admission gate when drafting or changing cases, before
+asking the human to accept the plan. Do not invoke it just to run an
+already-accepted plan.
+"""
+from __future__ import annotations
+
+import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from doc_home import homes, layout_for, reconcile_spec  # noqa: E402
+from ticket_yaml import (
+    TicketYamlError,
+    as_str,
+    collect_hops,
+    dimensions_from_surfaces,
+    entries,
+    field_list,
+    has_open_status,
+    load_ticket_yaml,
+    nonempty_list,
+    scalar,
+    section_ids,
+    signoff_bys,
+    yaml_str_list,
+)
+
+
+def coding_section(text: str) -> str:
+    m = re.search(r"^##[ \t]*编码规范(?!填写)[^\n]*\n(?P<body>.*?)(?=^##[ \t]|\Z)", text, re.M | re.S)
+    return m.group("body") if m else ""
+
+
+def check_review_coding(review_text: str, errors: list) -> None:
+    """Weak structural gate for conventions/coding.md — not semantic judgment."""
+    if "编码规范" not in review_text:
+        fail("review.md missing 编码规范 section", errors)
+        return
+    ok("review.md has 编码规范")
+    body = coding_section(review_text)
+    if not body.strip():
+        fail("review.md 编码规范 section empty", errors)
+        return
+
+    scene_lines = [
+        ln for ln in body.splitlines()
+        if re.search(r"场景命中", ln)
+    ]
+    if not scene_lines:
+        fail("review.md missing 场景命中", errors)
+    else:
+        scene_blob = "\n".join(scene_lines)
+        has_zero = bool(re.search(r"零命中", scene_blob))
+        has_p = bool(re.search(r"\bP(?:1[0-7]|[1-9])\b", scene_blob))
+        has_placeholder = bool(re.search(r"P\?", scene_blob)) and not has_p and not has_zero
+        if has_placeholder:
+            fail("review.md 场景命中 still placeholder P?", errors)
+        elif not has_zero and not has_p:
+            fail("review.md 场景命中 needs P# or 零命中", errors)
+        else:
+            ok("review.md has 场景命中")
+
+    smell_lines = [ln for ln in body.splitlines() if re.search(r"气味命中", ln)]
+    if not smell_lines:
+        fail("review.md missing 气味命中", errors)
+    else:
+        smell_blob = "\n".join(smell_lines)
+        has_none = bool(re.search(r"(气味命中\s*[:：]\s*无\b)|(/\s*无\b)|(\b无\s*[（(]已扫)", smell_blob))
+        if not has_none:
+            has_none = bool(re.search(r"气味命中\s*[:：]\s*无\b", smell_blob))
+        has_c = bool(re.search(r"\bC(?:1[0-5]|[1-9])\b", smell_blob))
+        has_c_ph = bool(re.search(r"C\?", smell_blob)) and not has_c and not has_none
+        if has_c_ph:
+            fail("review.md 气味命中 still placeholder C?", errors)
+        elif not has_none and not has_c:
+            fail("review.md 气味命中 needs C# or 无（已扫）", errors)
+        else:
+            ok("review.md has 气味命中")
+
+    refactor_claimed = bool(
+        re.search(r"重构\s*[:：]\s*有", body)
+        or re.search(r"结构调整\s*[:：]\s*有", body)
+    )
+    if refactor_claimed:
+        has_r = bool(re.search(r"R\s*条件\s*[:：].*R[1-6]|\bR[1-6]\b.*满足", body)) or bool(
+            re.search(r"^\s*[-*]?\s*R\s*条件\s*[:：]\s*.*\S", body, re.M)
+        )
+        has_guard = bool(re.search(r"护栏\s*[:：]\s*\S", body))
+        if has_guard and re.search(r"护栏\s*[:：]\s*$", body, re.M):
+            has_guard = bool(re.search(r"护栏\s*[:：]\s*\S+", body))
+        if not has_r and not has_guard:
+            fail("review.md refactor claim needs R1-R6 or 护栏:", errors)
+        else:
+            ok("review.md refactor guard noted")
+
+    hit_blob = "\n".join(scene_lines + smell_lines)
+    hit_codes = re.findall(r"\b(?:P(?:1[0-7]|[1-9])|C(?:1[0-5]|[1-9]))\b", hit_blob)
+    zero_only = bool(re.search(r"零命中", hit_blob)) and not hit_codes
+    if hit_codes and not zero_only:
+        fix_lines = [ln for ln in body.splitlines() if re.search(r"纠正\s*[:：]", ln)]
+        fix_blob = "\n".join(fix_lines)
+        if not fix_lines or not re.search(r"纠正\s*[:：]\s*\S", fix_blob):
+            fail("review.md has P/C hits but empty 纠正", errors)
+        elif re.search(r"纠正\s*[:：]\s*(路径\s*\+\s*改了什么)?\s*$", fix_blob):
+            fail("review.md 纠正 still template placeholder", errors)
+        else:
+            ok("review.md has 纠正 for hits")
+
+    five = [ln for ln in body.splitlines() if re.search(r"五轴", ln)]
+    if not five:
+        fail("review.md missing 五轴", errors)
+    else:
+        blob = "\n".join(five)
+        axes = ("正确性", "可读性", "架构", "安全", "性能")
+        missing = [a for a in axes if a not in blob]
+        if missing:
+            fail("review.md 五轴 missing: %s" % ",".join(missing), errors)
+        else:
+            ok("review.md has 五轴")
+
+    stack = [ln for ln in body.splitlines() if re.search(r"栈指南", ln)]
+    if not stack:
+        fail("review.md missing 栈指南", errors)
+    else:
+        blob = "\n".join(stack)
+        if re.search(r"栈指南\s*[:：]\s*$", blob) or re.search(r"栈指南\s*[:：]\s*…", blob):
+            fail("review.md 栈指南 empty", errors)
+        elif not re.search(r"栈指南\s*[:：]\s*\S", blob):
+            fail("review.md 栈指南 empty", errors)
+        else:
+            ok("review.md has 栈指南")
+
+    enh = [ln for ln in body.splitlines() if re.search(r"增强扫描", ln)]
+    if not enh:
+        fail("review.md missing 增强扫描", errors)
+    else:
+        blob = "\n".join(enh)
+        if re.search(r"未跑", blob) and not re.search(r"已跑", blob):
+            fail("review.md 增强扫描 still 未跑", errors)
+        elif not re.search(r"已跑", blob):
+            fail("review.md 增强扫描 needs 已跑", errors)
+        else:
+            ok("review.md has 增强扫描")
+
+
+AGENT_BY = re.compile(r"^(agent|ai|cursor|assistant)$", re.I)
+
+OPS_KINDS = ("onboard", "runtime", "feature", "patrol", "unknown")
+OPS_STATUSES = (
+    "open",
+    "classified",
+    "reproducing",
+    "root-caused",
+    "rewound",
+    "handed-off",
+    "resolved",
+)
+
+SEMANTIC_PRIOR = {
+    "req": ("req-review",),
+    "arch": ("req-review", "req"),
+    "code": ("req-review", "req", "arch"),
+    "test": ("req-review", "req", "arch"),
+}
+
+TEST_SURFACE_ALIASES = {
+    "correctness": frozenset({"correctness"}),
+    "compat": frozenset({"compat"}),
+    "boundary": frozenset({"boundary", "exception"}),
+    "concurrency": frozenset({"concurrency"}),
+    "performance": frozenset({"performance"}),
+    "ui-prototype": frozenset({"ui-prototype", "ui"}),
+}
+
+DIM_RE = re.compile(r"(?m)^\s*-?\s*dimension:\s*['\"]?([A-Za-z0-9_-]+)")
+
+
+def collect_dimensions_md(blob: str) -> set[str]:
+    return {m.group(1).strip().lower() for m in DIM_RE.finditer(blob or "")}
+
+
+def family_covered(family: str, dims: set[str]) -> bool:
+    return bool(dims & TEST_SURFACE_ALIASES[family])
+
+
+def semantic_stage(gate: dict, stage: str) -> dict:
+    body = gate.get(stage) if isinstance(gate, dict) else None
+    return body if isinstance(body, dict) else {}
+
+
+def check_slice_must_lock(baseline: dict, req: dict, errors: list[str]) -> None:
+    items = {i["id"]: i for i in entries(baseline, "items")}
+    drifted = []
+    for s in entries(req, "slices"):
+        item = items.get(s.get("baseline_item_id") or "")
+        if not item:
+            continue
+        expected = item.get("must") or item.get("must_not") or ""
+        got = s.get("must") or ""
+        if not expected:
+            drifted.append("%s (baseline item has no must/must_not)" % s["id"])
+        elif re.sub(r"\s+", " ", expected) != re.sub(r"\s+", " ", got):
+            drifted.append("%s!=%s" % (s["id"], item["id"]))
+    if drifted:
+        fail(
+            "slice must diverges from baseline item (semantic drift): %s"
+            % ",".join(drifted),
+            errors,
+        )
+    else:
+        ok("slice must matches baseline item")
+
+
+def _semantic_missing(gate, needed):
+    # type: (object, tuple) -> list
+    missing = []
+    if not isinstance(gate, dict) or not gate:
+        return list(needed)
+    for st in needed:
+        body = semantic_stage(gate, st)
+        passed = as_str(body.get("passed"))
+        who = as_str(body.get("by"))
+        if passed != "true" or not who or AGENT_BY.match(who):
+            missing.append(st)
+    return missing
+
+
+def _soft_ticket(path):
+    # type: (Path) -> dict
+    try:
+        if path.is_file():
+            data = load_ticket_yaml(path)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+    return {}
+
+
+def _hint_semantic_backfill(root, deliver, missing):
+    # type: (Path, object, list) -> None
+    """Print recoverable prior stages; never writes YAML."""
+    if not missing:
+        return
+    baseline = _soft_ticket(root / "baseline.yaml")
+    req = _soft_ticket(root / "req.yaml")
+    arch = _soft_ticket(root / "arch.yaml")
+    sealed = as_str(baseline.get("sealed")) == "true"
+    req_ok = as_str(req.get("accepted")) == "true"
+    arch_ok = as_str(arch.get("accepted")) == "true"
+    evidence = {
+        "req-review": "baseline.sealed=true" if sealed else "baseline not sealed",
+        "req": "req.accepted=true" if req_ok else "req not accepted",
+        "arch": "arch.accepted=true" if arch_ok else "arch not accepted",
+    }
+    print("HINT semantic_gate backfill candidates (human confirm still required; do not auto-write):")
+    for st in missing:
+        print("  - %s  evidence: %s" % (st, evidence.get(st, "n/a")))
+    print("HINT dry-run: check-feature.sh <feature> <stage> --backfill-semantic-gate-dry-run")
+
+
+def check_semantic_recorded(deliver, stage, errors, root=None):
+    # type: (dict, str, list, object) -> None
+    needed = SEMANTIC_PRIOR.get(stage)
+    if not needed:
+        return
+    gate = deliver.get("semantic_gate") if isinstance(deliver, dict) else None
+    if not isinstance(gate, dict) or not gate:
+        fail(
+            "deliver.yaml missing semantic_gate (prior stages must record 语义门已过); missing=%s"
+            % ",".join(needed),
+            errors,
+        )
+        if root is not None:
+            _hint_semantic_backfill(root, deliver, list(needed))
+        return
+    missing = []
+    for st in needed:
+        body = semantic_stage(gate, st)
+        passed = as_str(body.get("passed"))
+        who = as_str(body.get("by"))
+        if passed != "true":
+            fail("semantic_gate.%s.passed is not true" % st, errors)
+            missing.append(st)
+        elif not who or AGENT_BY.match(who):
+            fail("semantic_gate.%s requires human by" % st, errors)
+            missing.append(st)
+        else:
+            ok("semantic_gate.%s recorded" % st)
+    if missing and root is not None:
+        _hint_semantic_backfill(root, deliver, missing)
+
+
+def dry_run_semantic_backfill(repo, feature, stage):
+    # type: (Path, str, str) -> int
+    """Print YAML snippet for missing semantic_gate keys; write nothing."""
+    root = homes(repo, feature)["task"]
+    deliver_path = root / "deliver.yaml"
+    if not deliver_path.is_file():
+        print("dry-run: missing %s" % deliver_path)
+        return 1
+    try:
+        deliver = load_ticket_yaml(deliver_path)
+    except Exception as ex:
+        print("dry-run: cannot parse deliver.yaml: %s" % ex)
+        return 1
+    if not isinstance(deliver, dict):
+        print("dry-run: deliver.yaml not a mapping")
+        return 1
+    needed = SEMANTIC_PRIOR.get(stage)
+    if not needed:
+        print("dry-run: stage %s needs no semantic_gate prior" % stage)
+        return 0
+    gate = deliver.get("semantic_gate") if isinstance(deliver.get("semantic_gate"), dict) else {}
+    missing = _semantic_missing(gate, needed)
+    who = as_str(deliver.get("by"))
+    if not who or AGENT_BY.match(who):
+        who = "<HUMAN_BY>"
+    print("# dry-run only — not written. After human confirm, merge into deliver.yaml:")
+    print("semantic_gate:")
+    for st in needed:
+        body = semantic_stage(gate, st) if gate else {}
+        if st in missing:
+            print("  %s:" % st)
+            print("    passed: true")
+            print("    by: %s" % who)
+        else:
+            print("  %s:  # already ok by=%s" % (st, as_str(body.get("by"))))
+    _hint_semantic_backfill(root, deliver, missing)
+    return 0
+
+
+def check_unproven_surfaces(
+    root: Path, plan: dict, cases: list[dict[str, str]], errors: list[str]
+) -> None:
+    unproven_md = root / "unproven.md"
+    blob = ""
+    if unproven_md.is_file():
+        blob += unproven_md.read_text(encoding="utf-8")
+    unproven_dims = collect_dimensions_md(blob)
+    unproven_dims |= dimensions_from_surfaces(plan.get("unproven_surfaces"))
+    case_dims = {(c.get("dimension") or "").strip().lower() for c in cases}
+    case_dims.discard("")
+    pass_dims = {
+        (c.get("dimension") or "").strip().lower()
+        for c in cases
+        if c.get("status") == "PASS"
+    }
+    pass_dims.discard("")
+
+    if "correctness" in unproven_dims:
+        fail("correctness cannot be waived via unproven_surfaces", errors)
+    overlap = []
+    for family, aliases in TEST_SURFACE_ALIASES.items():
+        if pass_dims & aliases and unproven_dims & aliases:
+            overlap.append(family)
+    if overlap:
+        fail(
+            "PASS case dimension also listed UNPROVEN: %s" % ",".join(overlap),
+            errors,
+        )
+
+    missing = []
+    for family in (
+        "correctness",
+        "compat",
+        "boundary",
+        "concurrency",
+        "performance",
+        "ui-prototype",
+    ):
+        if family_covered(family, case_dims):
+            continue
+        if family == "correctness":
+            missing.append("correctness (needs executable case, not UNPROVEN)")
+        elif family_covered(family, unproven_dims):
+            continue
+        else:
+            missing.append(family)
+    if missing:
+        fail(
+            "test surfaces uncovered (need case or unproven.md / "
+            "plan.unproven_surfaces): %s" % ",".join(missing),
+            errors,
+        )
+    else:
+        ok("test surfaces covered")
+
+
+def run_stage_extensions(repo: Path, stage: str, errors: list[str], product: str = "") -> None:
+    script = Path(__file__).resolve().parent / "stage-extensions.py"
+    cmd = [sys.executable, str(script), stage, "--repo", str(repo)]
+    if product:
+        cmd.extend(["--product", product])
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        fail("stage-extensions could not run: %s" % exc, errors)
+        return
+    out = (proc.stdout or "") + (proc.stderr or "")
+    for line in out.splitlines():
+        print(line)
+    if proc.returncode != 0:
+        fail("stage-extensions: declared product page missing", errors)
+    elif any(line.startswith("OPEN ") for line in out.splitlines()):
+        ok("stage extensions listed")
+    else:
+        ok("no stage extensions")
+
+
+def run_product_checks(repo: Path, stage: str, errors: list[str]) -> None:
+    script = Path(__file__).resolve().parent / "product-checks.sh"
+    try:
+        proc = subprocess.run(
+            ["bash", str(script), "--stage", stage, "--repo", str(repo)],
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        fail("product-checks could not run: %s" % exc, errors)
+        return
+    out = (proc.stdout or "") + (proc.stderr or "")
+    for line in out.splitlines():
+        print(line)
+    if proc.returncode != 0:
+        fail("product-checks: product check failed", errors)
+    else:
+        ok("product checks")
+
+
+def run_outbound_skills_check(repo: Path, errors: list[str]) -> None:
+    script = Path(__file__).resolve().parent / "outbound-skills-check.sh"
+    try:
+        proc = subprocess.run(
+            ["bash", str(script), "--repo", str(repo)],
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        fail("outbound-skills-check could not run: %s" % exc, errors)
+        return
+    out = (proc.stdout or "") + (proc.stderr or "")
+    for line in out.splitlines():
+        print(line)
+    if proc.returncode != 0:
+        fail("outbound-skills-check: required handoff Skill missing", errors)
+    else:
+        ok("outbound required skills present")
+
+
+def fail(msg: str, errors: list[str]) -> None:
+    errors.append(msg)
+    print("FAIL  " + msg)
+
+
+def ok(msg: str) -> None:
+    print("PASS  " + msg)
+
+
+_GRILL_LINE = re.compile(
+    r"(?m)^(convention|frontier|shared_understanding):\s*(\S+)\s*$"
+)
+_GRILL_Q = re.compile(r"(?m)^❓ \*\*Q[1-9][0-9]*\*\* - \*\*[^*]+\*\*:")
+_GRILL_A = re.compile(r"(?m)^➡️ \S")
+
+
+def _grill_fields(text: str) -> dict[str, list[str]]:
+    found: dict[str, list[str]] = {}
+    for key, val in _GRILL_LINE.findall(text):
+        found.setdefault(key, []).append(val)
+    return found
+
+
+def check_human_spec(repo: Path, feature: str, baseline: dict, errors: list[str]) -> None:
+    """Sealed tickets have one human spec. Two copies collapse onto the repo's spec directory."""
+    layout = layout_for(repo, feature)
+    spec = reconcile_spec(repo, feature, layout)
+    if scalar(baseline, "sealed") != "true":
+        return
+    if spec.is_file() and spec.read_text(encoding="utf-8").strip():
+        ok("human spec %s" % spec.relative_to(repo).as_posix())
+        return
+    fail("sealed baseline missing %s" % spec.relative_to(repo).as_posix(), errors)
+
+
+def check_grill(root: Path, baseline: dict, errors: list[str]) -> None:
+    """grill.md is the only question write-up. A sealed baseline must close it."""
+    path = root / "grill.md"
+    sealed = scalar(baseline, "sealed") == "true"
+    if not path.is_file():
+        if sealed:
+            fail("sealed baseline missing grill.md", errors)
+        return
+    text = path.read_text(encoding="utf-8")
+    fields = _grill_fields(text)
+    convention = fields.get("convention", [])
+    frontier = fields.get("frontier", [])
+    shared = fields.get("shared_understanding", [])
+    if convention != ["grilling"]:
+        fail("grill.md must have one line: convention: grilling", errors)
+        return
+    ok("grill.md convention grilling")
+    if len(frontier) != 1 or frontier[0] not in ("empty", "open"):
+        fail("grill.md must have one frontier line: empty or open", errors)
+        return
+    if len(shared) != 1 or shared[0] not in ("true", "false"):
+        fail("grill.md must have one shared_understanding line: true or false", errors)
+        return
+    if not _GRILL_Q.search(text) or not _GRILL_A.search(text):
+        fail("grill.md missing a grilling question line", errors)
+        return
+    ok("grill.md uses grilling question lines")
+    if not sealed:
+        ok("grill.md present")
+        return
+    if frontier[0] != "empty" or shared[0] != "true":
+        fail("sealed baseline but grill.md frontier is not closed", errors)
+    else:
+        ok("grill.md closed with sealed baseline")
+
+
+def load_ticket(path: Path, errors: list[str]) -> dict:
+    if not path.is_file():
+        return {}
+    try:
+        return load_ticket_yaml(path)
+    except TicketYamlError as exc:
+        fail(str(exc), errors)
+        return {}
+
+
+def git_names(repo: Path, *git_args: str) -> list[str]:
+    try:
+        out = subprocess.check_output(
+            ["git", "-C", str(repo), *git_args],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return []
+    return [l for l in out.splitlines() if "generatedverify" in l]
+
+
+def staged_generatedverify(repo: Path) -> list[str]:
+    return git_names(repo, "diff", "--cached", "--name-only")
+
+
+def tracked_generatedverify(repo: Path) -> list[str]:
+    return git_names(repo, "ls-files")
+
+
+def main() -> int:
+    p = argparse.ArgumentParser()
+    p.add_argument("--repo", default=".")
+    p.add_argument("--feature", required=True)
+    p.add_argument(
+        "--stage",
+        required=True,
+        choices=["req-review", "req", "arch", "code", "test", "verify-plan", "ops"],
+    )
+    p.add_argument(
+        "--product",
+        default="",
+        help="Named product for stage-page filter. Omit to use the checkout marker id",
+    )
+    p.add_argument(
+        "--backfill-semantic-gate-dry-run",
+        action="store_true",
+        help="Print semantic_gate YAML for missing priors; write nothing",
+    )
+    args = p.parse_args()
+    repo = Path(args.repo).resolve()
+    root = homes(repo, args.feature)["task"]
+    patrol = homes(repo, args.feature)["patrol"]
+    if args.backfill_semantic_gate_dry_run:
+        return dry_run_semantic_backfill(repo, args.feature, args.stage)
+    errors: list[str] = []
+    run_stage_extensions(repo, args.stage, errors, args.product.strip())
+    run_product_checks(repo, args.stage, errors)
+
+    deliver = load_ticket(root / "deliver.yaml", errors)
+    baseline = load_ticket(root / "baseline.yaml", errors)
+    req = load_ticket(root / "req.yaml", errors)
+    arch = load_ticket(root / "arch.yaml", errors)
+    plan = load_ticket(root / "verify" / "plan.yaml", errors)
+    ops = load_ticket(root / "ops.yaml", errors)
+
+    if args.stage == "req-review":
+        if not (root / "baseline.yaml").is_file():
+            fail("missing %s" % (root / "baseline.yaml").relative_to(repo).as_posix(), errors)
+        elif not baseline:
+            if not any("baseline.yaml" in e for e in errors):
+                fail("baseline.yaml is empty", errors)
+        else:
+            ok("baseline.yaml exists")
+            if not scalar(baseline, "goal"):
+                fail("baseline.goal empty", errors)
+            else:
+                ok("baseline.goal set")
+            if not scalar(baseline, "non_goal"):
+                fail("baseline.non_goal empty", errors)
+            else:
+                ok("baseline.non_goal set")
+            items = section_ids(baseline, "items")
+            if not items:
+                fail("baseline.items has no id entries", errors)
+            else:
+                ok("baseline.items = %s" % ",".join(items))
+            if has_open_status(baseline):
+                fail("baseline still has status: open", errors)
+            else:
+                ok("no status: open in baseline")
+            if nonempty_list(baseline, "objections"):
+                fail("baseline.objections not empty", errors)
+            else:
+                ok("objections empty")
+            if nonempty_list(baseline, "review_questions"):
+                fail("baseline.review_questions must stay empty; questions belong in grill.md", errors)
+            else:
+                ok("review_questions empty")
+
+    if args.stage in ("req", "arch", "code", "test", "verify-plan"):
+        if scalar(baseline, "sealed") != "true":
+            fail("baseline.sealed is not true", errors)
+        else:
+            ok("baseline sealed")
+        b_rev = scalar(baseline, "revision")
+        items = section_ids(baseline, "items")
+
+        if args.stage in ("req", "arch", "code", "test"):
+            if not req:
+                fail("missing req.yaml", errors)
+            else:
+                if scalar(req, "baseline_revision") != b_rev:
+                    fail(
+                        "req.baseline_revision %s != baseline.revision %s"
+                        % (scalar(req, "baseline_revision"), b_rev),
+                        errors,
+                    )
+                else:
+                    ok("req.baseline_revision matches")
+                slice_ids = section_ids(req, "slices")
+                refs = field_list(req, "slices", "baseline_item_id")
+                missing = [i for i in items if i not in refs]
+                if missing:
+                    fail("baseline items with no slice: %s" % ",".join(missing), errors)
+                else:
+                    ok("every baseline item has a slice")
+                extra = [r for r in refs if r not in items]
+                if extra:
+                    fail("slice baseline_item_id not in baseline: %s" % ",".join(extra), errors)
+                else:
+                    ok("no unknown baseline_item_id in req")
+                if len(refs) != len(slice_ids):
+                    fail("each slice must have exactly one baseline_item_id", errors)
+                check_slice_must_lock(baseline, req, errors)
+
+        if args.stage in ("req", "arch", "code", "test"):
+            check_semantic_recorded(deliver, args.stage, errors, root=root)
+
+        if args.stage in ("arch", "code", "test"):
+            if not arch:
+                fail("missing arch.yaml", errors)
+            else:
+                if scalar(arch, "baseline_revision") != b_rev:
+                    fail("arch.baseline_revision mismatch", errors)
+                else:
+                    ok("arch.baseline_revision matches")
+                intent_refs = field_list(arch, "case_intents", "baseline_item_id")
+                missing = [i for i in items if i not in intent_refs]
+                if missing:
+                    fail("baseline items with no case_intent: %s" % ",".join(missing), errors)
+                else:
+                    ok("every baseline item has a case_intent")
+                bad = [str(h) for h in collect_hops(arch) if h > 1]
+                if bad:
+                    fail("arch impact hop > 1: %s" % ",".join(bad), errors)
+                else:
+                    ok("impact hops <= 1")
+
+        if args.stage in ("code", "test", "verify-plan"):
+            if not plan:
+                fail("missing verify/plan.yaml", errors)
+            else:
+                if args.stage == "test" and scalar(plan, "mode") != "test":
+                    fail("plan.mode must be test at test stage (got %s)" % (scalar(plan, "mode") or "empty"), errors)
+                else:
+                    if args.stage == "test":
+                        ok("plan.mode is test")
+
+                if args.stage in ("verify-plan", "test"):
+                    b_goal = scalar(baseline, "goal")
+                    p_goal = scalar(plan, "goal")
+                    if not p_goal:
+                        fail("plan.goal empty", errors)
+                    elif b_goal and p_goal != b_goal:
+                        fail(
+                            "plan.goal diverges from baseline.goal (semantic drift)",
+                            errors,
+                        )
+                    else:
+                        ok("plan.goal matches baseline.goal")
+
+                cases = entries(plan, "cases")
+                if args.stage == "test":
+                    check_unproven_surfaces(root, plan, cases, errors)
+                case_refs = [c["baseline_item_id"] for c in cases if c["baseline_item_id"]]
+                missing = [i for i in items if i not in case_refs]
+                if missing:
+                    fail("baseline items with no plan case: %s" % ",".join(missing), errors)
+                else:
+                    ok("every baseline item has a plan case")
+                extra = [r for r in case_refs if r not in items]
+                if extra:
+                    fail("plan baseline_item_id not in baseline: %s" % ",".join(extra), errors)
+                fake_pass = [
+                    c["id"]
+                    for c in cases
+                    if c["status"] == "PASS"
+                    and c["evidence"] in ("", "not run", "not-run", "UNPROVEN")
+                ]
+                if fake_pass:
+                    fail("PASS without run evidence: %s" % ",".join(fake_pass), errors)
+                else:
+                    ok("no PASS without run evidence")
+                if req:
+                    slice_map = {
+                        s["id"]: s["baseline_item_id"] for s in entries(req, "slices")
+                    }
+                    no_slice = [c["id"] for c in cases if not c["slice_id"]]
+                    if no_slice:
+                        fail("plan cases missing slice_id: %s" % ",".join(no_slice), errors)
+                    else:
+                        ok("every plan case has slice_id")
+                    unknown = [
+                        c["id"] for c in cases if c["slice_id"] and c["slice_id"] not in slice_map
+                    ]
+                    if unknown:
+                        fail("plan slice_id not in req: %s" % ",".join(unknown), errors)
+                    else:
+                        ok("plan slice_id exists in req")
+                    mismatch = [
+                        c["id"]
+                        for c in cases
+                        if c["slice_id"] in slice_map
+                        and c["baseline_item_id"] != slice_map[c["slice_id"]]
+                    ]
+                    if mismatch:
+                        fail(
+                            "plan baseline_item_id != req slice: %s" % ",".join(mismatch),
+                            errors,
+                        )
+                    else:
+                        ok("plan baseline_item_id matches req slice")
+                if any(h > 1 for h in collect_hops(plan)):
+                    fail("plan impact hop > 1", errors)
+
+    if args.stage in ("req-review", "req", "arch", "code", "test"):
+        ev = root / "deliver-eval.md"
+        if not ev.is_file() or not ev.read_text(encoding="utf-8").strip():
+            fail("missing %s" % (root / "deliver-eval.md").relative_to(repo).as_posix(), errors)
+        else:
+            ok("deliver-eval.md exists")
+
+    if args.stage == "code":
+        review = root / "review.md"
+        review_text = review.read_text(encoding="utf-8") if review.is_file() else ""
+        if not review.is_file() or not review_text.strip():
+            fail("missing %s" % (root / "review.md").relative_to(repo).as_posix(), errors)
+        else:
+            ok("review.md exists")
+            check_review_coding(review_text, errors)
+
+    if args.stage == "ops":
+        if not ops:
+            fail("missing %s" % (root / "ops.yaml").relative_to(repo).as_posix(), errors)
+        else:
+            ok("ops.yaml exists")
+            for field in ("phenomenon", "env", "artifact", "observable"):
+                if not scalar(ops, field):
+                    fail("ops.%s empty" % field, errors)
+                else:
+                    ok("ops.%s set" % field)
+            kind = scalar(ops, "kind")
+            if kind not in OPS_KINDS:
+                fail("ops.kind unknown: %s" % kind, errors)
+            else:
+                ok("ops.kind = %s" % kind)
+            status = scalar(ops, "status")
+            if status not in OPS_STATUSES:
+                fail("ops.status unknown: %s" % status, errors)
+            if kind == "unknown":
+                fail("ops.kind is still unknown", errors)
+            if kind in ("onboard", "runtime"):
+                if not scalar(ops, "handoff"):
+                    fail("ops.handoff required for kind=%s" % kind, errors)
+                else:
+                    ok("ops.handoff set")
+            if kind in ("feature", "patrol"):
+                if scalar(baseline, "sealed") != "true":
+                    fail("baseline.sealed is not true", errors)
+                else:
+                    ok("baseline sealed")
+                suspects = yaml_str_list(ops, "suspect_item_ids")
+                items = section_ids(baseline, "items")
+                extra = [s for s in suspects if s not in items]
+                if extra:
+                    fail("suspect_item_ids not in baseline: %s" % ",".join(extra), errors)
+                elif kind == "feature" and not suspects:
+                    fail("kind=feature needs suspect_item_ids", errors)
+                else:
+                    ok("suspect_item_ids in baseline")
+                b_rev = scalar(baseline, "revision")
+                if scalar(ops, "baseline_revision") and scalar(ops, "baseline_revision") != b_rev:
+                    fail("ops.baseline_revision mismatch", errors)
+            if kind == "patrol":
+                if not patrol.is_file():
+                    fail("missing %s" % patrol.relative_to(repo).as_posix(), errors)
+                else:
+                    ok("patrol pack exists")
+            origin = scalar(ops, "defect_origin")
+            if origin and origin not in ("req", "arch", "code"):
+                fail("ops.defect_origin must be req|arch|code", errors)
+            if scalar(ops, "resolved") == "true":
+                who = scalar(ops, "by")
+                if not who or AGENT_BY.match(who):
+                    fail("resolved=true requires human by", errors)
+                else:
+                    ok("resolved has human by")
+        run_outbound_skills_check(repo, errors)
+
+    if deliver:
+        rt = scalar(deliver, "risk_tier")
+        if rt and rt not in ("P0", "P1", "P2"):
+            fail("deliver.risk_tier must be P0|P1|P2", errors)
+        if scalar(deliver, "stage") not in (
+            "",
+            "req-review",
+            "req",
+            "arch",
+            "code",
+            "test",
+            "done",
+            "ops",
+        ):
+            fail("deliver.stage unknown: %s" % scalar(deliver, "stage"), errors)
+
+    forged = []
+    for label, text in (
+        ("baseline", baseline),
+        ("req", req),
+        ("arch", arch),
+        ("deliver", deliver),
+        ("plan", plan),
+        ("ops", ops),
+    ):
+        for who in signoff_bys(text):
+            if AGENT_BY.match(who):
+                forged.append("%s.by=%s" % (label, who))
+    if forged:
+        fail("agent filled signoff by: %s" % ", ".join(forged), errors)
+    else:
+        ok("no agent-filled signoff by")
+
+    staged = staged_generatedverify(repo)
+    if staged:
+        fail("staged generatedverify paths: %s" % ", ".join(staged), errors)
+    else:
+        ok("no staged generatedverify")
+    tracked = tracked_generatedverify(repo)
+    if tracked:
+        fail("tracked generatedverify paths: %s" % ", ".join(tracked), errors)
+    else:
+        ok("no tracked generatedverify")
+
+    check_grill(root, baseline, errors)
+    check_human_spec(repo, args.feature, baseline, errors)
+
+    print("---")
+    if errors:
+        print("%d FAIL" % len(errors))
+        return 1
+    print("0 FAIL")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

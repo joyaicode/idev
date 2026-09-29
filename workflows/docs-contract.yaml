@@ -1,0 +1,22 @@
+schema_version: 1
+id: docs-contract
+aliases: ["回填契约", "契约回填", "经验回填"]
+summary: 把约定 / 经验回填到 docs（S5）。
+risk_tier: P2
+params:
+  - name: feature
+    required: false
+    from: user
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: backfill
+    kind: docs.backfill
+    label: 契约或经验回填
+  - id: gate
+    kind: human.gate
+    label: 人确认回填内容
+    with:
+      will_write: ["契约文档回填段落（docs/SKILL.md 解析出的落点）"]
+      proof: "回填前后差异摘要"

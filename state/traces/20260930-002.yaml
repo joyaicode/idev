@@ -1,0 +1,72 @@
+schema_version: 2
+at: "2026-09-30T00:06:00+08:00"
+feature: "-"
+intent: "验收 idev 导体：跑健康检查和四条行为用例，不改台账。"
+invoke:
+  trigger: "验收idev"
+  matched: "导体验收看 healthcheck 与 ledger，不建产品票"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+route:
+  module: conventions
+  convention_class: evidence
+  stage: ""
+  risk_tier: P1
+  scenario: S4
+  why: "验收导体本身，不是产品票红绿，也不是把 trial 改成 ga。"
+rejected:
+  - module: deliver
+    why: "导体自身不建产品票"
+  - module: verify
+    why: "没有 plan.yaml 要跑"
+  - module: ops
+    why: "没有线上现象"
+thinking:
+  summary: "healthcheck PASS warns=0，审计 HARD 0，selfcheck PASS。kafka 启停读到 joypaas 参数文件。elasticsearch-web 的 test 打开三张 ES 页，kafka 的 test 不开。台账仍是 trial / pending，因为本轮用语不是确认。"
+  signals:
+    - "验收idev"
+    - "ledger phase trial acceptance pending"
+  excluded:
+    - "把 phase 写成 ga"
+    - "代写 accepted"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "跑 healthcheck.sh 与 selfcheck.sh"
+      so: "两者退出码 0"
+    - n: 2
+      do: "复跑 kafka 启停预检、阶段过滤、票目录和规则指针"
+      so: "四条与再审修复一致"
+opened:
+  - "scripts/healthcheck.sh"
+  - "state/ledger.yaml"
+  - "references/lifecycle.md"
+calls:
+  - kind: script
+    name: session-context.py
+    args: "--scenario S4 cwd=idev"
+    result: "OK no current product"
+  - kind: script
+    name: healthcheck.sh
+    args: ""
+    result: "PASS warns=0 hard=0"
+  - kind: script
+    name: selfcheck.sh
+    args: ""
+    result: "PASS"
+  - kind: script
+    name: s8-preflight.sh
+    args: "localdev-start cwd=kafka-project"
+    result: "RESULT OK defaults=joypaas"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "导体验收不进 verify 阶段机"
+stop: ""
+next: "台账保持 trial。人说确认之后才记 accepted"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

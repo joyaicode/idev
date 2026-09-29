@@ -1,0 +1,54 @@
+schema_version: 1
+id: lite-change
+aliases:
+  - 轻量改动
+  - 小改
+  - 小改动
+  - 小修
+  - lite change
+  - lite-change
+  - 对这个 diff 走轻量
+summary: >-
+  小改捷径（不改 goal/baseline）：定界论证 → 编码纪律 → selftest plan/跑测 → 停问是否提测。禁止跳签、改密封正文、自动 promote。人未说提测则停在 gate-next。产线自己的小改踩坑写在该仓 .idev/pack/，挂到 extensions.yaml 的 code 阶段，由 session-context 打开。
+risk_tier: P1
+params:
+  - name: feature
+    required: true
+    from: user
+  - name: mode
+    required: false
+    from: default
+    default: selftest
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: preflight
+    kind: preflight.inputs
+    label: 前置探针（票/路径/配方依赖可读；缺则 BLOCKED）
+  - id: scope-guard
+    kind: route.s4
+    label: 确认不改 goal/baseline；小范围论证后改码
+  - id: code-pass
+    kind: deliver.code_pass
+    label: 编码纪律与 review
+  - id: plan
+    kind: verify.plan
+    with: { mode: selftest }
+    label: 起草或确认 selftest plan
+  - id: gate-plan
+    kind: human.gate
+    label: 人 accepted plan（已 accepted 且未改则跳过）
+    with:
+      will_write: ["verify/plan.yaml accepted"]
+      proof: "verify-plan 门禁结果 / case 数"
+  - id: run
+    kind: verify.run
+    with: { mode: selftest }
+    label: 跑已勾选 cases
+  - id: gate-next
+    kind: human.gate
+    label: 默认结束；若要提测/推阶段再确认（不自动 promote）
+    with:
+      will_write: []
+      proof: "verify run PASS/FAIL 计数"

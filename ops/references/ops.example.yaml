@@ -1,0 +1,15 @@
+schema_version: 1
+feature: example-change
+kind: feature
+status: classified
+phenomenon: "enabled=false still creates a ticket on the shared test env."
+env: "shared-test"
+artifact: "published jar on the shared test env, not local webpack"
+observable: "POST create returns ticket id; config has approval.enabled=false"
+baseline_revision: 1
+suspect_item_ids:
+  - B1
+defect_origin: ""
+handoff: ""
+resolved: false
+by: ""

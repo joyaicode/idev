@@ -1,0 +1,27 @@
+schema_version: 1
+id: dev-logic
+aliases: ["逻辑验", "验逻辑", "logic 一键"]
+summary: 对着 diff 做 logic 维验证：plan → 签字 → run。
+risk_tier: P1
+params:
+  - name: feature
+    required: true
+    from: user
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: plan
+    kind: verify.plan
+    with: { mode: logic }
+    label: 起草或确认 logic plan
+  - id: gate-plan
+    kind: human.gate
+    label: 人 accepted plan
+    with:
+      will_write: ["verify/plan.yaml accepted"]
+      proof: "verify-plan 门禁结果 / case 数"
+  - id: run
+    kind: verify.run
+    with: { mode: logic }
+    label: 跑已勾选 cases

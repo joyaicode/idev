@@ -1,0 +1,60 @@
+schema_version: 2
+at: "2026-09-30T00:06:00+08:00"
+feature: "-"
+intent: "按确认用语记下导体试运行验收，不转 ga。"
+invoke:
+  trigger: "确认"
+  matched: "导体验收 chat-confirm"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+route:
+  module: conventions
+  convention_class: docs
+  stage: ""
+  risk_tier: P1
+  scenario: S4
+  why: "上一轮检查已绿。本轮只记台账，不改 Skill，不把 trial 改成 ga。"
+rejected:
+  - module: deliver
+    why: "导体自身不建产品票"
+  - module: verify
+    why: "没有 plan 要签"
+  - module: ops
+    why: "没有现象"
+thinking:
+  summary: "确认用语命中。台账 acceptance 写成 chat-confirm，confirmed_by 取 git user.name wangwei794，conductor_revision 从 0 到 1。phase 仍是 trial。"
+  signals:
+    - "确认"
+    - "healthcheck 与 selfcheck 已在上一轮通过"
+  excluded:
+    - "phase 改成 ga"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "读 evolve.md 与 ledger.yaml，核对确认用语和签名来源"
+      so: "确认算数，名字来自 git config user.name"
+    - n: 2
+      do: "写入 state/ledger.yaml"
+      so: "acceptance 为 chat-confirm，revision 1，phase 仍为 trial"
+opened:
+  - "state/ledger.yaml"
+  - "verify/references/evolve.md"
+  - "references/chat-confirm-signoff.md"
+calls:
+  - kind: script
+    name: git config user.name
+    args: ""
+    result: "wangwei794"
+decisions:
+  - kind: gate
+    chose: "acceptance chat-confirm，phase 保持 trial"
+    why: "ga 要另一次确认"
+stop: ""
+next: "试用继续。要转 ga 须再确认一次"
+check_feature: skipped
+signoff:
+  status: recorded
+  marks:
+    - acceptance
+  by: wangwei794
+  evidence: "state/ledger.yaml conductor_revision 1"

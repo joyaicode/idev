@@ -1,0 +1,22 @@
+schema_version: 1
+id: docs-feature
+aliases: ["出文档", "变更说明", "写变更说明"]
+summary: 为当前 feature 写变更说明 / 任务小结（S5 docs）。
+risk_tier: P2
+params:
+  - name: feature
+    required: true
+    from: user
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: changelog
+    kind: docs.changelog
+    label: 起草变更说明
+  - id: gate
+    kind: human.gate
+    label: 人确认文档可合入或定稿
+    with:
+      will_write: ["特性文档定稿（docs/SKILL.md 解析出的落点）"]
+      proof: "文档差异摘要"

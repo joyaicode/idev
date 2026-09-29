@@ -1,0 +1,38 @@
+schema_version: 1
+id: test-pack
+aliases: ["提测包", "正式测", "按提测维度跑"]
+summary: 确认票在 test 阶段后，按 test 维起草 plan、签字并跑。
+risk_tier: P1
+params:
+  - name: feature
+    required: true
+    from: user
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: preflight
+    kind: preflight.inputs
+    label: 前置探针（票/路径/配方依赖可读；缺则 BLOCKED）
+  - id: advance-check
+    kind: deliver.advance
+    with: { expect_stage: test }
+    label: 确认 stage=test（否则停，不跳阶段）
+  - id: plan
+    kind: verify.plan
+    with: { mode: test }
+    label: 起草或确认 test plan
+  - id: gate-plan
+    kind: human.gate
+    label: 人 accepted plan
+    with:
+      will_write: ["verify/plan.yaml accepted"]
+      proof: "verify-plan 门禁结果 / case 数"
+  - id: run
+    kind: verify.run
+    with: { mode: test }
+    label: 跑已勾选 cases
+  - id: report
+    kind: docs.changelog
+    with: { template: verify-report }
+    label: 汇总 report 要点

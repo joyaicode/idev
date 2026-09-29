@@ -1,0 +1,66 @@
+schema_version: 1
+id: repo-commit-push
+aliases:
+  - 代码提交
+  - 整仓提交
+  - 提交并推送
+  - 提交推送
+  - repo commit push
+summary: >-
+  工程整仓提交并推送远程：先查 Go 本地 replace、前端 lint-fix、Java 构建（默认可跳过单测），
+  敏感配置屏蔽后提交推送，再在本地还原敏感配置。
+risk_tier: P0
+params:
+  - name: project_root
+    required: true
+    from: user
+  - name: commit_message
+    required: true
+    from: user
+  - name: skip_tests
+    required: false
+    from: default
+    default: "true"
+  - name: skip_test_compile
+    required: false
+    from: default
+    default: "false"
+    # true → 额外 -Dmaven.test.skip=true
+  - name: remote
+    required: false
+    from: default
+    default: origin
+  - name: branch
+    required: false
+    from: default
+    default: ""
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: replace-check
+    kind: git.replace_check
+    label: 检查 go.mod 本地 replace
+  - id: lint-fix
+    kind: frontend.lint_fix
+    label: 前端 lint-fix
+  - id: java-build
+    kind: java.build
+    label: Java 编译构建（默认可跳过单测）
+    with:
+      skip_tests: true
+  - id: shield
+    kind: git.sensitive_shield
+    label: 敏感配置屏蔽（备份后占位）
+  - id: gate
+    kind: human.gate
+    label: 确认提交说明与推送目标
+    with:
+      will_write: ["git commit（提交说明）", "git push（当前分支 → 远端）"]
+      proof: "git status 摘要 / 敏感屏蔽结果 / go.mod replace 检查"
+  - id: commit-push
+    kind: git.commit_push
+    label: 整仓 commit 并 push
+  - id: restore
+    kind: git.sensitive_restore
+    label: 本地还原敏感配置

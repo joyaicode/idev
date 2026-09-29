@@ -1,0 +1,33 @@
+schema_version: 1
+id: debug-repro
+aliases: ["复现闭环", "按现象复现", "debug 一键"]
+summary: 现象分类后走 verify debug：plan → 签字 → run（须能红/绿切换）。
+risk_tier: P0
+params:
+  - name: feature
+    required: true
+    from: user
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: preflight
+    kind: preflight.inputs
+    label: 前置探针（票/路径/配方依赖可读；缺则 BLOCKED）
+  - id: classify
+    kind: ops.classify
+    label: 现场分类
+  - id: plan
+    kind: verify.plan
+    with: { mode: debug }
+    label: 起草 debug plan（环境/产物/可观察物）
+  - id: gate-plan
+    kind: human.gate
+    label: 人确认环境与 plan
+    with:
+      will_write: ["verify/plan.yaml accepted"]
+      proof: "verify-plan 门禁结果 / case 数"
+  - id: run
+    kind: verify.run
+    with: { mode: debug }
+    label: 复现与根因红绿

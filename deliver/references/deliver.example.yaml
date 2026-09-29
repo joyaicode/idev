@@ -1,0 +1,30 @@
+schema_version: 2
+feature: example-change
+stage: req-review
+risk_tier: P1
+aligned: false
+by: ""
+baseline_revision: 0
+req_revision: 0
+arch_revision: 0
+reopen_baseline: false
+semantic_gate:
+  req-review:
+    passed: true
+    by: example-owner
+  req:
+    passed: true
+    by: example-owner
+  arch:
+    passed: true
+    by: example-owner
+  code:
+    passed: true
+    by: example-owner
+last_rewind:
+  origin: ""
+  note: ""
+revisions:
+  - at: "2026-09-06T00:00:00Z"
+    by: agent
+    note: "enter req-review"

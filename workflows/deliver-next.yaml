@@ -1,0 +1,25 @@
+schema_version: 1
+id: deliver-next
+aliases: ["推下一阶段", "往下推一格", "deliver next"]
+summary: 读 deliver.yaml，在当前 stage 做允许的下一步；遇门禁则停问，不跳阶段、不自动签字。
+risk_tier: P1
+params:
+  - name: feature
+    required: true
+    from: deliver.yaml
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: preflight
+    kind: preflight.inputs
+    label: 前置探针（票/路径/配方依赖可读；缺则 BLOCKED）
+  - id: advance
+    kind: deliver.advance
+    label: 当前阶段允许动作
+  - id: gate
+    kind: human.gate
+    label: 若本步含停问点则请签
+    with:
+      will_write: ["当前 stage 的签收字段（按 chat-confirm 列出；本步无停问点则无）"]
+      proof: "check-feature.sh <feature> <stage> 结果"

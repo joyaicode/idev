@@ -1,0 +1,20 @@
+{
+  "joypaas_root": "/Users/wangwei794/go/src/coding.jd.com/joypaas",
+  "skills_subdir": ".cursor/skills",
+  "required": [
+    "joypaas-onboard-diagnose",
+    "jmiss-incident"
+  ],
+  "optional": [
+    "joypaas-product-practice",
+    "joypaas-frontend-test",
+    "joypaas-ui-lifecycle"
+  ],
+  "link_targets": [
+    "~/.cursor/skills",
+    "~/.agents/skills"
+  ],
+  "updated_at": "2026-09-29T22:25:09+08:00",
+  "pilot": "joypaas",
+  "product_root": "/Users/wangwei794/go/src/coding.jd.com/joypaas"
+}

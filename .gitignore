@@ -1,0 +1,9 @@
+
+# idev session residue. Product line under .idev is tracked.
+.idev/*
+!.idev/handoff.yaml
+!.idev/workflow-defaults.yaml
+!.idev/workflows/
+!.idev/workflows/**
+!.idev/pack/
+!.idev/pack/**

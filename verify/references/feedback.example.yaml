@@ -1,0 +1,7 @@
+schema_version: 1
+feature: example-change
+plan_ref: docs/task/example-change/verify/plan.yaml
+status: pending
+tags: []
+by: ""
+note: ""

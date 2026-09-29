@@ -1,0 +1,30 @@
+schema_version: 1
+id: patrol-replay
+aliases: ["巡检重放", "重放巡检包", "patrol"]
+summary: 重放已登记巡检包（doc_home.py --key patrol）；无包则拒跑。
+risk_tier: P1
+params:
+  - name: feature
+    required: true
+    from: user
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: preflight
+    kind: preflight.inputs
+    label: 前置探针（票/路径/配方依赖可读；缺则 BLOCKED）
+  - id: plan
+    kind: verify.plan
+    with: { mode: patrol }
+    label: 确认 patrol plan（无包拒跑）
+  - id: gate-plan
+    kind: human.gate
+    label: 人 accepted（已 accepted 未改则跳过）
+    with:
+      will_write: ["verify/plan.yaml accepted"]
+      proof: "verify-plan 门禁结果 / case 数"
+  - id: run
+    kind: verify.run
+    with: { mode: patrol }
+    label: 原样重放

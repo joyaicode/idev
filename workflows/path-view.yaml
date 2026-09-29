@@ -1,0 +1,35 @@
+schema_version: 1
+id: path-view
+aliases:
+  - 运行路径
+  - 路径视图
+  - path view
+  - 观测路径
+summary: 展示最近 traces 的实际运行路径（trigger→场景→调用→opened），便于减负与 shortcut；不改票、不签字。
+risk_tier: P2
+params: []
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+  - id: last
+    kind: shell.confirmed
+    with:
+      cmd: bash ~/.cursor/skills/idev/scripts/path-view.sh
+    label: 最近一条运行路径
+  - id: table
+    kind: shell.confirmed
+    with:
+      cmd: bash ~/.cursor/skills/idev/scripts/path-view.sh paths 20
+    label: 最近 20 条路径表
+  - id: stats
+    kind: shell.confirmed
+    with:
+      cmd: bash ~/.cursor/skills/idev/scripts/path-view.sh stats 50
+    label: 路径骨架/首调用频次（无分数）
+  - id: note
+    kind: human.gate
+    with:
+      will_write: []
+      proof: "path-view / paths / path-stats 输出"
+    label: 人可据此开 evolve 提案或 shortcut；本配方不改 Skill

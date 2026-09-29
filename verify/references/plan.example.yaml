@@ -1,0 +1,66 @@
+schema_version: 1
+feature: example-change
+mode: selftest
+accepted: false
+# When baseline.yaml is sealed, copy goal/non_goal from it; do not invent.
+goal: "When approval.enabled is false, annotated methods run without creating a ticket."
+non_goal: "Do not change Replay, ticket fields, or OMI channels."
+baseline_revision: 1
+entry:
+  kind: diff
+  intent_ref: "HEAD"
+impact_candidates:
+  - path: service-starter/src/main/java/com/example/approval/ApprovalMethodInterceptor.java
+    hop: 0
+    include: true
+  - path: service-starter/src/test/java/com/example/approval/ApprovalAnnotationIT.java
+    hop: 1
+    include: true
+cases:
+  - id: correctness-disabled-passes
+    slice_id: skip-when-disabled
+    baseline_item_id: B1
+    dimension: correctness
+    accepted: true
+    runner:
+      kind: maven-failsafe
+      module: service-starter
+      selector: ApprovalAnnotationDisabledIT
+    status: UNPROVEN
+    evidence: "not run"
+  - id: compat-enabled-unchanged
+    slice_id: keep-enabled
+    baseline_item_id: B2
+    dimension: compat
+    accepted: true
+    runner:
+      kind: maven-failsafe
+      module: service-starter
+      selector: ApprovalAnnotationIT
+    status: UNPROVEN
+    evidence: "not run"
+  - id: compat-replay-untouched
+    slice_id: no-replay-change
+    baseline_item_id: B3
+    dimension: compat
+    accepted: true
+    runner:
+      kind: maven-surefire
+      module: service-starter
+      selector: TicketFieldFillerTest
+    status: UNPROVEN
+    evidence: "not run"
+human_signoff:
+  - id: req
+    prompt: "Requirement satisfied?"
+    status: PENDING
+  - id: design
+    prompt: "Design satisfied?"
+    status: PENDING
+  - id: arch
+    prompt: "Architecture and conventions accepted?"
+    status: PENDING
+revisions:
+  - at: "2026-09-06T00:00:00Z"
+    by: agent
+    note: "initial plan"

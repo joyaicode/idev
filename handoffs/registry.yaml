@@ -1,0 +1,4 @@
+schema_version: 1
+# 内核登记表为空。当前产品的交出口写在该仓 .idev/handoff.yaml。
+# idev 不内置任何产品的 Skill 名、路径或探测规则。
+packs: {}
