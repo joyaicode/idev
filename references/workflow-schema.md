@@ -162,6 +162,8 @@ $W abort --note <原因> --feature <f>
 | `with.will_write` | 可选；字符串数组，优先用于拼 `将代写`。`[]` 表示 `将代写: 无`（只停问、不写字段） |
 | `with.proof` | 可选；短证明上下文（门禁结果 / PASS 计数） |
 
+`with.will_write` 与 `label` 里的 `将代写` 至少有一个，都没有 → `workflow-check` 失败；`will_write` 不是字符串列表或含空串也失败。`workflow.py next` 在停问步骤直接打印由它拼出的 `将代写:` 行。
+
 无确认用语不得把本步标 PASS。
 
 产线配方的别名只写在该仓 `.idev/workflows/<id>.yaml`。内核 kind 表不登记某一条产线的配方名。产品配方顶栏若有 `roles` / `rules`，只是说明，`workflow-check` 不校验。它校验 `needs_ticket` / `aliases` / `risk_tier` / `params` / `policy` / `steps` 与 `human.gate` 的 `将代写`。

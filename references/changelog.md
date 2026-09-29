@@ -1,6 +1,6 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
-- 2026-09-30：workflow 补齐三件套。编排语法的代码形态收进 `scripts/lib/workflow_spec.py`（kind 与落点、顶栏 / 参数 / 策略取值、配方与 run 校验），`workflow-check` 改用它，并开始拒绝未知字段、非法 `from` / `policy` / `risk_tier`。新增驱动器 `scripts/workflow.py`（`resolve` / `start` / `next` / `record` / `status` / `abort`）：按配方写 `run.yaml`，给出下一步与落点页，守跳步、签字原话、失败即停，不替 Agent 执行步骤。无票运行落 `product_sink.py workflow-runs`。自检锁住文档 kind 表与代码一致和驱动规则。`workflow-check` 对齐驱动器：产品配方从扩展根读；产品可有多条配方，但一个 id 或别名只许指向一条生效配方；`--run` 核对步骤与所记配方一致。
+- 2026-09-30：workflow 补齐三件套。编排语法的代码形态收进 `scripts/lib/workflow_spec.py`（kind 与落点、顶栏 / 参数 / 策略取值、配方与 run 校验），`workflow-check` 改用它，并开始拒绝未知字段、非法 `from` / `policy` / `risk_tier`。新增驱动器 `scripts/workflow.py`（`resolve` / `start` / `next` / `record` / `status` / `abort`）：按配方写 `run.yaml`，给出下一步与落点页，守跳步、签字原话、失败即停，不替 Agent 执行步骤。无票运行落 `product_sink.py workflow-runs`。自检锁住文档 kind 表与代码一致和驱动规则。`workflow-check` 对齐驱动器：产品配方从扩展根读；产品可有多条配方，但一个 id 或别名只许指向一条生效配方；`--run` 核对步骤与所记配方一致。配方校验时停问步骤必须声明 `with.will_write`（`[]` = 将代写: 无）或在 `label` 写 `将代写`，驱动器 `next` 打印该行。
 
 - 2026-09-30：自检与健康检查各用一个本轮独占的临时目录，不再写死 `/tmp/idev-*`，两份并发不互相覆盖；macOS 下带后缀的 `mktemp` 模板去掉。产线在 `AGENTS.md` 或 `issue-tracker.md` 声明 `docs/specs/` 时，规格目录用复数，两份同在时并入复数那份。巡检包、测试设计、`current.md` 的执行页一律指向 `doc_home.py --key`。lite-change 烟测改在本会话 trace 目录找小改记录。配方新增可选 `doc`，`session-context --workflow` 列成 `OPEN`；UI 全量、UI 建设、启停三页执行说明移到产品仓 `.idev/pack/references/`，内核不再点名产品配方 id。
 
