@@ -20,7 +20,19 @@
 ## hardcoded-path-check 说明
 `healthcheck.sh` 会 grep 活文档/脚本中形如 `/Users/<name>`、`/home/<name>/` 的残留（跳过 `state/`、`verify/state/`，它们是本机记录）。OK 只表示**这台机器上扫描无残留**，不代表在别的机器上跑通。
 
+## Linux 调度
+
+见 [linux-schedulers.md](linux-schedulers.md)（systemd user timer / cron）。本机 `healthcheck` 在无 LaunchAgent 时对周任务报 WARN，不拖垮 core。
+
+## 第二产线冒烟（本机可跑）
+
+```bash
+bash ~/.cursor/skills/idev/scripts/second-product-smoke.sh
+```
+
+断言：临时 generic 仓只靠 `.idev/marker.yaml` 即可 `session-context`；产物不泄漏 joypaas 字样；不改内核源码。
+
 ## 未验证 / 未覆盖
-- 未在第二台机器、第二个账号、Linux 上跑过。
+- 未在第二台机器、第二个账号、Linux 上跑过完整 healthcheck（模板已给，待实测回填）。
 - `state/` 与 `verify/state/` 里历史记录仍含原机绝对路径与人名（未改写历史）。
 - 某一产品的内网仓与交出口 Skill 属于该产品自己的环境，不是 idev 的依赖。

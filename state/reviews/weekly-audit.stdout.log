@@ -1,0 +1,27 @@
+# idev trace audit (last 7)
+dir: /Users/wangwei794/.cursor/skills/idev/state/traces
+
+| 指标 | 数量 | 占比 | 含义 |
+|------|------|------|------|
+| 缺 scenario | 0 | 0.0% | 路由未记 S1–S8（滚动窗外历史可忽略） |
+| **同轮多模块执行 calls** | 0 | 0.0% | 硬报警：应收敛 |
+| 仅 opened 多模块（深读） | 0 | 0.0% | 允许：单执行 + 邻接只读 |
+| calls 弱/空 | 0 | 0.0% | 软信号：补真实 calls |
+| 疑似写入签收但无 signoff | 0 | 0.0% | 硬报警：须补 signoff |
+| **阶段页未写入 opened** | 0 | 0.0% | 硬报警：extensions 里的路径必须出现在 opened |
+| **有标记的产品 trace 缺 extensions** | 0 | 0.0% | 硬报警：`.idev/traces` 必须写 extensions，空列表也可以 |
+| 仅否定/描述签收词（已排除） | 1 | 14.3% | 不算违规 |
+
+## 周报「必须清零项」（不计入 HARD_COUNT，不改硬报警口径）
+| 项 | 数量 | 占比 | 怎么清 |
+|----|------|------|--------|
+| calls 弱/空 | 0 | 0.0% | 补真实 `calls[]`（不伪造） |
+| `feature: -` 未绑票 | 0 | 0.0% | 小改先绑票走 S8 lite-change（s8-preflight）；非交付类对话可说明原因 |
+| S1 未打开 grilling | 0 | 0.0% | S1 必开 `~/.cursor/skills/grilling/SKILL.md` 并写入 opened |
+MUST_ZERO_TOTAL=0
+
+## 硬报警样本（最多 15）
+(无)
+
+说明：见 references/deep-read.md（报警表与深读规则）。
+HARD_COUNT=0

@@ -1,0 +1,17 @@
+inbox_non_ok=0 hot_tags=[]
+review_hits=0 review_days=7
+open_proposals=6 stale_proposals=0 stale_days=14
+=== evolve-review ===
+HARD_COUNT=0
+hot_tags=(none)
+signal=0
+wrote /Users/wangwei794/.cursor/skills/idev/state/proposals/20261010-101831-evolve-review.md
+receipt /Users/wangwei794/.cursor/skills/idev/state/reviews/20261010-evolve-review-receipt.md
+latest /Users/wangwei794/.cursor/skills/idev/state/reviews/evolve-review-latest.md
+# idev execution-clean
+repo=/Users/wangwei794/go/src/coding.jd.com/joypaas
+mode=apply compact=1 cites=2 generations=3
+generation=1 since_last=1 hot_traces=6
+compact SKIP
+BUMP generation=1
+execution-clean PASS removed=0

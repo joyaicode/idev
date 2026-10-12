@@ -33,6 +33,8 @@ for rel in \
   scripts/link-companion-skills.sh \
   scripts/core-strip-check.sh \
   scripts/lite-change-smoke.sh \
+  scripts/late-lifecycle-smoke.sh \
+  scripts/second-product-smoke.sh \
   scripts/s8-preflight.sh \
   references/s1-vs-s8-playbook.md \
   scripts/ticket_yaml.py \

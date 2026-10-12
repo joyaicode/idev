@@ -1,9 +1,9 @@
 schema_version: 1
 feature: idev-conductor
 phase: trial
-conductor_revision: 1
+conductor_revision: 2
 acceptance: chat-confirm
 confirmed_by: wangwei794
-confirmed_at: "2026-09-30T00:05:40+08:00"
-confirmed: "确认"
-note: "reset 2026-09-29: all history cleared at user request"
+confirmed_at: "2026-10-01T00:15:00+08:00"
+confirmed: "修复所有缺陷，然后按改善建议进行调整"
+note: "P6 defect remediation landed; late-lifecycle smoke + cold-start + evolve SLA"

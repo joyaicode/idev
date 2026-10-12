@@ -5,11 +5,11 @@
 
 ## 先读（降认知负荷）
 
-1. **[references/operator-cheatsheet.md](operator-cheatsheet.md)** — 命令、打开预算、轻量、selftest/test/promote/aligned 四格。路由以 `SKILL.md` 决策树为准。认票与 H1–H6 全文在 [invoke.md](invoke.md)。grilling 触发细则：[cheatsheet §7.2](operator-cheatsheet.md)。新票 vs 小改：[references/s1-vs-s8-playbook.md](s1-vs-s8-playbook.md)。HITL：[references/hitl-risk-tiers.md](hitl-risk-tiers.md)。审计解读：[references/deep-read.md](deep-read.md)。
-2. **真源**只有 `~/.cursor/skills/idev/`（实目录）；`~/.agents/skills/idev`、`~/.joycode/skills/idev` 必须是指向它的 symlink，勿复制第二份。companion：grilling 真源是 `~/.cursor/skills/grilling/`（实目录）；产线文档目录认 `~/.cursor/skills/setup-agents-docs/`。交付时打开 idev 的 [docs/SKILL.md](../docs/SKILL.md)。文档命令写 `~/.cursor/skills/idev/...`。
-3. 周审计：`bash ~/.cursor/skills/idev/scripts/audit-traces.sh 50`（或 S8 `weekly-trace-audit` / `scripts/install-weekly-audit.sh`）。结果指标：`scripts/ticket-metrics.sh`（见 [references/trace.md](trace.md)）。
-4. 自进化：有信号则 nudge 写提案；S8 `self-evolve-review` / `scripts/evolve-review.sh`（只草稿）；契约 [verify/references/evolve.md](../verify/references/evolve.md) · [references/self-evolution.md](self-evolution.md)
-5. 自检：`bash ~/.cursor/skills/idev/scripts/healthcheck.sh`（symlink / 配方 / 审计 / outbound / grilling / hardcoded-path）。他机落地：[references/portability-checklist.md](portability-checklist.md)
+**冷启动只读两页：** [agent-brief.md](agent-brief.md) + `SKILL.md` 决策树。其余按场景懒加载（模块 SKILL 顶部「本阶段 5 步」→ 需要时再开 how-to / gates）。
+
+1. **命令速查（指针目录）** [operator-cheatsheet.md](operator-cheatsheet.md) — 路由仍以 `SKILL.md` 为准；认票/H1–H6 在 [invoke.md](invoke.md)。
+2. **真源** `~/.cursor/skills/idev/`（实目录）；aliases 必须是 symlink。companion：grilling + setup-agents-docs。
+3. 周审计 / 自进化 / 自检：`audit-traces.sh` · `evolve-review.sh` · `healthcheck.sh`（含 late-lifecycle / second-product smoke）。Linux 调度：[linux-schedulers.md](linux-schedulers.md)。可移植：[portability-checklist.md](portability-checklist.md)。
 
 **唯一顶层 Skill**；conventions / docs / deliver / verify / ops 是内部模块。[docs/SKILL.md](../docs/SKILL.md) 管产线文档落点，写文档时与当前执行模块一起打开。闭环真源 [conventions/evidence.md](../conventions/evidence.md)。idev 不绑产品仓，产品依赖 idev。使用中的中间文件在产品仓 `.idev/`，不进内核。禁止 `.scratch/`。分工：[conventions/scope.md](../conventions/scope.md)。
 

@@ -12,6 +12,14 @@ parent: idev
 每阶段按 [experts.md](references/experts.md) 拒过，不是扮演专家说话。  
 `sealed` / `accepted` / `aligned`：人手改 YAML，或本轮确认用语由 Agent 按 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md) 代写当前停问点。`继续` 不算。
 
+## 本阶段 5 步（先做这些）
+
+1. `session-context.py` → 只开 `OPEN` 行；S1 必开 grilling + [docs/SKILL.md](../docs/SKILL.md)。
+2. 读本阶段票文件（`baseline` / `req` / `arch` / `review`…），边界不清先 grilling，勿自拷问。
+3. 改产物；请签前 `check-feature.sh <feature> <stage>`（FAIL 看 HINT）。
+4. 有确认用语才代写当前停问点；`aligned`/`done` 必须人名 `by`。
+5. `trace.sh append`；对话一行运行路径。
+
 | Need | Doc |
 |------|-----|
 | 怎么用 | [references/how-to.md](references/how-to.md) |

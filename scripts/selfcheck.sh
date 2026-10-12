@@ -1184,6 +1184,58 @@ grep -q 'promote receipt' "$PROMOTE_FIX/docs/test-case/promo-patrol.yaml"
 rm -rf "$PROMOTE_FIX"
 echo "OK  promote refuse FAIL + receipt on PASS"
 
+echo "=== negative: aligned/done without human by ==="
+ALIGN_FIX=$(mktemp -d)
+mkdir -p "$ALIGN_FIX/docs/task/align-demo" "$ALIGN_FIX/docs/spec"
+printf 'eval\n' > "$ALIGN_FIX/docs/task/align-demo/deliver-eval.md"
+cat > "$ALIGN_FIX/docs/spec/align-demo.md" <<'EOF'
+spec
+EOF
+cat > "$ALIGN_FIX/docs/task/align-demo/grill.md" <<'EOF'
+convention: grilling
+frontier: empty
+shared_understanding: true
+
+❓ **Q1** - **scope**: settled
+➡️ keep
+EOF
+cat > "$ALIGN_FIX/docs/task/align-demo/baseline.yaml" <<'YAML'
+schema_version: 2
+feature: align-demo
+revision: 1
+sealed: true
+goal: g
+non_goal: n
+items:
+  - id: B1
+    must: m
+boundaries: []
+details: []
+review_questions: []
+objections: []
+YAML
+cat > "$ALIGN_FIX/docs/task/align-demo/deliver.yaml" <<'YAML'
+schema_version: 2
+feature: align-demo
+stage: done
+risk_tier: P2
+aligned: true
+by: agent
+YAML
+if "${CHECK[@]}" --repo "$ALIGN_FIX" --feature align-demo --stage ops >/tmp/idev-align-neg.out 2>&1; then
+  fail "expected FAIL when aligned by=agent"
+fi
+grep -qE 'aligned/done requires human by|agent filled signoff' /tmp/idev-align-neg.out \
+  || fail "missing aligned forge fail"
+grep -q '^HINT:' /tmp/idev-align-neg.out || fail "missing FAIL HINT"
+rm -rf "$ALIGN_FIX"
+echo "OK  aligned forge + HINT"
+
+echo "=== late-lifecycle + second-product smoke ==="
+bash "${ROOT}/late-lifecycle-smoke.sh" >/dev/null || fail "late-lifecycle-smoke"
+bash "${ROOT}/second-product-smoke.sh" >/dev/null || fail "second-product-smoke"
+echo "OK  late-lifecycle + second-product smoke"
+
 echo "=== grill.md recognition ==="
 GRILL=$(mktemp -d)
 mkdir -p "$GRILL/docs/task/grill-demo"

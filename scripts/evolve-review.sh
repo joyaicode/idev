@@ -135,38 +135,50 @@ open(out, "w", encoding="utf-8").write("\n".join(rows) if rows else "(none)")
 print(f"review_hits={len(rows)} review_days={days}")
 PY
 
-# 4) open proposals
-python3 - "$PROPOSALS" "$TMP/open.txt" <<'PY'
-import os, sys, re
-prop = sys.argv[1]
-out = sys.argv[2]
+# 4) open proposals (+ stale/draft age as hard signal)
+STALE_DAYS="${IDEV_PROPOSAL_STALE_DAYS:-14}"
+python3 - "$PROPOSALS" "$TMP/open.txt" "$TMP/stale_n.txt" "$STALE_DAYS" <<'PY'
+import os, sys, re, time
+prop, out, stale_out, stale_days = sys.argv[1], sys.argv[2], sys.argv[3], int(sys.argv[4])
 rows = []
+stale_n = 0
+cutoff = time.time() - stale_days * 86400
+closed = {"landed", "archived", "rejected", "ga"}
 for name in sorted(os.listdir(prop)) if os.path.isdir(prop) else []:
     if not name.endswith(".md"):
         continue
     p = os.path.join(prop, name)
     try:
         text = open(p, encoding="utf-8", errors="replace").read(4000)
+        mtime = os.path.getmtime(p)
     except OSError:
         continue
     m = re.search(r"^status:\s*(\S+)", text, re.M)
-    status = (m.group(1) if m else "unknown").strip().strip('"')
-    if status.lower() in ("landed", "archived", "rejected", "ga"):
+    status = (m.group(1) if m else "unknown").strip().strip('"').lower()
+    if status in closed:
         continue
-    rows.append(f"- `{name}` status={status}")
+    age = int((time.time() - mtime) / 86400)
+    mark = ""
+    if status == "stale" or (mtime < cutoff and status in ("draft", "unknown", "open", "partial")):
+        stale_n += 1
+        mark = " STALE_SIGNAL"
+    rows.append(f"- `{name}` status={status} age={age}d{mark}")
 open(out, "w", encoding="utf-8").write("\n".join(rows) if rows else "(none)")
-print(f"open_proposals={len(rows)}")
+open(stale_out, "w", encoding="utf-8").write(str(stale_n))
+print(f"open_proposals={len(rows)} stale_proposals={stale_n} stale_days={stale_days}")
 PY
 
 HOT="$(python3 -c "import json; d=json.load(open('$TMP/inbox.json')); print(','.join(d.get('hot') or []) or '(none)')")"
 INBOX_N="$(python3 -c "import json; d=json.load(open('$TMP/inbox.json')); print(sum((d.get('counts') or {}).values()))")"
 REVIEW_BODY="$(cat "$TMP/reviews.txt")"
 OPEN_BODY="$(cat "$TMP/open.txt")"
+STALE_N="$(cat "$TMP/stale_n.txt")"
 AUDIT_SNIP="$(grep -E 'HARD|ALERT|multi-exec|seal-write|WARN|FAIL' "$AUDIT_OUT" | head -40 || true)"
 
 SIGNAL=0
 [[ "$HARD" != "0" ]] && SIGNAL=1
 [[ "$HOT" != "(none)" ]] && SIGNAL=1
+[[ "$STALE_N" != "0" ]] && SIGNAL=1
 # reviews are soft: never raise signal alone (debounce historical 缺口 mentions)
 
 TITLE_DATE="$(date +%Y%m%d)"
@@ -181,12 +193,13 @@ window: ${WINDOW}
 
 ## 结论
 
-本窗未发现需进化的硬信号（HARD_COUNT=0，inbox 无 ≥2 同类非 ok 热标签）。reviews 缺口词仅作软提示，不单独抬 signal。
+本窗未发现需进化的硬信号（HARD_COUNT=0，inbox 无 ≥2 同类非 ok 热标签，无超龄 draft/stale 提案）。reviews 缺口词仅作软提示，不单独抬 signal。
 
 ## 证据摘要
 
 - HARD_COUNT=${HARD}
 - inbox non-ok count=${INBOX_N}; hot_tags=${HOT}
+- stale_proposals (≥${STALE_DAYS}d draft/stale)=${STALE_N}
 - soft review hits (≤${REVIEW_DAYS}d, not a signal): ${REVIEW_BODY}
 - open proposals:
 ${OPEN_BODY}
@@ -213,6 +226,7 @@ window: ${WINDOW}
 | HARD_COUNT | ${HARD} |
 | inbox hot tags (≥2) | ${HOT} |
 | inbox non-ok count | ${INBOX_N} |
+| stale proposals (≥${STALE_DAYS}d) | ${STALE_N} |
 
 ## 要改什么（草稿 — 须 grill 后改）
 

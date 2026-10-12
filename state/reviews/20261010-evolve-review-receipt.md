@@ -1,0 +1,7 @@
+# evolve-review receipt
+
+at: 2026-10-10T10:18:32+08:00
+draft: `/Users/wangwei794/.cursor/skills/idev/state/proposals/20261010-101831-evolve-review.md`
+HARD_COUNT: 0
+hot_tags: (none)
+signal: 0

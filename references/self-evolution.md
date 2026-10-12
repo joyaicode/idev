@@ -60,7 +60,14 @@ Nudge 话术示例：「这次踩到 X，要不要我按 evolve 写一条提案�
 ### Curator
 
 `bash ~/.cursor/skills/idev/scripts/evolve-curator.sh`  
-默认只打印建议；`--apply` 才把超龄且未落地的提案标 `status: archived`（保留文件）。
+默认只打印建议；`--apply` 才改状态（不硬删）。
+
+| 年龄 | 动作 |
+|------|------|
+| ≥ `--stale-days`（默认 14） | `status: stale`（仍打开，催 grill） |
+| ≥ `--days`（默认 30） | `status: archived` |
+
+`evolve-review.sh` 把 **stale / 超龄 draft** 计入硬信号（与 HARD / inbox hot 并列），避免提案永久草稿。
 
 ### 清理执行产物
 

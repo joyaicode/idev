@@ -11,6 +11,14 @@ parent: idev
 **不是**验收权威，不准把无基线写成达标。  
 plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析，不把路径写死成 `docs/task`。
 
+## 本阶段 5 步（先做这些）
+
+1. 读 `plan.yaml`；无 plan 先起草（goal/non_goal 复制密封基线）。
+2. 请人 `accepted` 前跑 `check-feature.sh <f> verify-plan`（已 accepted 再 run 不重跑）。
+3. 按 mode 跑 cases；只许 PASS/FAIL/UNPROVEN；PASS 必须有证据路径。
+4. 提测维表六族：`mode: test` + `unproven.md`；人没提 promote 不问不跑。
+5. 写 `conductor-eval` 件数；试运行停问 feedback tags；`trace.sh append`。
+
 | Need | Doc |
 |------|-----|
 | 怎么用 | [references/how-to.md](references/how-to.md) |

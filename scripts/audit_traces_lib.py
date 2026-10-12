@@ -69,9 +69,11 @@ def main() -> int:
         "unbound_feature": 0,
         "extensions_not_opened": 0,
         "extensions_missing": 0,
+        "grill_not_opened": 0,
     }
     weak_files: list[str] = []
     unbound_files: list[str] = []
+    grill_files: list[str] = []
     flagged: list[tuple[str, list[str], str]] = []
     marked_traces = _marked_product_traces(trace_dir)
     kernel_traces = _kernel_traces(trace_dir)
@@ -155,6 +157,14 @@ def main() -> int:
         elif re.search(r"\b(sealed|accepted|aligned)\b", text, re.I) and neg_seal.search(text):
             stats["seal_fp_negation"] += 1
 
+        # Soft: S1 must open grilling; missing is MUST_ZERO, not HARD.
+        if scenario == "S1" and not re.search(
+            r"grilling/SKILL\.md|skills/grilling", opened_block
+        ):
+            stats["grill_not_opened"] += 1
+            flags.append("grill-not-opened")
+            grill_files.append(path.name)
+
         hard = [
             f
             for f in flags
@@ -216,11 +226,19 @@ def main() -> int:
         f"| `feature: -` 未绑票 | {stats['unbound_feature']} | {pct(stats['unbound_feature'])}% | "
         "小改先绑票走 S8 lite-change（s8-preflight）；非交付类对话可说明原因 |"
     )
-    print(f"MUST_ZERO_TOTAL={stats['weak_calls'] + stats['unbound_feature']}")
+    print(
+        f"| S1 未打开 grilling | {stats['grill_not_opened']} | {pct(stats['grill_not_opened'])}% | "
+        "S1 必开 `~/.cursor/skills/grilling/SKILL.md` 并写入 opened |"
+    )
+    print(
+        f"MUST_ZERO_TOTAL={stats['weak_calls'] + stats['unbound_feature'] + stats['grill_not_opened']}"
+    )
     if weak_files:
         print("- calls 弱/空样本（最多 10）: " + ", ".join(weak_files[:10]))
     if unbound_files:
         print("- 未绑票样本（最多 10）: " + ", ".join(unbound_files[:10]))
+    if grill_files:
+        print("- S1 未开 grilling 样本（最多 10）: " + ", ".join(grill_files[:10]))
     print()
     print("## 硬报警样本（最多 15）")
     if not flagged:

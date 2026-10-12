@@ -474,6 +474,52 @@ def ok(msg: str) -> None:
     print("PASS  " + msg)
 
 
+# Actionable next steps for common structural fails (printed once at end).
+FAIL_HINTS: list[tuple[re.Pattern[str], str]] = [
+    (
+        re.compile(r"plan\.mode must be test"),
+        "HINT: set plan.mode: test, cover unproven 六族 (or unproven.md), then re-run check-feature <f> test",
+    ),
+    (
+        re.compile(r"aligned/done requires human by|stage=done requires aligned"),
+        "HINT: wait for human confirmation wording; write aligned: true + by: <人名>; never by: agent",
+    ),
+    (
+        re.compile(r"resolved=true requires human by"),
+        "HINT: ops.resolved needs human by after chat-confirm; do not forge",
+    ),
+    (
+        re.compile(r"sealed baseline but grill\.md frontier is not closed|missing grill\.md"),
+        "HINT: open ~/.cursor/skills/grilling/SKILL.md; close frontier: empty + shared_understanding: true before seal",
+    ),
+    (
+        re.compile(r"PASS without run evidence"),
+        "HINT: keep UNPROVEN until a real run leaves a log path in evidence",
+    ),
+    (
+        re.compile(r"missing verify/plan\.yaml|plan\.goal"),
+        "HINT: draft verify/plan.yaml with goal copied from baseline; accept before run",
+    ),
+    (
+        re.compile(r"ops\.kind is still unknown|ops\.\w+ empty"),
+        "HINT: classify first (ops/references/classify.md); fill phenomenon/env/artifact/observable",
+    ),
+    (
+        re.compile(r"semantic_gate"),
+        "HINT: prior stages need semantic_gate.*.passed: true + human by; dry-run: --backfill-semantic-gate-dry-run",
+    ),
+]
+
+
+def print_fail_hints(errors: list[str]) -> None:
+    seen: set[str] = set()
+    for err in errors:
+        for pat, hint in FAIL_HINTS:
+            if pat.search(err) and hint not in seen:
+                print(hint)
+                seen.add(hint)
+
+
 _GRILL_LINE = re.compile(
     r"(?m)^(convention|frontier|shared_understanding):\s*(\S+)\s*$"
 )
@@ -850,7 +896,8 @@ def main() -> int:
         rt = scalar(deliver, "risk_tier")
         if rt and rt not in ("P0", "P1", "P2"):
             fail("deliver.risk_tier must be P0|P1|P2", errors)
-        if scalar(deliver, "stage") not in (
+        stage = scalar(deliver, "stage")
+        if stage not in (
             "",
             "req-review",
             "req",
@@ -860,7 +907,18 @@ def main() -> int:
             "done",
             "ops",
         ):
-            fail("deliver.stage unknown: %s" % scalar(deliver, "stage"), errors)
+            fail("deliver.stage unknown: %s" % stage, errors)
+        aligned = scalar(deliver, "aligned")
+        if aligned == "true" or stage == "done":
+            who = scalar(deliver, "by")
+            if not who or AGENT_BY.match(who):
+                fail("aligned/done requires human by", errors)
+            else:
+                ok("aligned/done has human by")
+            if stage == "done" and aligned != "true":
+                fail("stage=done requires aligned: true", errors)
+            elif stage == "done":
+                ok("stage=done with aligned: true")
 
     forged = []
     for label, text in (
@@ -896,6 +954,7 @@ def main() -> int:
     print("---")
     if errors:
         print("%d FAIL" % len(errors))
+        print_fail_hints(errors)
         return 1
     print("0 FAIL")
     return 0

@@ -5,6 +5,13 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 
 # Agent 入口须知（先读这页，1 分钟）
 
+## 冷启动（只读两页）
+
+1. **本页**（回路 / STOP / 冲突 / 编号）
+2. **`SKILL.md` 决策树**（认场景 S1–S8）
+
+其它页按场景懒加载：认票/H1–H6 → [invoke.md](invoke.md)；模块步骤 → 该模块 SKILL 顶部「本阶段 5 步」；签字用语 → [chat-confirm-signoff.md](chat-confirm-signoff.md)。**不要**一上来打开 lifecycle / cheatsheet 全文 / 多模块。
+
 ## 你是谁、在做什么
 
 你在 idev 里是**人机共驾**的执行者：起草、自测、写报告、跑命令由你做；**签字类状态由人确认**。你不是无人值守流水线。
@@ -22,7 +29,7 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 3. **只开一个执行模块**（deliver / verify / ops 不同时加载）。
 4. **动手前**：涉及改代码先读 [conventions/coding.md](../conventions/coding.md) §0；涉及“加层/拆分/缓存/队列/重试/重写”先走 [conventions/canon.md](../conventions/canon.md) §1。
 5. **有不清楚处先 grilling**（`~/.cursor/skills/grilling/SKILL.md`），不要拿含糊摘要请人签。
-6. **收尾**：`scripts/trace.sh append` 写 trace（产品仓进 `.idev/traces/`，不进内核）；请签时回显一行 `将代写: <字段>`。
+6. **收尾**：`scripts/trace.sh append` 写 trace（产品仓进 `.idev/traces/`，导体自身会话才进内核）；请签时回显一行 `将代写: <字段>`。
 
 ## 什么时候必须停下来问人（STOP）
 

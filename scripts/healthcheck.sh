@@ -63,6 +63,23 @@ else
   fail=1
 fi
 
+if bash "$ROOT/scripts/late-lifecycle-smoke.sh" >$HC_TMP/idev-late-smoke.out 2>&1; then
+  echo "OK  late-lifecycle smoke"
+  grep -E 'LATE_LIFECYCLE_SMOKE_OK|OK  ' $HC_TMP/idev-late-smoke.out | tail -8 || true
+else
+  echo "FAIL late-lifecycle smoke"
+  tail -50 $HC_TMP/idev-late-smoke.out || true
+  fail=1
+fi
+
+if bash "$ROOT/scripts/second-product-smoke.sh" >$HC_TMP/idev-second.out 2>&1; then
+  echo "OK  second-product smoke"
+else
+  echo "FAIL second-product smoke"
+  cat $HC_TMP/idev-second.out || true
+  fail=1
+fi
+
 
 # S8 preflight script must exist and fail-closed on missing ticket
 if [[ -x "$ROOT/scripts/s8-preflight.sh" ]]; then

@@ -12,6 +12,14 @@ parent: idev
 特征缺陷回退 deliver 的 `req` / `arch` / `code`。接入坑和集群故障**交出去**，不要抄进本模块。  
 `ops.yaml` 写在 `<票目录>/`。`<票目录>` 只认 `doc_home.py --key task`。
 
+## 本阶段 5 步（先做这些）
+
+1. `session-context.py`（S6/ops）→ 只开 `OPEN`。
+2. 写齐 `ops.yaml`：phenomenon / env / artifact / observable + `kind`（禁长期 `unknown`）。
+3. `check-feature.sh <f> ops`；红绿只走 verify `debug`/`patrol`。
+4. `onboard`/`runtime` 只写 handoff，不抄交出口正文；不自动做生产写操作。
+5. `resolved` 须人名 `by`；`trace.sh append`。
+
 | Need | Doc |
 |------|-----|
 | 怎么用 | [references/how-to.md](references/how-to.md) |
