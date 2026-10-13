@@ -128,7 +128,12 @@ CANON_TRIGGER: <无|新增一层|拆分|缓存|队列|重试|重写|新依赖>
 TABLE_HIT: <§1 行号/名称 | 零命中>
 IMPACT: codegraph depth=1,候选 <n> 个(<列表或路径>)| 查不到:<原因>
 
-CHANGED: <文件数>(全部在 include: true 内?是/否)
+SCOPE: <动手前就定好:本轮打算改哪些 file:symbol>
+READ: <改之前读过的 file:symbol>
+CHANGED: <实际改的 file:symbol;无改动写「无」>
+REVERT: <动手前的 base commit 或 stash ref;CHANGED 非空时必填>
+RED_FIRST: <仅 review.fix:修之前那条用例红过 + 日志路径>
+ASSUMED: <这轮做了什么没验的假设;没有写「无」>
 HITS: §1 <n> 命中已改 / §2 已扫 / T# <列表或无>
 UNRELATED: <条数,未改>
 SELFTEST: <跑了什么> → PASS | FAIL(签名 <sig>,第 <n> 轮)
@@ -191,3 +196,29 @@ preamble 已给好 `IDEV` / `REPO` / `TICKET`(都是 `Path`)并把 idev 的 lib 
 它也不是第二套测试框架:算事实可以,判红绿仍只有 verify。
 
 全文:[references/code-agent.md](../references/code-agent.md)。
+
+## 准确率护栏(机检,不是提醒)
+
+四条从 Cursor / Claude Code 借来的硬约束 —— 它们在那边是**工具边界**,在这里是
+**回报字段 + `delegation.py` 机检**:
+
+| 字段 | 挡什么 | 机检 |
+|---|---|---|
+| `SCOPE` 先定、`CHANGED` 后对 | **范围蔓延**:本来改一处,顺手又「优化」三处 | `scope-held` —— `CHANGED` 超出 `SCOPE` 即 FAIL |
+| `READ` ⊇ `CHANGED` | **盲改**:改一个没读过的地方,多半是按名字猜它在干什么 | `read-before-change` |
+| `REVERT` 给锚点 | 改乱了只能手工考古 | `revert-anchor` —— 有改动却无锚点即 FAIL |
+| `RED_FIRST`(仅 `review.fix`) | 没见它红过就修,你不知道修的是不是它 | `red-first` |
+
+动手前先记锚点,这一行让「把这次委派全撤掉」变成一条命令:
+
+```bash
+git rev-parse HEAD        # 这就是 REVERT 的值
+```
+
+**`SCOPE` / `READ` / `CHANGED` 都写 `路径:符号`,不要只写路径。** 「改了 `service.py`」
+没有信息量,「改了 `service.py:resolve_token`」才让导体能核对 —— 这是 Claude 的 `Edit`
+要求唯一精确字符串的同一个用意:**失败要响,不要静默改到相邻的相似位置**。
+
+`ASSUMED` 写清这轮没验的前提。导体只核那一条,比把整份回报重验一遍便宜得多。
+
+全文与借鉴来源:[references/agent-accuracy.md](../references/agent-accuracy.md)。

@@ -32,12 +32,14 @@
 | `deliver/` `verify/` `ops/` `docs/` `conventions/` | 阶段模块与规约 |
 | `scripts/workflow.py` | 按配方驱动 `run.yaml`，`next` 打印 `OPEN` 落点页 + `DELEGATE` 派给谁 |
 | `scripts/lib/kind_agents.py` | `kind → agent` 登记表（29 kinds / 5 agents，24 委派 / 5 导体保留） |
+| `scripts/stage-gate.py` | 七视角把关：experts.md 拒过清单里可机检的 21 条 |
 | `scripts/delegation.py` | 委派留痕：write / check / replay / timeline / eval |
 | `scripts/agent-metrics.py` · `agent-review.sh` | 跨票指标 · 定期复盘（只起草不 land） |
 | `scripts/failure_signature.py` · `hypothesis.py` | 提效：失败签名归一化 · 假设台账 |
 | `references/agents.md` · `agents-playbook.md` | 委派契约（是什么）· 唤起与配合最佳实践（怎么用） |
 | `references/boost.md` | 提效：**本地事实优先**（文档会过时）· §0 交代 · 签名归一化 · 假设台账 |
 | `references/code-agent.md` · `scripts/repl.py` | 用代码表达推理：计算的源码与输出落成证据 |
+| `references/agent-accuracy.md` | 准确率护栏：借 Cursor/Claude Code 的机械约束（6 条机检） |
 | `references/external-tools.md` | Langfuse 导出 · promptfoo 回归断言 · 为什么不装 DSPy |
 | `scripts/langfuse-export.py` · `promptfoo-gen.py` | 离线导出观测 · 生成格式与边界断言（0 评分） |
 | `references/agents-evolve.md` · `failure-modes.md` · `agents-todo.md` | 可调试与自进化 · 失败模式清单 · 待办 |

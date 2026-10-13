@@ -143,6 +143,101 @@ def human_secs(seconds: int | None) -> str:
     return f"{seconds // 60}m{seconds % 60:02d}s"
 
 
+
+# references/agent-accuracy.md — the guards borrowed from Cursor / Claude Code.
+# Each one translates a tool-level constraint those agents enforce into a
+# declaration this layer can machine-check.
+SCOPE_LINE = re.compile(r"(?mi)^\s*SCOPE:\s*(.+?)\s*$")
+READ_LINE = re.compile(r"(?mi)^\s*READ:\s*(.+?)\s*$")
+CHANGED_LINE = re.compile(r"(?mi)^\s*CHANGED:\s*(.+?)\s*$")
+REVERT_LINE = re.compile(r"(?mi)^\s*REVERT:\s*(.+?)\s*$")
+RED_FIRST_LINE = re.compile(r"(?mi)^\s*RED_FIRST:\s*(.+?)\s*$")
+ASSUMED_LINE = re.compile(r"(?mi)^\s*ASSUMED:\s*(.+?)\s*$")
+# A declaration of "nothing", which is a valid answer for every one of these.
+NONE_VALUE = re.compile(r"(?i)^\s*(?:无|none|-|n/?a|不适用|0)\s*(?:[(（].*)?$")
+# file.ext:symbol — the anchor granularity. "changed service.py" carries no
+# information; "service.py:resolve_token" lets the conductor check.
+ANCHOR = re.compile(r"[\w./-]+\.\w+:[\w.$<>-]+")
+
+
+def _paths(value: str) -> set[str]:
+    """File paths named in a SCOPE / READ / CHANGED value, anchors stripped."""
+    out = set()
+    for hit in re.findall(r"[\w./-]+\.\w+", value):
+        out.add(hit.split(":")[0])
+    return out
+
+
+def check_accuracy(record: dict) -> dict[str, str]:
+    """The accuracy guards. Scoped to the agent and kind that can honour them.
+
+    Only idev-coder declares scope/read/revert — it is the one that edits
+    files. The other FACTS agents declare ASSUMED, because reaching a
+    judgement on an unverified premise is the failure these catch.
+    """
+    agent = str(record.get("agent", ""))
+    kind = str(record.get("kind", ""))
+    raw = str((record.get("report") or {}).get("raw", ""))
+    out: dict[str, str] = {}
+
+    if agent in kind_agents.FACTS_AGENTS:
+        # Saying "I assumed X" costs one line and saves the conductor from
+        # re-verifying the whole report. Writing 无 counts as declaring.
+        out["assumption-declared"] = "PASS" if ASSUMED_LINE.search(raw) else "FAIL:no ASSUMED line"
+
+    if agent != "idev-coder":
+        return out
+
+    scope = SCOPE_LINE.search(raw)
+    read = READ_LINE.search(raw)
+    changed = CHANGED_LINE.search(raw)
+
+    out["scope-declared"] = "PASS" if scope else "FAIL:no SCOPE line"
+
+    changed_paths = _paths(changed.group(1)) if changed else set()
+    touched = bool(changed_paths) and not NONE_VALUE.match(changed.group(1) if changed else "")
+
+    # scope-held: nothing outside the declared scope. This is the one that
+    # catches scope creep — "while I was in there I also fixed...".
+    if not scope:
+        out["scope-held"] = "WARN:no SCOPE to compare"
+    elif not touched:
+        out["scope-held"] = "PASS"
+    else:
+        extra = changed_paths - _paths(scope.group(1))
+        out["scope-held"] = "PASS" if not extra else "FAIL:outside SCOPE: " + ",".join(sorted(extra))
+
+    # read-before-change: Claude's Edit enforces this at the tool layer.
+    if not touched:
+        out["read-before-change"] = "PASS"
+    elif not read:
+        out["read-before-change"] = "FAIL:no READ line"
+    else:
+        unread = changed_paths - _paths(read.group(1))
+        out["read-before-change"] = "PASS" if not unread else "FAIL:changed unread: " + ",".join(sorted(unread))
+
+    # revert-anchor: a checkpoint, so undoing a delegation is one command.
+    if not touched:
+        out["revert-anchor"] = "PASS"
+    else:
+        rev = REVERT_LINE.search(raw)
+        if rev and not NONE_VALUE.match(rev.group(1)):
+            out["revert-anchor"] = "PASS"
+        else:
+            out["revert-anchor"] = "FAIL:changed files with no REVERT anchor"
+
+    # Anchors, not bare paths — only a hint, since a path alone is still usable.
+    if touched and not ANCHOR.search(changed.group(1)):
+        out["anchor-granularity"] = "WARN:CHANGED names files but no file:symbol anchor"
+
+    # red-first: fixing without seeing it red means not knowing what you fixed.
+    if kind == "review.fix":
+        rf = RED_FIRST_LINE.search(raw)
+        out["red-first"] = "PASS" if rf else "FAIL:no RED_FIRST line (evidence.md step 4)"
+
+    return out
+
+
 def read_evidence(record: dict, repo: Path | None) -> str | None:
     """The evidence file's text. None when the file cannot be found.
 
@@ -297,6 +392,8 @@ def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     checks.update(check_boost(record, repo))
     # Local-facts declarations (the judgement-making agents).
     checks.update(check_facts(record))
+    # Accuracy guards borrowed from Cursor / Claude Code.
+    checks.update(check_accuracy(record))
     return checks
 
 

@@ -81,6 +81,7 @@ FINDINGS: <I* 条数>(blocking <n> / 一般 <n>)
 UNRELATED: <条数>
 FACTS: codegraph <用了什么> | 源码 <路径:行> | 命令 <输出路径> | git <commit>
 DOC_DRIFT: 无 | <文档页> 说 X,代码实际 Y(建议派 docs.backfill)
+ASSUMED: <这轮没验的假设;没有写「无」>
 CHECKS: evidence-present=PASS|FAIL  no-signoff-write=PASS  report-parsed=PASS
 SUGGEST: <本定义里哪一步含糊,或空>
 CONCLUSION: <一句话>
@@ -128,3 +129,14 @@ preamble 已给好 `IDEV` / `REPO` / `TICKET`(都是 `Path`)并把 idev 的 lib 
 它也不是第二套测试框架:算事实可以,判红绿仍只有 verify。
 
 全文:[references/code-agent.md](../references/code-agent.md)。
+
+## 把猜测浮出来(机检)
+
+`ASSUMED:` 列出这轮做了什么**没验、但结论依赖它**的假设;没有就写「无」。
+机检 `assumption-declared`。
+
+这是 Claude 的一个实质优势:**它会说「我不确定」**,而不是把猜测写成结论。
+效率上也是净赚 —— 导体只需核那一条假设,不必把整份回报重验一遍。它还防住一类隐蔽错误:
+推理每一步都对,只是最开头的前提是猜的。
+
+[references/agent-accuracy.md](../references/agent-accuracy.md)

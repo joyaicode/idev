@@ -92,7 +92,8 @@ codegraph_impact <symbol> --depth 1         # 改它会波及谁
    - `kind=patrol` → 重放巡检包,交 verify `patrol`
    - `kind=onboard` / `runtime` → **只写 handoff 并停**,打开当前产品 `.idev/handoff.yaml` 里对应的 Skill,**不抄正文**
 3. 猜想进台账(见上),取证本身交 verify
-4. 门禁,FAIL 不准请签:`bash $IDEV/scripts/check-feature.sh <feature> ops`
+4. 门禁,FAIL 不准请签:`bash $IDEV/scripts/check-feature.sh <feature> ops
+   python3 $IDEV/scripts/stage-gate.py --feature <feature> --stage ops`
 
 ## kind = ui.fix_deposit(沉淀)
 
@@ -151,6 +152,7 @@ SCENE: env=<> artifact=<> observable=<>(齐否)
 层: <发现层 → 根因层;修在哪一层>
 IMPACT: <影响范围,可检验> | codegraph depth=1 提名 <n>
 NEXT: <交 verify debug | 交 verify patrol | 已写 handoff 需停 | 交 coder 修 | 缺项待补>
+ASSUMED: <这轮没验的假设;没有写「无」>
 CHECK: hypothesis.py check = PASS | FAIL(<哪条>)
 红线: 未命中 | 命中<哪条>
 FACTS: codegraph <用了什么> | 源码 <路径:行> | 命令 <输出路径> | git <commit>
@@ -206,3 +208,30 @@ preamble 已给好 `IDEV` / `REPO` / `TICKET`(都是 `Path`)并把 idev 的 lib 
 它也不是第二套测试框架:算事实可以,判红绿仍只有 verify。
 
 全文:[references/code-agent.md](../references/code-agent.md)。
+
+## 把猜测浮出来(机检)
+
+`ASSUMED:` 列出这轮做了什么**没验、但结论依赖它**的假设;没有就写「无」。
+机检 `assumption-declared`。
+
+这是 Claude 的一个实质优势:**它会说「我不确定」**,而不是把猜测写成结论。
+效率上也是净赚 —— 导体只需核那一条假设,不必把整份回报重验一遍。它还防住一类隐蔽错误:
+推理每一步都对,只是最开头的前提是猜的。
+
+[references/agent-accuracy.md](../references/agent-accuracy.md)
+
+## 过专家拒过清单(机检那一半)
+
+请人签字前除 `check-feature` 还要跑:
+
+```bash
+python3 $IDEV/scripts/stage-gate.py --feature <f> --stage ops
+```
+
+它执行 `deliver/references/experts.md` 拒过清单里**可机检的那一半** ——
+验收含主观词、slice 不挂基线、根因未复现、弱断言这类。每条发现都说明**为什么**不可接受,
+照着改。
+
+**但它 PASS 不等于这一关过了。** 拒过清单的另一半是专业判断(拆解是否忠实、架构是否合理、
+用例是否有意义),只能人过 + grill 拷问。回报里把两者分开说:机检结果写
+`GATE:`,专业判断的未决项写进 `OPEN:` 或 `ASSUMED:`。

@@ -57,6 +57,30 @@ S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none`
 [references/boost.md](references/boost.md)；待办与验证状态
 [references/agents-todo.md](references/agents-todo.md)。
 
+## 每道关:七视角的专业性把关
+
+`deliver/references/experts.md` 按产品 / 设计 / 架构 / 开发 / 测试 / 交付 / 排障
+七档给拒过清单。其中**可机检的那一半**由 `scripts/stage-gate.py` 执行（21 条）：
+验收含主观词 · 解决方案冒充需求 · slice 不挂基线 · 无回退路径 · 弱断言 ·
+根因未复现 ……每条都说明**为什么**不可接受。
+
+```bash
+python3 scripts/stage-gate.py --feature <f> --all
+```
+
+**机检没发现 ≠ 这一关过了** —— 另一半（拆解是否忠实 / 架构是否合理 / 用例是否有
+意义）只能人过 + grill 拷问。请签前三道一起过：`check-feature.sh`（结构）+ 
+`stage-gate.py`（专业硬错）+ 人按 `experts.md` 过清单。
+
+## 准确率护栏
+
+借 Cursor / Claude Code 在编码/测试/根因上**让它们准的机械约束**，翻译成这一层的
+回报字段 + 机检：`SCOPE`/`CHANGED` 挡范围蔓延 · `READ` ⊇ `CHANGED` 挡盲改 ·
+`REVERT` 给撤销锚点 · `RED_FIRST` 要求修之前见它红过 · `ASSUMED` 把猜测浮出来。
+根因上用**二分**而非通读；探测用**一条消息并发**而非串行等待。
+
+六条机检与借鉴来源：[references/agent-accuracy.md](references/agent-accuracy.md)。
+
 ## 外部工具
 
 Langfuse（只做离线导出，不在交付路径上加网络依赖）· promptfoo（只做回报格式与边界的

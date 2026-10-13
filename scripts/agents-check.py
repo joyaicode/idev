@@ -174,6 +174,20 @@ def check_files(agent_dir: Path, strict_roster: bool, errors: list[str], warns: 
                         f"{path.name}: judgement-making agent has no {marker} line; "
                         "delegation.py checks facts-first / drift-declared"
                     )
+        # agent-accuracy.md: the guards are only real if the field is in
+        # the report format — delegation.py cannot check a line nobody emits.
+        if name in kind_agents.FACTS_AGENTS and "ASSUMED:" not in body:
+            errors.append(
+                f"{path.name}: no ASSUMED: line; delegation.py checks assumption-declared"
+            )
+        if name == "idev-coder":
+            for marker in ("SCOPE:", "READ:", "REVERT:", "RED_FIRST:"):
+                if marker not in body:
+                    errors.append(
+                        f"{path.name}: no {marker} line; "
+                        "delegation.py checks scope-held / read-before-change / "
+                        "revert-anchor / red-first"
+                    )
         if name in kind_agents.BOOST_AGENTS and "$IDEV" not in body:
             errors.append(f"{path.name}: runs the boost scripts but never names $IDEV (the idev root)")
 

@@ -106,6 +106,7 @@ report:
     STATUS: PASS
     FACTS: codegraph_context + 源码 scripts/delegation.py:1
     DOC_DRIFT: 无
+    ASSUMED: 无
     EVIDENCE: ${TICKET}/review.md
     CONCLUSION: smoke
 YAML
@@ -173,6 +174,8 @@ report:
     STATUS: PASS
     FACTS: codegraph_context + 源码 scripts/delegation.py:1
     DOC_DRIFT: 无
+    SCOPE: scripts/delegation.py:check_accuracy
+    ASSUMED: 无
     EVIDENCE: ${TICKET}/review.md
     CHANGE_KIND: 追加行为
     CANON_TRIGGER: 无
@@ -269,6 +272,8 @@ report:
     STATUS: PASS
     FACTS: codegraph_context + 源码 scripts/delegation.py:1
     DOC_DRIFT: 无
+    SCOPE: scripts/delegation.py:check_accuracy
+    ASSUMED: 无
     EVIDENCE: ${TICKET}/review.md
     CONCLUSION: 改完了,但没交代 §0
 YAML
@@ -295,6 +300,8 @@ report:
     STATUS: PASS
     FACTS: codegraph_context + 源码 scripts/delegation.py:1
     DOC_DRIFT: 无
+    SCOPE: scripts/delegation.py:check_accuracy
+    ASSUMED: 无
     EVIDENCE: ${TICKET}/review.md
     CHANGE_KIND: 追加行为
     CANON_TRIGGER: 缓存
@@ -321,6 +328,8 @@ report:
     STATUS: PASS
     FACTS: codegraph_context + 源码 scripts/delegation.py:1
     DOC_DRIFT: 无
+    SCOPE: scripts/delegation.py:check_accuracy
+    ASSUMED: 无
     EVIDENCE: ${TICKET}/review.md
     CHANGE_KIND: 追加行为
     CANON_TRIGGER: 无
@@ -358,6 +367,7 @@ report:
     EVIDENCE: ${TICKET}/review.md
     FACTS: 看了文档
     DOC_DRIFT: 无
+    ASSUMED: 无
 YAML
 expect 1 "reject 文档-only as a fact source" -- \
   python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/nofacts.yaml"
@@ -403,6 +413,169 @@ report:
 YAML
 expect 0 "facts checks do not apply to the docs agent" -- \
   python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/docsok.yaml"
+
+# --- agent-accuracy.md: the borrowed guards ---
+
+# Scope creep: CHANGED names a file SCOPE never did. This is the guard that
+# catches "while I was in there I also fixed...".
+cat > "${TMP}/creep.yaml" <<YAML
+step: code-creep
+kind: deliver.code_pass
+agent: idev-coder
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: code
+  must_read: conventions/coding.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    FACTS: 源码 scripts/delegation.py:1
+    DOC_DRIFT: 无
+    ASSUMED: 无
+    SCOPE: a.py:f
+    READ: a.py:f, b.py:g
+    CHANGED: a.py:f, b.py:g
+    REVERT: abc1234
+YAML
+expect 1 "catch a change outside the declared SCOPE" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/creep.yaml"
+contains "scope-held" "names scope-held"
+contains "b.py" "names the file that escaped scope"
+
+# Blind edit: changed a file that was never read.
+cat > "${TMP}/blind.yaml" <<YAML
+step: code-blind
+kind: deliver.code_pass
+agent: idev-coder
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: code
+  must_read: conventions/coding.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    FACTS: 源码 scripts/delegation.py:1
+    DOC_DRIFT: 无
+    ASSUMED: 无
+    SCOPE: a.py:f, b.py:g
+    READ: a.py:f
+    CHANGED: a.py:f, b.py:g
+    REVERT: abc1234
+YAML
+expect 1 "catch editing a file that was never read" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/blind.yaml"
+contains "read-before-change" "names read-before-change"
+
+# No revert anchor: undoing this delegation would be an excavation.
+cat > "${TMP}/noanchor.yaml" <<YAML
+step: code-noanchor
+kind: deliver.code_pass
+agent: idev-coder
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: code
+  must_read: conventions/coding.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    FACTS: 源码 scripts/delegation.py:1
+    DOC_DRIFT: 无
+    ASSUMED: 无
+    SCOPE: a.py:f
+    READ: a.py:f
+    CHANGED: a.py:f
+YAML
+expect 1 "require a REVERT anchor when files changed" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/noanchor.yaml"
+contains "revert-anchor" "names revert-anchor"
+
+# Fixing without having seen it red.
+cat > "${TMP}/nored.yaml" <<YAML
+step: fix-nored
+kind: review.fix
+agent: idev-coder
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: code
+  must_read: conventions/coding.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    FACTS: 源码 scripts/delegation.py:1
+    DOC_DRIFT: 无
+    ASSUMED: 无
+    SCOPE: a.py:f
+    READ: a.py:f
+    CHANGED: a.py:f
+    REVERT: abc1234
+YAML
+expect 1 "require RED_FIRST on a fix step" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/nored.yaml"
+contains "red-first" "names red-first"
+
+# An undeclared assumption, on a non-coder agent.
+cat > "${TMP}/noassume.yaml" <<YAML
+step: classify-na
+kind: ops.classify
+agent: idev-ops
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: ops
+  must_read: ops/SKILL.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    FACTS: codegraph_context + 源码 scripts/trace.py:45
+    DOC_DRIFT: 无
+YAML
+expect 1 "require an ASSUMED declaration" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/noassume.yaml"
+contains "assumption-declared" "names assumption-declared"
+
+# All four guards honoured, on a fix step: must pass.
+cat > "${TMP}/cleanfix.yaml" <<YAML
+step: fix-clean
+kind: review.fix
+agent: idev-coder
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: code
+  must_read: conventions/coding.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    FACTS: 源码 scripts/delegation.py:250
+    DOC_DRIFT: 无
+    ASSUMED: 无
+    CHANGE_KIND: 追加行为
+    CANON_TRIGGER: 无
+    TABLE_HIT: 零命中
+    SCOPE: scripts/delegation.py:check_accuracy
+    READ: scripts/delegation.py:check_accuracy
+    CHANGED: scripts/delegation.py:check_accuracy
+    REVERT: 5ded958
+    RED_FIRST: 用例 guard-a 红过,日志 ${TICKET}/repl/guard-a-1.out
+YAML
+expect 0 "a fix honouring every guard passes" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/cleanfix.yaml"
 
 say "4 failure signature"
 cat > "${TMP}/log-a.txt" <<'LOG'
@@ -513,7 +686,7 @@ mkbad() {   # mkbad <slug> <filename>; file body on stdin; sets BAD
   cat > "${BAD}/$2"
 }
 
-BODY='正文需要含这些标记:STATUS: EVIDENCE: CHECKS: SUGGEST: FACTS: DOC_DRIFT: BLOCKED('
+BODY='正文需要含这些标记:STATUS: EVIDENCE: CHECKS: SUGGEST: FACTS: DOC_DRIFT: ASSUMED: BLOCKED('
 
 mkbad noname idev-reviewer.md <<MD
 ---
@@ -590,6 +763,7 @@ STATUS: 有,但缺 EVIDENCE 与 SUGGEST,也没有分类后缀
 CHECKS: 有
 FACTS: 有
 DOC_DRIFT: 无
+ASSUMED: 无
 MD
 expect 1 "a drifted report format is caught" -- python3 "${S}/agents-check.py" --agents-dir "$BAD"
 contains "report format" "names the report-format drift"
@@ -957,6 +1131,127 @@ expect 0 "show a transcript" -- \
 contains "stdout" "show prints the transcript"
 expect 2 "show refuses an unknown step" -- \
   python3 "${S}/repl.py" --repo "$TMP" show --feature "$FEATURE" --step nope
+
+say "14 stage-gate: the experts.md reject-lists"
+
+# A gate nobody tested is a gate nobody should trust. Each stage gets one
+# deliberately bad ticket and one clean one — findings must fire on the bad
+# input AND stay quiet on the good, or the gate is just crying wolf.
+GT="${TMP}/.idev/task/gate-bad"
+mkdir -p "${GT}/verify"
+
+cat > "${GT}/baseline.yaml" <<'YML'
+schema_version: 1
+goal: 让系统更稳定
+objections:
+  - 还没谈完
+items:
+  - {id: B1, must: 用 Redis 缓存用户态, acceptance: 响应要流畅}
+  - {id: B2, must: 记审计日志}
+YML
+expect 1 "req-review catches vague acceptance and solution-as-requirement" -- \
+  python3 "${S}/stage-gate.py" --repo "$TMP" --feature gate-bad --stage req-review
+contains "untestable-acceptance" "names the vague acceptance"
+contains "solution-as-requirement" "names the solution smuggled into a requirement"
+contains "no-acceptance" "names the item with no acceptance at all"
+contains "open-objections" "names the unresolved objections"
+
+cat > "${GT}/req.yaml" <<'YML'
+slices:
+  - {id: S1, baseline_item_id: B1, points: 13}
+  - {id: S2, must: 顺手加个导出}
+YML
+expect 1 "req catches oversized stories and unanchored slices" -- \
+  python3 "${S}/stage-gate.py" --repo "$TMP" --feature gate-bad --stage req
+contains "story-too-big" "names the 13-point story"
+contains "unanchored-slice" "names the slice with no baseline item"
+contains "dropped-baseline-item" "names the baseline item nobody covers"
+
+cat > "${GT}/arch.yaml" <<'YML'
+include: [src/a.py, src/b.py]
+case_intents:
+  - {id: CI1}
+YML
+expect 1 "arch catches a missing impact set and no rollback" -- \
+  python3 "${S}/stage-gate.py" --repo "$TMP" --feature gate-bad --stage arch
+contains "no-impact" "names the missing impact_candidates"
+contains "no-rollback" "names the missing rollback path"
+
+cat > "${GT}/review.md" <<'YML'
+编码规范: P? 待定
+C7 命中,待改下轮处理
+YML
+expect 1 "code catches placeholder codes and logged-not-fixed hits" -- \
+  python3 "${S}/stage-gate.py" --repo "$TMP" --feature gate-bad --stage code
+contains "placeholder-codes" "names the P? placeholder"
+contains "hit-not-applied" "names the hit deferred to next round"
+
+cat > "${GT}/verify/plan.yaml" <<'YML'
+cases:
+  - {id: c1, status: PASS, assert: 接口不报错}
+YML
+expect 1 "test catches a weak assertion and a PASS with no evidence" -- \
+  python3 "${S}/stage-gate.py" --repo "$TMP" --feature gate-bad --stage test
+contains "weak-assertion" "names the 不报错 assertion"
+contains "pass-without-evidence" "names the evidence-free PASS"
+
+cat > "${GT}/ops.yaml" <<'YML'
+phenomenon: 页面空白
+kind: unknown
+root_cause: 应该是缓存没刷
+YML
+expect 1 "ops catches an unreproduced root cause" -- \
+  python3 "${S}/stage-gate.py" --repo "$TMP" --feature gate-bad --stage ops
+contains "rootcause-without-repro" "names the unreproduced root cause"
+contains "conclusion-before-classify" "names the conclusion before classification"
+contains "scene-incomplete" "names the incomplete scene"
+
+# The other direction: a compliant ticket must come back clean, or findings
+# become noise people learn to ignore.
+GK="${TMP}/.idev/task/gate-ok"
+mkdir -p "${GK}/verify"
+cat > "${GK}/baseline.yaml" <<'YML'
+schema_version: 1
+goal: 登录失败时给出可定位的提示
+items:
+  - {id: B1, must: 登录失败提示, acceptance: 3 秒内返回带错误码的提示}
+YML
+cat > "${GK}/req.yaml" <<'YML'
+slices:
+  - {id: S1, baseline_item_id: B1, must: 登录失败提示, points: 5}
+YML
+cat > "${GK}/arch.yaml" <<'YML'
+include: [src/auth.py]
+impact_candidates:
+  - {path: src/login_handler.py, hop: 1}
+rollback: feature flag auth_msg_v2,关掉即回旧行为
+case_intents:
+  - {id: CI1, baseline_item_id: B1}
+YML
+cat > "${GK}/review.md" <<'YML'
+编码规范: §1 零命中;§2 已扫;T# 无。五轴 / 栈指南 / 增强扫描已跑。
+YML
+cat > "${GK}/verify/plan.yaml" <<'YML'
+cases:
+  - {id: c1, baseline_item_id: B1, status: PASS, evidence: target/verify/c1/run.log,
+     assert: 密码错误时 3 秒内收到错误码 AUTH_401}
+YML
+cat > "${GK}/ops.yaml" <<'YML'
+phenomenon: 登录提示缺失
+env: test
+artifact: 已发布包 v1.2.3
+observable: 网关日志
+kind: feature
+repro: yes
+root_cause: 错误码未透传,固定它可红绿切换
+YML
+expect 0 "a compliant ticket passes every stage" -- \
+  python3 "${S}/stage-gate.py" --repo "$TMP" --feature gate-ok --all
+contains "没发现 ≠ 没问题" "PASS still says machine silence is not approval"
+
+expect 0 "--list explains what each stage checks" -- python3 "${S}/stage-gate.py" --list
+expect 2 "refuse a feature with no ticket home" -- \
+  python3 "${S}/stage-gate.py" --repo "$TMP" --feature nope --stage req
 
 printf '\n== result\n'
 printf '  pass %d   fail %d\n' "$PASS" "$FAIL"

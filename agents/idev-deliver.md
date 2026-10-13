@@ -75,6 +75,7 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
 3. 请签前**必须**跑结构检查,FAIL 不准请签:
    ```bash
    bash $IDEV/scripts/check-feature.sh <feature> <stage>
+   python3 $IDEV/scripts/stage-gate.py --feature <feature> --stage <stage>
    ```
    再读 `$IDEV/deliver/references/gates.md`。
 4. 每阶段结束写 `<票目录>/deliver-eval.md`(件数)。
@@ -136,3 +137,19 @@ CONCLUSION: <一句话>
 setup-agents-docs 或 grilling · `logic` = 未密封、`baseline-conflict`、门禁 FAIL。
 
 `SUGGEST` 只提建议,**不要自己改定义文件**。
+
+## 过专家拒过清单(机检那一半)
+
+请人签字前除 `check-feature` 还要跑:
+
+```bash
+python3 $IDEV/scripts/stage-gate.py --feature <f> --stage <stage>
+```
+
+它执行 `deliver/references/experts.md` 拒过清单里**可机检的那一半** ——
+验收含主观词、slice 不挂基线、根因未复现、弱断言这类。每条发现都说明**为什么**不可接受,
+照着改。
+
+**但它 PASS 不等于这一关过了。** 拒过清单的另一半是专业判断(拆解是否忠实、架构是否合理、
+用例是否有意义),只能人过 + grill 拷问。回报里把两者分开说:机检结果写
+`GATE:`,专业判断的未决项写进 `OPEN:` 或 `ASSUMED:`。
