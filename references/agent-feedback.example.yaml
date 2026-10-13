@@ -1,0 +1,31 @@
+# 委派层的反馈。契约见 references/agents-evolve.md 第五节。
+#
+# 落点:<票目录>/workflow/agent-feedback.yaml
+# 时机:试运行期每轮委派结束**停问一次**(整轮一次,不是每步 —— 每步都停会违反
+#       内核 H5「不为观测另停」)。
+#
+# 与 verify 的 feedback.yaml 是两张表,不要混:
+#   verify 的八个 tag 管红绿质量(missed-impact / false-green / …)
+#   本表管执行者质量(委派包够不够、agent 有没有越界)
+schema_version: 1
+feature: example-change
+
+# pending 直到人写 tags,或明确 none。
+status: pending
+
+# 只许下表取值。加标签 = 改 agents-evolve.md 第五节的登记表,不新开文件类型。
+#   brief-incomplete  委派包缺项导致 agent BLOCKED      -> 改委派包格式
+#   brief-too-heavy   委派包塞了无关上下文,干扰判断     -> 改委派包格式
+#   prompt-unclear    agent 定义里步骤含糊,导致做错     -> 改该 agent 的定义
+#   agent-overstep    越界:改了不该改的、或试图写签字字段 -> 改硬规则 + 收紧 tools
+#   agent-no-evidence 回报 PASS 但给不出证据路径         -> 改该 agent 的回报格式
+#   wrong-agent       这个 kind 派给了不合适的执行者     -> 改 kind_agents.py 登记表
+#   handoff-lossy     上一步的产物没传到下一步           -> 改委派包 / 回报格式
+#   ok                这次没有委派层问题
+tags: []
+
+# 必须是人名。Agent 可代写人的口述,但这一行不能是 agent/ai/cursor/assistant。
+by: ""
+
+# 一句话证据。指向具体留痕更好:<票目录>/workflow/delegations/<step>-<n>.yaml
+note: ""

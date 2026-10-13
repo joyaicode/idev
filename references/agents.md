@@ -1,0 +1,224 @@
+# agent 层(委派契约)
+
+把 workflow 的每个 step 派给一个专职 agent 执行。**不是**新阶段机,**不是**第二套路由。
+扩展 = 本页登记表加行 + `scripts/lib/kind_agents.py` 加行(两者不一致则 `agents-check.py` 失败)。
+
+签字权不在这一层。`human.gate` 永远留在导体。
+
+## skill 与 agent:职责分离,共同合作
+
+本层**同时**用两种机制,各做各不能互相替代的事:
+
+| | **skill**(`/idev`,注入主会话) | **agent**(5 个,独立上下文) |
+|---|---|---|
+| 身份 | 导体 | 执行者 |
+| 装在哪 | `~/.claude/skills/idev`、`~/.cursor/skills/idev` | `~/.claude/agents/*.md`(Cursor 兼容读同一处) |
+| 认票 / 认场景 / 路由 S1–S8 | **是** | 否 |
+| 读 `DELEGATE` 行、决定派给谁 | **是** | 否 |
+| 组委派包 | **是** | 否(它只能收) |
+| 在落点页里干活、产出工件 | 否 | **是** |
+| 给证据路径 | 验收别人的 | **是**(自己的) |
+| 与人交互:请签、停问、唤起 grilling | **是** | **不能** |
+| 写 `sealed`/`accepted`/`aligned`/`resolved` | **是**(有人确认用语时代写) | **不能** |
+| 落委派留痕、写 trace | **是**(每轮一条) | 否(否则一轮多条账) |
+| 外层循环(`ui.clean_pass_loop`) | **是** | 否 |
+
+### 为什么必须这样分(四条都是硬依据,不是偏好)
+
+1. **签字权** —— 内核 `workflow_spec.is_human()` 的黑名单正是
+   `{agent, ai, cursor, assistant}`。**subagent 签字在代码层就被拒**,不是约定而是实现。
+2. **与人交互** —— subagent 看不到对话历史,也无法与人往复确认。而
+   `sealed`/`accepted`/`aligned` 必须有**人本轮的确认用语**(`继续` 不算)。
+3. **嵌套限制** —— Cursor 2.5 起 subagent 可以再派 subagent,但「由另一个 subagent 启动的
+   subagent 不能再启动」。导体若本身是 subagent,它派出的执行者就到了嵌套末端。
+4. **上下文方向相反** —— 执行要**独立**上下文(一个 step 的细节不该污染别的 step);
+   路由要**完整**对话(认票、听出确认用语、知道人上一句说了什么)。同一个机制满足不了两者。
+
+所以:**把导体做成 agent,等于把「人机共驾」降级成「无人值守」** —— 而内核 `SKILL.md`
+第一句就是「**不是**无人值守自动 seal→promote」。
+
+### 两者之间的接口(只有三样)
+
+| 方向 | 东西 | 契约 |
+|---|---|---|
+| skill → agent | **委派包** | 固定 9 行,见下节。agent 看不到对话历史,这是它唯一的输入 |
+| agent → skill | **回报** | `STATUS` + `EVIDENCE` 必填,另有 `CHECKS` / `SUGGEST`,见各 agent 定义 |
+| 双向留痕 | **delegation record** | `brief` 与 `report` 都存**原文**,所以能照原样重放 |
+
+接口之外没有别的通道:agent 不读导体的对话,导体不进 agent 的上下文。**这正是它可调试的
+原因** —— 出问题时只有三样东西要看,而 `brief-complete` 失败指向导体、其余四项指向 agent。
+
+### 反模式
+
+| 不要 | 为什么 |
+|---|---|
+| 把导体做成 agent(`~/.claude/agents/idev.md`) | 上面四条,尤其签字权在代码层被拒 |
+| 让 agent 自己 `trace.sh append` | 一轮多条账,周审计口径失效 |
+| 让 agent 直接问人 | 它问不到;要停问就 `BLOCKED` 回报,由导体停 |
+| 把 5 个 agent 也做成 skill | skill 注入当前上下文,5 个一起注入就没有隔离了,等于回到单体 |
+| 省掉委派包里的字段"反正 agent 能猜" | 它猜不到。少一项它只能 `BLOCKED(brief)` 回来 |
+
+## 这一层是什么 / 不是什么
+
+| 是 | 不是 |
+|---|---|
+| 每个 step 多一行「这步谁去做」 | 新的状态机(run 状态机一个字节没改) |
+| 专职 prompt + 按职责收紧的工具集 | 并行(一次仍只推进一个 step) |
+| 独立上下文,互不污染 | 新的签字权(人签字的规则完全不变) |
+| 强化「只开一个执行模块」 | 新的验收权威或分数门禁 |
+
+**为什么这不违反内核对并行的反对:** `conventions/canon.md:181` 把「多开几个 Agent 就快了」列为反模式、`references/hitl-risk-tiers.md:33` 说不内置并行阶段机 —— 这两条针对**并行**。本层是**串行委派**:`current_step()` 单指针、`find_run()` 拒多活跃 run、所有停问点原样保留。换的只是「这一步由谁执行」。
+
+`conventions/evidence.md:4` 已经为此留了口子:「复杂问题可并行多个 Agent,但不能用『另一个 Agent 猜过了』代替证据。」—— 所以每个 agent 的回报都必须带证据路径,**agent 说过不算证据**。
+
+## 登记表(kind → 委派给)
+
+按内核自己的**生命周期阶段与模块**归并,一个 agent 端到端拥有一个阶段,而不是按动作切碎:
+
+| agent | 对应阶段 / 模块 | 角色 | 承接 kind |
+|---|---|---|---|
+| `idev-deliver` | deliver 阶段机 + 产线文档 | 需求 / 架构 / 文档 | `deliver.advance` · `docs.backfill` · `docs.changelog` |
+| `idev-coder` | `code` 阶段 + 构建提交 | 开发 | `deliver.code_pass` · `review.fix` · `ui.playbook_sync` · `frontend.lint_fix` · `java.build` · `git.replace_check` · `git.sensitive_shield` · `git.sensitive_restore` · `git.commit_push` |
+| `idev-reviewer` | 评审 | 审查(**独立于开发**) | `review.report` |
+| `idev-verifier` | verify 模块 + 用例所需环境 | 测试 | `verify.plan` · `verify.run` · `ui.lifecycle_run` · `ui.surface_scan` · `ui.coverage_lock` · `localdev.start` · `localdev.stop` · `localdev.approval_off` |
+| `idev-ops` | ops 模块 + S4 论证 | 排障 / 诊断 | `route.s4` · `ops.classify` · `ui.fix_deposit` |
+| **导体** | — | 持签字权 | `preflight.inputs` · `human.gate` · `shell.confirmed` · `ui.clean_pass_loop` · `ui.product_batch` |
+
+29 个 kind:24 个委派,5 个导体保留。每个 kind 的**落点页**仍只认内核 `workflow_spec.KINDS`,
+本页不复制那一列。
+
+**为什么这样分而不是更细:** 一个阶段里的动作天然同进同退 —— 写完代码就要构建和提交,
+跑用例就要先起环境,论证和排障都走 `evidence.md` 的同一套闭环。切得更碎只会让导体
+多组几次委派包,而每组一次就多一次 `brief-complete` 出错的机会。
+
+**`review.report` 为什么单列:** `coding.md` §0 明文规定这一步**只记账、不改代码**,
+而 `idev-coder` 的硬规则是命中必须当轮改掉。同一个 agent 不能既是实现者又是审查者 ——
+这是制度性的分离,不是粒度选择。
+
+## 导体保留的五步(为什么不委派)
+
+| kind | 原因 |
+|---|---|
+| `human.gate` | **制度性,不是选择。** `workflow_spec.is_human()` 的黑名单正是 `{agent, ai, cursor, assistant}` —— subagent 签字在代码层就被拒。签字权不可下放。 |
+| `preflight.inputs` | 纯可读性探针,导体自跑一条命令即可,委派反而多一跳 |
+| `shell.confirmed` | 就一条人已确认的命令,组委派包比直接跑更贵 |
+| `ui.clean_pass_loop` | 外层整轮循环控制(`policy.max_clean_attempts`),跨多个 step,不属于单步执行 |
+| `ui.product_batch` | 历史 kind,新配方不用 |
+
+## 导体回路(每步五动作)
+
+1. `python3 scripts/workflow-agent.py next --feature <f>` → 读 `NEXT` / `OPEN` / `DELEGATE` 三行
+2. `DELEGATE none` → 导体自己做这一步;`DELEGATE <agent>` → 组委派包(见下)
+3. **记下 `started_at`**,然后委派:Claude Code 用 Agent 工具,Cursor 用 `/<agent-name>`。
+   **一步只派一个 agent**
+4. 收回报,**记下 `finished_at`**。核对 `STATUS` 与 `EVIDENCE`。**回报里没有证据路径的 PASS
+   不作数**,打回重做
+5. **落委派留痕**(可调试的前提,见 [agents-evolve.md](agents-evolve.md)):
+   ```bash
+   python3 scripts/delegation.py write --feature <f>    # brief + report 原文走 stdin
+   ```
+   它会算五项诚实性检查并写回,`duration_s` 由两个时间戳算出。
+   `no-signoff-write` 或 `metrics-shape` 失败 → 退出码 2,**停下来**,不要 record
+6. `workflow-agent.py record <step> <STATUS> --evidence <路径>`。`human.gate` 另须
+   `--by <人名> --quote "<确认原话>"`
+
+两个时间戳是**可选**的 —— 可观测性不该挡住一次正常委派。但缺了就没有耗时视图,
+「哪个 agent 慢、哪一步是瓶颈」就答不出来,所以默认记上。
+
+一次 run 的全景(谁做了什么、多久、结果、证据)一条命令看完:
+
+```bash
+python3 scripts/delegation.py timeline --feature <f>
+```
+
+重派时先取回上次的委派包,别凭记忆重组:
+
+```bash
+python3 scripts/delegation.py replay --feature <f> --step <step>
+```
+
+它打印可直接重发的委派包(含 `prior_failure`),**但不自动重派** —— 派不派仍是你的决定。
+
+每轮末导体统一写一条 trace(`scripts/trace.sh append`),委派记成 `calls[].kind: agent`(见下)。**各 agent 自己不写 trace**,否则一轮多条账。
+
+## 委派包(固定格式)
+
+subagent **看不到对话历史** —— 委派消息是它唯一的输入。少一项它就得 `BLOCKED` 回来,等于白跑一趟。照抄这个格式:
+
+```
+票目录: <python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <f> --key task 的输出>
+仓根: <绝对路径>
+feature / stage / risk_tier: <来自 deliver.yaml>
+本步: <step.id>  kind=<kind>  label=<label>  with=<with>
+attempt: <第几次;>1 时必须附 prior_failure>
+必读: <该 kind 的落点页绝对路径>
+IDEV_ROOT: <idev 内核根,默认 ~/.cursor/skills/idev>
+AGENT_ROOT: <idev-agent 仓根>   # 派给 coder / verifier / analyst / ops 时必填
+禁止: 写 sealed/accepted/aligned/resolved/reopen_baseline/semantic_gate.*;改密封基线正文
+回报: 按你定义里的回报格式,STATUS + EVIDENCE 必填
+```
+
+`AGENT_ROOT` 是**派给 `idev-coder` / `idev-verifier` / `idev-ops` 时的必填项**:
+这四个要跑本仓的提效脚本(`failure_signature.py`、`hypothesis.py`),定义里以 `$AGENT` 引用它。
+不给就等于让它们去空路径执行 —— `delegation.py` 的 `brief-complete` 对这三个 agent 强制检查这一项。
+
+`attempt > 1` 时 `prior_failure` 必填,且别凭记忆重组委派包:用
+`delegation.py replay --feature <f> --step <step>` 把上次那份原样取回来。
+
+`git.commit_push` 的委派包还必须写明「`human.gate` 已过」,否则 `idev-coder` 会按它的硬规则 12 拒跑 —— 那是它唯一不可逆的动作。
+
+需要 `product` 的配方:委派包必须点明**恰好一个**产品名,不点名就不委派(内核规则,不是本层新加的)。
+
+## 双边字段对照
+
+一份定义同时服务 Claude Code 和 Cursor,靠的是两边都**静默忽略**不认识的 frontmatter 字段:
+
+| 字段 | Claude Code | Cursor | 本层怎么写 |
+|---|---|---|---|
+| `name` | 认(必填) | 认 | 必写,须等于文件名 |
+| `description` | 认(必填) | 认 | 必写。缺了 Claude Code **静默跳过整个文件** |
+| `model` | 认 | 认 | `inherit` |
+| `tools` | 认(逗号分隔) | 忽略 | 按职责收紧 |
+| `readonly` | 忽略 | 认 | 一律 `false`,原因见下 |
+| `is_background` | 忽略 | 认 | `false`(串行委派,要等回报) |
+
+**为什么没有一个 agent 用 `readonly: true`:** Cursor 的 `readonly` 禁止全部写入与改变状态的 shell 命令。而 `review.report` 要写 `review.md`、`verify.plan` 要写 `plan.yaml`、`ops.classify` 要写 `ops.yaml`、`idev-coder` 要跑 `git commit`、`idev-verifier` 要启停本地服务 —— 没有一个步骤是纯读的。误设 `true` 会让这些步骤在 Cursor 下直接跑不通。`agents-check.py` 按 `kind_agents.READONLY_BREAKS` 逐个硬检查。
+
+工具收紧改为落在 Claude Code 的 `tools` 上,并在每个 agent 的硬规则里重述:
+
+| agent | 收紧 |
+|---|---|
+| `idev-reviewer` | **无 `Edit`** —— 写 `review.md` 用 `Write`,不改已有代码 |
+| `idev-ops` | **无 `Edit`** —— 写假设台账、报告、lessons,不改代码 |
+| 其余三个 | 全套(要改代码、写票 YAML,或跑改变状态的命令) |
+
+**归并的代价要说清:** `idev-coder` 现在同时拥有 `code` 阶段和 `git.commit_push`,
+所以它必须有 `Write`/`Edit`,**无法再像原先那个独立的命令执行者那样收紧到"只跑命令
+不改文件"**。那条边界现在只剩 prompt 级约束(硬规则 12–15)加导体验收回报。
+换来的是少两次委派、少两次组委派包出错的机会 —— 这是有意的权衡,不是疏漏。
+
+Cursor 侧这些收紧不生效(它忽略 `tools`,subagent 继承父级全部工具),所以**每个 agent 的硬规则里都重述了一遍**边界。这是 prompt 级约束,不是工具级 —— 实际把关仍在导体验收回报那一步。
+
+## trace
+
+内核 `scripts/trace.py` 的 `CALL_KINDS` 是 `("script","module","skill","repo","tool")`,需要加 `"agent"`:
+
+```python
+CALL_KINDS = ("script", "module", "skill", "repo", "tool", "agent")
+```
+
+委派记成 `calls[].kind: agent`,`target` 写 agent 名。**不要记成 `module`** —— 否则一轮里多次委派会被周审计的 `multi-exec-calls` 当成「calls 跨多执行模块」硬报警。
+
+补丁见 `patches/0002-trace-agent-call-kind.patch`。打之前 `calls[].kind` 先用 `tool`,周审计不会报警,但区分度差。
+
+## 自检
+
+```bash
+python3 scripts/agents-check.py        # 定义 + 登记表 + 与内核 KINDS 同步
+python3 scripts/lib/kind_agents.py --check
+python3 scripts/lib/kind_agents.py --kind review.report   # 单看一行
+```
+
+`agents-check.py` 校验六项:AGENTS 与 `agents/*.md` 双向齐全 · `name` 等于文件名 · `description` 非空 · 没有 `readonly: true` 却要写文件 · `KIND_AGENTS` 恰好覆盖内核 `KINDS` · 每行的 agent 名已登记。
+
+内核加了新 kind 而这里没加行 → FAIL。这是有意的:和 `selfcheck.sh` 锁住散文 kind 表与 `KINDS` 相等是同一种机械门禁。

@@ -26,6 +26,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import doc_home  # noqa: E402
+import kind_agents  # noqa: E402
 import workflow_defaults  # noqa: E402
 from product_marker import resolve_extension_repo  # noqa: E402
 from product_sink import kernel_root, product_repo, sink_dir  # noqa: E402
@@ -161,6 +162,7 @@ def next_line(run: dict) -> list[str]:
     lines = [
         f"NEXT {step['id']}  kind={kind}  status={step.get('status', 'pending')}",
         f"OPEN {KINDS.get(kind, '-')}",
+        kind_agents.delegate_line(kind),
     ]
     if step.get("label"):
         lines.append(f"LABEL {step['label']}")

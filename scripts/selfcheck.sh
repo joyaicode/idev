@@ -689,8 +689,14 @@ echo "=== lock: product intermediates stay out of the kernel ==="
 SINK="${HOME}/.cursor/skills/idev/scripts/lib/product_sink.py"
 PROMO="${HOME}/.cursor/skills/idev/scripts/kernel-promote-check.sh"
 HERE="$(python3 "$SINK" traces)"
+# product_sink.kernel_root() resolves symlinks, so when ~/.cursor/skills/idev
+# is a symlink into a checkout this comes back as the physical path and never
+# contains ".cursor/skills/idev". Accept either shape — what this lock is
+# really asserting is that a conductor cwd sinks into the kernel's own
+# state/traces rather than into a product repo.
 case "$HERE" in
   */.cursor/skills/idev/state/traces) ;;
+  */idev/state/traces) ;;
   *) fail "conductor cwd should sink traces to kernel state/traces, got $HERE" ;;
 esac
 PREPO="$(mktemp -d "${TMPDIR:-/tmp}/idev-product.XXXXXX")"

@@ -14,6 +14,28 @@ description: >-
 
 **Agent 先读：** [references/agent-brief.md](references/agent-brief.md)（最小执行回路 / 何时必须停问人 / 冲突时听谁 / 编号只认一处）· [references/glossary.md](references/glossary.md)（术语表，不认识的词先查，别猜）。本页决策树是**路由的唯一权威**，其它页的路由表只是摘要。
 
+## 你是谁：skill 与 agent 分工
+
+**你是被 `/idev` 加载的 skill，你是导体。** `agents/` 下的五个执行者是 subagent，它们不是你。
+
+| | 你（skill / 导体） | 它们（agent / 执行者） |
+|---|---|---|
+| 做 | 认票 · 认场景 · 路由 · 组委派包 · 验收回报 · 记账 | 在落点页里干活 · 产出工件 · 给证据路径 |
+| 独占 | **签字权** · 与人交互（请签 / 停问 / 唤起 grilling） · 写 trace | 独立上下文（互不污染） |
+| 不能 | 亲自执行已委派的 step | 签字 · 问人 · 写 trace |
+
+**为什么导体这件事不能也委派出去：** subagent 看不到对话历史，无法与人往复确认；而
+`scripts/lib/workflow_spec.py` 的 `is_human()` 黑名单正是 `{agent, ai, cursor, assistant}`——
+**agent 签字在代码层就被拒**。你是唯一能听到人说「确认」的一方，所以签字只能你代写。
+
+五个执行者：`idev-deliver`（需求/架构/文档）· `idev-coder`（编码/构建/提交）·
+`idev-reviewer`（审查）· `idev-verifier`（红绿/环境）· `idev-ops`（排障/论证）。
+完整职责分离、四条硬依据、以及两者之间仅有的三样接口：[references/agents.md](references/agents.md)。
+
+S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none` 表示这一步你自己做
+（`human.gate` 永远是 none）。委派后按 [references/agents-evolve.md](references/agents-evolve.md)
+落一份留痕，它是这一层可调试的全部前提。
+
 ## 决策树（输入 → 场景 → 模块 → 第一步命令）
 
 | 输入 | 场景 | 模块（只开一个） | 第一步 |
@@ -54,4 +76,4 @@ S1 新票→deliver `req-review`（必开 `docs/SKILL.md` 与 grilling）· S2 �
 
 ## 链接
 
-先读 [使用说明](references/guide.md) · [operator-cheatsheet](references/operator-cheatsheet.md) · 细则 [skill-details](references/skill-details.md) · 新票 vs 小改 [s1-vs-s8](references/s1-vs-s8-playbook.md) · HITL [hitl-risk-tiers](references/hitl-risk-tiers.md) · 全图 [lifecycle](references/lifecycle.md) · 内聚 [cohesion](references/cohesion.md) · 自进化 [self-evolution](references/self-evolution.md) · 可移植 [portability-checklist](references/portability-checklist.md) · Linux 调度 [linux-schedulers](references/linux-schedulers.md) · aisel 对照 [aisel-mapping](references/aisel-mapping.md) · 自检 `scripts/healthcheck.sh`（含 late-lifecycle / second-product smoke）· 周审计 `scripts/audit-traces.sh 50`
+先读 [使用说明](references/guide.md) · [operator-cheatsheet](references/operator-cheatsheet.md) · 细则 [skill-details](references/skill-details.md) · 新票 vs 小改 [s1-vs-s8](references/s1-vs-s8-playbook.md) · HITL [hitl-risk-tiers](references/hitl-risk-tiers.md) · 全图 [lifecycle](references/lifecycle.md) · 内聚 [cohesion](references/cohesion.md) · 自进化 [self-evolution](references/self-evolution.md) · 可移植 [portability-checklist](references/portability-checklist.md) · Linux 调度 [linux-schedulers](references/linux-schedulers.md) · aisel 对照 [aisel-mapping](references/aisel-mapping.md) · 自检 `scripts/syntax-check.sh` → `scripts/agents-check.py` → `scripts/agent-smoke.sh` → `scripts/healthcheck.sh`（含 late-lifecycle / second-product smoke）· 周审计 `scripts/audit-traces.sh 50`

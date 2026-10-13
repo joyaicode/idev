@@ -42,7 +42,7 @@ SCENARIOS = ("", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8")
 SHORT_SCENARIOS = ("S2", "S3", "S5", "S8")
 CHECKS = ("", "PASS", "FAIL", "skipped")
 KINDS = ("route", "gate", "stop", "refuse", "handoff", "call", "open")
-CALL_KINDS = ("script", "module", "skill", "repo", "tool")
+CALL_KINDS = ("script", "module", "skill", "repo", "tool", "agent")
 ITEM_KEYS = (
     "kind",
     "module",

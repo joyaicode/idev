@@ -9,7 +9,22 @@
 | ops | 现场分类、handoff、origin 指针 | 第二套断言、交出口正文、拆解 slices |
 | 入口 traces | 路由 / 拒过 / 停问的可观测记录 | 分数、签字、第二套 eval |
 | workflows | 快捷指令配方登记表与 run 契约 | 新模块、第二套阶段机、跳过签字 |
+| agents | 执行者定义 + `kind → agent` 登记表 | **顶层 `name:`**、签字、trace、第二套路由 |
 
-加能力 = 改**已有模块**的登记表（schema / experts / classify / plan-schema / workflow-schema）。不再加模块。  
+加能力 = 改**已有模块**的登记表（schema / experts / classify / plan-schema / workflow-schema / kind_agents）。不再加模块。  
 **禁止**再开第二个顶层 Skill。入口只许 `idev`；各模块头写 `module:` 与 `parent: idev`，不写 `name:`。产品旧名留在该 pack 的 README，不要写回核心入口。  
 不兼容才在本目录加 ADR 副本并升该模块 `schema_version`。
+
+## agents 不是第二个 Skill
+
+`agents/*.md` 是**执行者定义**，不是模块、也不是 skill：
+
+- 它们的 `name:` 是 **subagent 名**（`idev-coder` 等），由 Claude Code / Cursor 的 agent 机制读，
+  **不是** skill 名——两套机制不同命名空间，`/idev` 仍然唯一。
+- 它们不持签字权（`workflow_spec.is_human()` 的黑名单正是 `{agent, ai, cursor, assistant}`）、
+  不写 trace、不做路由。换的只是「这一步由谁执行」。
+- 扩展方式和别的模块一样：改 `scripts/lib/kind_agents.py` 的 `KIND_AGENTS` 一行 +
+  `references/agents.md` 散文一行，两者不一致则 `agents-check.py` 失败。
+
+所以「禁止第二个顶层 Skill」原样成立：**skill 只有 `/idev` 一个**（导体，注入主会话，持签字权），
+agent 是它委派的执行者。职责分离见 [agents.md](agents.md)。

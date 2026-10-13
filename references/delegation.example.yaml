@@ -1,0 +1,65 @@
+# 委派留痕的样例。契约见 references/agents-evolve.md 第一节。
+#
+# 落点:<票目录>/workflow/delegations/<step-id>-<attempt>.yaml
+# 写入:python3 scripts/delegation.py write --feature <f>   # 本文件内容走 stdin
+#
+# brief 与 report 都存原文,不存摘要 —— 留痕的全部价值在于能照原样再派一次。
+schema_version: 1
+feature: example-change
+step: report
+kind: review.report
+agent: idev-reviewer
+at: 2026-10-12T22:30:00+08:00
+attempt: 1
+
+# 时序:导体在委派前后各记一次。可选 —— 可观测性不做成门禁,但没有它
+# timeline 与 agent-eval 的耗时列是空的,"哪个 agent 慢"就答不出来。
+# duration_s 由 delegation.py 从两端算出并写回,不用手填。
+started_at: 2026-10-12T22:26:55+08:00
+finished_at: 2026-10-12T22:30:00+08:00
+duration_s: 185
+
+# 委派包原文。attempt > 1 时 prior_failure 必填,否则 delegation.py write 拒收。
+brief:
+  ticket_home: docs/task/example-change
+  repo: ~/go/src/coding.example.com/product
+  stage: code
+  risk_tier: P1
+  must_read: conventions/coding.md
+  idev_root: ~/.cursor/skills/idev
+  agent_root: ~/.cursor/skills/idev            # 合并进 idev 后与 idev_root 同一个
+  with: {}
+  prior_failure: ""
+
+# agent 回报原文。raw 要全文,不要只留摘要。
+report:
+  status: PASS
+  evidence: docs/task/example-change/review.md
+  raw: |
+    STATUS: PASS
+    EVIDENCE: docs/task/example-change/review.md
+    FINDINGS: 3(blocking 1 / 一般 2)
+    UNRELATED: 2
+    CHECKS: evidence-present=PASS  no-signoff-write=PASS  report-parsed=PASS
+    SUGGEST:
+    CONCLUSION: 认出 Java,扫到 1 条 blocking(C7 catch 后返回空),已标待签收。
+
+# 产出计量:导体从回报里摘关键数字。扁平 map,只许数字或短字符串 ——
+# 嵌套结构会把它变成第二套 eval,delegation.py 的 metrics-shape 会拒。
+# 字段名各 agent 自定(reviewer 记 findings,coder 记 files_changed,
+# verifier 记 cases_run),agent-eval 按字段名求和。
+metrics:
+  findings: 3
+  blocking: 1
+  unrelated: 2
+
+# 五项可机检由 delegation.py 自己算并写回,不要手填。
+# brief-complete 的失败指向导体,其余指向 agent。
+checks:
+  evidence-present: PASS
+  no-signoff-write: PASS
+  brief-complete: PASS
+  report-parsed: PASS
+
+outcome: recorded      # recorded | rejected | retried
+suggest: ""            # agent 提的改进建议,只记不执行;够 2 次才走提案
