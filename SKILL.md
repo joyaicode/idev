@@ -36,6 +36,21 @@ S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none`
 （`human.gate` 永远是 none）。委派后按 [references/agents-evolve.md](references/agents-evolve.md)
 落一份留痕，它是这一层可调试的全部前提。
 
+## 提效三板斧
+
+把规约里**已经要求、但以前只能靠自觉**的事变成可执行、可机检、可计数。不新增门禁，不打分。
+
+| 阶段 | 执行者 | 做什么 |
+|---|---|---|
+| 编码 | `idev-coder` | `coding.md` §0 三项交代（`CHANGE_KIND`/`CANON_TRIGGER`/`TABLE_HIT`）+ codegraph 影响面 + 增量自测 |
+| 测试 | `idev-verifier` | 维度表先铺满用例骨架 + 失败签名归一化（`scripts/failure_signature.py`） |
+| 根因 | `idev-ops` | 假设台账（`scripts/hypothesis.py`）+ 证据链 + 有界修复红线自动计数 |
+
+`verify/SKILL.md` 硬规则 5 原文就是「有 codegraph 就用」，`conventions/evidence.md` 第 5 步
+原文就定了三条有界修复红线 —— 这三板斧只是让它们**判得出来**。细则
+[references/boost.md](references/boost.md)；待办与验证状态
+[references/agents-todo.md](references/agents-todo.md)。
+
 ## 决策树（输入 → 场景 → 模块 → 第一步命令）
 
 | 输入 | 场景 | 模块（只开一个） | 第一步 |

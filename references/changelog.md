@@ -1,5 +1,8 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-13：agent 层合并进内核，idev 成为一整套。新增 `agents/`（五个执行者：deliver / coder / reviewer / verifier / ops，按生命周期阶段与模块归并）与 `kind → agent` 登记表 `scripts/lib/kind_agents.py`；`workflow.py next` 原生多打一行 `DELEGATE`，`trace.py` 的 `calls[].kind` 增 `agent`。导体（`/idev` skill）独占签字权与人交互，执行者是 subagent——`is_human()` 的黑名单本就含 `agent/ai/cursor/assistant`，所以这条分工是代码级的，不是约定。新增委派留痕与五项诚实性检查（`delegation.py`）、跨票指标与复盘（`agent-metrics.py` / `agent-review.sh`，只起草不 land）、提效三板斧（`failure_signature.py` 签名归一化让 evidence.md 的三条红线判得出来、`hypothesis.py` 假设台账、coding.md §0 三项交代可机检）。自检三道：`syntax-check.sh` / `agents-check.py` / `agent-smoke.sh`（143 条）。顺手修两处内核既有问题：`selfcheck.sh` 的 trace sink 锁死路径含 `.cursor/skills/idev`，而 `kernel_root()` 用 `resolve()` 必然得到物理路径，该锁在 symlink 拓扑下永远不通过；复制进来的脚本补执行位。`cohesion.md` 加 `agents` 登记并论证它不是第二个顶层 Skill（subagent 名与 skill 名不同命名空间，入口仍只有 `idev`）。
+
+
 - 2026-10-01：P6 综合缺陷修复。`aligned`/`done` 须人名 `by`；`check-feature` FAIL 打 HINT；`late-lifecycle-smoke`（test→promote→ops→拒伪造 aligned）与 `second-product-smoke` 挂入 healthcheck；audit 软信号 S1 未开 grilling；curator 14d→stale、30d→archive，evolve-review 把超龄 draft 当硬信号；agent-brief 钉死两页冷启动；三模块 SKILL 顶加「本阶段 5 步」；Linux systemd/cron 模板。真实产品票 `done` 仍须人确认（不伪造）。
 
 - 2026-09-30：workflow 补齐三件套。编排语法的代码形态收进 `scripts/lib/workflow_spec.py`（kind 与落点、顶栏 / 参数 / 策略取值、配方与 run 校验），`workflow-check` 改用它，并开始拒绝未知字段、非法 `from` / `policy` / `risk_tier`。新增驱动器 `scripts/workflow.py`（`resolve` / `start` / `next` / `record` / `status` / `abort`）：按配方写 `run.yaml`，给出下一步与落点页，守跳步、签字原话、失败即停，不替 Agent 执行步骤。无票运行落 `product_sink.py workflow-runs`。自检锁住文档 kind 表与代码一致和驱动规则。`workflow-check` 对齐驱动器：产品配方从扩展根读；产品可有多条配方，但一个 id 或别名只许指向一条生效配方；`--run` 核对步骤与所记配方一致。配方校验时停问步骤必须声明 `with.will_write`（`[]` = 将代写: 无）或在 `label` 写 `将代写`，驱动器 `next` 打印该行。

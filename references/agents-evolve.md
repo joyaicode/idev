@@ -232,7 +232,7 @@ bash scripts/agent-review.sh --repo <产品仓> --dry-run           # 先看不�
 
 超龄未 grill 的 draft 也算硬信号(和内核一样):永远不被拷问的提案本身就是个问题。
 
-**它不改定义、不改登记表、不改 ledger,也不 land 任何提案。** `agent_layer_revision + 1`
+**它不改定义、不改登记表、不改 ledger,也不 land 任何提案。** `conductor_revision + 1`
 与把提案标 `landed` 都只能由人做。
 
 ## 七、长期打磨:改哪里由数据说
@@ -279,7 +279,7 @@ python3 scripts/agent-metrics.py --repo <仓> --unused         # 登记表里从
 只许改:登记表加行、agent 定义的硬规则或步骤澄清、委派包格式、文档指针。
 **不许**在提案里顺手改内核。
 
-land 后在本仓 `state/ledger.yaml` 把 `agent_layer_revision + 1`,提案标 `landed`
+land 后在入口台账 `state/ledger.yaml` 把 `conductor_revision + 1`,提案标 `landed`(合并进 idev 后不另开 agent 层的 revision —— 台账只有入口这一份)
 —— 由**人**标,不是 AI。
 
 ## 九、禁止
