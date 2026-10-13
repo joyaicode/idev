@@ -5,6 +5,8 @@
 
 签字权不在这一层。`human.gate` 永远留在导体。
 
+本页是**契约是什么**；**怎么用**见 [agents-playbook.md](agents-playbook.md)。
+
 ## skill 与 agent:职责分离,共同合作
 
 本层**同时**用两种机制,各做各不能互相替代的事:

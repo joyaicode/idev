@@ -104,6 +104,8 @@ metrics:
 report:
   raw: |
     STATUS: PASS
+    FACTS: codegraph_context + 源码 scripts/delegation.py:1
+    DOC_DRIFT: 无
     EVIDENCE: ${TICKET}/review.md
     CONCLUSION: smoke
 YAML
@@ -169,6 +171,8 @@ brief: {ticket_home: ${TICKET}, repo: ${TMP}, stage: code, must_read: convention
 report:
   raw: |
     STATUS: PASS
+    FACTS: codegraph_context + 源码 scripts/delegation.py:1
+    DOC_DRIFT: 无
     EVIDENCE: ${TICKET}/review.md
     CHANGE_KIND: 追加行为
     CANON_TRIGGER: 无
@@ -263,6 +267,8 @@ brief:
 report:
   raw: |
     STATUS: PASS
+    FACTS: codegraph_context + 源码 scripts/delegation.py:1
+    DOC_DRIFT: 无
     EVIDENCE: ${TICKET}/review.md
     CONCLUSION: 改完了,但没交代 §0
 YAML
@@ -287,6 +293,8 @@ brief:
 report:
   raw: |
     STATUS: PASS
+    FACTS: codegraph_context + 源码 scripts/delegation.py:1
+    DOC_DRIFT: 无
     EVIDENCE: ${TICKET}/review.md
     CHANGE_KIND: 追加行为
     CANON_TRIGGER: 缓存
@@ -311,6 +319,8 @@ brief:
 report:
   raw: |
     STATUS: PASS
+    FACTS: codegraph_context + 源码 scripts/delegation.py:1
+    DOC_DRIFT: 无
     EVIDENCE: ${TICKET}/review.md
     CHANGE_KIND: 追加行为
     CANON_TRIGGER: 无
@@ -328,6 +338,71 @@ if printf '%s' "$LAST_OUT" | grep -q "s0-declared"; then
 else
   ok "s0-declared stayed out of the reviewer's record"
 fi
+
+# --- boost.md 第零节: 本地事实优先 ---
+
+# 只写"文档"不算第一手来源 —— 那正是它不可信的东西。
+cat > "${TMP}/nofacts.yaml" <<YAML
+step: classify-nf
+kind: ops.classify
+agent: idev-ops
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: ops
+  must_read: ops/SKILL.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    FACTS: 看了文档
+    DOC_DRIFT: 无
+YAML
+expect 1 "reject 文档-only as a fact source" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/nofacts.yaml"
+contains "facts-first" "names facts-first"
+contains "first-hand" "explains what counts as first-hand"
+
+# 不交代文档漂移 —— 写"无"也算交代，缺这一行才是问题。
+cat > "${TMP}/nodrift.yaml" <<YAML
+step: classify-nd
+kind: ops.classify
+agent: idev-ops
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: ops
+  must_read: ops/SKILL.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    FACTS: codegraph_impact --depth 1 + 源码 scripts/trace.py:45
+YAML
+expect 1 "require a DOC_DRIFT declaration" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/nodrift.yaml"
+contains "drift-declared" "names drift-declared"
+
+# 文档类步骤不查这两项 —— 它的产出本身就是文档，"文档说"在那里不循环。
+cat > "${TMP}/docsok.yaml" <<YAML
+step: changelog-ok
+kind: docs.changelog
+agent: idev-deliver
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: code
+  must_read: docs/SKILL.md
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    CONCLUSION: 文档类步骤无需交代 FACTS
+YAML
+expect 0 "facts checks do not apply to the docs agent" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/docsok.yaml"
 
 say "4 failure signature"
 cat > "${TMP}/log-a.txt" <<'LOG'
@@ -438,7 +513,7 @@ mkbad() {   # mkbad <slug> <filename>; file body on stdin; sets BAD
   cat > "${BAD}/$2"
 }
 
-BODY='正文需要含这些标记:STATUS: EVIDENCE: CHECKS: SUGGEST: BLOCKED('
+BODY='正文需要含这些标记:STATUS: EVIDENCE: CHECKS: SUGGEST: FACTS: DOC_DRIFT: BLOCKED('
 
 mkbad noname idev-reviewer.md <<MD
 ---
@@ -513,6 +588,8 @@ tools: Read, Bash
 ---
 STATUS: 有,但缺 EVIDENCE 与 SUGGEST,也没有分类后缀
 CHECKS: 有
+FACTS: 有
+DOC_DRIFT: 无
 MD
 expect 1 "a drifted report format is caught" -- python3 "${S}/agents-check.py" --agents-dir "$BAD"
 contains "report format" "names the report-format drift"
@@ -791,6 +868,95 @@ attempts:
 YAML
 expect 0 "failure_signature check survives a non-numeric delta" -- \
   python3 "${S}/failure_signature.py" --repo "$TMP" check --feature "$FEATURE"
+
+say "13 repl: computation as evidence"
+
+# The signoff guard is the one that matters most: a REPL must not become the
+# way around workflow_spec.is_human(). Assert it refuses BEFORE executing.
+cat > "${TMP}/bad-signoff.py" <<'PYSNIP'
+import safeyaml
+d = safeyaml.mapping(TICKET / "deliver.yaml") or {}
+d["aligned"] = True
+print("would have written aligned")
+PYSNIP
+expect 2 "refuse a snippet that writes a signoff field" -- \
+  python3 "${S}/repl.py" --repo "$TMP" run --feature "$FEATURE" --step guard-a \
+    --code "${TMP}/bad-signoff.py"
+contains "signoff" "names the signoff problem"
+contains "nothing was executed" "says it did not run"
+if [ -e "${TICKET}/repl/guard-a-1.py" ]; then
+  bad "a refused snippet was still saved"
+else
+  ok "a refused snippet leaves no transcript"
+fi
+
+# Writing a ticket YAML from a REPL is refused too.
+cat > "${TMP}/bad-write.py" <<'PYSNIP'
+(TICKET / "plan.yaml").write_text("cases: []\n")
+PYSNIP
+expect 2 "refuse a snippet that writes a ticket yaml" -- \
+  python3 "${S}/repl.py" --repo "$TMP" run --feature "$FEATURE" --step guard-b \
+    --code "${TMP}/bad-write.py"
+
+expect 2 "refuse an empty snippet" -- \
+  python3 "${S}/repl.py" --repo "$TMP" run --feature "$FEATURE" --step guard-c --code /dev/null
+
+# The happy path: a computation whose source and output both land in the
+# ticket, so someone else can re-run it.
+cat > "${TMP}/count.py" <<'PYSNIP'
+print("IDEV ok:", (IDEV / "SKILL.md").is_file())
+print("TICKET ok:", TICKET.is_dir())
+import safeyaml
+print("safeyaml importable:", callable(safeyaml.mapping))
+print("cases:", 3)
+PYSNIP
+expect 0 "run a real computation" -- \
+  python3 "${S}/repl.py" --repo "$TMP" run --feature "$FEATURE" --step compute \
+    --code "${TMP}/count.py" --note "smoke"
+contains "EVIDENCE" "prints the evidence path"
+contains "IDEV ok: True" "the preamble resolved IDEV"
+contains "safeyaml importable: True" "the idev libs are on sys.path"
+if [ -f "${TICKET}/repl/compute-1.py" ] && [ -f "${TICKET}/repl/compute-1.out" ]; then
+  ok "source and transcript both saved"
+else
+  bad "missing ${TICKET}/repl/compute-1.{py,out}"
+fi
+if grep -q "exit: 0" "${TICKET}/repl/compute-1.out"; then
+  ok "the transcript records the exit status"
+else
+  bad "no exit status in the transcript"
+fi
+
+# A failing snippet is recorded, not hidden — exit 1, transcript kept.
+cat > "${TMP}/boom.py" <<'PYSNIP'
+raise ValueError("boom")
+PYSNIP
+expect 1 "a failing snippet exits non-zero" -- \
+  python3 "${S}/repl.py" --repo "$TMP" run --feature "$FEATURE" --step boom \
+    --code "${TMP}/boom.py"
+if grep -q "ValueError" "${TICKET}/repl/boom-1.out"; then
+  ok "the failure is in the transcript, not swallowed"
+else
+  bad "the traceback was not recorded"
+fi
+
+# Runs are numbered, never overwritten.
+expect 0 "a second run of the same step" -- \
+  python3 "${S}/repl.py" --repo "$TMP" run --feature "$FEATURE" --step compute \
+    --code "${TMP}/count.py"
+if [ -f "${TICKET}/repl/compute-2.out" ]; then
+  ok "the second run got its own index"
+else
+  bad "the second run overwrote the first"
+fi
+
+expect 0 "list the runs" -- python3 "${S}/repl.py" --repo "$TMP" list --feature "$FEATURE"
+contains "compute-1" "list names the runs"
+expect 0 "show a transcript" -- \
+  python3 "${S}/repl.py" --repo "$TMP" show --feature "$FEATURE" --step compute
+contains "stdout" "show prints the transcript"
+expect 2 "show refuses an unknown step" -- \
+  python3 "${S}/repl.py" --repo "$TMP" show --feature "$FEATURE" --step nope
 
 printf '\n== result\n'
 printf '  pass %d   fail %d\n' "$PASS" "$FAIL"

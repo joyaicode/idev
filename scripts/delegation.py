@@ -79,6 +79,13 @@ NO_TRIGGER = re.compile(r"(?i)^\s*(?:无|none|-)\s*(?:[(（].*)?$")
 STRUCT_GATE = re.compile(r"§\s*3|满足条件|两顶帽子")
 APPLIED = re.compile(r"运用|纠正|已改|当轮改")
 
+# references/boost.md 第零节: 本地事实优先。文档会过时而且过时的时候不会
+# 告诉你,所以凡是要下判断的步骤都得交代事实是从哪来的。
+FACTS_LINE = re.compile(r"(?mi)^\s*FACTS:\s*(.+?)\s*$")
+DRIFT_LINE = re.compile(r"(?mi)^\s*DOC_DRIFT:\s*(.+?)\s*$")
+# 至少有一个第一手来源。"文档"不算 —— 那正是它不可信的东西。
+FIRSTHAND = re.compile(r"(?i)codegraph|源码|源文件|src/|\.py|\.sh|\.java|\.ts|\.go|命令|输出|日志|log|git\b|readlink|realpath|ls -")
+
 
 def home(feature: str, repo: Path | None) -> Path:
     base = (repo or Path.cwd()).resolve()
@@ -220,6 +227,32 @@ def check_boost(record: dict, repo: Path | None) -> dict[str, str]:
     return out
 
 
+def check_facts(record: dict) -> dict[str, str]:
+    """boost.md 第零节的两项:事实从哪来、文档有没有漂移。
+
+    只对会下判断的 agent 生效(排障/论证、编码、审查、红绿)。文档类步骤
+    不查 —— 它的产出本身就是文档。
+    """
+    agent = str(record.get("agent", ""))
+    if agent not in kind_agents.FACTS_AGENTS:
+        return {}
+
+    raw = str((record.get("report") or {}).get("raw", ""))
+    out: dict[str, str] = {}
+
+    facts = FACTS_LINE.search(raw)
+    if facts is None:
+        out["facts-first"] = "FAIL:no FACTS line"
+    elif not FIRSTHAND.search(facts.group(1)):
+        # 只写"文档"或"看了一下"不算事实来源。
+        out["facts-first"] = "FAIL:no first-hand source (codegraph / 源码 / 命令 / git)"
+    else:
+        out["facts-first"] = "PASS"
+
+    out["drift-declared"] = "PASS" if DRIFT_LINE.search(raw) else "FAIL:no DOC_DRIFT line"
+    return out
+
+
 def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     """The honesty checks from agents-evolve.md, plus the per-agent §0 checks."""
     checks: dict[str, str] = {}
@@ -262,6 +295,8 @@ def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
 
     # Per-agent §0 declarations (idev-coder only; empty for the rest).
     checks.update(check_boost(record, repo))
+    # Local-facts declarations (the judgement-making agents).
+    checks.update(check_facts(record))
     return checks
 
 

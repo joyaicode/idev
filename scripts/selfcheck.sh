@@ -1125,9 +1125,14 @@ done
 bash "${HOME}/.cursor/skills/idev/scripts/evolve-review.sh" --dry-run >${SCRATCH}/idev-evolve-dry.out 2>&1 \
   || fail "evolve-review --dry-run failed"
 grep -q 'DRY-RUN\|signal=' ${SCRATCH}/idev-evolve-dry.out || fail "evolve-review dry-run unexpected output"
-# with consumed inbox and no HARD, signal must be 0 (reviews soft-only)
-if grep -q 'HARD_COUNT=0' ${SCRATCH}/idev-evolve-dry.out && grep -q 'hot_tags=(none)' ${SCRATCH}/idev-evolve-dry.out; then
-  grep -q 'signal=0' ${SCRATCH}/idev-evolve-dry.out || fail "expected signal=0 when HARD=0 and no hot tags"
+# with consumed inbox and no HARD, signal must be 0 (reviews soft-only).
+# Stale drafts are the third hard signal (self-evolution.md: 避免提案永久草稿),
+# so exclude that case — otherwise this fails whenever a real proposal has
+# been sitting unreviewed for 14 days, which is the signal working, not a bug.
+if grep -q 'HARD_COUNT=0' ${SCRATCH}/idev-evolve-dry.out \
+  && grep -q 'hot_tags=(none)' ${SCRATCH}/idev-evolve-dry.out \
+  && grep -q 'stale_proposals=0' ${SCRATCH}/idev-evolve-dry.out; then
+  grep -q 'signal=0' ${SCRATCH}/idev-evolve-dry.out || fail "expected signal=0 when HARD=0, no hot tags and no stale drafts"
 fi
 bash "${HOME}/.cursor/skills/idev/scripts/evolve-curator.sh" --days 30 >${SCRATCH}/idev-curator.out 2>&1 \
   || fail "evolve-curator failed"

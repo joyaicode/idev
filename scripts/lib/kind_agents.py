@@ -21,6 +21,16 @@ from pathlib import Path
 # The conductor (the session talking to the person) keeps these steps.
 CONDUCTOR = "-"
 
+# Agents that reach a judgement and therefore must declare where the facts
+# came from (references/boost.md 第零节). idev-deliver is out: its output is
+# the document, so "the document says" is not circular there.
+FACTS_AGENTS: tuple[str, ...] = (
+    "idev-ops",
+    "idev-coder",
+    "idev-reviewer",
+    "idev-verifier",
+)
+
 # The agent that declares coding.md §0 (CHANGE_KIND / CANON_TRIGGER /
 # TABLE_HIT). delegation.py runs the §0 checks against this name only, so
 # keeping it here means a rename stays visible: agents-check verifies the

@@ -79,6 +79,8 @@ STATUS: PASS | FAIL | UNPROVEN | BLOCKED(brief) | BLOCKED(env) | BLOCKED(logic)
 EVIDENCE: <review.md 的绝对路径>
 FINDINGS: <I* 条数>(blocking <n> / 一般 <n>)
 UNRELATED: <条数>
+FACTS: codegraph <用了什么> | 源码 <路径:行> | 命令 <输出路径> | git <commit>
+DOC_DRIFT: 无 | <文档页> 说 X,代码实际 Y(建议派 docs.backfill)
 CHECKS: evidence-present=PASS|FAIL  no-signoff-write=PASS  report-parsed=PASS
 SUGGEST: <本定义里哪一步含糊,或空>
 CONCLUSION: <一句话>
@@ -87,3 +89,42 @@ CONCLUSION: <一句话>
 - 报告写出来了就是 `PASS`(有命中不等于 FAIL —— 命中是本步的正常产物)
 - 缺票目录、缺语言规约、扫描脚本跑不起来 → `BLOCKED` 并列缺项
 - 扫了但某一轴没有基线可比 → `UNPROVEN` 并写明缺什么
+
+## 事实从哪来(硬)
+
+**文档不可信,会过时,而且过时的时候不会告诉你。** 下判断之前用工具拿第一手事实:
+`codegraph_context` / `codegraph_trace` / `codegraph_impact --depth 1` 看真实结构 ·
+直接 `Read` 看真实实现 · 跑命令看真实输出 · `git log -p` 看它为什么是这样。
+
+回报的 `FACTS:` 必须给出**至少一个第一手来源**。只写「文档」或「看了一下」不算 ——
+`delegation.py` 的 `facts-first` 会抓到。
+
+文档和代码打架时:**以代码为准**,并在 `DOC_DRIFT:` 写明哪一页说了什么、代码实际是什么,
+交回导体派 `docs.backfill` 去修。不记下来,下一轮会被同一份文档再骗一次。没有冲突就写「无」。
+
+全文:[references/boost.md](../references/boost.md) 第零节。
+
+## 要算数就写代码(CodeAgent)
+
+**答案是一个数字、一个集合、一份清单 → 写代码,不要口算。** 散文推理不是证据,
+算出来的结果 + 能重跑的脚本才是。
+
+```bash
+python3 $IDEV/scripts/repl.py run --feature <f> --step <本步> --note "<算什么>" <<'PY'
+import safeyaml
+plan = safeyaml.mapping(TICKET / "verify" / "plan.yaml") or {}
+print(len(plan.get("cases") or []), "cases")
+PY
+```
+
+preamble 已给好 `IDEV` / `REPO` / `TICKET`(都是 `Path`)并把 idev 的 lib 放进 `sys.path`,
+所以 `safeyaml` / `doc_home` / `workflow_spec` 直接 import,不要自己拼路径。
+
+产物:`<票目录>/repl/<step>-<n>.py`(源码原文)+ `.out`(stdout/stderr/退出码),
+后者就是回报里的 `EVIDENCE` 路径 —— **别人能重跑同一份源码得到同一个答案**,
+这才是它算证据的原因。
+
+**签字字段与票 YAML 写入在执行前就被拒** —— REPL 不得成为绕过 `is_human()` 的路。
+它也不是第二套测试框架:算事实可以,判红绿仍只有 verify。
+
+全文:[references/code-agent.md](../references/code-agent.md)。

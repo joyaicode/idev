@@ -31,6 +31,8 @@ description: >-
 五个执行者：`idev-deliver`（需求/架构/文档）· `idev-coder`（编码/构建/提交）·
 `idev-reviewer`（审查）· `idev-verifier`（红绿/环境）· `idev-ops`（排障/论证）。
 完整职责分离、四条硬依据、以及两者之间仅有的三样接口：[references/agents.md](references/agents.md)。
+**怎么用**（何时走 `/idev`、何时直接点 agent、委派包最常漏什么、出问题按什么顺序查）：
+[references/agents-playbook.md](references/agents-playbook.md)。
 
 S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none` 表示这一步你自己做
 （`human.gate` 永远是 none）。委派后按 [references/agents-evolve.md](references/agents-evolve.md)
@@ -46,10 +48,22 @@ S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none`
 | 测试 | `idev-verifier` | 维度表先铺满用例骨架 + 失败签名归一化（`scripts/failure_signature.py`） |
 | 根因 | `idev-ops` | 假设台账（`scripts/hypothesis.py`）+ 证据链 + 有界修复红线自动计数 |
 
+要算数就写代码，不要口算：`scripts/repl.py` 把计算的源码与输出落成票目录里的证据
+（[references/code-agent.md](references/code-agent.md)）——散文推理不是证据，
+算出来的结果加上能重跑的脚本才是。
+
 `verify/SKILL.md` 硬规则 5 原文就是「有 codegraph 就用」，`conventions/evidence.md` 第 5 步
 原文就定了三条有界修复红线 —— 这三板斧只是让它们**判得出来**。细则
 [references/boost.md](references/boost.md)；待办与验证状态
 [references/agents-todo.md](references/agents-todo.md)。
+
+## 外部工具
+
+Langfuse（只做离线导出，不在交付路径上加网络依赖）· promptfoo（只做回报格式与边界的
+回归断言，不打分）· DSPy（**不装** —— 它的 optimizer 正是内核禁的「自动改 Skill +
+分数选优」，有效成分已落在回报格式、`agent-metrics` 件数、以及提案→拷问→人确认这条线上）。
+
+接外部工具的三条判据与四处内核禁令：[references/external-tools.md](references/external-tools.md)。
 
 ## 决策树（输入 → 场景 → 模块 → 第一步命令）
 

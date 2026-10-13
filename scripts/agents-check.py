@@ -166,6 +166,14 @@ def check_files(agent_dir: Path, strict_roster: bool, errors: list[str], warns: 
                 errors.append(f"{path.name}: report format has no {marker} line; delegation.py parses it")
         if "BLOCKED(" not in body:
             errors.append(f"{path.name}: no BLOCKED(brief|env|logic) split; metrics cannot attribute the blocker")
+        # boost.md 第零节: 下判断的 agent 必须交代事实来源与文档漂移。
+        if name in kind_agents.FACTS_AGENTS:
+            for marker in ("FACTS:", "DOC_DRIFT:"):
+                if marker not in body:
+                    errors.append(
+                        f"{path.name}: judgement-making agent has no {marker} line; "
+                        "delegation.py checks facts-first / drift-declared"
+                    )
         if name in kind_agents.BOOST_AGENTS and "$IDEV" not in body:
             errors.append(f"{path.name}: runs the boost scripts but never names $IDEV (the idev root)")
 

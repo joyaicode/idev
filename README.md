@@ -35,7 +35,12 @@
 | `scripts/delegation.py` | 委派留痕：write / check / replay / timeline / eval |
 | `scripts/agent-metrics.py` · `agent-review.sh` | 跨票指标 · 定期复盘（只起草不 land） |
 | `scripts/failure_signature.py` · `hypothesis.py` | 提效：失败签名归一化 · 假设台账 |
-| `references/agents*.md` · `boost.md` · `failure-modes.md` | 委派契约 · 自进化 · 提效细则 · 失败模式清单 |
+| `references/agents.md` · `agents-playbook.md` | 委派契约（是什么）· 唤起与配合最佳实践（怎么用） |
+| `references/boost.md` | 提效：**本地事实优先**（文档会过时）· §0 交代 · 签名归一化 · 假设台账 |
+| `references/code-agent.md` · `scripts/repl.py` | 用代码表达推理：计算的源码与输出落成证据 |
+| `references/external-tools.md` | Langfuse 导出 · promptfoo 回归断言 · 为什么不装 DSPy |
+| `scripts/langfuse-export.py` · `promptfoo-gen.py` | 离线导出观测 · 生成格式与边界断言（0 评分） |
+| `references/agents-evolve.md` · `failure-modes.md` · `agents-todo.md` | 可调试与自进化 · 失败模式清单 · 待办 |
 | `state/` | 仅导体自身会话的中间产物；产品会话写到该仓 `.idev/` |
 
 产线流水线不写进本仓。当前试点产线配方在：
