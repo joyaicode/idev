@@ -17,7 +17,7 @@ is_background: false
 | `ops.classify` | 投产后现象 | 先**分类**,再取证 |
 | `ui.fix_deposit` | 修完之后 | 根因与防再发写成 lessons |
 
-委派消息是你唯一的任务输入 —— 你看不到之前的对话。`$IDEV` = idev 内核根,`$AGENT` = idev-agent 仓根(两者都在委派包里)。**缺环境 / 产物 / 可观察物就回报 `BLOCKED(brief)`,不要猜。**
+委派消息是你唯一的任务输入 —— 你看不到之前的对话。`$IDEV` 是 idev 根(在委派包里给你)。**缺环境 / 产物 / 可观察物就回报 `BLOCKED(brief)`,不要猜。**
 
 **`attempt > 1` 时先读 `brief.prior_failure`**,把上次的假设标 `disproven`(不要删),再提新的。
 
@@ -39,11 +39,11 @@ is_background: false
 不管哪个 kind,猜想都**不许只在脑子里**:
 
 ```bash
-python3 $AGENT/scripts/hypothesis.py add --feature <f> \
+python3 $IDEV/scripts/hypothesis.py add --feature <f> \
   --claim "<命题>" --case "<可运行、能红能绿的用例>"
-python3 $AGENT/scripts/hypothesis.py set --feature <f> --id H1 \
+python3 $IDEV/scripts/hypothesis.py set --feature <f> --id H1 \
   --evidence <日志路径> --repro yes --status proven
-python3 $AGENT/scripts/hypothesis.py check --feature <f>
+python3 $IDEV/scripts/hypothesis.py check --feature <f>
 ```
 
 - **用例**:可运行、能红能绿,断言**用户原现象**,不是"进程没挂"
@@ -106,8 +106,8 @@ codegraph_impact <symbol> --depth 1         # 改它会波及谁
 本轮若已在改-跑循环里:
 
 ```bash
-python3 $AGENT/scripts/failure_signature.py append --feature <f> --log <日志> --delta <改动行数>
-python3 $AGENT/scripts/failure_signature.py check --feature <f>
+python3 $IDEV/scripts/failure_signature.py append --feature <f> --log <日志> --delta <改动行数>
+python3 $IDEV/scripts/failure_signature.py check --feature <f>
 ```
 
 退出码 2 = 命中(同签名连续 3 次 / 连续 2 次无有效变化 / 单根因超 ~15 分钟)→

@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # Soft-link ~/.agents and ~/.joycode idev dirs to the only true source:
-# ~/.cursor/skills/idev (must be a real directory, not a symlink).
+# ~/.cursor/skills/idev.
+#
+# That path may itself be a symlink into a git checkout. "True source" means
+# there is exactly ONE copy of the content, not that this path is a real
+# directory — and a versioned checkout is the better shape. Aliases are
+# verified by physical path below, which handles either.
 set -euo pipefail
 TRUE="${HOME}/.cursor/skills/idev"
 
-if [ ! -d "$TRUE" ]; then
+if [ ! -e "$TRUE" ]; then
   echo "FAIL true source missing: $TRUE" >&2
   exit 1
 fi
-if [ -L "$TRUE" ]; then
-  echo "FAIL $TRUE is a symlink; true source must be a real directory" >&2
-  echo "     points to: $(readlink "$TRUE")" >&2
+if [ ! -f "$TRUE/SKILL.md" ]; then
+  echo "FAIL $TRUE does not look like an idev root (no SKILL.md)" >&2
   exit 1
 fi
 

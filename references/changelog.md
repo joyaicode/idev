@@ -1,5 +1,7 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-13：修两处「永远红」的既有检查。`healthcheck` 与 `link-idev-aliases.sh` 都硬性要求 `~/.cursor/skills/idev` 是真目录，而本机拓扑是「git 仓是真源、那里是 symlink」——于是 healthcheck 恒定 FAIL，等于一个没法用的健康检查，新问题会被淹没。「真源」的意图是**只有一份内容**，不是「这个路径必须是真目录」，而版本化的 checkout 是更好的形态。改为接受两种形态，并把「物理根必须等于真源」从字符串比较改成物理路径比较（否则 symlink 必然被读成第二份副本）。`link-idev-aliases.sh` 内部本来就用 `pwd -P` 比对别名，只是前置检查拦住了。另：`selfcheck` 的 trace sink 锁同理已修。
+
 - 2026-10-13：agent 层合并进内核，idev 成为一整套。新增 `agents/`（五个执行者：deliver / coder / reviewer / verifier / ops，按生命周期阶段与模块归并）与 `kind → agent` 登记表 `scripts/lib/kind_agents.py`；`workflow.py next` 原生多打一行 `DELEGATE`，`trace.py` 的 `calls[].kind` 增 `agent`。导体（`/idev` skill）独占签字权与人交互，执行者是 subagent——`is_human()` 的黑名单本就含 `agent/ai/cursor/assistant`，所以这条分工是代码级的，不是约定。新增委派留痕与五项诚实性检查（`delegation.py`）、跨票指标与复盘（`agent-metrics.py` / `agent-review.sh`，只起草不 land）、提效三板斧（`failure_signature.py` 签名归一化让 evidence.md 的三条红线判得出来、`hypothesis.py` 假设台账、coding.md §0 三项交代可机检）。自检三道：`syntax-check.sh` / `agents-check.py` / `agent-smoke.sh`（143 条）。顺手修两处内核既有问题：`selfcheck.sh` 的 trace sink 锁死路径含 `.cursor/skills/idev`，而 `kernel_root()` 用 `resolve()` 必然得到物理路径，该锁在 symlink 拓扑下永远不通过；复制进来的脚本补执行位。`cohesion.md` 加 `agents` 登记并论证它不是第二个顶层 Skill（subagent 名与 skill 名不同命名空间，入口仍只有 `idev`）。
 
 

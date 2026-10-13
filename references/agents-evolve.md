@@ -45,8 +45,7 @@ brief:                 # 委派包原文 —— 重放的依据,必须完整
   stage: code
   risk_tier: P1
   must_read: conventions/coding.md
-  idev_root: ~/.cursor/skills/idev
-  agent_root: ~/go/src/github.com/idev-agent   # coder/verifier/analyst/ops 必填
+  idev_root: ~/.cursor/skills/idev   # coder/verifier/ops 必填($IDEV)
   with: {}
   prior_failure: ""    # attempt > 1 时写上一次的失败原因
 report:                # agent 回报原文,不要摘要
@@ -96,7 +95,7 @@ python3 scripts/delegation.py replay --feature <f> --step <step>   # 打印可�
 |------|----------|--------|
 | `evidence-present` | 回报 `PASS` 却没有证据路径(路径给了但不存在 → `WARN`) | agent |
 | `no-signoff-write` | 回报声称写了、或留痕显示碰了 `sealed`/`accepted`/`aligned`/`resolved`/`reopen_baseline`/`semantic_gate.*` | agent(**严重**) |
-| `brief-complete` | `brief` 缺 `ticket_home`/`repo`/`stage`/`must_read`,或派给 coder/verifier/analyst/ops 却缺 `agent_root` | **导体** |
+| `brief-complete` | `brief` 缺 `ticket_home`/`repo`/`stage`/`must_read`,或派给 coder/verifier/ops 却缺 `idev_root` | **导体** |
 | `report-parsed` | 回报没有可机读的 `STATUS:` 行 | agent |
 | `metrics-shape` | `metrics` 不是扁平 map,或某个值是嵌套结构 / 超长字符串 | 导体 |
 

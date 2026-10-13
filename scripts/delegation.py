@@ -250,7 +250,10 @@ def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     brief = record.get("brief") or {}
     required = list(BRIEF_REQUIRED)
     if str(record.get("agent", "")) in kind_agents.BOOST_AGENTS:
-        required.append("agent_root")
+        # The boost scripts live in idev itself now, so idev_root is the only
+        # root there is. Before the merge this was a separate agent_root, and
+        # requiring both only gave the conductor one more field to get wrong.
+        required.append("idev_root")
     missing = [k for k in required if not str(brief.get(k, "")).strip()]
     checks["brief-complete"] = "PASS" if not missing else "FAIL:" + ",".join(missing)
 
@@ -431,7 +434,7 @@ def cmd_replay(args: argparse.Namespace) -> int:
     print(f"# next attempt: {safeyaml.as_int(record.get('attempt'), 1) + 1}")
     print(f"# prior outcome: {report_status(record) or '?'}  ({human_secs(duration_of(record))})")
     print()
-    for key in ("ticket_home", "repo", "stage", "risk_tier", "must_read", "idev_root", "agent_root"):
+    for key in ("ticket_home", "repo", "stage", "risk_tier", "must_read", "idev_root"):
         if brief.get(key):
             print(f"{key}: {brief[key]}")
     if brief.get("with"):

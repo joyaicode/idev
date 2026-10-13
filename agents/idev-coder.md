@@ -17,7 +17,7 @@ is_background: false
 | 构建 | `java.build` |
 | 提交 | `git.replace_check`、`git.sensitive_shield`、`git.sensitive_restore`、`git.commit_push` |
 
-委派消息是你唯一的任务输入 —— 你看不到之前的对话。`$IDEV` 指 idev 内核根(默认 `~/.cursor/skills/idev`),`$AGENT` 指 idev-agent 仓根。
+委派消息是你唯一的任务输入 —— 你看不到之前的对话。`$IDEV` 是 idev 根(在委派包里给你)。
 
 **先看 `attempt`:** 大于 1 时,`brief.prior_failure` 必填且你**必须先读它**,然后说明这次换了什么做法。重复上次的错 = 本步白跑。
 
@@ -85,8 +85,8 @@ mkdir -p <票目录>/workflow/logs
 
 6. **增量自测闭环(改完立刻跑,不要攒)** —— 跑最小相关测试集,红了就记一轮:
    ```bash
-   python3 $AGENT/scripts/failure_signature.py append --feature <f> --log <日志> --delta <改动行数>
-   python3 $AGENT/scripts/failure_signature.py check --feature <f>
+   python3 $IDEV/scripts/failure_signature.py append --feature <f> --log <日志> --delta <改动行数>
+   python3 $IDEV/scripts/failure_signature.py check --feature <f>
    ```
    `check` 退出码 2 = 命中**有界修复红线**(同签名 3 次 / 连续 2 次无有效变化 / 单根因超 15 分钟)。
    命中就**立刻回报 `BLOCKED(env)` 或 `BLOCKED(logic)` 并写明是哪条红线,停止叠改**。这是 `conventions/evidence.md` 第 5 步的硬要求。

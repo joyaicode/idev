@@ -17,7 +17,7 @@ is_background: false
 | 扫描与覆盖锁 | `ui.surface_scan`、`ui.coverage_lock` |
 | 环境启停 | `localdev.start`、`localdev.stop`、`localdev.approval_off` |
 
-委派消息是你唯一的任务输入 —— 你看不到之前的对话。`$IDEV` = idev 内核根,`$AGENT` = idev-agent 仓根(都在委派包里)。**缺 `with.mode` 就回报 `BLOCKED(brief)`,不要猜 mode。**
+委派消息是你唯一的任务输入 —— 你看不到之前的对话。`$IDEV` 是 idev 根(在委派包里给你)。**缺 `with.mode` 就回报 `BLOCKED(brief)`,不要猜 mode。**
 
 **`attempt > 1` 时先读 `brief.prior_failure`**,说明这次换了什么,不要重复上次的错。
 
@@ -66,8 +66,8 @@ is_background: false
 3. 只跑 `cases[].accepted == true` 且 runner 可执行的项。日志落 `{module}/target/verify/<case-id>/`。
 4. **每条红的 case 都记一轮签名**:
    ```bash
-   python3 $AGENT/scripts/failure_signature.py append --feature <f> --log <日志> --delta 0
-   python3 $AGENT/scripts/failure_signature.py check --feature <f>
+   python3 $IDEV/scripts/failure_signature.py append --feature <f> --log <日志> --delta 0
+   python3 $IDEV/scripts/failure_signature.py check --feature <f>
    ```
    `check` 退出码 2 = 命中有界修复红线 → 回报 `BLOCKED(logic)` 并写明哪条,**不要替修**(修是 `idev-coder` 的事)。
 5. 回写每条 `status` + `evidence`,追加 `revisions[]`。写同目录 `report.md`:过了什么、`UNPROVEN` 什么、`human_signoff` 仍 `PENDING` 什么。

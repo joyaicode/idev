@@ -12,19 +12,27 @@ echo "root: $ROOT"
 echo
 
 TRUE="${HOME}/.cursor/skills/idev"
-if [[ -L "$TRUE" ]]; then
-  echo "FAIL ~/.cursor/skills/idev is a symlink (must be the real directory) -> $(readlink "$TRUE")"
-  fail=1
-elif [[ -d "$TRUE" ]]; then
-  echo "OK  true source ~/.cursor/skills/idev"
-else
+# "True source" means there is exactly ONE copy of the content — not that
+# this particular path is a real directory. A symlink into a git checkout
+# satisfies that and is the better shape (the content is versioned), so
+# accept either and verify by physical path below.
+if [[ ! -e "$TRUE" ]]; then
   echo "FAIL ~/.cursor/skills/idev missing"
   fail=1
+elif [[ ! -f "$TRUE/SKILL.md" ]]; then
+  echo "FAIL ~/.cursor/skills/idev has no SKILL.md (not an idev root)"
+  fail=1
+elif [[ -L "$TRUE" ]]; then
+  echo "OK  true source ~/.cursor/skills/idev -> $(cd "$TRUE" && pwd -P) (checkout)"
+else
+  echo "OK  true source ~/.cursor/skills/idev (real directory)"
 fi
 
-# Physical root must be the true source
-if [[ "$ROOT" != "$TRUE" ]]; then
-  echo "FAIL physical root is not ~/.cursor/skills/idev ($ROOT)"
+# The checkout being healthchecked must be the same content as the true
+# source — compared physically, so a symlink does not read as a second copy.
+if [[ -e "$TRUE" ]] && [[ "$(cd "$ROOT" && pwd -P)" != "$(cd "$TRUE" && pwd -P)" ]]; then
+  echo "FAIL this checkout ($ROOT) is not what ~/.cursor/skills/idev resolves to"
+  echo "     that would be a second copy; there must be only one"
   fail=1
 fi
 

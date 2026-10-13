@@ -152,15 +152,17 @@ feature / stage / risk_tier: <来自 deliver.yaml>
 本步: <step.id>  kind=<kind>  label=<label>  with=<with>
 attempt: <第几次;>1 时必须附 prior_failure>
 必读: <该 kind 的落点页绝对路径>
-IDEV_ROOT: <idev 内核根,默认 ~/.cursor/skills/idev>
-AGENT_ROOT: <idev-agent 仓根>   # 派给 coder / verifier / analyst / ops 时必填
+IDEV_ROOT: <idev 根,默认 ~/.cursor/skills/idev>
 禁止: 写 sealed/accepted/aligned/resolved/reopen_baseline/semantic_gate.*;改密封基线正文
 回报: 按你定义里的回报格式,STATUS + EVIDENCE 必填
 ```
 
-`AGENT_ROOT` 是**派给 `idev-coder` / `idev-verifier` / `idev-ops` 时的必填项**:
-这四个要跑本仓的提效脚本(`failure_signature.py`、`hypothesis.py`),定义里以 `$AGENT` 引用它。
-不给就等于让它们去空路径执行 —— `delegation.py` 的 `brief-complete` 对这三个 agent 强制检查这一项。
+`IDEV_ROOT` 对 `idev-coder` / `idev-verifier` / `idev-ops` 是**必填**:这三个要跑提效脚本
+(`scripts/failure_signature.py`、`scripts/hypothesis.py`),定义里以 `$IDEV` 引用它。
+不给就等于让它们去空路径执行 —— `delegation.py` 的 `brief-complete` 对这三个强制检查这一项。
+
+合并进 idev 之前这里还有一个独立的 `AGENT_ROOT`(agent 层单独一个仓)。合并后两者是同一个
+路径,要求填两遍只是给导体多一次填错的机会,所以只保留 `IDEV_ROOT`。
 
 `attempt > 1` 时 `prior_failure` 必填,且别凭记忆重组委派包:用
 `delegation.py replay --feature <f> --step <step>` 把上次那份原样取回来。

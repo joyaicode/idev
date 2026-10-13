@@ -26,8 +26,7 @@ brief:
   stage: code
   risk_tier: P1
   must_read: conventions/coding.md
-  idev_root: ~/.cursor/skills/idev
-  agent_root: ~/.cursor/skills/idev            # 合并进 idev 后与 idev_root 同一个
+  idev_root: ~/.cursor/skills/idev           # coder/verifier/ops 必填($IDEV)
   with: {}
   prior_failure: ""
 

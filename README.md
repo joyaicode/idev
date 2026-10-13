@@ -1,22 +1,41 @@
-# idev（本地快照）
+# idev
 
-人机共驾的端到端交付生命周期导体。真源路径：`~/.cursor/skills/idev/`。
+人机共驾的 AI 端到端交付生命周期导体 —— **一个 skill 当导体，五个 agent 当执行者**。
 
-本仓库是 **2026-09-30 workflow 重构完成后的本地暂存**：已 `git init` 在 `main`，尚未推到 GitHub（本机 `gh` / SSH 当时未授权）。日常使用仍直接读这个目录；别名链到 `~/.agents/skills/idev`、`~/.joycode/skills/idev`。
+真源是这个 git checkout；`~/.cursor/skills/idev` 是指向它的 symlink，别名
+`~/.agents/skills/idev`、`~/.joycode/skills/idev` 再指向那里。只有一份内容。
+
+## skill 与 agent：为什么要两种机制
+
+| | **skill**（`/idev`） | **agent**（`/idev-coder` 等五个） |
+|---|---|---|
+| 身份 | 导体，注入主会话 | 执行者，独立上下文 |
+| 做 | 认票 · 路由 · 组委派包 · 验收回报 · 记账 | 在落点页里干活 · 产出工件 · 给证据 |
+| 独占 | **签字权** · 与人交互 · 写 trace | 上下文隔离 |
+| 不能 | 亲自执行已委派的 step | 签字 · 问人 · 写 trace |
+
+**不是选择，是约束：** `scripts/lib/workflow_spec.py` 的 `is_human()` 黑名单正是
+`{agent, ai, cursor, assistant}`——**agent 签字在代码层就被拒**；subagent 看不到对话历史，
+无法与人往复确认；Cursor 的「subagent 启动的 subagent 不能再启动」也要求导体在主会话。
+把导体也做成 agent，等于把「人机共驾」降级成「无人值守」。
+
+两者之间只有三样接口：**委派包**（skill→agent）、**回报**（agent→skill）、
+**留痕**（双向存原文，可重放）。职责分离全文见 [references/agents.md](references/agents.md)。
 
 ## 目录
 
 | 路径 | 作用 |
 |------|------|
-| `SKILL.md` | 唯一入口与场景路由（S1–S8） |
+| `SKILL.md` | 唯一入口：导体 · 场景路由 S1–S8 · skill↔agent 分工 · 提效三板斧 |
+| `agents/` | 五个执行者：deliver（需求/架构/文档）· coder（编码/构建/提交）· reviewer（审查）· verifier（红绿/环境）· ops（排障/论证） |
 | `workflows/` | 内核编排配方（任何产线都能用） |
-| `scripts/workflow.py` | 按配方驱动 `run.yaml`（不替 Agent 执行步骤） |
-| `scripts/workflow-check.py` | 校验配方与 run |
-| `scripts/lib/workflow_spec.py` | 编排语法的代码形态（kind / 顶栏 / 策略） |
-| `scripts/lib/workflow_defaults.py` | 读扩展根 `.idev/workflow-defaults.yaml` |
-| `scripts/s8-preflight.sh` | S8 前置探针 |
-| `references/workflow-schema.md` | 编排语法（给人看） |
 | `deliver/` `verify/` `ops/` `docs/` `conventions/` | 阶段模块与规约 |
+| `scripts/workflow.py` | 按配方驱动 `run.yaml`，`next` 打印 `OPEN` 落点页 + `DELEGATE` 派给谁 |
+| `scripts/lib/kind_agents.py` | `kind → agent` 登记表（29 kinds / 5 agents，24 委派 / 5 导体保留） |
+| `scripts/delegation.py` | 委派留痕：write / check / replay / timeline / eval |
+| `scripts/agent-metrics.py` · `agent-review.sh` | 跨票指标 · 定期复盘（只起草不 land） |
+| `scripts/failure_signature.py` · `hypothesis.py` | 提效：失败签名归一化 · 假设台账 |
+| `references/agents*.md` · `boost.md` · `failure-modes.md` | 委派契约 · 自进化 · 提效细则 · 失败模式清单 |
 | `state/` | 仅导体自身会话的中间产物；产品会话写到该仓 `.idev/` |
 
 产线流水线不写进本仓。当前试点产线配方在：
@@ -25,16 +44,33 @@
 
 其它产品仓只留 `marker.yaml` + `extension_root: ../joypaas`（或等价相对路径）。
 
+## 装 agent
+
+```bash
+bash scripts/link-agents.sh      # agents/*.md -> ~/.claude/agents/（Cursor 兼容读同一处）
+```
+
+`/idev` 不需要安装——idev 本身就是 skill。待办与验证状态见
+[references/agents-todo.md](references/agents-todo.md)。
+
 ## 本机自检
+
+**按顺序跑，前一道过不了后面的结论就不成立：**
 
 ```bash
 cd ~/.cursor/skills/idev
-bash scripts/workflow-check.sh
-bash scripts/selfcheck.sh
-bash scripts/healthcheck.sh
+bash scripts/syntax-check.sh       # 1 纯解析全部脚本，零副作用
+python3 scripts/agents-check.py    # 2 agent 定义 + 回报格式 + 登记表同步
+bash scripts/workflow-check.sh     # 3 配方与 run 契约
+bash scripts/refs-check.sh         # 4 文档交叉引用
+bash scripts/selfcheck.sh          # 5 内核锁
+bash scripts/agent-smoke.sh        # 6 委派层端到端 143 条
+bash scripts/healthcheck.sh        # 7 环境与拓扑
 ```
 
-期望：`PASS` / `selfcheck PASS` / `healthcheck PASS`。
+全部期望 `PASS`。`syntax-check` 必须第一个跑——**smoke 抓不到 smoke 自己的语法错**，
+不能解析的脚本一条断言都不会执行。详见
+[references/failure-modes.md](references/failure-modes.md) 第十一条。
 
 ## 驱动一次配方（产品仓内）
 

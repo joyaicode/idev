@@ -159,7 +159,7 @@ YAML
 expect 2 "refuse attempt>1 with no prior_failure" -- \
   python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/retry.yaml"
 
-# a boost agent without agent_root -> brief-complete FAIL (exit 1, recorded).
+# a boost agent without idev_root -> brief-complete FAIL (exit 1, recorded).
 # The §0 fields are filled in so this case fails for one reason only.
 cat > "${TMP}/noroot.yaml" <<YAML
 step: code-pass
@@ -174,13 +174,13 @@ report:
     CANON_TRIGGER: 无
     TABLE_HIT: 零命中
 YAML
-expect 1 "flag missing agent_root for a boost agent" -- \
+expect 1 "flag missing idev_root for a boost agent" -- \
   python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/noroot.yaml"
 contains "brief-complete" "names brief-complete"
 contains "conductor" "blames the conductor, not the agent"
 
 # PASS with no evidence -> evidence-present FAIL.
-# agent_root is present on purpose: ops is a boost agent, and leaving it out
+# idev_root is present on purpose: ops is a boost agent, and leaving it out
 # would make this case fail two checks at once and prove neither.
 cat > "${TMP}/noev.yaml" <<YAML
 step: classify
@@ -191,7 +191,7 @@ brief:
   repo: ${TMP}
   stage: ops
   must_read: ops/SKILL.md
-  agent_root: ${REPO}
+  idev_root: ${REPO}
 report: {raw: "STATUS: PASS\nCONCLUSION: no path given\n"}
 YAML
 expect 1 "flag PASS without evidence" -- \
@@ -259,7 +259,7 @@ brief:
   repo: ${TMP}
   stage: code
   must_read: conventions/coding.md
-  agent_root: ${REPO}
+  idev_root: ${REPO}
 report:
   raw: |
     STATUS: PASS
@@ -283,7 +283,7 @@ brief:
   repo: ${TMP}
   stage: code
   must_read: conventions/coding.md
-  agent_root: ${REPO}
+  idev_root: ${REPO}
 report:
   raw: |
     STATUS: PASS
@@ -307,7 +307,7 @@ brief:
   repo: ${TMP}
   stage: code
   must_read: conventions/coding.md
-  agent_root: ${REPO}
+  idev_root: ${REPO}
 report:
   raw: |
     STATUS: PASS
