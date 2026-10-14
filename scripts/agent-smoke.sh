@@ -1253,6 +1253,196 @@ expect 0 "--list explains what each stage checks" -- python3 "${S}/stage-gate.py
 expect 2 "refuse a feature with no ticket home" -- \
   python3 "${S}/stage-gate.py" --repo "$TMP" --feature nope --stage req
 
+say "15 realign: after the baseline moved"
+
+# The dangerous case this exists for: a PASS case still anchored to an item
+# the correction removed, so new requirements get validated by old evidence.
+RA="${TMP}/.idev/task/realign-bad"
+mkdir -p "${RA}/verify"
+cat > "${RA}/baseline.yaml" <<'YML'
+revision: 2
+sealed: false
+items:
+  - {id: B3, must: 登录失败给错误码, acceptance: 3 秒内 AUTH_401}
+YML
+cat > "${RA}/deliver.yaml" <<'YML'
+stage: req-review
+reopen_baseline: true
+aligned: true
+last_rewind: {origin: req, note: 需求订正}
+semantic_gate:
+  arch: {passed: true, by: p}
+YML
+cat > "${RA}/req.yaml" <<'YML'
+baseline_revision: 1
+accepted: true
+slices:
+  - {id: S1, baseline_item_id: B1, must: 旧需求}
+YML
+cat > "${RA}/arch.yaml" <<'YML'
+baseline_revision: 1
+accepted: true
+case_intents: [{id: CI1, baseline_item_id: B1}]
+YML
+cat > "${RA}/verify/plan.yaml" <<'YML'
+accepted: true
+cases:
+  - {id: c1, baseline_item_id: B1, status: PASS, evidence: logs/c1.log}
+YML
+expect 1 "realign finds drift after a reopen" -- \
+  python3 "${S}/realign.py" --repo "$TMP" --feature realign-bad
+contains "baseline_revision=1" "names the artifact built on the old revision"
+contains "B1" "names the vanished item the artifacts still point at"
+contains "证的是旧需求" "flags the PASS that proves a removed requirement"
+contains "已失效,但仍是 true" "flags the signoffs the schema voided"
+contains "没有 slice 覆盖" "flags the corrected item nobody decomposed"
+
+expect 1 "realign --plan gives a forward redo order" -- \
+  python3 "${S}/realign.py" --repo "$TMP" --feature realign-bad --plan
+contains "从 req 开始" "starts from the earliest drifting stage"
+contains "停问点" "keeps the human gates in the redo path"
+
+# Aligned ticket: quiet, or the findings become noise.
+RK="${TMP}/.idev/task/realign-ok"
+mkdir -p "${RK}/verify"
+cat > "${RK}/baseline.yaml" <<'YML'
+revision: 2
+sealed: true
+items: [{id: B3, must: 登录失败给错误码, acceptance: 3 秒内 AUTH_401}]
+YML
+cat > "${RK}/deliver.yaml" <<'YML'
+stage: code
+baseline_revision: 2
+semantic_gate: {req: {passed: true, by: p}, arch: {passed: true, by: p}}
+YML
+cat > "${RK}/req.yaml" <<'YML'
+baseline_revision: 2
+accepted: true
+slices: [{id: S1, baseline_item_id: B3, must: 登录失败给错误码}]
+YML
+cat > "${RK}/arch.yaml" <<'YML'
+baseline_revision: 2
+accepted: true
+case_intents: [{id: CI1, baseline_item_id: B3}]
+YML
+cat > "${RK}/verify/plan.yaml" <<'YML'
+accepted: true
+cases: [{id: c1, baseline_item_id: B3, status: PASS, evidence: logs/c1.log}]
+YML
+expect 0 "an aligned ticket comes back clean" -- \
+  python3 "${S}/realign.py" --repo "$TMP" --feature realign-ok
+contains "对准 ≠ 做对了" "PASS still says alignment is not correctness"
+expect 0 "--plan on an aligned ticket says nothing to redo" -- \
+  python3 "${S}/realign.py" --repo "$TMP" --feature realign-ok --plan
+
+expect 2 "refuse a feature with no ticket home" -- \
+  python3 "${S}/realign.py" --repo "$TMP" --feature nope
+
+say "16 artifact-match: is the source the build that is running"
+
+# Needs git and zip to build a real jar; skip rather than fake it.
+if ! command -v zip >/dev/null 2>&1 || ! command -v git >/dev/null 2>&1; then
+  printf '  skip zip or git missing; artifact matching not covered\n'
+else
+  AM="${TMP}/am"
+  mkdir -p "$AM"
+  (
+    cd "$AM"
+    git init -q .
+    echo one > a.txt && git add -A
+    git -c user.email=t@t -c user.name=t commit -qm one
+    git rev-parse HEAD > "${TMP}/c1"
+    echo two > b.txt && git add -A
+    git -c user.email=t@t -c user.name=t commit -qm two
+    git rev-parse HEAD > "${TMP}/c2"
+  ) >/dev/null 2>&1
+  C1="$(cat "${TMP}/c1")"
+  C2="$(cat "${TMP}/c2")"
+
+  mkjar() {   # mkjar <commit> <out.jar>
+    local d
+    d="$(mktemp -d)"
+    mkdir -p "$d/BOOT-INF/classes" "$d/META-INF"
+    printf 'git.commit.id.full=%s\ngit.branch=main\n' "$1" > "$d/BOOT-INF/classes/git.properties"
+    printf 'Manifest-Version: 1.0\nImplementation-Version: 1.2.3\n' > "$d/META-INF/MANIFEST.MF"
+    echo x > "$d/BOOT-INF/classes/A.class"
+    (cd "$d" && zip -qr "$2" .)
+  }
+  mkjar "$C2" "${TMP}/match.jar"
+  mkjar "$C1" "${TMP}/old.jar"
+
+  expect 0 "same commit is a MATCH" -- \
+    python3 "${S}/artifact-match.py" --artifact "${TMP}/match.jar" --repo "$AM"
+  contains "MATCH" "states the verdict"
+  contains "读源码得到的逻辑就是运行时的逻辑" "says source may be trusted here"
+
+  expect 1 "an older artifact is AHEAD" -- \
+    python3 "${S}/artifact-match.py" --artifact "${TMP}/old.jar" --repo "$AM"
+  contains "源码比产物新 1 个提交" "counts how far the source moved"
+  contains "b.txt" "names the file changed since the build"
+  contains "不要用当前源码的逻辑解释线上现象" "refuses reasoning from newer source"
+
+  # No build identity at all must be UNKNOWN, and UNKNOWN is not a pass.
+  BD="$(mktemp -d)"
+  echo x > "$BD/A.class"
+  (cd "$BD" && zip -q "${TMP}/bare.jar" A.class)
+  expect 1 "an artifact with no identity is UNKNOWN" -- \
+    python3 "${S}/artifact-match.py" --artifact "${TMP}/bare.jar" --repo "$AM"
+  contains "UNKNOWN" "states the verdict"
+  contains "这不是放行" "refuses to treat UNKNOWN as a pass"
+  contains "假想臆断" "names what assuming sameness would be"
+
+  expect 2 "refuse a missing artifact" -- \
+    python3 "${S}/artifact-match.py" --artifact "${TMP}/nope.jar" --repo "$AM"
+fi
+
+# The ops report must carry the verdict — for kind=feature only, since
+# onboard / runtime are handed off and patrol replays a registered pack.
+cat > "${TMP}/ops-noart.yaml" <<YAML
+step: classify-noart
+kind: ops.classify
+agent: idev-ops
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: ops
+  must_read: ops/SKILL.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    KIND: feature
+    FACTS: codegraph_context + 源码 scripts/trace.py:45
+    DOC_DRIFT: 无
+    ASSUMED: 无
+YAML
+expect 1 "a feature defect must confirm the artifact" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/ops-noart.yaml"
+contains "artifact-verified" "names artifact-verified"
+
+cat > "${TMP}/ops-handoff.yaml" <<YAML
+step: classify-handoff
+kind: ops.classify
+agent: idev-ops
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: ops
+  must_read: ops/SKILL.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    KIND: onboard
+    FACTS: 源码 scripts/trace.py:45
+    DOC_DRIFT: 无
+    ASSUMED: 无
+YAML
+expect 0 "a handoff kind does not need the artifact check" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/ops-handoff.yaml"
+
 printf '\n== result\n'
 printf '  pass %d   fail %d\n' "$PASS" "$FAIL"
 if [ "$FAIL" -ne 0 ]; then

@@ -211,3 +211,20 @@ python3 $IDEV/scripts/stage-gate.py --feature <f> --stage test
 **但它 PASS 不等于这一关过了。** 拒过清单的另一半是专业判断(拆解是否忠实、架构是否合理、
 用例是否有意义),只能人过 + grill 拷问。回报里把两者分开说:机检结果写
 `GATE:`,专业判断的未决项写进 `OPEN:` 或 `ASSUMED:`。
+
+## 发现需求有问题怎么办(反馈通道)
+
+**不自己改基线。** 写 `baseline-conflict`,回报 `BLOCKED(logic)`,交回导体问人。
+`deliver-schema.md` 原文:「Agent 不得自行 unseal」—— 基线是验收的尺,
+让被量的人改尺,这一格就没意义了。
+
+**反馈必须带依据。** 「我觉得这需求不合理」不是反馈;「这条 must 和
+`src/auth.py:resolve` 里已有的规则相反,见那一行」才是。写进 `FACTS:`。
+
+人选两条路之一:基线内改实现(基线不动,回退 `req`/`arch`/`code`),
+或 `reopen_baseline`(回 `req-review` 重拷问,`revision + 1`,**旧 id 的 slice / case 全部作废**)。
+
+订正之后导体会跑 `realign.py` 查全线对准,你可能会被重新派一次 —— 那时
+`brief.prior_failure` 会说明上次为什么作废。
+
+全文:[references/feedback-loop.md](../references/feedback-loop.md)。

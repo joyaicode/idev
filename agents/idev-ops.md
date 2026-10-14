@@ -149,6 +149,7 @@ REPRO: 是 | 否(在用户同一现象上红过?)
 ROOTCAUSE: <能红绿切换的根因;证不出就写「未定性」>
 KIND: feature | patrol | onboard | runtime | unknown   # ops.classify 时必填
 SCENE: env=<> artifact=<> observable=<>(齐否)
+ARTIFACT: MATCH | AHEAD(源码新 <n> 个提交,疑点文件 <列表>) | UNKNOWN(<为什么>)
 层: <发现层 → 根因层;修在哪一层>
 IMPACT: <影响范围,可检验> | codegraph depth=1 提名 <n>
 NEXT: <交 verify debug | 交 verify patrol | 已写 handoff 需停 | 交 coder 修 | 缺项待补>
@@ -235,3 +236,21 @@ python3 $IDEV/scripts/stage-gate.py --feature <f> --stage ops
 **但它 PASS 不等于这一关过了。** 拒过清单的另一半是专业判断(拆解是否忠实、架构是否合理、
 用例是否有意义),只能人过 + grill 拷问。回报里把两者分开说:机检结果写
 `GATE:`,专业判断的未决项写进 `OPEN:` 或 `ASSUMED:`。
+
+## 产物与源码必须同源(机检)
+
+排障最该先问的不是「代码怎么写的」,是**「我读的代码是不是线上跑的那一份」**。
+
+`ARTIFACT:` 一行必填,取值来自 `artifact-match.py`:
+
+- `MATCH` —— 读源码得到的逻辑就是运行时的逻辑
+- `AHEAD` —— 源码比产物新。**先切到产物那个 commit 再读**,或换同源产物重新复现;
+  都不动的话,结论只能基于产物自身的可观察行为(日志 / 响应 / 抓包)。
+  它列出的变更文件是第一优先级 —— 现象很可能就在那几处差异里
+- `UNKNOWN` —— 产物没携带构建身份。**这不是放行**:「应该是同一份」正是拒过清单
+  第一条禁的假想臆断
+
+机检 `artifact-verified`:`kind=feature` 却没有 `ARTIFACT:` 行 → FAIL。
+特征缺陷要回退 deliver,而回退的前提是确认现象出在**那一份**代码上。
+
+[references/boost.md](../references/boost.md) 第零节。

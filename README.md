@@ -32,6 +32,9 @@
 | `deliver/` `verify/` `ops/` `docs/` `conventions/` | 阶段模块与规约 |
 | `scripts/workflow.py` | 按配方驱动 `run.yaml`，`next` 打印 `OPEN` 落点页 + `DELEGATE` 派给谁 |
 | `scripts/lib/kind_agents.py` | `kind → agent` 登记表（29 kinds / 5 agents，24 委派 / 5 导体保留） |
+| `references/feedback-loop.md` | 双向反馈环：下游质疑上游 · 订正后全线对准 · 交付后跟进 |
+| `scripts/artifact-match.py` | 运维:产物与源码是否同源（MATCH/AHEAD/UNKNOWN） |
+| `scripts/realign.py` | 需求订正后查七类漂移，给出向前的重做顺序 |
 | `scripts/stage-gate.py` | 七视角把关：experts.md 拒过清单里可机检的 21 条 |
 | `scripts/delegation.py` | 委派留痕：write / check / replay / timeline / eval |
 | `scripts/agent-metrics.py` · `agent-review.sh` | 跨票指标 · 定期复盘（只起草不 land） |

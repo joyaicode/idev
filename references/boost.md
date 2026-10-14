@@ -39,6 +39,45 @@
 `--depth 1` 是规约不是建议:`conductor-eval` 的 `one-hop-only` 以「候选 hop > 1」为失败。
 查不到(动态分发 / 反射 / 配置路由)就**明说查不到**,不要当成「没有影响面」。
 
+### 把 codegraph 用深,而不是只用一次
+
+`codegraph_context` 是起点,不是终点。三类问题它答不了,要换工具:
+
+| 问题 | 工具 | 为什么不能只靠 context |
+|---|---|---|
+| 这个流程**怎么**走到那里 | `codegraph_trace --from A --to B` | context 给的是邻域,不是路径。trace 含动态分发的跳(回调、JSX children),grep 跟不上 |
+| 改它会**波及谁** | `codegraph_impact <sym> --depth 1` | 调用方不在你改的那个文件里,读源码看不见 |
+| 这组相关符号的**实际实现** | `codegraph_explore "<几个名字>"` | 比链式 `codegraph_node` 少几次往返,一次给全 |
+
+**查不到不等于没有。** 动态分发、反射、配置路由、SPI 注册 —— 这些 codegraph 看不见。
+查不到就**明说查不到**,然后换一条路证明(跑一次看日志、搜配置、读注册表),
+不要当成「没有影响面」。
+
+### 运行时制品:先确认源码就是跑着的那一份
+
+**排障时最该先问的不是「代码怎么写的」,是「我读的代码是不是线上跑的那一份」。**
+
+`conventions/evidence.md` 要求「先认环境/产物」,`ops` 的拒过清单第一条就是
+「未确认环境/产物就写结论」。但以前只能读源码树 —— 于是「认产物」是一句声明,
+不是一次核对:agent 点个 jar 的名字,然后完全基于领先三个提交的工作副本推理。
+
+```bash
+python3 scripts/artifact-match.py --artifact <线上那个 jar> --repo <源码仓>
+```
+
+它从制品自己携带的构建身份读:`git.properties`(最好,点名 commit)→
+`MANIFEST.MF` 的 `Implementation-Version` / `Build-Time` → class 时间戳(下界)。
+
+| 判定 | 含义 | 下一步 |
+|---|---|---|
+| `MATCH` | 制品点名的 commit 就是当前 HEAD(且工作区干净) | 读源码得到的逻辑就是运行时的逻辑 |
+| `AHEAD` | 源码比制品新 —— **它会列出这期间动过的文件** | 切到那个 commit 再读,或换同源制品,或只用制品自身的可观察行为 |
+| `UNKNOWN` | 制品没携带可用身份 | **不是放行**:结论限制在可观察行为内,或让构建加 `git-commit-id-plugin` |
+
+`AHEAD` 时列出的变更文件就是排查的第一优先级 —— **现象很可能就在那几个文件的差异里**。
+
+**`UNKNOWN` 不是 PASS。** 「应该是同一份」正是拒过清单里的假想臆断。
+
 ### 文档和代码打架时
 
 1. **以代码为准。** `conventions/evidence.md` 原文:「和代码或现象打架时以可运行证据为准」

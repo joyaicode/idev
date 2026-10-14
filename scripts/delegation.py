@@ -153,6 +153,9 @@ CHANGED_LINE = re.compile(r"(?mi)^\s*CHANGED:\s*(.+?)\s*$")
 REVERT_LINE = re.compile(r"(?mi)^\s*REVERT:\s*(.+?)\s*$")
 RED_FIRST_LINE = re.compile(r"(?mi)^\s*RED_FIRST:\s*(.+?)\s*$")
 ASSUMED_LINE = re.compile(r"(?mi)^\s*ASSUMED:\s*(.+?)\s*$")
+# ops: 认产物不能只是声明。A feature defect sends the ticket back to deliver,
+# and that is only sound if the symptom was confirmed against *that* build.
+ARTIFACT_LINE = re.compile(r"(?mi)^\s*ARTIFACT:\s*(MATCH|AHEAD|UNKNOWN)\b")
 # A declaration of "nothing", which is a valid answer for every one of these.
 NONE_VALUE = re.compile(r"(?i)^\s*(?:无|none|-|n/?a|不适用|0)\s*(?:[(（].*)?$")
 # file.ext:symbol — the anchor granularity. "changed service.py" carries no
@@ -184,6 +187,15 @@ def check_accuracy(record: dict) -> dict[str, str]:
         # Saying "I assumed X" costs one line and saves the conductor from
         # re-verifying the whole report. Writing 无 counts as declaring.
         out["assumption-declared"] = "PASS" if ASSUMED_LINE.search(raw) else "FAIL:no ASSUMED line"
+
+    if agent == "idev-ops" and kind == "ops.classify":
+        # Only for kind=feature: onboard/runtime are handed off, and patrol
+        # replays a registered pack, so neither reads product source here.
+        if re.search(r"(?mi)^\s*KIND:\s*feature\b", raw):
+            out["artifact-verified"] = (
+                "PASS" if ARTIFACT_LINE.search(raw)
+                else "FAIL:no ARTIFACT: MATCH|AHEAD|UNKNOWN line (artifact-match.py)"
+            )
 
     if agent != "idev-coder":
         return out

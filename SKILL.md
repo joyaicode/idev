@@ -57,6 +57,43 @@ S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none`
 [references/boost.md](references/boost.md)；待办与验证状态
 [references/agents-todo.md](references/agents-todo.md)。
 
+## 运维:先确认源码就是跑着的那一份
+
+排障最该先问的不是「代码怎么写的」，是**「我读的代码是不是线上跑的那一份」**。
+`evidence.md` 要求「先认环境/产物」，但以前只能读源码树 —— 于是「认产物」是一句
+声明，不是一次核对。
+
+```bash
+python3 scripts/artifact-match.py --artifact <线上那个 jar> --repo <源码仓>
+```
+
+从制品自己携带的身份读（`git.properties` → `MANIFEST.MF` → class 时间戳）：
+`MATCH` 可以信源码 · `AHEAD` **会列出这期间动过的文件**，那就是排查第一优先级 ·
+`UNKNOWN` **不是放行**，结论只能限制在产物自身的可观察行为内。
+
+有源码时把 codegraph 用深：`trace` 查流程路径、`impact --depth 1` 查波及、
+`explore` 一次拿多个符号的实现。查不到（动态分发/反射/配置路由）就**明说查不到**。
+细则 [references/boost.md](references/boost.md) 第零节。
+
+## 双向反馈:下游可以质疑上游
+
+任何阶段发现需求有问题 → 标 `baseline-conflict` 并**停**，不自己改基线
+（`deliver-schema.md`：Agent 不得自行 unseal）。反馈要带依据，不是「我觉得不合理」。
+
+需求订正后，**全线重新对准**——最危险的是一条 `PASS` 还挂在已删除的 item 上，
+于是新需求被旧证据验收：
+
+```bash
+python3 scripts/realign.py --feature <f>          # 哪里没对准（七类漂移）
+python3 scripts/realign.py --feature <f> --plan   # 按什么顺序重做
+```
+
+交付后持续跟进：`ticket-metrics.sh` 的 **reopen 次数**与**签字后被推翻次数**
+就是需求质量的事后信号；有硬信号走 `agent-review.sh` 起草提案 → grill → 人确认 →
+改**关口**（而不是只修这一张票）。
+
+全环：[references/feedback-loop.md](references/feedback-loop.md)。
+
 ## 每道关:七视角的专业性把关
 
 `deliver/references/experts.md` 按产品 / 设计 / 架构 / 开发 / 测试 / 交付 / 排障
