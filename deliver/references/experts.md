@@ -28,7 +28,8 @@ python3 scripts/stage-gate.py --list                   # 各档查什么
 
 | stage | 已机检 |
 |---|---|
-| `req-review` | 验收含主观词 · 验收无可量化指标 · 无验收 · 解决方案冒充需求 · `objections` 未清空 · goal 含主观词 |
+| `req-review` | 验收含主观词 · 验收无可量化指标 · 无验收 · 解决方案冒充需求 · `objections` 未清空 · goal 含主观词 · 界面需求无 `ui` 块 |
+| `req-review` 的 `ui` 块 | 缺 screen/intent · 必填字段无 `on_invalid` · action 无 `on_success`/`on_failure` · 缺 `states.loading`/`error` · 写了实现细节(`el-xxx`/class/css) · 含主观词（`ui-spec.py`） |
 | `req` | 故事 > 8 点 · slice 不挂 `baseline_item_id` · 丢掉基线 item |
 | `arch` | `case_intent` 不挂 item · 要改多处却无 `impact_candidates` · 无回退路径 |
 | `code` | `review.md` 仍是 `P?`/`C?` · 命中标成「待改 / 下轮」 |

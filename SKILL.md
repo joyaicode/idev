@@ -94,6 +94,24 @@ python3 scripts/realign.py --feature <f> --plan   # 按什么顺序重做
 
 全环：[references/feedback-loop.md](references/feedback-loop.md)。
 
+## 需求细到交互层(界面类需求)
+
+`baseline.yaml` 的 item 下写 `ui` 块：screen / intent / fields（含校验与 `on_invalid`）/
+actions（含 `on_success`、`on_failure`、`on_pending`）/ states（`loading`、`error`）。
+**说规则，不选控件** —— 写「填错时字段下方红字并保持焦点」，不写「用 el-form 的 rules」。
+
+```bash
+python3 scripts/ui-spec.py --schema            # 格式
+python3 scripts/ui-spec.py --feature <f>       # 校验 + 生成可视化
+```
+
+产出 `<票目录>/ui/<f>.spec.json`（json-render flat 格式，产线用自己的 catalog 映射到
+既有组件库）与同名 `.html`（零依赖预览，评审时直接打开）。
+
+**预览不是实现，也不是尺** —— 验收的尺永远是 `baseline.yaml`，基线一变就重新生成。
+`stage-gate` 的 `ui-not-specified` 会对看起来是界面需求却没有 `ui` 块的 item 报错；
+纯后端需求不受此约束。
+
 ## 每道关:七视角的专业性把关
 
 `deliver/references/experts.md` 按产品 / 设计 / 架构 / 开发 / 测试 / 交付 / 排障

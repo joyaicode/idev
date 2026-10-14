@@ -14,14 +14,36 @@ live in the conversation, where they cannot be counted or revisited.
 
 The ledger is <ticket home>/hypotheses.yaml. check exits 1 on a finding.
 
+    hypothesis.py candidates --feature F            # 候选原因与排除状态
+    hypothesis.py blast --feature F --id H1 \
+        --baseline CASE --guard CASE                # 修复前后的影响范围用例
+
 Disproven hypotheses are kept, never deleted: a ruled-out path is part of
 the evidence chain and keeps the next round from walking it again.
+
+## Three kinds of rigour this enforces
+
+**证据分级.** evidence.md ranks材料: AI 反馈不可信, 文档不可信, 代码逻辑可信.
+A log line proves a symptom happened; it does not prove *why*. So a root
+cause needs at least one `code:` tier evidence — a file:line whose logic
+explains the symptom. `check` reports which tier each item rests on.
+
+**穷举候选.** 「推导并论证可能引起问题的所有原因」means the ruled-out ones
+are part of the answer. A single proven hypothesis with no siblings is
+suspicious: either nothing else was ever considered, or alternatives were
+dismissed in someone's head. Candidates make that visible.
+
+**影响范围.** evidence.md step 4 asks for three case classes: 正确性 (red to
+green), 影响范围 (paths that must not change), 验收 (the symptom is gone).
+The middle one is the one that gets skipped, and it is the one that catches
+a fix that breaks something else. `blast` records it per hypothesis.
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -37,6 +59,18 @@ except ImportError:
     raise SystemExit(2) from None
 
 REPRO = ("pending", "yes", "no")
+
+# Evidence tiers, weakest to strongest. evidence.md: 代码逻辑可信, 文档不可信.
+# A log proves the symptom occurred; only code logic explains why.
+TIERS = ("doc", "log", "repro", "code")
+TIER_WHY = {
+    "doc": "文档/注释 —— 不可信,只是线索",
+    "log": "日志/响应 —— 证明现象发生了,不证明为什么",
+    "repro": "可复现用例 —— 证明能触发,仍需解释机制",
+    "code": "代码逻辑(file:line)—— 解释机制的那一层",
+}
+# A file:line reference is what "code tier" means in practice.
+CODE_REF = re.compile(r"[\w./-]+\.\w+:\d+")
 STATUS = ("open", "proven", "disproven")
 
 
@@ -94,6 +128,9 @@ def cmd_add(args: argparse.Namespace) -> int:
         "evidence": [],
         "repro": "pending",
         "status": "open",
+        # 影响范围: the cases that prove the fix did not break anything else.
+        # evidence.md step 4 class 2 — the one that gets skipped.
+        "blast": {"baseline": [], "guard": []},
         "at": now(),
     }
     data["items"].append(item)
@@ -119,6 +156,8 @@ def cmd_set(args: argparse.Namespace) -> int:
         item["repro"] = args.repro
     if args.status:
         item["status"] = args.status
+    if getattr(args, "note", None):
+        item["note"] = args.note
     item["at"] = now()
     save(path, data)
     rc = check(data, verbose=False)
@@ -142,10 +181,31 @@ def cmd_list(args: argparse.Namespace) -> int:
             print(f"(非 mapping 条目,跳过: {item!r})")
             continue
         ev = len(safeyaml.as_list(item.get("evidence")))
-        print(f"{item.get('id')}  {item.get('status','?'):10} repro={item.get('repro','?'):7} evidence={ev}  {item.get('claim','')}")
+        tier = tier_of(safeyaml.as_list(item.get("evidence"))) or "-"
+        blast = item.get("blast") if isinstance(item.get("blast"), dict) else {}
+        guards = len(safeyaml.as_list(blast.get("guard")))
+        print(f"{item.get('id')}  {item.get('status','?'):10} repro={item.get('repro','?'):7} "
+              f"evidence={ev}({tier}) guard={guards}  {item.get('claim','')}")
         if item.get("case"):
             print(f"      case: {item['case']}")
     return 0
+
+
+def tier_of(evidence: list) -> str:
+    """The strongest tier this evidence reaches."""
+    best = ""
+    for e in evidence:
+        s = str(e)
+        if CODE_REF.search(s):
+            return "code"
+        low = s.lower()
+        if any(k in low for k in (".log", "logs/", "target/", "response", "curl")):
+            best = best or "log"
+        elif any(k in low for k in (".md", "doc", "readme", "wiki")):
+            best = best or "doc"
+        else:
+            best = best or "log"
+    return best
 
 
 def check(data: dict, verbose: bool = True) -> int:
@@ -171,9 +231,40 @@ def check(data: dict, verbose: bool = True) -> int:
                 errors.append(f"{hid}: proven-needs-repro — status proven but repro={item.get('repro')}")
             if not evidence:
                 errors.append(f"{hid}: proven-needs-evidence — status proven with no evidence path")
+            else:
+                # 结论要有直接证据支撑: a log says the symptom happened; only
+                # code logic says why. Without a file:line the mechanism is
+                # still a story.
+                tier = tier_of(evidence)
+                if tier != "code":
+                    errors.append(
+                        f"{hid}: proven-needs-code-evidence — 证据最强只到 {tier} "
+                        f"({TIER_WHY.get(tier, tier)});根因要有 file:line 级的"
+                        "代码逻辑解释机制,否则只是「现象发生过」")
+            # 影响范围: a proven root cause is about to be fixed. Without a
+            # guard case, nobody knows whether the fix broke a neighbour.
+            blast = item.get("blast") if isinstance(item.get("blast"), dict) else {}
+            if not safeyaml.as_list(blast.get("guard")):
+                errors.append(
+                    f"{hid}: proven-needs-blast-radius — 没有 blast.guard 用例。"
+                    "evidence.md 第 4 步要三类用例,影响范围那一类最常被跳过,"
+                    "而它正是挡住「修一个坏三个」的那一类。"
+                    f"用 hypothesis.py blast --id {hid} --guard <case> 记上")
         for path in evidence:
             if not Path(str(path)).exists():
                 warns.append(f"{hid}: evidence path not found: {path}")
+
+    # 穷举候选: 「论证可能引起问题的所有原因」. One proven item with no
+    # disproven siblings means either nothing else was considered, or the
+    # alternatives were dismissed without record.
+    proven_ids = [str(i.get("id")) for i in items
+                  if isinstance(i, dict) and str(i.get("status")) == "proven"]
+    disproven = [i for i in items if isinstance(i, dict) and str(i.get("status")) == "disproven"]
+    if proven_ids and not disproven and len(items) == 1:
+        warns.append(
+            f"{proven_ids[0]}: 只有一条假设且直接证成,没有任何被排除的候选 —— "
+            "第一个猜想恰好就是根因是可能的,但更常见的是别的可能性从未被写下来。"
+            "把考虑过又排除的原因记成 disproven,它们是证据链的一部分")
 
     # case-before-next: an open hypothesis with no case, while later ones exist.
     for i, item in enumerate(items):
@@ -199,6 +290,81 @@ def check(data: dict, verbose: bool = True) -> int:
     return 0
 
 
+def cmd_candidates(args: argparse.Namespace) -> int:
+    """What was considered, and what is ruled out. The ruled-out ones matter."""
+    data = load(ledger_path(args.feature, args.repo), args.feature)
+    items = [i for i in safeyaml.as_list(data.get("items")) if isinstance(i, dict)]
+    if not items:
+        print("(还没有候选原因)")
+        print("排障要「推导并论证可能引起问题的所有原因」——")
+        print("先把想到的都 add 进来,再逐个证成或排除。")
+        return 0
+
+    by_status: dict[str, list[dict]] = {}
+    for i in items:
+        by_status.setdefault(str(i.get("status", "open")), []).append(i)
+
+    print(f"# 候选原因  {args.feature}   共 {len(items)} 条")
+    print()
+    for status, label in (("proven", "已证成"), ("open", "待验"), ("disproven", "已排除")):
+        group = by_status.get(status, [])
+        if not group:
+            continue
+        print(f"## {label}  ({len(group)})")
+        for i in group:
+            tier = tier_of(safeyaml.as_list(i.get("evidence"))) or "-"
+            print(f"  {i.get('id')}  [{tier}]  {i.get('claim','')}")
+            if status == "disproven":
+                # Why it was ruled out is the part that stops the next round
+                # from walking the same path.
+                why = str(i.get("note") or i.get("case") or "")
+                if why:
+                    print(f"       排除依据: {why[:70]}")
+                else:
+                    print("       排除依据: (空)—— 写上它,否则下一轮会重走这条路")
+        print()
+
+    if not by_status.get("disproven"):
+        print("**没有任何被排除的候选。** 这不一定错,但值得问一句:")
+        print("别的可能性是真的考虑过并排除了,还是从没写下来?")
+        print()
+    return 0
+
+
+def cmd_blast(args: argparse.Namespace) -> int:
+    """Record the cases that prove a fix stayed inside its blast radius."""
+    path = ledger_path(args.feature, args.repo)
+    data = load(path, args.feature)
+    item = find(safeyaml.as_list(data.get("items")), args.id)
+    if item is None:
+        print(f"BLOCKED no such hypothesis: {args.id}", file=sys.stderr)
+        return 2
+    blast = item.get("blast") if isinstance(item.get("blast"), dict) else {}
+    blast.setdefault("baseline", [])
+    blast.setdefault("guard", [])
+    for c in args.baseline or []:
+        if c not in blast["baseline"]:
+            blast["baseline"].append(c)
+    for c in args.guard or []:
+        if c not in blast["guard"]:
+            blast["guard"].append(c)
+    if args.note:
+        blast["note"] = args.note
+    item["blast"] = blast
+    item["at"] = now()
+    save(path, data)
+
+    print(f"OK   {args.id} blast -> {path}")
+    print(f"  baseline(修复前的现状,用来对照): {len(blast['baseline'])} 条")
+    print(f"  guard(不该变的路径,修复后必须仍绿): {len(blast['guard'])} 条")
+    if not blast["guard"]:
+        print()
+        print("HINT guard 还是空的。evidence.md 第 4 步的三类用例里,")
+        print("     「影响范围:不该变的路径保持原行为」最常被跳过 ——")
+        print("     而它正是挡住「修一个坏三个」的那一类。")
+    return 0
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     return check(load(ledger_path(args.feature, args.repo), args.feature))
 
@@ -221,11 +387,24 @@ def main() -> int:
     p.add_argument("--evidence", action="append", help="repeatable")
     p.add_argument("--repro", choices=REPRO)
     p.add_argument("--status", choices=STATUS)
+    p.add_argument("--note", help="disproven 时写排除依据,否则下一轮会重走这条路")
     p.set_defaults(fn=cmd_set)
 
     p = sub.add_parser("list", help="list hypotheses")
     p.add_argument("--feature", required=True)
     p.set_defaults(fn=cmd_list)
+
+    p = sub.add_parser("candidates", help="what was considered and what is ruled out")
+    p.add_argument("--feature", required=True)
+    p.set_defaults(fn=cmd_candidates)
+
+    p = sub.add_parser("blast", help="record the blast-radius cases for a hypothesis")
+    p.add_argument("--feature", required=True)
+    p.add_argument("--id", required=True)
+    p.add_argument("--baseline", action="append", help="修复前的现状用例(可重复)")
+    p.add_argument("--guard", action="append", help="不该变的路径,修复后必须仍绿(可重复)")
+    p.add_argument("--note")
+    p.set_defaults(fn=cmd_blast)
 
     p = sub.add_parser("check", help="exit 1 on a finding")
     p.add_argument("--feature", required=True)

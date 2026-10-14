@@ -204,7 +204,64 @@ python3 scripts/failure_signature.py check --feature <f>       # 命中红线则
 命中时 agent 必须回报 `BLOCKED` 并写清是哪条,**不静默再试**。这是 evidence.md 的原文要求,
 脚本只是让它可判定。
 
-## 四、根因:假设台账
+## 四、根因:假设台账 + 三条严格要求
+
+`conventions/evidence.md` 要求「每一步先设计用例并证明」。台账让它可查,
+另外三条要求让它**严格**:
+
+### 4.1 结论要有代码逻辑级的证据,不只是一个路径
+
+`evidence.md` 的可信度表把材料分了级,所以证据也分级:
+
+| 级别 | 是什么 | 证明了什么 |
+|---|---|---|
+| `doc` | 文档 / 注释 | **什么都没证明** —— 它不可信,只是线索 |
+| `log` | 日志 / 响应 / 抓包 | 现象**发生过**。不证明为什么 |
+| `repro` | 可复现用例 | 能**触发**。仍没解释机制 |
+| `code` | `file:line` 的代码逻辑 | **解释机制的那一层** |
+
+**`status: proven` 必须有 `code` 级证据** —— 即至少一条 `file:line`。机检
+`proven-needs-code-evidence`。
+
+为什么卡这一条:一条日志说明「请求到了网关却没带 traceId」,这是现象。
+**为什么**没带?只有那一行代码能回答。停在日志级就是把现象当成了根因,
+下一次换个触发路径它又出现。
+
+### 4.2 穷举可能原因,排除的也要留痕
+
+「推导并论证可能引起问题的**所有**原因」—— 被排除的那些是答案的一部分。
+
+```bash
+python3 scripts/hypothesis.py add --feature <f> --claim "<可能原因>" --case "<怎么验>"
+python3 scripts/hypothesis.py set --feature <f> --id H2 --status disproven \
+  --note "打开 debug 日志看到这条分支根本没进,见 logs/h2.log"
+python3 scripts/hypothesis.py candidates --feature <f>
+```
+
+`candidates` 分三栏列:已证成 / 待验 / 已排除,并给出每条的证据级别。
+
+**只有一条假设且直接证成会给 WARN**(不是 FAIL —— 第一个猜想恰好对是可能的)。
+但它值得问一句:别的可能性是真的考虑过并排除了,还是**从没写下来**?
+`disproven` 没写排除依据也会被点出来 —— 否则下一轮会重走同一条路。
+
+### 4.3 修复前先设计影响范围用例
+
+`evidence.md` 第 4 步要三类用例:**正确性**(红转绿)· **影响范围**(不该变的保持原行为)·
+**验收**(原现象消失)。中间那一类最常被跳过,而**它正是挡住「修一个坏三个」的那一类**。
+
+```bash
+python3 scripts/hypothesis.py blast --feature <f> --id H1 \
+  --baseline <修复前的现状用例> \
+  --guard <不该变的路径,修复后必须仍绿>
+```
+
+`status: proven` 却没有 `blast.guard` → 机检 `proven-needs-blast-radius` FAIL。
+**根因一旦证成就要动手修了,这时候没有护栏用例,就没人知道修完有没有碰坏邻居。**
+
+guard 用例从哪来?用 `codegraph_impact <根因符号> --depth 1` 提名调用方 ——
+那些路径就是最该保持原行为的地方。
+
+
 
 `conventions/evidence.md` 要求「每一步先设计用例并证明,通过后才决定推导的下一步」。
 以前假设散在对话里,查不回去也数不清。现在落盘:

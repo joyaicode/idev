@@ -150,6 +150,21 @@ def gate_req_review(home: Path, out: list[Finding]) -> None:
         out.append(Finding("req-review", "open-objections", "baseline.yaml",
                            f"还有 {len(objections)} 条未清空的 objections"))
 
+    # 界面类需求没有 ui 规则 = 交互留给实现阶段各自发挥，测试阶段没有尺可量。
+    # 只对看起来涉及界面的 item 要求，避免纯后端票被迫编一个 ui 块。
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        iid = str(item.get("id", "?"))
+        blob = text_of(item.get("must")) + " " + text_of(item.get("acceptance"))
+        looks_ui = re.search(
+            r"页面|界面|按钮|表单|弹窗|列表|输入|点击|提示|展示|跳转|下拉|勾选|UI|前端", blob)
+        if looks_ui and not isinstance(item.get("ui"), dict):
+            out.append(Finding(
+                "req-review", "ui-not-specified", f"items[{iid}]",
+                "看起来是界面需求但没有 ui 块 —— 交互细到字段校验/动作结果/加载失败状态,"
+                "评审时才看得见分歧。`scripts/ui-spec.py --schema` 看格式"))
+
     goal = text_of(baseline.get("goal"))
     if goal:
         hits = vague_hits(goal)

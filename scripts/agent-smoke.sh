@@ -19,6 +19,7 @@ set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 S="${REPO}/scripts"
+IDEV_LIB="${REPO}/scripts/lib"
 FEATURE="smoke-change"
 PASS=0
 FAIL=0
@@ -647,8 +648,22 @@ expect 1 "proven without evidence is rejected" -- python3 "${S}/hypothesis.py" -
   --feature "$FEATURE" --id H1 --repro yes
 contains "proven-needs-evidence" "names proven-needs-evidence"
 
-expect 0 "proven with repro and evidence passes" -- python3 "${S}/hypothesis.py" --repo "$TMP" set \
-  --feature "$FEATURE" --id H1 --evidence "${TICKET}/review.md"
+# code-tier evidence (file:line) plus a guard case, so this exercises
+# proven-needs-repro / proven-needs-evidence without tripping the newer
+# tier and blast-radius checks.
+# Exit 1 here, not 0: the blast radius is recorded in the next step, so at
+# this moment proven-needs-blast-radius is the one finding left. Asserting 0
+# would mean asserting the guard check does not exist.
+expect 1 "code evidence clears the tier check, blast radius still pending" -- \
+  python3 "${S}/hypothesis.py" --repo "$TMP" set \
+  --feature "$FEATURE" --id H1 --evidence "scripts/delegation.py:250"
+if printf '%s' "$LAST_OUT" | grep -q "proven-needs-code-evidence"; then
+  bad "file:line was not accepted as code-tier evidence"
+else
+  ok "file:line clears the evidence-tier check"
+fi
+expect 0 "record its blast radius" -- python3 "${S}/hypothesis.py" --repo "$TMP" blast \
+  --feature "$FEATURE" --id H1 --guard t_neighbour_unchanged
 
 # an open hypothesis with no case, followed by another -> case-before-next
 python3 "${S}/hypothesis.py" --repo "$TMP" add --feature "$FEATURE" --claim "no case yet" >/dev/null 2>&1
@@ -1214,7 +1229,23 @@ cat > "${GK}/baseline.yaml" <<'YML'
 schema_version: 1
 goal: 登录失败时给出可定位的提示
 items:
-  - {id: B1, must: 登录失败提示, acceptance: 3 秒内返回带错误码的提示}
+  - id: B1
+    must: 登录失败提示
+    acceptance: 3 秒内返回带错误码的提示
+    ui:
+      screen: 登录页
+      intent: 用户输错密码后知道该怎么办
+      fields:
+        - {name: password, label: 密码, type: password, required: true, on_invalid: 字段下方红字「请输入密码」}
+      actions:
+        - name: 登录
+          primary: true
+          on_success: 跳转工作台
+          on_failure: 留在本页,错误码 AUTH_401 显示在表单上方
+          on_pending: 按钮禁用,不允许重复提交
+      states:
+        loading: 骨架屏,不显示空数据文案
+        error: 网络失败显示「网络不可用,请重试」与重试按钮
 YML
 cat > "${GK}/req.yaml" <<'YML'
 slices:
@@ -1442,6 +1473,211 @@ report:
 YAML
 expect 0 "a handoff kind does not need the artifact check" -- \
   python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/ops-handoff.yaml"
+
+say "17 root-cause rigour: evidence tier, candidates, blast radius"
+
+H() { python3 "${S}/hypothesis.py" --repo "$TMP" "$@"; }
+
+# A log proves the symptom happened; it does not explain why. Calling that a
+# root cause is the mistake this tier check exists for.
+expect 0 "add a hypothesis" -- H add --feature "$FEATURE" \
+  --claim "网关丢了 X-Trace" --case "curl 带头,断言下游日志"
+expect 1 "proving on log evidence alone is refused" -- H set --feature "$FEATURE" \
+  --id H1 --evidence "logs/gw.log" --repro yes --status proven
+contains "proven-needs-code-evidence" "names the evidence-tier finding"
+contains "file:line" "says what would count"
+contains "blast-radius" "also wants the blast-radius cases"
+
+# file:line reaches the code tier — now only the blast radius is missing.
+expect 1 "code evidence still needs a blast radius" -- H set --feature "$FEATURE" \
+  --id H1 --evidence "src/gateway/filter.py:88"
+contains "proven-needs-blast-radius" "names the blast-radius finding"
+CT_OUT="$(H check --feature "$FEATURE" 2>&1)"
+if printf '%s' "$CT_OUT" | grep -q "proven-needs-code-evidence"; then
+  bad "file:line was not recognised as code-tier evidence"
+else
+  ok "file:line counts as code-tier evidence"
+fi
+
+expect 0 "record the blast radius" -- H blast --feature "$FEATURE" --id H1 \
+  --guard t_trace_passthrough --baseline t_before_fix
+contains "guard" "reports the guard count"
+# Now everything the checks ask for is on file: code-tier evidence, a repro,
+# and a guard case.
+expect 0 "a proven hypothesis with code evidence and guards passes" -- \
+  H check --feature "$FEATURE"
+
+# One proven hypothesis and nothing ruled out is a warning, not a failure:
+# the first guess being right is possible, just less common than nobody
+# having written the alternatives down.
+# The lone-proven warning is exercised on its own feature, since this
+# ticket already carries hypotheses from section 5.
+# Its own checkout: by this point $TMP carries a git repo, a driven run and
+# a dozen ledgers from earlier sections. A case about "a ledger with exactly
+# one hypothesis" must not depend on any of that.
+RC_REPO="$(mktemp -d)"
+git init -q "$RC_REPO" >/dev/null 2>&1 || true
+RC_HOME="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$RC_REPO" --feature rc-lone --key task 2>/dev/null)"
+mkdir -p "${RC_HOME:?rc-lone ticket home unresolved}"
+L() { python3 "${S}/hypothesis.py" --repo "$RC_REPO" "$@"; }
+L add --feature rc-lone --claim "单一猜想" --case "c" >/dev/null 2>&1 || true
+L set --feature rc-lone --id H1 --evidence "src/a.py:10" --repro yes --status proven >/dev/null 2>&1 || true
+L blast --feature rc-lone --id H1 --guard g >/dev/null 2>&1 || true
+RC_OUT="$(L check --feature rc-lone 2>&1)"
+if printf '%s' "$RC_OUT" | grep -q "没有任何被排除的候选"; then
+  ok "a lone proven hypothesis is flagged as suspicious"
+else
+  bad "no warning about missing ruled-out candidates"
+  printf '%s\n' "$RC_OUT" | sed 's/^/       | /' >&2
+fi
+rm -rf "$RC_REPO"
+
+expect 0 "candidates lists what was considered" -- H candidates --feature "$FEATURE"
+contains "已证成" "groups by status"
+
+# A ruled-out candidate with no reason recorded means the next round walks
+# the same path again.
+expect 0 "add a second candidate" -- H add --feature "$FEATURE" \
+  --claim "下游没读 header" --case "直接调下游断言"
+expect 0 "rule it out with a reason" -- H set --feature "$FEATURE" --id H2 \
+  --status disproven --note "打开 debug 看到该分支没进,见 logs/h2.log"
+expect 0 "candidates shows the ruled-out reason" -- H candidates --feature "$FEATURE"
+contains "已排除" "shows the ruled-out group"
+contains "排除依据" "shows why it was ruled out"
+CD_OUT="$(H candidates --feature "$FEATURE" 2>&1)"
+if printf '%s' "$CD_OUT" | grep -q "没有任何被排除的候选"; then
+  bad "still complaining about missing candidates after one was ruled out"
+else
+  ok "the warning clears once a candidate is ruled out"
+fi
+
+expect 2 "blast refuses an unknown hypothesis" -- H blast --feature "$FEATURE" \
+  --id H99 --guard x
+
+say "18 ui-spec: requirements down to the interaction layer"
+
+UI_REPO="$(mktemp -d)"
+git init -q "$UI_REPO" >/dev/null 2>&1 || true
+UH="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$UI_REPO" --feature login --key task 2>/dev/null)"
+mkdir -p "${UH:?login ticket home unresolved}"
+
+# Rules missing exactly the things that get skipped in practice, plus an
+# implementation detail that does not belong in a requirement.
+cat > "${UH}/baseline.yaml" <<'YML'
+revision: 1
+items:
+  - id: B1
+    must: 登录失败给出可定位提示
+    acceptance: 3 秒内返回带错误码的提示
+    ui:
+      screen: 登录页
+      intent: 用户输错密码后知道该怎么办
+      fields:
+        - {name: username, label: 用户名, type: text, required: true}
+        - {name: password, label: 密码, type: el-input, rule: 非空}
+      actions:
+        - {name: 登录, primary: true, on_success: 跳转工作台}
+YML
+expect 1 "catch the gaps that matter in a ui rule set" -- \
+  python3 "${S}/ui-spec.py" --repo "$UI_REPO" --feature login
+contains "on_invalid" "asks what the user sees when input is wrong"
+contains "on_failure" "asks what happens when the action fails"
+contains "states 缺 loading" "asks what the screen looks like mid-request"
+contains "重复提交就在这里发生" "explains why loading matters"
+contains "el-input" "rejects an implementation detail in a requirement"
+
+# A complete rule set renders.
+cat > "${UH}/baseline.yaml" <<'YML'
+revision: 2
+items:
+  - id: B1
+    must: 登录失败给出可定位提示
+    acceptance: 3 秒内返回带错误码的提示
+    ui:
+      screen: 登录页
+      intent: 用户输错密码后知道该怎么办
+      fields:
+        - name: username
+          label: 用户名
+          type: text
+          required: true
+          rule: 非空,长度 4-32
+          on_invalid: 字段下方红字「用户名需 4-32 字符」,焦点留在该字段
+        - {name: password, label: 密码, type: password, required: true, on_invalid: 字段下方红字「请输入密码」}
+      actions:
+        - name: 登录
+          primary: true
+          on_success: 跳转工作台,顶部提示「欢迎回来」
+          on_failure: 留在本页,错误码 AUTH_401 显示在表单上方
+          on_pending: 按钮禁用并显示加载态,不允许重复提交
+      states:
+        loading: 骨架屏,不显示空数据文案
+        error: 网络失败显示「网络不可用,请重试」与重试按钮
+YML
+expect 0 "a complete rule set generates the artifacts" -- \
+  python3 "${S}/ui-spec.py" --repo "$UI_REPO" --feature login
+contains "1 个界面 / 2 个输入项 / 1 个动作" "counts what it rendered"
+contains "不是实现,也不是尺" "says the preview is not the measuring stick"
+
+if [ -f "${UH}/ui/login.spec.json" ] && [ -f "${UH}/ui/login.html" ]; then
+  ok "both the spec and the preview were written"
+else
+  bad "missing ${UH}/ui/login.{spec.json,html}"
+fi
+if grep -q '"format": "json-render/flat@1"' "${UH}/ui/login.spec.json"; then
+  ok "the spec declares the json-render flat format"
+else
+  bad "the spec does not declare its format"
+fi
+# Semantic types only — picking components would put a product asset in the kernel.
+if grep -q '"type": "field"' "${UH}/ui/login.spec.json" \
+  && ! grep -qi 'el-input\|shadcn\|<div' "${UH}/ui/login.spec.json"; then
+  ok "the spec names semantic types, not components"
+else
+  bad "the spec leaked component choices"
+fi
+# The preview must open offline: a review that needs a network is a review
+# that gets skipped.
+if ! grep -qE '(src|href)=' "${UH}/ui/login.html"; then
+  ok "the preview is self-contained (no external references)"
+else
+  bad "the preview pulls in external resources"
+fi
+if grep -q "baseline.yaml" "${UH}/ui/login.html"; then
+  ok "the preview names the baseline as the measuring stick"
+else
+  bad "the preview does not point back at the baseline"
+fi
+
+# --check validates without writing.
+rm -rf "${UH}/ui"
+expect 0 "--check validates without writing" -- \
+  python3 "${S}/ui-spec.py" --repo "$UI_REPO" --feature login --check
+if [ -f "${UH}/ui/login.html" ]; then
+  bad "--check wrote the preview"
+else
+  ok "--check left the output alone"
+fi
+
+expect 0 "--schema documents the ui block" -- python3 "${S}/ui-spec.py" --schema
+contains "on_invalid" "the schema explains the field-level rules"
+
+# A backend-only requirement must not be forced to invent a ui block.
+cat > "${UH}/baseline.yaml" <<'YML'
+revision: 1
+goal: 清理过期会话
+items:
+  - {id: B9, must: 后台定时清理过期会话, acceptance: 每小时清理一次}
+YML
+expect 0 "a backend-only requirement needs no ui block" -- \
+  python3 "${S}/ui-spec.py" --repo "$UI_REPO" --feature login
+UG_OUT="$(python3 "${S}/stage-gate.py" --repo "$UI_REPO" --feature login --stage req-review 2>&1)"
+if printf '%s' "$UG_OUT" | grep -q "ui-not-specified"; then
+  bad "stage-gate demanded a ui block for a backend requirement"
+else
+  ok "stage-gate leaves backend requirements alone"
+fi
+rm -rf "$UI_REPO"
 
 printf '\n== result\n'
 printf '  pass %d   fail %d\n' "$PASS" "$FAIL"

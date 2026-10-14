@@ -50,9 +50,30 @@ python3 $IDEV/scripts/hypothesis.py check --feature <f>
 - **证据**:请求/响应、日志、源码、部署物、环境与 URL、对照金样板 —— **贴出实际输出**
 - **复现**:在用户同一现象上至少红过一次
 
-`check` 查三条(退出码 1 = 有发现):`proven-needs-repro`(证成却没复现)·
-`proven-needs-evidence`(证成却无证据路径)· `case-before-next`(有 open 且无用例的假设,
-却已经往下加了新假设)。
+`check` 查五条(退出码 1 = 有发现):
+
+| 检查 | 失败条件 |
+|---|---|
+| `proven-needs-repro` | 证成却没复现 |
+| `proven-needs-evidence` | 证成却无证据路径 |
+| `proven-needs-code-evidence` | 证据最强只到 `log`/`doc` —— **根因要有 `file:line` 解释机制** |
+| `proven-needs-blast-radius` | 证成却没有 `blast.guard` 用例 |
+| `case-before-next` | 有 open 且无用例的假设,却已往下加新假设 |
+
+**穷举候选:** 想到的可能原因都 `add` 进来,排除的标 `disproven` 并写 `--note` 排除依据。
+`candidates` 子命令按「已证成 / 待验 / 已排除」三栏列出。只有一条假设且直接证成会给 WARN ——
+第一个猜想恰好对是可能的,但更常见的是别的可能性从没写下来。
+
+**修复前记影响范围用例:**
+
+```bash
+python3 $IDEV/scripts/hypothesis.py blast --feature <f> --id H1 \
+  --baseline <修复前的现状用例> --guard <不该变的路径,修复后必须仍绿>
+```
+
+guard 用例从 `codegraph_impact <根因符号> --depth 1` 提名的调用方来 ——
+那些路径就是最该保持原行为的地方。`evidence.md` 第 4 步三类用例里,
+影响范围那一类最常被跳过,**而它正是挡住「修一个坏三个」的那一类**。
 
 **复现失败 = 猜想未成立:** 标 `disproven`,换命题,**不写结论**。证否的**留着不删** ——
 排除过的路径是证据链的一部分,也是下次不重走弯路的依据。
@@ -155,6 +176,9 @@ IMPACT: <影响范围,可检验> | codegraph depth=1 提名 <n>
 NEXT: <交 verify debug | 交 verify patrol | 已写 handoff 需停 | 交 coder 修 | 缺项待补>
 ASSUMED: <这轮没验的假设;没有写「无」>
 CHECK: hypothesis.py check = PASS | FAIL(<哪条>)
+候选: 已证成 <n> / 待验 <n> / 已排除 <n>(排除的写了依据?)
+证据级别: code(file:line) | repro | log | doc —— 根因必须到 code
+影响范围: baseline <n> 条 / guard <n> 条(guard 从 codegraph_impact 提名)
 红线: 未命中 | 命中<哪条>
 FACTS: codegraph <用了什么> | 源码 <路径:行> | 命令 <输出路径> | git <commit>
 DOC_DRIFT: 无 | <文档页> 说 X,代码实际 Y(建议派 docs.backfill)

@@ -65,7 +65,14 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
    **边界不清先回报,让导体唤起 grilling** —— 不要自己拷问。
 2. 按当前 stage 做允许动作:
    - **`req-review`** — 起草规格与 `baseline.yaml`;未决问题写 `grill.md`;
-     `review_questions` 与 `objections` 保持空列表。冲突不得默许
+     `review_questions` 与 `objections` 保持空列表。冲突不得默许。
+     **涉及界面的 item 要写 `ui` 块**(交互规则),然后生成可视化产物给人评审:
+     ```bash
+     python3 $IDEV/scripts/ui-spec.py --schema                      # 看格式
+     python3 $IDEV/scripts/ui-spec.py --feature <f>                 # 校验 + 生成
+     ```
+     产出 `<票目录>/ui/<f>.spec.json`(json-render flat 格式)与同名 `.html`
+     (零依赖预览,浏览器直接打开)
    - **`req`** — 只把密封 item 译成 slices,**不增不减**。译不清进 `open_questions`(只问理解);
      想加义务 → `baseline-conflict`,**停**
    - **`arch`** — 方案只实现基线;`case_intents` 挂 `baseline_item_id`。方案"更好"但超基线 → 拒过。
@@ -122,6 +129,7 @@ EVIDENCE: <本阶段产物路径,多个逐行列>
 本步: deliver.advance | docs.backfill | docs.changelog
 STAGE: <当前 stage>(未改动)
 LAYOUT: 规范目录 docs/ | .idev/(还没有这套文档)
+UI: <有 ui 块的 item 数>/<总数>;ui-spec = PASS | FAIL(<几处>) | 不适用(非界面需求)
 GATE: check-feature <stage> = PASS | FAIL | 不适用
 将代写: <若本步到了停问点,列出该写哪些字段;没有就写「无」>
 OPEN: <未决问句条数;>0 时写明在 grill.md 哪几条>
@@ -170,3 +178,30 @@ python3 $IDEV/scripts/stage-gate.py --feature <f> --stage <stage>
 `brief.prior_failure` 会说明上次为什么作废。
 
 全文:[references/feedback-loop.md](../references/feedback-loop.md)。
+
+## 界面需求要细到交互层(req-review)
+
+**需求说清规则,不替 arch 选控件。** 写「必填、填错时字段下方红字并保持焦点」,
+不写「用 el-form 的 rules」。
+
+`ui` 块要覆盖四件最常漏的事:
+
+| 项 | 为什么必须说清 |
+|---|---|
+| `fields[].on_invalid` | 用户填错了看到什么。不说清,每个实现都不一样 |
+| `actions[].on_failure` | 失败后能不能重试、错误码显示在哪 |
+| `states.loading` | 请求在路上时界面什么样 —— **重复提交就在这里发生** |
+| `states.error` | 请求失败时界面什么样(不是空白页) |
+
+```bash
+python3 $IDEV/scripts/ui-spec.py --feature <f>
+```
+
+它校验这些,然后生成两个产物:`.spec.json`(json-render flat 格式,产线用自己的
+catalog 映射到既有组件库)和 `.html`(零依赖预览,评审时直接打开)。
+
+**html 是预览,不是实现,也不是尺。** 验收的尺永远是 `baseline.yaml` ——
+手改那个 html 会在下次生成时丢失,而且会让两份东西打架。基线一变就重新生成。
+
+`stage-gate` 的 `ui-not-specified` 会对看起来是界面需求却没有 `ui` 块的 item 报错。
+纯后端需求不受此约束。
