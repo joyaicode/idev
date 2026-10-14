@@ -88,6 +88,7 @@ is_background: false
 | `localdev.stop` | 停本地服务 | 扩展根 `commands.stop`,目录同上 |
 | `localdev.approval_off` | 关审批开关 | 扩展根 `commands.approval_off`。**只跑那条命令本身**,不要改产线路由或配置里的开关 |
 | `ui.surface_scan` | 扫 frontend views + locale | `python3 $IDEV/scripts/ui-surface-scan.py` → `e2e/inventory.json` |
+| `ui.playbook_sync` 的验收 | 剧本生命周期是否完整 | `python3 $IDEV/scripts/ui-playbook.py --repo <仓>` |
 | `ui.coverage_lock` | 锁覆盖 | `python3 $IDEV/scripts/ui-coverage-check.py`;`required` token 必须出现在 e2e 且挂 wave |
 
 **没有该键 → `BLOCKED(env)`,不猜命令。** 命令输出落盘再给路径:
@@ -228,3 +229,43 @@ python3 $IDEV/scripts/stage-gate.py --feature <f> --stage test
 `brief.prior_failure` 会说明上次为什么作废。
 
 全文:[references/feedback-loop.md](../references/feedback-loop.md)。
+
+## UI 剧本:覆盖整个生命周期
+
+剧本不是「把界面点一遍」,是**围绕一个自己造的实体走完它的一生**:
+
+```
+create → read → change → restore → cleanup
+```
+
+顺序不是仪式,每一步护着下一步:
+
+| 阶段 | 为什么在这个位置 |
+|---|---|
+| `create` | 自己造主体。复用别人的数据,失败原因会和被测代码无关 |
+| 打标 | 名字带 `AUTOTEST` / `E2E_` / `__e2e`。**没标记的测试实体和真实数据分不开** —— 清理不敢做,线上看到它的人也不知道那是什么 |
+| `read` | 读回刚建的 —— 最便宜的一次「写真的落了吗」,且在变更搅浑之前 |
+| `change` | 被测的那次变更 |
+| `restore` | 归位,让重跑从同一处开始。**非强制**:不可逆的写明预期即可 |
+| `cleanup` | 放 `afterEach` / `finally`,**用例中途失败时也要执行** |
+
+```bash
+python3 $IDEV/scripts/ui-playbook.py --schema          # 契约
+python3 $IDEV/scripts/ui-playbook.py --repo <仓>       # 校验生命周期
+python3 $IDEV/scripts/ui-playbook.py --repo <仓> --plan # 还有哪些交互面没覆盖
+```
+
+阶段用 `// @phase: create` 或 `test.step('create: ...')` 标 —— 后者会出现在
+Playwright 的 trace viewer 里,排查时就在那儿看。
+
+不可逆的操作(审批通过、支付成功)可以没有 `restore`,但要写明:
+
+```ts
+// @phase: restore (irreversible: 审批通过后不可撤回,预期状态为 approved)
+```
+
+它还会抓两件实际会咬人的事:**写死的 id**(create 既然造了主体就该用它返回的 id,
+写死让剧本依赖某份特定数据)和**整个 flow 没有断言**(那只是点了一遍界面)。
+
+**阶段齐 ≠ 测得对。** 断言是否有意义要人评审,红绿仍走 verify 的 `mode=test`。
+覆盖面由 `ui-coverage-check.py` 管(required token 要挂 wave),本工具管 flow 自身。

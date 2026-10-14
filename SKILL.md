@@ -112,6 +112,39 @@ python3 scripts/ui-spec.py --feature <f>       # 校验 + 生成可视化
 `stage-gate` 的 `ui-not-specified` 会对看起来是界面需求却没有 `ui` 块的 item 报错；
 纯后端需求不受此约束。
 
+## UI 剧本:覆盖整个生命周期(测试阶段)
+
+剧本不是「把界面点一遍」，是**围绕一个自己造的实体走完它的一生**：
+
+```
+create → read → change → restore → cleanup
+```
+
+实体名带 `AUTOTEST`/`E2E_` 标记（**没标记的测试实体和真实数据分不开**，
+清理不敢做）；`read` 在 `change` 之前（否则分不清写没写进去）；`cleanup` 放
+`afterEach`/`finally`（中途失败也要执行）；不可逆的操作可以不归位，但要写明预期。
+
+```bash
+python3 scripts/ui-playbook.py --schema         # 契约
+python3 scripts/ui-playbook.py --repo <仓>      # 校验生命周期
+python3 scripts/ui-playbook.py --repo <仓> --plan  # 还有哪些交互面没覆盖
+```
+
+**写剧本时查状态冲突**（编写阶段，不是等跑红）：一个 flow 开了鉴权、下一个需要它关着，
+**这类失败重跑不会好**。凡是改变后续前置条件的操作都声明 `// @switch: auth on`、
+`// @requires: auth off`、`// @order: last`：
+
+```bash
+python3 scripts/ui-evolve.py --schema        # 开关契约
+python3 scripts/ui-evolve.py --repo <仓>     # 边写边查
+```
+
+冲突有两种改法，它**提方案不改文件**：**branch**（按开关拆两个自洽 flow，剧本翻倍但
+互不依赖）或 **reorder**（动开关的排最后，前面都在默认状态下跑 —— 复杂度最低）。
+
+交互面清单由 `ui-surface-scan.py` 扫、`ui-coverage-check.py` 锁（required 要挂 wave）；
+本工具管 flow 自身的生命周期完整性。**阶段齐 ≠ 测得对** —— 断言是否有意义要人评审。
+
 ## 每道关:七视角的专业性把关
 
 `deliver/references/experts.md` 按产品 / 设计 / 架构 / 开发 / 测试 / 交付 / 排障

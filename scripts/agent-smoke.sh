@@ -1679,6 +1679,218 @@ else
 fi
 rm -rf "$UI_REPO"
 
+say "19 ui-playbook: the lifecycle a UI flow must cover"
+
+PB="$(mktemp -d)"
+mkdir -p "${PB}/e2e/flows"
+
+# The failure mode this exists for: a flow that changes before it reads, on
+# an entity it did not create and did not tag.
+cat > "${PB}/e2e/flows/bad.spec.ts" <<'TSX'
+import { test, expect } from '@playwright/test';
+test('实例管理', async ({ page }) => {
+  await test.step('change: 改配置', async () => {
+    await page.goto('/instance/1234567');
+    await page.click('.btn-save');
+  });
+  await test.step('read: 看详情', async () => {
+    await expect(page.locator('.name')).toContainText('x');
+  });
+  await test.step('create: 新建', async () => { await page.click('.btn-create'); });
+});
+TSX
+expect 1 "catch a flow that skips the lifecycle" -- \
+  python3 "${S}/ui-playbook.py" --repo "$PB"
+contains "phase-order" "names the ordering problem"
+contains "读回要在变更之前" "explains why read precedes change"
+contains "untagged-entity" "names the untagged entity"
+contains "missing-cleanup" "names the missing cleanup"
+
+# A correct flow: cleanup in afterEach is written early but RUNS last, so
+# judging order by text position must not punish it.
+cat > "${PB}/e2e/flows/bad.spec.ts" <<'TSX'
+import { test, expect } from '@playwright/test';
+const TAG = `AUTOTEST_${Date.now()}`;
+let id = '';
+test.afterEach(async ({ request }) => {
+  // @phase: cleanup
+  if (id) await request.delete(`/api/instance/${id}`);
+});
+test('实例全生命周期', async ({ page }) => {
+  await test.step('create: 新建实例', async () => {
+    await page.fill('.name-input', TAG);
+    id = (await page.locator('.instance-id').textContent()) ?? '';
+    expect(id).not.toBe('');
+  });
+  await test.step('read: 读回只读信息', async () => {
+    await expect(page.locator('.name')).toContainText(TAG);
+  });
+  await test.step('change: 改配置', async () => {
+    await page.fill('.desc-input', 'changed');
+    await expect(page.locator('.desc')).toContainText('changed');
+  });
+  await test.step('restore: 归位', async () => {
+    await page.fill('.desc-input', '');
+    await expect(page.locator('.desc')).toHaveText('');
+  });
+});
+TSX
+expect 0 "a complete lifecycle passes" -- python3 "${S}/ui-playbook.py" --repo "$PB"
+contains "阶段齐 ≠ 测得对" "PASS still says structure is not correctness"
+
+# An irreversible step may skip restore, but must say why.
+cat > "${PB}/e2e/flows/approve.spec.ts" <<'TSX'
+import { test, expect } from '@playwright/test';
+const TAG = 'E2E_approve';
+let id = '';
+test.afterEach(async ({ request }) => {
+  // @phase: cleanup
+  if (id) await request.delete(`/api/order/${id}`);
+});
+test('审批单', async ({ page }) => {
+  // @phase: create
+  await page.fill('.name-input', TAG); id = 'x';
+  // @phase: read
+  await expect(page.locator('.status')).toContainText('pending');
+  // @phase: change
+  await page.click('.btn-approve');
+  // @phase: restore (irreversible: 审批通过后不可撤回,预期状态为 approved)
+  await expect(page.locator('.status')).toContainText('approved');
+});
+TSX
+expect 0 "an irreversible flow may skip restore when it says why" -- \
+  python3 "${S}/ui-playbook.py" --repo "$PB"
+
+# Cleanup only on the happy path leaves debris.
+cat > "${PB}/e2e/flows/leaky.spec.ts" <<'TSX'
+import { test, expect } from '@playwright/test';
+const TAG = 'AUTOTEST_leaky';
+test('漏清理', async ({ page }) => {
+  // @phase: create
+  await page.fill('.n', TAG);
+  // @phase: read
+  await expect(page.locator('.n')).toContainText(TAG);
+  // @phase: change
+  await page.click('.s');
+  // @phase: restore
+  await page.click('.undo');
+  // @phase: cleanup
+  await page.click('.del');
+});
+TSX
+expect 1 "catch cleanup that only runs on success" -- \
+  python3 "${S}/ui-playbook.py" --repo "$PB"
+contains "cleanup-not-guaranteed" "names the unguaranteed cleanup"
+contains "下一轮继承垃圾" "explains the consequence"
+rm -f "${PB}/e2e/flows/leaky.spec.ts"
+
+# A flow that clicks through the UI and asserts nothing.
+cat > "${PB}/e2e/flows/silent.spec.ts" <<'TSX'
+import { test } from '@playwright/test';
+const TAG = 'AUTOTEST_silent';
+test.afterEach(async ({ request }) => {
+  // @phase: cleanup
+  await request.delete('/api/x');
+});
+test('无断言', async ({ page }) => {
+  // @phase: create
+  await page.fill('.n', TAG);
+  // @phase: read
+  await page.goto('/x');
+  // @phase: change
+  await page.click('.s');
+  // @phase: restore
+  await page.click('.undo');
+});
+TSX
+expect 1 "catch a flow with no assertions" -- python3 "${S}/ui-playbook.py" --repo "$PB"
+contains "no-assertion" "names the missing assertions"
+contains "只是点了一遍界面" "says what such a flow actually does"
+rm -f "${PB}/e2e/flows/silent.spec.ts"
+
+expect 0 "--schema documents the contract" -- python3 "${S}/ui-playbook.py" --schema
+contains "AUTOTEST" "the schema explains the tagging requirement"
+expect 2 "refuse a repo with no e2e dir" -- python3 "${S}/ui-playbook.py" --repo "$TMP"
+rm -rf "$PB"
+
+say "20 ui-evolve: state conflicts while authoring a playbook"
+
+EV="$(mktemp -d)"
+mkdir -p "${EV}/e2e/flows"
+
+# The example from the brief: one flow turns auth on, the next needs it off.
+# Re-running never fixes this, which is why it has to be caught while writing.
+cat > "${EV}/e2e/flows/a-auth.spec.ts" <<'TSX'
+import { test, expect } from '@playwright/test';
+// @switch: auth on
+test('开启鉴权', async ({ page }) => { await page.click('.enable-auth'); expect(1).toBe(1); });
+TSX
+cat > "${EV}/e2e/flows/b-instance.spec.ts" <<'TSX'
+import { test, expect } from '@playwright/test';
+// @requires: auth off
+test('实例列表', async ({ page }) => { await page.goto('/instance'); expect(1).toBe(1); });
+TSX
+expect 1 "catch a flow whose prerequisite an earlier flow destroys" -- \
+  python3 "${S}/ui-evolve.py" --repo "$EV"
+contains "前置状态被上游改掉了" "names the conflict in words a reader sees"
+contains "重跑多少次都一样" "says re-running will not fix it"
+contains "branch" "offers the branch restructuring"
+contains "reorder" "offers the reorder restructuring"
+contains "跑完之后遗留" "reports the leftover switch state"
+
+# A declaration line must not be read as an action. `@requires: auth off`
+# states a dependency; calling it a flip is a false positive, and false
+# positives teach people to ignore findings.
+EV_OUT="$(python3 "${S}/ui-evolve.py" --repo "$EV" 2>&1)"
+if printf '%s' "$EV_OUT" | grep -q "b-instance.spec.ts → (后续全部)"; then
+  bad "read @requires as an undeclared switch flip"
+else
+  ok "a @requires declaration is not mistaken for a flip"
+fi
+
+# reorder actually resolves it: the switch flow runs last, so everything
+# depending on the default state runs first.
+cat > "${EV}/e2e/flows/a-auth.spec.ts" <<'TSX'
+import { test, expect } from '@playwright/test';
+// @switch: auth on
+// @order: last
+test('开启鉴权', async ({ page }) => { await page.click('.enable-auth'); expect(1).toBe(1); });
+TSX
+expect 0 "the reorder fix resolves the conflict" -- python3 "${S}/ui-evolve.py" --repo "$EV"
+contains "@order:last" "shows the reordered run"
+contains "没冲突 ≠ 剧本够好" "PASS still says this is only one dimension"
+
+# branch also resolves it: each flow self-contained on its own switch state.
+rm -f "${EV}/e2e/flows/"*.spec.ts
+cat > "${EV}/e2e/flows/auth-on.spec.ts" <<'TSX'
+import { test, expect } from '@playwright/test';
+// @switch: auth on
+// @requires: auth on
+test('鉴权开启下的列表', async ({ page }) => { await page.goto('/instance'); expect(1).toBe(1); });
+TSX
+cat > "${EV}/e2e/flows/auth-off.spec.ts" <<'TSX'
+import { test, expect } from '@playwright/test';
+// @switch: auth restore
+test('默认状态下的列表', async ({ page }) => { await page.goto('/instance'); expect(1).toBe(1); });
+TSX
+expect 0 "the branch fix also resolves it" -- python3 "${S}/ui-evolve.py" --repo "$EV"
+
+# An undeclared flip is invisible downstream.
+cat > "${EV}/e2e/flows/c-sneaky.spec.ts" <<'TSX'
+import { test, expect } from '@playwright/test';
+test('悄悄关审批', async ({ page }) => { await page.click('.disable-approval'); expect(1).toBe(1); });
+TSX
+expect 1 "catch a switch flipped without a declaration" -- \
+  python3 "${S}/ui-evolve.py" --repo "$EV"
+contains "改了全局开关却没声明" "names the undeclared flip in words a reader sees"
+contains "后续场景无法预见" "explains why declaring matters"
+
+expect 0 "--schema documents the switch contract" -- python3 "${S}/ui-evolve.py" --schema
+contains "@order: last" "the schema shows the reorder form"
+contains "降低复杂度" "the schema names the tradeoff"
+expect 2 "refuse a repo with no flows" -- python3 "${S}/ui-evolve.py" --repo "$TMP"
+rm -rf "$EV"
+
 printf '\n== result\n'
 printf '  pass %d   fail %d\n' "$PASS" "$FAIL"
 if [ "$FAIL" -ne 0 ]; then

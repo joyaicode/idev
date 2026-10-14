@@ -56,7 +56,15 @@ is_background: false
 4. **按本步 kind 改**:
    - `deliver.code_pass` — 实现本阶段代码。多做的删掉,少做的补上
    - `review.fix` — **只改 `review.md` 里已签收的 `I*`**(及人显式纳入的 `O*`)。未签收的不动
-   - `ui.playbook_sync` — 按 `e2e/inventory.json` 建设或进化 wave / helper,只打本轮资源
+   - `ui.playbook_sync` — 按 `e2e/inventory.json` 建设或进化 wave / helper,只打本轮资源。
+     剧本要走完 `create → read → change → restore → cleanup`,实体名带
+     `AUTOTEST`/`E2E_` 标记,cleanup 放 `afterEach`/`finally`。写完自检:
+     ```bash
+     python3 $IDEV/scripts/ui-playbook.py --schema         # 生命周期契约
+     python3 $IDEV/scripts/ui-playbook.py --repo <仓>      # 校验生命周期
+     python3 $IDEV/scripts/ui-evolve.py --schema           # 全局开关契约
+     python3 $IDEV/scripts/ui-evolve.py --repo <仓>        # 状态冲突(边写边跑)
+     ```
    - `frontend.lint_fix` — 跑扩展根 `commands.lint_fix`。残留 lint = FAIL
 
 ## 构建与提交
@@ -239,3 +247,36 @@ git rev-parse HEAD        # 这就是 REVERT 的值
 `brief.prior_failure` 会说明上次为什么作废。
 
 全文:[references/feedback-loop.md](../references/feedback-loop.md)。
+
+## 写剧本时的状态冲突(编写阶段就查)
+
+剧本之间会互相影响:一个 flow 开了鉴权,下一个需要它关着 —— **这类失败重跑不会好**,
+`ui.clean_pass_loop` 从头再跑一轮,冲突还在同一处。
+
+**边写边跑,别等跑红**:
+
+```bash
+python3 $IDEV/scripts/ui-evolve.py --repo <仓>
+```
+
+凡是改变**后续场景前置条件**的操作都要声明:
+
+```ts
+// @switch: auth on        本 flow 把 auth 打开了(留给后续)
+// @switch: auth restore   用完归位,不影响后续
+// @requires: auth off     本 flow 需要 auth 处于 off
+// @order: last            排到最后跑
+```
+
+冲突有两种可行改法,它会**提方案但不改你的文件**:
+
+| 改法 | 什么时候选 | 代价 / 收益 |
+|---|---|---|
+| **branch** | 开关影响**多个**场景的行为 | 剧本翻倍;但每个 flow 不依赖别人留下的状态 |
+| **reorder** | 只是「最后顺便验一下开关本身」 | 覆盖集中在尾部;复杂度最低,改动最小 |
+
+后者就是「串完其它场景后,最后再验鉴权和关鉴权」—— 给动开关的 flow 加
+`// @order: last` 即可,前面的场景都在默认状态下跑。
+
+它还抓**没声明就改开关**(后续场景无法预见,也无法被检出冲突)和**跑完遗留未归位**
+(会污染下一轮)。

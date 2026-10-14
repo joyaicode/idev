@@ -35,6 +35,8 @@
 | `references/feedback-loop.md` | 双向反馈环：下游质疑上游 · 订正后全线对准 · 交付后跟进 |
 | `scripts/artifact-match.py` | 运维:产物与源码是否同源（MATCH/AHEAD/UNKNOWN） |
 | `scripts/realign.py` | 需求订正后查七类漂移，给出向前的重做顺序 |
+| `scripts/ui-evolve.py` | 编写阶段查剧本状态冲突，提 branch / reorder 方案（不改文件） |
+| `scripts/ui-playbook.py` | UI 剧本生命周期：create→read→change→restore→cleanup，实体打标 |
 | `scripts/ui-spec.py` | 需求细到交互层：校验 `ui` 规则，生成 json-render spec + 零依赖预览 |
 | `scripts/stage-gate.py` | 七视角把关：experts.md 拒过清单里可机检的 21 条 |
 | `scripts/delegation.py` | 委派留痕：write / check / replay / timeline / eval |
