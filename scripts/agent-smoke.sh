@@ -1891,6 +1891,82 @@ contains "降低复杂度" "the schema names the tradeoff"
 expect 2 "refuse a repo with no flows" -- python3 "${S}/ui-evolve.py" --repo "$TMP"
 rm -rf "$EV"
 
+say "21 link-agents: install to both Claude Code and Cursor"
+
+# Run against a fake HOME so this never touches the real install.
+LA_HOME="$(mktemp -d)"
+expect 0 "install reaches both locations" -- env HOME="$LA_HOME" bash "${S}/link-agents.sh"
+contains "两个位置" "says it installed to both"
+
+for loc in ".claude/agents" ".cursor/agents"; do
+  n=0
+  for f in "${LA_HOME}/${loc}"/idev-*.md; do
+    [ -L "$f" ] || continue
+    n=$((n + 1))
+  done
+  if [ "$n" -ge 5 ]; then
+    ok "${loc} has all five agents as symlinks"
+  else
+    bad "${loc} has $n agent symlinks, expected 5"
+  fi
+done
+
+# Symlinks, not copies: editing the repo must change what both tools read.
+if [ "$(readlink "${LA_HOME}/.cursor/agents/idev-coder.md")" = "${REPO}/agents/idev-coder.md" ]; then
+  ok "the Cursor link points back at the repo"
+else
+  bad "the Cursor link does not point at the repo"
+fi
+
+expect 0 "--check reports a clean install" -- env HOME="$LA_HOME" bash "${S}/link-agents.sh" --check
+contains "CHECK PASS" "says both locations are complete"
+
+# A missing link must be reported, not silently healed by --check.
+rm -f "${LA_HOME}/.cursor/agents/idev-ops.md"
+expect 1 "--check notices a missing link" -- env HOME="$LA_HOME" bash "${S}/link-agents.sh" --check
+contains "MISS idev-ops.md" "names the missing agent"
+if [ -e "${LA_HOME}/.cursor/agents/idev-ops.md" ]; then
+  bad "--check wrote something; it must only report"
+else
+  ok "--check changed nothing"
+fi
+
+# Re-running heals it.
+expect 0 "re-running restores the missing link" -- env HOME="$LA_HOME" bash "${S}/link-agents.sh"
+expect 0 "--check is clean again" -- env HOME="$LA_HOME" bash "${S}/link-agents.sh" --check
+
+# A real file at the destination must be refused, never overwritten: that
+# file belongs to someone, and clobbering it is unrecoverable.
+rm -f "${LA_HOME}/.cursor/agents/idev-ops.md"
+echo "someone else's agent" > "${LA_HOME}/.cursor/agents/idev-ops.md"
+expect 1 "refuse to overwrite a real file" -- env HOME="$LA_HOME" bash "${S}/link-agents.sh"
+contains "not a symlink" "says why it refused"
+if grep -q "someone else" "${LA_HOME}/.cursor/agents/idev-ops.md"; then
+  ok "the pre-existing file is intact"
+else
+  bad "the pre-existing file was destroyed"
+fi
+rm -f "${LA_HOME}/.cursor/agents/idev-ops.md"
+
+# --unlink clears both locations and leaves non-symlinks alone.
+env HOME="$LA_HOME" bash "${S}/link-agents.sh" >/dev/null 2>&1 || true
+expect 0 "--unlink removes them" -- env HOME="$LA_HOME" bash "${S}/link-agents.sh" --unlink
+left=0
+for loc in ".claude/agents" ".cursor/agents"; do
+  for f in "${LA_HOME}/${loc}"/idev-*.md; do
+    [ -e "$f" ] && left=$((left + 1))
+  done
+done
+if [ "$left" -eq 0 ]; then
+  ok "both locations are clear after --unlink"
+else
+  bad "$left links survived --unlink"
+fi
+
+expect 1 "reject an unknown flag" -- env HOME="$LA_HOME" bash "${S}/link-agents.sh" --nope
+contains "用法" "shows the usage line"
+rm -rf "$LA_HOME"
+
 printf '\n== result\n'
 printf '  pass %d   fail %d\n' "$PASS" "$FAIL"
 if [ "$FAIL" -ne 0 ]; then

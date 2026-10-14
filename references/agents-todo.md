@@ -43,14 +43,16 @@ NPE** —— 换语言或日志格式仍需自己验一次，见 P0 第 6 项。
 
 | # | 待办 | 状态 | 完成判据 |
 |---|---|---|---|
-| 1 | 装五个 agent：`bash scripts/link-agents.sh` | **可做** | `~/.claude/agents/` 下有 5 个链接；Cursor 兼容读同一处 |
+| 1 | 装五个 agent：`bash scripts/link-agents.sh` | **可做** | `~/.claude/agents/` 与 `~/.cursor/agents/` 各 5 个链接；`--check` 核对 |
 | 2 | 提交合并的改动 | **可做** | `git status` 干净 |
 | 3 | Claude Code：`/idev` 唤起导体，5 个 agent 可见 | **待验** | `claude --debug` 无 skip 记录；`/doctor` 不报重名 |
-| 4 | Cursor：`/idev` 唤起导体，且确认它怎么处理 `tools` | **待验** | 先放**一个**最小文件试，再铺开五个 |
+| 4 | Cursor：`/idev-coder` 能否唤起，且它怎么处理 `tools` 字段 | **待验** | 装完在 Cursor 里敲 `/idev-` 看补全；`tools` 若不被识别，`readonly: true` 仍在 |
 | 5 | 自动唤起：不打 `/idev`，直接说交付类诉求 | **待验** | 两边都能按 description 命中 |
 | 6 | 签名归一化在**你自己的栈**上 | **待验** | 同错签名相同、不同错签名不同 |
 
-**第 4 项是唯一没有文档依据的。** Claude Code 侧官方明示会静默忽略未识别字段；Cursor 侧
+**第 4 项是唯一没有文档依据的。** 安装已不再依赖「Cursor 兼容读 `~/.claude/agents/`」这个
+未实测的假设 —— 两处都装，多一条 symlink 换掉一个赌注。剩下待验的是 Cursor 怎么处理
+Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未识别字段；Cursor 侧
 无文档，也没实测过。如果那边 agent 加载异常，先只留一个最小文件试，别五个一起铺。
 
 **第 6 项最该当心。** 归一化是启发式：**过度归一化会把两个不同的 bug 合成同一签名，

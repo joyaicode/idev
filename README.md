@@ -60,7 +60,8 @@
 ## 装 agent
 
 ```bash
-bash scripts/link-agents.sh      # agents/*.md -> ~/.claude/agents/（Cursor 兼容读同一处）
+bash scripts/link-agents.sh          # 装到 ~/.claude/agents 与 ~/.cursor/agents
+bash scripts/link-agents.sh --check  # 核对两处是否齐全      # agents/*.md -> ~/.claude/agents/（Cursor 兼容读同一处）
 ```
 
 `/idev` 不需要安装——idev 本身就是 skill。待办与验证状态见
