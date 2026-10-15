@@ -2705,6 +2705,146 @@ contains "afterEach" "says where cleanup belongs"
 contains "每个阶段至少断言一件可观察的事" "says what to assert"
 rm -rf "$PB2"
 
+say "32 behave sanely against a repo that has no ticket yet"
+
+# Every tool must refuse the same way when the ticket does not exist.
+# lessons.py used to compute the path and carry on, so `check` answered
+# "PASS 0 条" and `recall` answered "no matching lessons" — a typo in the
+# feature name read as "the ledger is clean" / "nothing is known".
+NT="$(mktemp -d)"
+git init -q "$NT" >/dev/null 2>&1 || true
+for tool in "stage-gate.py --feature nope --all" "realign.py --feature nope" \
+            "req-ground.py --feature nope" "ui-spec.py --feature nope"; do
+  # shellcheck disable=SC2086
+  expect 2 "${tool%% *} refuses a feature with no ticket" -- \
+    python3 "${S}"/${tool} --repo "$NT"
+done
+expect 2 "lessons.py refuses a feature with no ticket" -- \
+  python3 "${S}/lessons.py" --repo "$NT" --feature nope check
+contains "BLOCKED" "says it is blocked, not clean"
+contains "feature 名打错了" "suggests the likely cause"
+
+# The kernel-wide ledger still works without a feature.
+expect 0 "the kernel ledger needs no ticket" -- python3 "${S}/lessons.py" check
+
+# An artifact with no commit must not be told to check out "<its commit>".
+if command -v zip >/dev/null 2>&1; then
+  NB="$(mktemp -d)"
+  mkdir -p "${NB}/META-INF"
+  printf 'Manifest-Version: 1.0\nImplementation-Version: 9.9.9\n' > "${NB}/META-INF/MANIFEST.MF"
+  echo x > "${NB}/A.class"
+  # Backdate the class so the repo's HEAD is genuinely newer — the shape
+  # seen on a real repo: built yesterday, committed to since.
+  touch -t 202001010000 "${NB}/A.class"
+  (cd "$NB" && zip -qrX "${NT}/nocommit.jar" .)
+  (cd "$NT" && echo a > a.txt && git add -A \
+    && git -c user.email=t@t -c user.name=t commit -qm one) >/dev/null 2>&1
+  expect 1 "an artifact with no commit is still actionable" -- \
+    python3 "${S}/artifact-match.py" --artifact "${NT}/nocommit.jar" --repo "$NT"
+  contains "产物没带 commit" "says why option 1 cannot name a commit"
+  contains "git -C" "still gives a command that can be run"
+  AM_OUT="$(python3 "${S}/artifact-match.py" --artifact "${NT}/nocommit.jar" --repo "$NT" 2>&1)"
+  if printf '%s' "$AM_OUT" | grep -q "checkout <产物的 commit>"; then
+    bad "told the user to check out a placeholder"
+  else
+    ok "no placeholder is offered as an instruction"
+  fi
+  rm -rf "$NB"
+fi
+rm -rf "$NT"
+
+say "33 concurrent writes must not lose entries"
+
+# Ten parallel appends to one ledger used to leave one entry: every process
+# read the same empty file, each wrote its own, last one won — and every
+# call reported OK. Silent data loss in the ledger that root-cause analysis
+# depends on.
+CW="$(mktemp -d)"
+git init -q "$CW" >/dev/null 2>&1 || true
+CW_HOME="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$CW" --feature cw --key task 2>/dev/null)"
+mkdir -p "${CW_HOME:?cw ticket home unresolved}"
+
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  python3 "${S}/hypothesis.py" --repo "$CW" add --feature cw \
+    --claim "假设 $i" --case "c$i" >/dev/null 2>&1 &
+done
+wait
+python3 - "${CW_HOME}/hypotheses.yaml" <<'PYX'
+import pathlib, sys
+sys.path.insert(0, "scripts/lib")
+import safeyaml
+d = safeyaml.mapping(pathlib.Path(sys.argv[1])) or {}
+items = d.get("items") or []
+ids = [str(i.get("id")) for i in items]
+if len(items) != 10 or len(set(ids)) != 10:
+    print(f"kept {len(items)} of 10, {len(set(ids))} unique ids")
+    sys.exit(1)
+PYX
+if [ $? -eq 0 ]; then
+  ok "ten concurrent appends keep ten entries with unique ids"
+else
+  bad "concurrent appends lost entries or reused ids"
+fi
+
+# Concurrent edits to different entries must not drop each other's fields.
+for i in 1 2 3 4 5; do
+  python3 "${S}/hypothesis.py" --repo "$CW" set --feature cw \
+    --id "H$i" --evidence "ev-$i.log" >/dev/null 2>&1 &
+done
+wait
+python3 - "${CW_HOME}/hypotheses.yaml" <<'PYX'
+import pathlib, sys
+sys.path.insert(0, "scripts/lib")
+import safeyaml
+d = safeyaml.mapping(pathlib.Path(sys.argv[1])) or {}
+by_id = {str(i.get("id")): i for i in (d.get("items") or [])}
+missing = [f"H{n}" for n in range(1, 6)
+           if not (by_id.get(f"H{n}", {}).get("evidence"))]
+if len(by_id) != 10 or missing:
+    print(f"{len(by_id)} entries; missing evidence on {missing}")
+    sys.exit(1)
+PYX
+if [ $? -eq 0 ]; then
+  ok "concurrent edits to different entries all survive"
+else
+  bad "a concurrent edit was overwritten"
+fi
+
+# Same ledger shape in lessons.py.
+LW_HOME="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$CW" --feature lw --key task 2>/dev/null)"
+mkdir -p "$LW_HOME"
+for i in 1 2 3 4 5 6 7 8; do
+  python3 "${S}/lessons.py" --repo "$CW" --feature lw add \
+    --scope "s$i" --symptom "y$i" --evidence e --action a \
+    --outcome o --not-when n >/dev/null 2>&1 &
+done
+wait
+python3 - "${LW_HOME}/lessons.yaml" <<'PYX'
+import pathlib, sys
+sys.path.insert(0, "scripts/lib")
+import safeyaml
+d = safeyaml.mapping(pathlib.Path(sys.argv[1])) or {}
+ls = d.get("lessons") or []
+ids = [str(x.get("id")) for x in ls]
+if len(ls) != 8 or len(set(ids)) != 8:
+    print(f"kept {len(ls)} of 8, {len(set(ids))} unique ids")
+    sys.exit(1)
+PYX
+if [ $? -eq 0 ]; then
+  ok "the lessons ledger survives concurrent appends too"
+else
+  bad "the lessons ledger lost entries"
+fi
+
+# A crash mid-write must not leave a half-written ledger behind: the write
+# goes to a temp file and is renamed into place.
+if ls "${CW_HOME}"/*.tmp >/dev/null 2>&1; then
+  bad "temp files were left behind"
+else
+  ok "no temp files survive a completed write"
+fi
+rm -rf "$CW"
+
 printf '\n== result\n'
 printf '  pass %d   fail %d\n' "$PASS" "$FAIL"
 if [ "$FAIL" -ne 0 ]; then

@@ -177,35 +177,53 @@ def find(items: list[dict], hid: str) -> dict | None:
     return None
 
 
+def _merge_item(fresh: dict, item: dict) -> dict:
+    """Put `item` back into whatever the ledger looks like right now.
+
+    A set/blast started from a copy read before the lock. Writing that whole
+    copy back would erase anything another process added meanwhile; merging
+    only the one entry keeps both.
+    """
+    fresh.setdefault("items", [])
+    for n, existing in enumerate(fresh["items"]):
+        if isinstance(existing, dict) and str(existing.get("id")) == str(item.get("id")):
+            fresh["items"][n] = item
+            return fresh
+    fresh["items"].append(item)
+    return fresh
+
+
 def cmd_add(args: argparse.Namespace) -> int:
     path = ledger_path(args.feature, args.repo)
-    data = load(path, args.feature)
-    item = {
-        "id": next_id(data["items"]),
-        "claim": args.claim,
-        "case": args.case or "",
-        "evidence": [],
-        "repro": "pending",
-        "status": "open",
-        # 影响范围: the cases that prove the fix did not break anything else.
-        # evidence.md step 4 class 2 — the one that gets skipped.
-        "blast": {"baseline": [], "guard": []},
-        # 时间窗必须可追溯: only from when the problem happened, when the
-        # alert fired, or when the data last changed — never widened to
-        # whatever makes the story work.
-        "window": {"from": "", "to": "", "source": ""},
-        # 根因报告先回答三问,再展开证据链。
-        "impact": "",
-        "remedy": "",
-        "at": now(),
-    }
-    data["items"].append(item)
-    save(path, data)
-    print(f"OK   {item['id']} -> {path}")
-    if not args.case:
-        print("HINT no case yet; evidence.md wants a runnable case before the next hypothesis")
-    return 0
+    holder: dict = {}
 
+    def build(data: dict) -> dict:
+        # Everything that depends on current state happens inside the lock,
+        # id included: two processes reading first would both pick H1.
+        data.setdefault("schema_version", 1)
+        data.setdefault("feature", args.feature)
+        data.setdefault("items", [])
+        item = {
+            "id": next_id(data["items"]),
+            "claim": args.claim,
+            "case": args.case or "",
+            "evidence": [],
+            "repro": "pending",
+            "status": "open",
+            "blast": {"baseline": [], "guard": []},
+            "window": {"from": "", "to": "", "source": ""},
+            "impact": "",
+            "remedy": "",
+            "at": now(),
+        }
+        data["items"].append(item)
+        holder["item"] = item
+        return data
+
+    safeyaml.save_locked(path, build)
+    item = holder["item"]
+    print(f"OK   {item['id']} -> {path}")
+    return check(load(path, args.feature), verbose=False)
 
 def cmd_set(args: argparse.Namespace) -> int:
     path = ledger_path(args.feature, args.repo)
@@ -237,7 +255,9 @@ def cmd_set(args: argparse.Namespace) -> int:
             win["source"] = args.window_source
         item["window"] = win
     item["at"] = now()
-    save(path, data)
+    # Re-read under the lock and re-apply, so a concurrent writer's
+    # fields are not dropped by this one's stale copy.
+    safeyaml.save_locked(path, lambda fresh: _merge_item(fresh, item))
     rc = check(data, verbose=False)
     if rc == 0:
         print(f"OK   {args.id} updated -> {path}")
@@ -482,7 +502,9 @@ def cmd_blast(args: argparse.Namespace) -> int:
         blast["note"] = args.note
     item["blast"] = blast
     item["at"] = now()
-    save(path, data)
+    # Re-read under the lock and re-apply, so a concurrent writer's
+    # fields are not dropped by this one's stale copy.
+    safeyaml.save_locked(path, lambda fresh: _merge_item(fresh, item))
 
     print(f"OK   {args.id} blast -> {path}")
     print(f"  baseline(修复前的现状,用来对照): {len(blast['baseline'])} 条")

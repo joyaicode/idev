@@ -334,8 +334,16 @@ def main() -> int:
 
     if verdict == "AHEAD":
         print("**源码与产物不同源。** 继续排查前选一条:")
-        print("  1. 把 checkout 切到产物那个 commit,再读代码")
-        print(f"     git -C {repo} checkout {ident.commit[:12] or '<产物的 commit>'}")
+        if ident.commit:
+            print("  1. 把 checkout 切到产物那个 commit,再读代码")
+            print(f"     git -C {repo} checkout {ident.commit[:12]}")
+        else:
+            # Telling someone to check out "<the artifact's commit>" when the
+            # artifact never carried one is not an option, it is a shrug.
+            print("  1. 找到构建这份产物的那次提交,再读代码。产物没带 commit,")
+            print("     只能靠构建记录 / CI 日志 / 制品库的构建号去反查:")
+            when = ident.newest_entry.date().isoformat() if ident.newest_entry else "构建日"
+            print(f"     git -C {repo} log --before='{when} 23:59' -5 --format='%h %cs %s'")
         print("  2. 换一份与源码同源的产物,重新部署后复现")
         print("  3. 两者都不动,但结论只能基于产物自身的可观察行为(日志 / 响应 / 抓包)")
         print()

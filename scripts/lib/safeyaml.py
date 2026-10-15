@@ -50,6 +50,53 @@ def dump(data: dict) -> str:
     return yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
 
 
+def save_locked(path, mutate):
+    """Read, mutate and write a ledger without losing a concurrent write.
+
+    Three ledgers (hypotheses, lessons, and anything else sharing one file
+    across entries) are read-modify-write. Plain write_text loses data the
+    moment two processes overlap: each reads the same state, each writes its
+    own entry, and the last one wins. Ten concurrent appends left one entry
+    — with every call reporting OK, which is the dangerous part.
+
+    `mutate(data)` receives the freshly-read mapping and returns what to
+    write. It runs while the lock is held, so it must not block.
+    """
+    import fcntl
+    import os
+    import tempfile
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_suffix(path.suffix + ".lock")
+
+    with open(lock_path, "a+") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            data = mapping(path)
+            if data is None:
+                data = {}
+            result = mutate(data)
+            # Write to a sibling temp file and rename: a reader never sees a
+            # half-written ledger, even if this process dies mid-write.
+            fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                    fh.write(dump(result))
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                os.replace(tmp, path)
+            except BaseException:
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+                raise
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+    return result
+
+
 def as_int(value: object, default: int = 0) -> int:
     """An int from whatever a ledger happens to hold in that field.
 

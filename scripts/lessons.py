@@ -150,7 +150,16 @@ def ledger_path(repo: Path | None, feature: str | None) -> Path:
 
         base = repo or (Path(os.environ["IDEV_PRODUCT_REPO"])
                         if os.environ.get("IDEV_PRODUCT_REPO") else Path.cwd())
-        return doc_home.homes(base.resolve(), feature)["task"] / "lessons.yaml"
+        home = doc_home.homes(base.resolve(), feature)["task"]
+        if not home.is_dir():
+            # Every other tool BLOCKs here. Returning a path under a ticket
+            # that does not exist made `check` report "PASS 0 条" and
+            # `recall` report "no matching lessons" — so a typo in the
+            # feature name read as "the ledger is clean" / "nothing known".
+            print(f"BLOCKED no ticket home at {home}", file=sys.stderr)
+            print("HINT    feature 名打错了?或这张票还没建立", file=sys.stderr)
+            raise SystemExit(2)
+        return home / "lessons.yaml"
     return kind_agents.kernel_root() / "state" / "lessons.yaml"
 
 
@@ -165,6 +174,18 @@ def load(path: Path) -> dict:
 def save(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(safeyaml.dump(data), encoding="utf-8")
+
+
+def _merge(fresh: dict, item: dict) -> dict:
+    """Put one lesson back into the ledger as it stands right now."""
+    fresh.setdefault("schema_version", 1)
+    fresh.setdefault("lessons", [])
+    for n, existing in enumerate(fresh["lessons"]):
+        if isinstance(existing, dict) and str(existing.get("id")) == str(item.get("id")):
+            fresh["lessons"][n] = item
+            return fresh
+    fresh["lessons"].append(item)
+    return fresh
 
 
 def next_id(lessons: list) -> str:
@@ -187,7 +208,7 @@ def find(lessons: list, lid: str) -> dict | None:
 
 def cmd_add(args: argparse.Namespace) -> int:
     path = ledger_path(args.repo, args.feature)
-    data = load(path)
+    data = load(path)  # for the six-question check below
     missing = [f for f in SIX if not str(getattr(args, f, "") or "").strip()]
     if missing:
         print("BLOCKED 六问缺:", file=sys.stderr)
@@ -209,8 +230,16 @@ def cmd_add(args: argparse.Namespace) -> int:
         "uses": 0,
         "at": now(),
     }
-    data["lessons"].append(item)
-    save(path, data)
+    # Built and appended under the lock: computing the id outside it would
+    # give two concurrent adds the same L1.
+    def build(fresh: dict) -> dict:
+        fresh.setdefault("schema_version", 1)
+        fresh.setdefault("lessons", [])
+        item["id"] = next_id(fresh["lessons"])
+        fresh["lessons"].append(item)
+        return fresh
+
+    safeyaml.save_locked(path, build)
     print(f"OK   {item['id']} candidate -> {path}")
     print(f"  {EVENT_WHY.get(args.event, args.event)}")
     print()
@@ -266,7 +295,7 @@ def cmd_retire(args: argparse.Namespace) -> int:
     item["status"] = "retired"
     item["retired_why"] = args.why
     item["at"] = now()
-    save(path, data)
+    safeyaml.save_locked(path, lambda fresh: _merge(fresh, item))
     print(f"OK   {item['id']} retired -> {path}")
     print("知识过期不清,下一轮会把它读成当前有效。")
     return 0
@@ -343,16 +372,21 @@ def cmd_check(args: argparse.Namespace) -> int:
             errors.append(f"{lid}: event={x.get('event')!r} 不在 {'/'.join(EVENT)} 里")
         for f in SIX:
             if not str(x.get(f) or "").strip():
-                errors.append(f"{lid}: 缺 {f} —— {SIX_Q[f]}")
+                errors.append(
+                    f"{lid}: 缺 {f} —— {SIX_Q[f]}。六问不全的不是决策知识,"
+                    "是过程日志 —— 补齐它,或 retire 掉")
         if status == "authoritative":
             # The gate, re-checked on read: a ledger edited by hand must not
             # be able to smuggle an unconfirmed lesson into authority.
             if not workflow_spec.is_human(str(x.get("confirmed_by", ""))):
                 errors.append(
                     f"{lid}: authoritative 但 confirmed_by={x.get('confirmed_by')!r} 不是人 —— "
-                    "入库门禁被绕过了")
+                    "入库门禁被绕过了。改回 status: candidate,然后走 "
+                    f"`lessons.py promote --id {lid} --by <人> --repro <复现证据>`")
             if not str(x.get("repro") or "").strip():
-                errors.append(f"{lid}: authoritative 但没有 repro —— 没复现过不算验证")
+                errors.append(
+                    f"{lid}: authoritative 但没有 repro —— 没复现过不算验证。"
+                    "旁路复现一次,把证据路径填进 repro;或改回 candidate")
         if status == "retired" and not str(x.get("retired_why") or "").strip():
             warns.append(f"{lid}: retired 却没写 retired_why,下次有人会把它加回去")
 
