@@ -41,7 +41,7 @@
 | `scripts/ui-playbook.py` | UI 剧本生命周期：create→read→change→restore→cleanup，实体打标 |
 | `scripts/req-ground.py` | 密封前把需求落到既有代码：落点/影响面/冲突/边界/方向 + 竞品对比 |
 | `scripts/ui-spec.py` | 需求细到交互层：校验 `ui` 规则，生成 json-render spec + 零依赖预览 |
-| `scripts/stage-gate.py` | 七视角把关：experts.md 拒过清单里可机检的 21 条 |
+| `scripts/stage-gate.py` | 七视角把关：experts.md 拒过清单里可机检的那一半（`--list`） |
 | `scripts/delegation.py` | 委派留痕：write / check / replay / timeline / eval |
 | `scripts/agent-metrics.py` · `agent-review.sh` | 跨票指标 · 定期复盘（只起草不 land） |
 | `scripts/failure_signature.py` · `hypothesis.py` | 提效：失败签名归一化 · 假设台账 |

@@ -97,7 +97,7 @@ python3 scripts/realign.py --feature <f> --plan   # 按什么顺序重做
 | 工具 | 查什么 | 性质 |
 |---|---|---|
 | `check-feature.sh <f> <stage>` | **结构**:字段齐不齐、原文锁、语义门、维表覆盖 | 既有 |
-| `stage-gate.py --feature <f> --all` | **专业硬错**:验收含主观词、弱断言、根因未复现……21 条 | 新 |
+| `stage-gate.py --feature <f> --all` | **专业硬错**:验收含主观词、弱断言、根因未复现…… | 新 |
 | 人按 `experts.md` 过清单 + grill 拷问 | **专业判断**:拆解忠实吗、架构合理吗、用例有意义吗 | 不可替代 |
 | `realign.py --feature <f>` | **基准对准**:产物还指向当前基线吗 | 新 |
 
