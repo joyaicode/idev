@@ -664,6 +664,13 @@ else
 fi
 expect 0 "record its blast radius" -- python3 "${S}/hypothesis.py" --repo "$TMP" blast \
   --feature "$FEATURE" --id H1 --guard t_neighbour_unchanged
+# The three-question report and a second evidence kind: both are required
+# since references/rootcause-guards.md landed.
+expect 0 "answer the three-question report" -- python3 "${S}/hypothesis.py" --repo "$TMP" set \
+  --feature "$FEATURE" --id H1 --evidence "监控 traceId 命中率跌零 grafana/gw" \
+  --impact "下游取不到 traceId,影响 09:00-09:30 全量请求的链路追踪" \
+  --remedy "补回透传;验证用例 t-trace-passthrough;必要时回滚网关配置" \
+  --window-source "告警时间"
 
 # an open hypothesis with no case, followed by another -> case-before-next
 python3 "${S}/hypothesis.py" --repo "$TMP" add --feature "$FEATURE" --claim "no case yet" >/dev/null 2>&1
@@ -1476,36 +1483,52 @@ expect 0 "a handoff kind does not need the artifact check" -- \
 
 say "17 root-cause rigour: evidence tier, candidates, blast radius"
 
-H() { python3 "${S}/hypothesis.py" --repo "$TMP" "$@"; }
+# Its own checkout and ticket: section 5 drives the same ledger, and two
+# sections sharing one ticket means adding a field in one silently changes
+# what the other asserts.
+RR_REPO="$(mktemp -d)"
+git init -q "$RR_REPO" >/dev/null 2>&1 || true
+RR_HOME="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$RR_REPO" --feature rigour --key task 2>/dev/null)"
+mkdir -p "${RR_HOME:?rigour ticket home unresolved}"
+H() {  # subcommand first, then --feature: argparse puts it on the subparser
+  local sub="$1"; shift
+  python3 "${S}/hypothesis.py" --repo "$RR_REPO" "$sub" --feature rigour "$@"
+}
 
 # A log proves the symptom happened; it does not explain why. Calling that a
 # root cause is the mistake this tier check exists for.
-expect 0 "add a hypothesis" -- H add --feature "$FEATURE" \
+expect 0 "add a hypothesis" -- H add \
   --claim "网关丢了 X-Trace" --case "curl 带头,断言下游日志"
-expect 1 "proving on log evidence alone is refused" -- H set --feature "$FEATURE" \
+expect 1 "proving on log evidence alone is refused" -- H set \
   --id H1 --evidence "logs/gw.log" --repro yes --status proven
 contains "proven-needs-code-evidence" "names the evidence-tier finding"
 contains "file:line" "says what would count"
 contains "blast-radius" "also wants the blast-radius cases"
 
 # file:line reaches the code tier — now only the blast radius is missing.
-expect 1 "code evidence still needs a blast radius" -- H set --feature "$FEATURE" \
+expect 1 "code evidence still needs a blast radius" -- H set \
   --id H1 --evidence "src/gateway/filter.py:88"
 contains "proven-needs-blast-radius" "names the blast-radius finding"
-CT_OUT="$(H check --feature "$FEATURE" 2>&1)"
+CT_OUT="$(H check 2>&1)"
 if printf '%s' "$CT_OUT" | grep -q "proven-needs-code-evidence"; then
   bad "file:line was not recognised as code-tier evidence"
 else
   ok "file:line counts as code-tier evidence"
 fi
 
-expect 0 "record the blast radius" -- H blast --feature "$FEATURE" --id H1 \
+expect 0 "record the blast radius" -- H blast --id H1 \
   --guard t_trace_passthrough --baseline t_before_fix
+# rootcause-guards.md also asks for a second evidence kind and the
+# three-question report before a root cause counts as answered.
 contains "guard" "reports the guard count"
+expect 0 "complete the answer" -- H set --id H1 \
+  --evidence "监控 traceId 命中率跌零 grafana/gw" \
+  --impact "下游取不到 traceId,影响该时间窗全量请求的链路追踪" \
+  --remedy "补回透传;验证用例 t-trace-passthrough" --window-source "告警时间"
 # Now everything the checks ask for is on file: code-tier evidence, a repro,
 # and a guard case.
 expect 0 "a proven hypothesis with code evidence and guards passes" -- \
-  H check --feature "$FEATURE"
+  H check
 
 # One proven hypothesis and nothing ruled out is a warning, not a failure:
 # the first guess being right is possible, just less common than nobody
@@ -1532,27 +1555,28 @@ else
 fi
 rm -rf "$RC_REPO"
 
-expect 0 "candidates lists what was considered" -- H candidates --feature "$FEATURE"
+expect 0 "candidates lists what was considered" -- H candidates
 contains "已证成" "groups by status"
 
 # A ruled-out candidate with no reason recorded means the next round walks
 # the same path again.
-expect 0 "add a second candidate" -- H add --feature "$FEATURE" \
+expect 0 "add a second candidate" -- H add \
   --claim "下游没读 header" --case "直接调下游断言"
-expect 0 "rule it out with a reason" -- H set --feature "$FEATURE" --id H2 \
+expect 0 "rule it out with a reason" -- H set --id H2 \
   --status disproven --note "打开 debug 看到该分支没进,见 logs/h2.log"
-expect 0 "candidates shows the ruled-out reason" -- H candidates --feature "$FEATURE"
+expect 0 "candidates shows the ruled-out reason" -- H candidates
 contains "已排除" "shows the ruled-out group"
 contains "排除依据" "shows why it was ruled out"
-CD_OUT="$(H candidates --feature "$FEATURE" 2>&1)"
+CD_OUT="$(H candidates 2>&1)"
 if printf '%s' "$CD_OUT" | grep -q "没有任何被排除的候选"; then
   bad "still complaining about missing candidates after one was ruled out"
 else
   ok "the warning clears once a candidate is ruled out"
 fi
 
-expect 2 "blast refuses an unknown hypothesis" -- H blast --feature "$FEATURE" \
+expect 2 "blast refuses an unknown hypothesis" -- H blast \
   --id H99 --guard x
+rm -rf "$RR_REPO"
 
 say "18 ui-spec: requirements down to the interaction layer"
 
@@ -1966,6 +1990,326 @@ fi
 expect 1 "reject an unknown flag" -- env HOME="$LA_HOME" bash "${S}/link-agents.sh" --nope
 contains "用法" "shows the usage line"
 rm -rf "$LA_HOME"
+
+say "22 req-ground: a requirement must land on existing code"
+
+RG_REPO="$(mktemp -d)"
+git init -q "$RG_REPO" >/dev/null 2>&1 || true
+RH="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$RG_REPO" --feature login --key task 2>/dev/null)"
+mkdir -p "${RH:?login ticket home unresolved}"
+
+# No grounding at all, plus a half-filled one. The conflict with no grill
+# question is the finding that matters most: experts.md calls leaving a
+# known conflict out of the questions a reject.
+cat > "${RH}/baseline.yaml" <<'YML'
+revision: 1
+items:
+  - {id: B1, must: 登录失败给出可定位提示, acceptance: 3 秒内返回带错误码的提示}
+  - id: B2
+    must: 展示剩余重试次数
+    acceptance: 3 次内显示
+    grounding:
+      touches: [src/auth/login.py]
+      conflicts:
+        - {where: src/auth/login.py:authenticate, existing: 统一返回 AUTH_FAILED}
+    comparison:
+      peers: [{name: 竞品A, behaviour: 显示剩余次数}]
+      differs: 我们不显示
+YML
+expect 1 "catch a requirement never grounded in the code" -- \
+  python3 "${S}/req-ground.py" --repo "$RG_REPO" --feature login
+contains "no-grounding" "names the item with no grounding at all"
+contains "reopen" "explains what finding this late costs"
+contains "touches-not-anchored" "wants file:symbol, not a bare path"
+contains "conflict-not-grilled" "a known conflict must become a question"
+contains "拒过项" "cites why leaving it out is refused"
+contains "differs-without-why" "a difference from a competitor needs a reason"
+contains "differs-not-grilled" "a large difference must be discussed"
+contains "no-boundary" "wants what is explicitly out of scope"
+
+# Grounded, with both conflicts and the competitor difference raised as
+# questions that actually exist in grill.md.
+cat > "${RH}/grill.md" <<'YML'
+# 待拷问
+Q3. 区分「密码错」与「账号锁定」是否违反「不泄漏账号状态」?
+Q5. 不给剩余重试次数,是否接受与竞品 A 的体验差距?
+YML
+cat > "${RH}/baseline.yaml" <<'YML'
+revision: 1
+items:
+  - id: B1
+    must: 登录失败给出可定位提示
+    acceptance: 3 秒内返回带错误码的提示
+    grounding:
+      touches: [src/auth/login.py:authenticate, src/gateway/filter.py:AuthFilter]
+      impact: [src/api/session.py:create_session]
+      conflicts:
+        - where: src/auth/login.py:authenticate
+          existing: 现在统一返回 AUTH_FAILED,不区分原因
+          tension: 本需求要区分原因,与既有的「不泄漏账号状态」相悖
+          grill: Q3
+      boundary: [不改第三方 SSO 回调, 不动既有错误码编号规则]
+      direction: 与 ADR-012「可观测性优先」一致
+    comparison:
+      peers: [{name: 竞品A, behaviour: 区分并给剩余次数}]
+      differs: 我们不给剩余重试次数
+      why: 剩余次数可被用来枚举有效账号,见 ADR-007 威胁模型
+      grill: Q5
+YML
+expect 0 "a grounded requirement passes" -- \
+  python3 "${S}/req-ground.py" --repo "$RG_REPO" --feature login
+contains "落地了 ≠ 读对了" "PASS still says the homework was only declared"
+
+# A question id that does not exist in grill.md is a dangling promise.
+python3 - "$RH" <<'PYX'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]) / "baseline.yaml"
+p.write_text(p.read_text(encoding="utf-8").replace("grill: Q3", "grill: Q9"), encoding="utf-8")
+PYX
+expect 1 "catch a grill reference that does not exist" -- \
+  python3 "${S}/req-ground.py" --repo "$RG_REPO" --feature login
+contains "grill-ref-dangling" "names the dangling reference"
+
+expect 0 "--probe says what to go read" -- \
+  python3 "${S}/req-ground.py" --repo "$RG_REPO" --feature login --probe
+contains "codegraph_impact" "gives the impact command"
+contains "挂一条 grill 问句" "repeats that conflicts become questions"
+
+expect 0 "--schema documents the grounding block" -- python3 "${S}/req-ground.py" --schema
+contains "comparison" "the schema covers the competitor comparison"
+
+# stage-gate only demands grounding once the baseline is sealed: a draft is
+# still collecting, and nagging there would train people to ignore it.
+cat > "${RH}/baseline.yaml" <<'YML'
+revision: 1
+sealed: false
+goal: 登录失败时给出可定位的提示
+items:
+  - {id: B1, must: 后台清理会话, acceptance: 每小时 1 次}
+YML
+RG_OUT="$(python3 "${S}/stage-gate.py" --repo "$RG_REPO" --feature login --stage req-review 2>&1)"
+if printf '%s' "$RG_OUT" | grep -q "not-grounded"; then
+  bad "stage-gate demanded grounding on an unsealed draft"
+else
+  ok "an unsealed draft is not nagged about grounding"
+fi
+cat > "${RH}/baseline.yaml" <<'YML'
+revision: 1
+sealed: true
+goal: 登录失败时给出可定位的提示
+items:
+  - {id: B1, must: 后台清理会话, acceptance: 每小时 1 次}
+YML
+expect 1 "stage-gate demands grounding once sealed" -- \
+  python3 "${S}/stage-gate.py" --repo "$RG_REPO" --feature login --stage req-review
+contains "not-grounded" "names the ungrounded sealed baseline"
+rm -rf "$RG_REPO"
+
+say "23 rootcause guards: an answer must be verifiable"
+
+# The dangerous outcome is not "no answer", it is an answer that sounds
+# reasonable and cannot be checked. Each guard blocks one way of sounding
+# reasonable.
+RC_REPO2="$(mktemp -d)"
+git init -q "$RC_REPO2" >/dev/null 2>&1 || true
+RH2="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$RC_REPO2" --feature guards --key task 2>/dev/null)"
+mkdir -p "${RH2:?guards ticket home unresolved}"
+G() { python3 "${S}/hypothesis.py" --repo "$RC_REPO2" "$@"; }
+
+expect 0 "add a hypothesis naming a middle service" -- G add --feature guards \
+  --claim "商品服务返回空" --case "curl 复现"
+expect 1 "one evidence kind is not enough to prove" -- G set --feature guards \
+  --id H1 --evidence "src/item/service.py:88" --repro yes --status proven
+contains "proven-needs-two-sources" "names the single-source finding"
+contains "互相印证" "says the two sources must corroborate"
+contains "report-missing-impact" "wants the impact answer"
+contains "report-missing-remedy" "wants the what-to-do answer"
+
+# A middle service relaying someone else's failure is the classic wrong
+# root cause in a distributed system.
+G_OUT="$(G check --feature guards 2>&1)"
+if printf '%s' "$G_OUT" | grep -q "root-cause-not-terminal"; then
+  ok "warns that a middle service cannot be the whole root cause"
+else
+  bad "no warning about a non-terminal root cause"
+fi
+
+expect 1 "a second evidence kind clears that guard" -- G set --feature guards \
+  --id H1 --evidence "监控 p99 突增 grafana/item"
+G_OUT="$(G check --feature guards 2>&1)"
+if printf '%s' "$G_OUT" | grep -q "proven-needs-two-sources"; then
+  bad "still complaining after a second evidence kind"
+else
+  ok "two corroborating kinds satisfy the double-evidence guard"
+fi
+
+# A time window with no stated origin is how unrelated evidence gets in.
+expect 1 "a time window must say where it came from" -- G set --feature guards \
+  --id H1 --window "2026-10-15T09:00..2026-10-15T09:30"
+contains "window-without-source" "names the unsourced window"
+contains "无关证据" "explains what an open window lets in"
+expect 1 "sourcing the window clears it" -- G set --feature guards --id H1 \
+  --window-source "告警时间"
+G_OUT="$(G check --feature guards 2>&1)"
+if printf '%s' "$G_OUT" | grep -q "window-without-source"; then
+  bad "window still unsourced after --window-source"
+else
+  ok "a sourced window is accepted"
+fi
+
+# The report answers three questions, not one.
+expect 1 "still needs the three-question report" -- G set --feature guards \
+  --id H1 --impact "商品详情页空白,09:00-09:30 全量读请求受影响"
+contains "report-missing-remedy" "still wants the remedy"
+G blast --feature guards --id H1 --guard t_neighbour >/dev/null 2>&1 || true
+expect 0 "a complete answer passes" -- G set --feature guards --id H1 \
+  --remedy "回滚 release-2026-10-15;验证用例 c-item-read"
+
+# Ruling something out without saying how sends the next round down the
+# same path.
+expect 0 "add a second candidate" -- G add --feature guards \
+  --claim "数据库连接池耗尽" --case "看连接数"
+expect 1 "ruling out without proof is refused" -- G set --feature guards \
+  --id H2 --status disproven
+contains "disproven-needs-proof" "names the unproven exclusion"
+contains "下一轮会重走这条路" "explains why the reason matters"
+expect 0 "a reason clears it" -- G set --feature guards --id H2 \
+  --note "连接数峰值 12/200,见 logs/pool.log"
+
+# FACTS must name where a service name came from.
+cat > "${TMP}/ops-recall.yaml" <<YAML
+step: classify-recall
+kind: ops.classify
+agent: idev-ops
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: ops
+  must_read: ops/SKILL.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TICKET}/review.md
+    KIND: onboard
+    FACTS: 商品服务的缓存层
+    DOC_DRIFT: 无
+    ASSUMED: 无
+YAML
+expect 1 "a service name from recall is refused" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/ops-recall.yaml"
+contains "facts-sourced" "names the unsourced facts line"
+contains "禁止凭经验编造" "says what is forbidden"
+rm -rf "$RC_REPO2"
+
+say "24 lessons: experience must pass a gate before it is authority"
+
+LS_REPO="$(mktemp -d)"
+git init -q "$LS_REPO" >/dev/null 2>&1 || true
+LS_HOME="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$LS_REPO" --feature lsn --key task 2>/dev/null)"
+mkdir -p "${LS_HOME:?lsn ticket home unresolved}"
+L() {
+  local sub="$1"; shift
+  python3 "${S}/lessons.py" --repo "$LS_REPO" --feature lsn "$sub" "$@"
+}
+
+# Six questions or it is a process log, not decision knowledge.
+expect 2 "refuse a lesson that answers fewer than six questions" -- \
+  L add --scope "库存" --symptom "回写延迟"
+contains "not-when" "names the boundary question"
+contains "过程日志" "says what an incomplete lesson actually is"
+
+expect 0 "accept a complete lesson as a candidate" -- L add \
+  --scope "商品链路/库存回写" --symptom "回写延迟,下游读到旧值" \
+  --evidence "kafka-lag 指标 + 幂等表无新记录" \
+  --action "先核对消息积压与幂等记录,再看消费者" \
+  --outcome "积压在生产侧,消费者正常" \
+  --not-when "消费位点连续推进时不适用"
+contains "candidate" "enters as a candidate"
+contains "候选 ≠ 权威" "says a candidate is not authority"
+
+# A model confirming its own conclusion is not confirmation — the same
+# blacklist that guards signoff.
+expect 2 "refuse an agent confirming its own lesson" -- \
+  L promote --id L1 --by agent --repro logs/r.log
+contains "模型确认自己的结论不叫确认" "says why the agent is refused"
+expect 2 "refuse promotion without a reproduction" -- \
+  L promote --id L1 --by wangwei794 --repro ""
+contains "旁路复现" "requires the lesson was replayed"
+expect 0 "a human plus a reproduction promotes it" -- \
+  L promote --id L1 --by wangwei794 --repro "logs/replay-L1.log"
+contains "authoritative" "reaches authority"
+contains "不是既定答案" "still only advises"
+
+# Recall advises; it must not read as an answer.
+expect 0 "recall returns relevant lessons" -- L recall --scope "库存回写"
+contains "不是答案" "frames lessons as advice"
+contains "不适用于" "always shows the boundary"
+contains "生搬硬套" "names the risk of reusing a conclusion blindly"
+
+expect 0 "add a second, unconfirmed lesson" -- L add --event user-correction \
+  --scope "商品链路/库存回写" --symptom "疑似消费者停滞" \
+  --evidence "位点连续推进" --action "不要判为消费者停滞" \
+  --outcome "实为生产侧突增" --not-when "位点停滞时则确为消费者问题"
+expect 0 "an unconfirmed lesson is marked as such on recall" -- \
+  L recall --scope "库存回写"
+contains "未经人确认" "marks the candidate as unconfirmed"
+contains "待验假设" "says to treat it as a hypothesis"
+
+expect 0 "the ledger is clean" -- L check
+
+# The gate is re-checked on read: editing the file by hand must not be able
+# to smuggle a lesson into authority.
+python3 - "$LS_HOME" <<'PYX'
+import pathlib, sys
+sys.path.insert(0, "scripts/lib")
+import safeyaml
+p = pathlib.Path(sys.argv[1]) / "lessons.yaml"
+d = safeyaml.mapping(p)
+d["lessons"][1]["status"] = "authoritative"
+p.write_text(safeyaml.dump(d), encoding="utf-8")
+PYX
+expect 1 "catch a hand-edited promotion" -- L check
+contains "入库门禁被绕过了" "says the gate was bypassed"
+contains "没复现过不算验证" "names the missing reproduction"
+
+expect 2 "retire needs a reason" -- L retire --id L1 --why ""
+expect 0 "retire with a reason" -- L retire --id L1 --why "错误码已重构,该路径不存在"
+expect 0 "a retired lesson drops out of recall" -- L recall --scope "库存回写" --no-count
+LS_OUT="$(L recall --scope "库存回写" --no-count 2>&1)"
+if printf '%s' "$LS_OUT" | grep -q "L1"; then
+  bad "a retired lesson is still being recalled"
+else
+  ok "retired lessons are not recalled"
+fi
+
+expect 0 "schema documents the six questions" -- \
+  python3 "${S}/lessons.py" schema
+contains "何时不适用" "the schema explains the boundary question"
+rm -rf "$LS_REPO"
+
+say "25 the check index must not drift from the code"
+
+# Each definition carries a table of what delegation.py checks. A table
+# nobody verifies becomes a promise the code does not keep — and the agent
+# believes the table.
+IDX_DIR="$(mktemp -d)"
+cp "${REPO}/agents"/*.md "$IDX_DIR/"
+expect 0 "the shipped definitions agree with the code" -- \
+  python3 "${S}/agents-check.py" --agents-dir "$IDX_DIR"
+
+python3 - "$IDX_DIR" <<'PYX'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]) / "idev-ops.md"
+t = p.read_text(encoding="utf-8")
+t = t.replace("| `artifact-verified` |", "| `totally-made-up` | 编造的 |\n| `artifact-verified` |", 1)
+p.write_text(t, encoding="utf-8")
+PYX
+expect 1 "catch a check the code never emits" -- \
+  python3 "${S}/agents-check.py" --agents-dir "$IDX_DIR"
+contains "totally-made-up" "names the invented check"
+contains "drifted" "says the table drifted"
+rm -rf "$IDX_DIR"
 
 printf '\n== result\n'
 printf '  pass %d   fail %d\n' "$PASS" "$FAIL"

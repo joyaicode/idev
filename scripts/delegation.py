@@ -156,6 +156,13 @@ ASSUMED_LINE = re.compile(r"(?mi)^\s*ASSUMED:\s*(.+?)\s*$")
 # ops: 认产物不能只是声明。A feature defect sends the ticket back to deliver,
 # and that is only sound if the symptom was confirmed against *that* build.
 ARTIFACT_LINE = re.compile(r"(?mi)^\s*ARTIFACT:\s*(MATCH|AHEAD|UNKNOWN)\b")
+# 服务名必须有来源: from the topology, a tool result, or the user — never
+# from recall. A name produced from memory is the first link in a chain of
+# reasoning about a service that may not exist.
+SOURCED = re.compile(
+    r"(?i)codegraph|拓扑|topology|工具返回|tool\s*result|用户(?:输入|提供)|"
+    r"源码|source|[\w./-]+\.\w+:\d+|日志|\.log\b|监控|metric|trace|"
+    r"git\s|配置|\.ya?ml\b|artifact-match")
 # A declaration of "nothing", which is a valid answer for every one of these.
 NONE_VALUE = re.compile(r"(?i)^\s*(?:无|none|-|n/?a|不适用|0)\s*(?:[(（].*)?$")
 # file.ext:symbol — the anchor granularity. "changed service.py" carries no
@@ -187,6 +194,15 @@ def check_accuracy(record: dict) -> dict[str, str]:
         # Saying "I assumed X" costs one line and saves the conductor from
         # re-verifying the whole report. Writing 无 counts as declaring.
         out["assumption-declared"] = "PASS" if ASSUMED_LINE.search(raw) else "FAIL:no ASSUMED line"
+
+    if agent in kind_agents.FACTS_AGENTS:
+        # A FACTS line that names no source kind is indistinguishable from
+        # recall. 「禁止凭经验编造」 only bites if the source is stated.
+        fm = FACTS_LINE.search(raw)
+        if fm and not SOURCED.search(fm.group(1)):
+            out["facts-sourced"] = (
+                "FAIL:FACTS 没点名来源 —— 服务名/符号名只能来自拓扑(codegraph)、"
+                "工具返回、源码或用户输入,禁止凭经验编造")
 
     if agent == "idev-ops" and kind == "ops.classify":
         # Only for kind=feature: onboard/runtime are handed off, and patrol

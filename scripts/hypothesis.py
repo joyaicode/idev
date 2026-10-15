@@ -71,6 +71,31 @@ TIER_WHY = {
 }
 # A file:line reference is what "code tier" means in practice.
 CODE_REF = re.compile(r"[\w./-]+\.\w+:\d+")
+
+# 关键判断至少双证据: one signal can only be marked 待验证. Two *independent*
+# kinds corroborating each other is what makes a conclusion checkable —
+# error log with monitoring, code path with a config change.
+EVIDENCE_KINDS = {
+    "code": re.compile(r"[\w./-]+\.\w+:\d+"),
+    "log": re.compile(r"(?i)\.log\b|logs?/|日志|stderr|stdout"),
+    "metric": re.compile(r"(?i)监控|metric|grafana|dashboard|qps|latency|p99"),
+    "trace": re.compile(r"(?i)trace|调用链|span|traceid"),
+    "config": re.compile(r"(?i)\.ya?ml\b|\.properties\b|\.conf\b|配置|config"),
+    "change": re.compile(r"(?i)发布|变更|deploy|release|commit\s*[0-9a-f]{7}|回滚"),
+    "repro": re.compile(r"(?i)用例|case|复现|repro|test"),
+}
+# 调用链必须穿透: a service that merely reports an error is usually relaying
+# someone else's failure. The root cause has to bottom out somewhere that
+# cannot pass the blame on.
+TERMINAL = re.compile(
+    r"(?i)数据库|database|\bdb\b|mysql|redis|缓存|cache|kafka|消息|mq|"
+    r"第三方|third[- ]party|外部依赖|upstream\s*api|业务输入|入参|配置项|"
+    r"磁盘|disk|内存|oom|网络|network|dns")
+# Anchoring at line start missed the common Chinese form 「商品服务」 —
+# which is exactly the case this check exists for.
+MIDDLE_ONLY = re.compile(
+    r"(?i)[\w.-]*(?:service|svc|gateway)\b|\bapi\b|"
+    r"[一-鿿]{1,6}服务|网关|中台|接口层|上游服务")
 STATUS = ("open", "proven", "disproven")
 
 
@@ -131,6 +156,13 @@ def cmd_add(args: argparse.Namespace) -> int:
         # 影响范围: the cases that prove the fix did not break anything else.
         # evidence.md step 4 class 2 — the one that gets skipped.
         "blast": {"baseline": [], "guard": []},
+        # 时间窗必须可追溯: only from when the problem happened, when the
+        # alert fired, or when the data last changed — never widened to
+        # whatever makes the story work.
+        "window": {"from": "", "to": "", "source": ""},
+        # 根因报告先回答三问,再展开证据链。
+        "impact": "",
+        "remedy": "",
         "at": now(),
     }
     data["items"].append(item)
@@ -158,6 +190,18 @@ def cmd_set(args: argparse.Namespace) -> int:
         item["status"] = args.status
     if getattr(args, "note", None):
         item["note"] = args.note
+    for field in ("impact", "remedy"):
+        val = getattr(args, field, None)
+        if val:
+            item[field] = val
+    if getattr(args, "window", None) or getattr(args, "window_source", None):
+        win = item.get("window") if isinstance(item.get("window"), dict) else {}
+        if getattr(args, "window", None):
+            lo, _, hi = str(args.window).partition("..")
+            win["from"], win["to"] = lo.strip(), hi.strip()
+        if getattr(args, "window_source", None):
+            win["source"] = args.window_source
+        item["window"] = win
     item["at"] = now()
     save(path, data)
     rc = check(data, verbose=False)
@@ -189,6 +233,17 @@ def cmd_list(args: argparse.Namespace) -> int:
         if item.get("case"):
             print(f"      case: {item['case']}")
     return 0
+
+
+def kinds_of(evidence: list) -> set[str]:
+    """Which independent evidence kinds this item rests on."""
+    out: set[str] = set()
+    for e in evidence:
+        s = str(e)
+        for kind, rx in EVIDENCE_KINDS.items():
+            if rx.search(s):
+                out.add(kind)
+    return out
 
 
 def tier_of(evidence: list) -> str:
@@ -241,6 +296,40 @@ def check(data: dict, verbose: bool = True) -> int:
                         f"{hid}: proven-needs-code-evidence — 证据最强只到 {tier} "
                         f"({TIER_WHY.get(tier, tier)});根因要有 file:line 级的"
                         "代码逻辑解释机制,否则只是「现象发生过」")
+            # 关键判断至少双证据. One signal is 待验证, not proven: a log line
+            # and a code path corroborating each other is checkable; either
+            # one alone is a story that happens to fit.
+            kinds = kinds_of(evidence)
+            if len(kinds) < 2:
+                errors.append(
+                    f"{hid}: proven-needs-two-sources — 证据只有 "
+                    f"{'/'.join(sorted(kinds)) or '一类'} 一类。"
+                    "关键判断至少要两类**互相印证**的证据(错误日志 × 监控异常、"
+                    "代码路径 × 配置变更……);单一信号只能标 open")
+            # 调用链必须穿透: a middle service relaying someone else's error
+            # is the most common wrong answer in a distributed system.
+            claim = str(item.get("claim", ""))
+            if not TERMINAL.search(claim) and MIDDLE_ONLY.search(claim):
+                warns.append(
+                    f"{hid}: root-cause-not-terminal — 根因落在一个中间服务上,"
+                    "而它报错往往只是在转述上游的失败。原则上要追到数据库 / 缓存 / "
+                    "消息 / 第三方 / 明确的业务输入异常;中间服务不能作为唯一根因。"
+                    "确实到底了就在 claim 里写明是哪一类终端原因")
+            # 时间窗可追溯: an unsourced window is how unrelated evidence
+            # gets swept in.
+            win = item.get("window") if isinstance(item.get("window"), dict) else {}
+            if (win.get("from") or win.get("to")) and not str(win.get("source") or "").strip():
+                errors.append(
+                    f"{hid}: window-without-source — 写了时间窗却没写来源。"
+                    "时间窗只能来自问题发生时间 / 告警时间 / 数据更新时间,"
+                    "随意扩大会把无关证据卷进来")
+            # 根因报告三问: 根因是什么 / 影响是什么 / 建议怎么做。
+            for field, q in (("impact", "影响是什么(影响范围、异常时间窗、受影响业务或数据)"),
+                             ("remedy", "建议怎么做(修复建议、验证方式、回滚或止损动作)")):
+                if not str(item.get(field) or "").strip():
+                    errors.append(
+                        f"{hid}: report-missing-{field} — 根因报告要先回答三问,"
+                        f"缺「{q}」。只说根因是什么,拿到它的人不知道下一步做什么")
             # 影响范围: a proven root cause is about to be fixed. Without a
             # guard case, nobody knows whether the fix broke a neighbour.
             blast = item.get("blast") if isinstance(item.get("blast"), dict) else {}
@@ -253,6 +342,20 @@ def check(data: dict, verbose: bool = True) -> int:
         for path in evidence:
             if not Path(str(path)).exists():
                 warns.append(f"{hid}: evidence path not found: {path}")
+
+    # 排除也要举证. A ruled-out candidate with no reason sends the next
+    # round down the same path — the record exists to stop exactly that.
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("status")) == "disproven":
+            why = str(item.get("note") or "").strip()
+            ev = safeyaml.as_list(item.get("evidence"))
+            if not why and not ev:
+                errors.append(
+                    f"{item.get('id')}: disproven-needs-proof — 标了已排除但没有依据。"
+                    "排除也要举证:写 --note 说明怎么排除的,或挂上证据路径。"
+                    "没有依据的排除,下一轮会重走这条路")
 
     # 穷举候选: 「论证可能引起问题的所有原因」. One proven item with no
     # disproven siblings means either nothing else was considered, or the
@@ -388,6 +491,10 @@ def main() -> int:
     p.add_argument("--repro", choices=REPRO)
     p.add_argument("--status", choices=STATUS)
     p.add_argument("--note", help="disproven 时写排除依据,否则下一轮会重走这条路")
+    p.add_argument("--impact", help="影响范围 / 异常时间窗 / 受影响业务(根因报告三问之二)")
+    p.add_argument("--remedy", help="修复建议 / 验证方式 / 回滚动作(根因报告三问之三)")
+    p.add_argument("--window", help="时间窗,格式 <from>..<to>")
+    p.add_argument("--window-source", help="时间窗来自哪:问题发生 / 告警 / 数据更新时间")
     p.set_defaults(fn=cmd_set)
 
     p = sub.add_parser("list", help="list hypotheses")

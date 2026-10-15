@@ -58,6 +58,11 @@ python3 $IDEV/scripts/hypothesis.py check --feature <f>
 | `proven-needs-evidence` | 证成却无证据路径 |
 | `proven-needs-code-evidence` | 证据最强只到 `log`/`doc` —— **根因要有 `file:line` 解释机制** |
 | `proven-needs-blast-radius` | 证成却没有 `blast.guard` 用例 |
+| `proven-needs-two-sources` | 证据只有一类 —— **关键判断至少双证据**(日志 × 监控、代码 × 变更) |
+| `window-without-source` | 写了时间窗却没写来源(只能来自问题发生 / 告警 / 数据更新时间) |
+| `root-cause-not-terminal` | 根因落在中间服务上 —— 它报错常是在转述上游,要穿透到 DB / 缓存 / 消息 / 第三方 / 业务输入 |
+| `disproven-needs-proof` | 排除了却没写依据 —— 下一轮会重走这条路 |
+| `report-missing-impact` / `-remedy` | 根因报告要先答三问:根因是什么 / 影响是什么 / 建议怎么做 |
 | `case-before-next` | 有 open 且无用例的假设,却已往下加新假设 |
 
 **穷举候选:** 想到的可能原因都 `add` 进来,排除的标 `disproven` 并写 `--note` 排除依据。
@@ -156,6 +161,25 @@ python3 $IDEV/scripts/failure_signature.py check --feature <f>
 15. 不要把接入登录/PIN/CORS 当 feature 缺陷去改业务;不要把集群 ISR / raft / 磁盘当控制台 bug。
 16. **编号只认一处**:`P`/`C`/`R` 认 `coding.md`;`T`/`A`/`F` 认 `canon.md`。
 17. 只测主路径、不测影响面、口头推理当验收 = 禁止。
+
+
+## 机检一览(回报缺这些字段会被打回)
+
+`delegation.py` 在收你的回报时跑这些检查。**它们查的是字段在不在、边界越没越**,
+不查你做得对不对 —— 后者靠人与 grill。
+
+| 检查 | 不通过意味着 |
+|---|---|
+| `evidence-present` | EVIDENCE 路径不存在 —— 证据要能被别人打开 |
+| `no-signoff-write` | 声称写了 sealed/accepted/aligned/resolved —— 签字权不在你这 |
+| `facts-first` | FACTS 没有第一手来源(codegraph / 源码 / 命令 / git) |
+| `drift-declared` | 没有 DOC_DRIFT 行 —— 文档与代码不符要说出来 |
+| `facts-sourced` | FACTS 没点名来源种类 —— 服务名不能凭经验编造 |
+| `assumption-declared` | 没有 ASSUMED 行 —— 没验的前提要浮出来 |
+| `artifact-verified` | kind=feature 却没有 ARTIFACT 行 —— 没确认产物与源码同源 |
+
+每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
+字段缺了会被打回重做,比写错更费时间。
 
 ## 回报格式
 
@@ -278,3 +302,82 @@ python3 $IDEV/scripts/stage-gate.py --feature <f> --stage ops
 特征缺陷要回退 deliver,而回退的前提是确认现象出在**那一份**代码上。
 
 [references/boost.md](../references/boost.md) 第零节。
+
+## 六条强约束(机检)
+
+> 根因分析最危险的不是「没有答案」,而是**「给出一个听起来合理但无法验证的答案」**。
+
+| 约束 | 怎么满足 |
+|---|---|
+| 服务名必须有来源 | `FACTS:` 点名来自拓扑(codegraph)/ 工具返回 / 源码 / 用户输入。**禁止凭经验编造** |
+| 时间窗必须可追溯 | `--window ... --window-source "告警时间"`。随意扩大会把无关证据卷进来 |
+| 调用链必须穿透 | 追到 DB / 缓存 / 消息 / 第三方 / 业务输入异常。**中间服务不能作为唯一根因** |
+| 关键判断至少双证据 | 两类互相印证:日志 × 监控、代码路径 × 配置变更。单一信号只能标 `open` |
+| 快照不等于根因 | `proven` 要有 `file:line` 解释机制 —— 日志只证明现象发生过 |
+| 排除也要举证 | `disproven` 写 `--note` 说明怎么排除的 |
+
+根因报告先回答三问,再展开证据链:
+
+```bash
+python3 $IDEV/scripts/hypothesis.py set --feature <f> --id H1 \
+  --impact "影响范围 / 异常时间窗 / 受影响业务" \
+  --remedy "修复建议 / 验证方式 / 回滚或止损动作"
+```
+
+**只说根因是什么,拿到它的人不知道下一步做什么。**
+
+### 排查怎么走
+
+不按固定 SOP 逐项检查,**以系统拓扑为地图,围绕异常入口自主规划**:
+
+1. **广度扫描,先缩圈** —— 按现象 + 数据标识识别入口节点与上下游候选,
+   快速排除明显无关的
+2. **定向深挖,再穿透** —— 对高嫌疑节点查日志 / 监控 / 代码路径 / 配置 / 发布变更,
+   沿调用链向下游穿透
+
+关键价值不在流程,而在:**不预设问题一定落在某个检查项里,而是按证据不断调整搜索空间**。
+
+全文:[references/rootcause-guards.md](../references/rootcause-guards.md)。
+
+## 排查完:把经验沉淀成候选(不是直接入库)
+
+一次排查里值得记的不只是「根因是什么」,还有:**哪些判断被验证、哪些路径被排除、
+哪些动作失败了、人纠正了什么、哪些既有知识已过时**。
+
+```bash
+python3 $IDEV/scripts/lessons.py add --feature <f> --event <类型> \
+  --scope "<系统/业务域>" --symptom "<现象>" --evidence "<依据>" \
+  --action "<动作>" --outcome "<结果>" --not-when "<何时不适用>"
+```
+
+六问缺一条就不收 —— **六问不全的不是决策知识,是过程日志**,记了也不敢复用。
+其中 `not_when` 最常被跳过,而它正是边界:**没有边界的经验会被用在它不成立的地方,
+那就是一条正确经验变成错误经验的方式。**
+
+事件类型按复用价值:
+
+| 类型 | 为什么记 |
+|---|---|
+| `user-correction` | 人纠正了 Agent 的结论 —— **最该记的一类** |
+| `verified` | 判断被证实,复用价值最高 |
+| `ruled-out` | 路径被排除,省下一次重走 |
+| `failed-action` | 动作失败过,防止再试 |
+| `stale-knowledge` | 既有知识过时 —— 记下来是为了让它被清掉 |
+
+### 入库门禁:候选 ≠ 权威
+
+新记的一律是 `candidate`,**没有参数能直接写成权威**。要升级需要两样:
+
+```bash
+python3 $IDEV/scripts/lessons.py promote --id L1 \
+  --by <确认的人> --repro <旁路复现的证据路径>
+```
+
+- `--by` 不能是 `agent`/`ai`/`cursor`/`assistant`(与签字同一条黑名单)——
+  **模型确认自己的结论不叫确认**
+- `--repro` 必填 —— 旁路复现过,不是只凭印象
+
+**为什么卡这道门:** 错误结论一旦入库,会被后续分析反复引用 ——
+一次局部偏差就演变成系统性偏差。这和 `baseline` 不许 agent 自己 unseal 是同一个道理。
+
+知识过时就 `retire --why <为什么>`。不清的话,下一轮会把它读成当前有效。

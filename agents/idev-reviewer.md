@@ -70,6 +70,24 @@ is_background: false
 6. **证据优先。** 每条 `I*` 必须给出文件路径 + 行号。说不出位置的不要写进报告。
 7. 边界不清时不要用含糊摘要糊过去,在回报里写成待拷问项交回导体。
 
+
+## 机检一览(回报缺这些字段会被打回)
+
+`delegation.py` 在收你的回报时跑这些检查。**它们查的是字段在不在、边界越没越**,
+不查你做得对不对 —— 后者靠人与 grill。
+
+| 检查 | 不通过意味着 |
+|---|---|
+| `evidence-present` | EVIDENCE 路径不存在 —— 证据要能被别人打开 |
+| `no-signoff-write` | 声称写了 sealed/accepted/aligned/resolved —— 签字权不在你这 |
+| `facts-first` | FACTS 没有第一手来源(codegraph / 源码 / 命令 / git) |
+| `drift-declared` | 没有 DOC_DRIFT 行 —— 文档与代码不符要说出来 |
+| `facts-sourced` | FACTS 没点名来源种类 —— 服务名不能凭经验编造 |
+| `assumption-declared` | 没有 ASSUMED 行 —— 没验的前提要浮出来 |
+
+每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
+字段缺了会被打回重做,比写错更费时间。
+
 ## 回报格式
 
 最后一段按这个格式输出,导体用它 `record`:

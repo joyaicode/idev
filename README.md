@@ -33,10 +33,13 @@
 | `scripts/workflow.py` | 按配方驱动 `run.yaml`，`next` 打印 `OPEN` 落点页 + `DELEGATE` 派给谁 |
 | `scripts/lib/kind_agents.py` | `kind → agent` 登记表（29 kinds / 5 agents，24 委派 / 5 导体保留） |
 | `references/feedback-loop.md` | 双向反馈环：下游质疑上游 · 订正后全线对准 · 交付后跟进 |
+| `scripts/lessons.py` | 经验台账：六问必答 · 候选→人确认+复现→权威 · 召回只给建议 |
+| `references/rootcause-guards.md` | 根因六条强约束：来源/时间窗/穿透/双证据/快照/排除举证 |
 | `scripts/artifact-match.py` | 运维:产物与源码是否同源（MATCH/AHEAD/UNKNOWN） |
 | `scripts/realign.py` | 需求订正后查七类漂移，给出向前的重做顺序 |
 | `scripts/ui-evolve.py` | 编写阶段查剧本状态冲突，提 branch / reorder 方案（不改文件） |
 | `scripts/ui-playbook.py` | UI 剧本生命周期：create→read→change→restore→cleanup，实体打标 |
+| `scripts/req-ground.py` | 密封前把需求落到既有代码：落点/影响面/冲突/边界/方向 + 竞品对比 |
 | `scripts/ui-spec.py` | 需求细到交互层：校验 `ui` 规则，生成 json-render spec + 零依赖预览 |
 | `scripts/stage-gate.py` | 七视角把关：experts.md 拒过清单里可机检的 21 条 |
 | `scripts/delegation.py` | 委派留痕：write / check / replay / timeline / eval |

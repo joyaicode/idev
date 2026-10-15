@@ -57,6 +57,38 @@ S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none`
 [references/boost.md](references/boost.md)；待办与验证状态
 [references/agents-todo.md](references/agents-todo.md)。
 
+## 根因分析:六条强约束
+
+> 最危险的不是「没有答案」，而是**「给出一个听起来合理但无法验证的答案」**。
+
+| 约束 | 挡什么 |
+|---|---|
+| 服务名必须有来源 | 凭记忆说出一个服务名，再围绕它推理一整轮 —— 而它可能不存在 |
+| 时间窗必须可追溯 | 把范围放宽到「正好能解释现象」，无关证据就卷进来了 |
+| 调用链必须穿透 | 把中间服务的报错当根因 —— 它常是在转述上游的失败 |
+| 关键判断至少双证据 | 单一信号配一个说得通的故事 |
+| 快照不等于根因 | 现象发生过 ≠ 解释了为什么 |
+| 排除也要举证 | 排除了没写依据，下一轮重走同一条路 |
+
+根因报告先回答三问：**根因是什么 / 影响是什么 / 建议怎么做**，再展开证据链。
+经验沉淀走「候选 → 旁路复现 → 人工确认 → 入库」—— 错误结论一旦入库会被反复引用。
+
+全文 [references/rootcause-guards.md](references/rootcause-guards.md)。
+
+### 经验沉淀:候选 ≠ 权威
+
+```bash
+python3 scripts/lessons.py recall --scope <域> --symptom <现象>  # 排查前召回
+python3 scripts/lessons.py add --feature <f> ...                 # 记成候选（六问必答）
+python3 scripts/lessons.py promote --id L1 --by <人> --repro <复现>  # 确认后入库
+```
+
+六问：范围 · 现象 · 证据 · 动作 · 结果 · **何时不适用**（最常被跳过，而它正是边界）。
+新记的一律是候选，**没有参数能直接写成权威**；升级要人确认 + 旁路复现，
+`--by` 不能是 `agent`/`ai`（与签字同一条黑名单）。手工改文件绕过门禁会被 `check` 识破。
+
+召回给的是**建议与约束，不是答案** —— 一条短路掉证据链的经验，比没有经验更糟。
+
 ## 运维:先确认源码就是跑着的那一份
 
 排障最该先问的不是「代码怎么写的」，是**「我读的代码是不是线上跑的那一份」**。
@@ -93,6 +125,27 @@ python3 scripts/realign.py --feature <f> --plan   # 按什么顺序重做
 改**关口**（而不是只修这一张票）。
 
 全环：[references/feedback-loop.md](references/feedback-loop.md)。
+
+## 需求要落到这个工程上(密封前)
+
+**需求不能脱离代码谈。** 基线一密封就是尺，而影响面评估原本要到 `arch` 才做 ——
+那时发现和存量逻辑冲突，只能 `reopen`：`revision + 1`，旧 slice / case **全部作废**。
+读代码一小时，发现晚了一整轮。所以前移。
+
+每条 item 的 `grounding`：`touches`（落在哪些 `file:symbol`）· `impact`（谁被波及，
+`codegraph_impact --depth 1` 提名）· `conflicts`（与存量哪里相悖）· `boundary`
+（**明确不做什么** —— 后面「为『更好』扩大范围」的闸）· `direction`（与哪条 ADR 的关系）。
+市场驱动的再加 `comparison`：竞品怎么做、我们哪里**有意**不同、为什么。
+
+**冲突和竞品差异必须挂 grill 问句** —— `experts.md`：「和已锁契约冲突却不写进问题」
+是拒过项。拷问到所有细节明确无疑，这是和人的对话，不是填字段。
+
+```bash
+python3 scripts/req-ground.py --feature <f> --probe  # 要读什么
+python3 scripts/req-ground.py --feature <f>          # 校验落地
+```
+
+验收标准同样在这一格定死（`stage-gate` 查主观词与可量化指标），后续所有阶段以它为准。
 
 ## 需求细到交互层(界面类需求)
 

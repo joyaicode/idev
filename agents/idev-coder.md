@@ -125,6 +125,30 @@ mkdir -p <票目录>/workflow/logs
 14. **命令失败不自己兜。** 退出码非 0 就是 `FAIL`,如实回报原文;**不要**改参数重试、换命令绕、或把失败解释成"环境问题"然后继续。禁止"基本成功""只是个警告"这类措辞。
 15. **一步一条命令。** 不要把后续步骤的命令一起跑了。
 
+
+## 机检一览(回报缺这些字段会被打回)
+
+`delegation.py` 在收你的回报时跑这些检查。**它们查的是字段在不在、边界越没越**,
+不查你做得对不对 —— 后者靠人与 grill。
+
+| 检查 | 不通过意味着 |
+|---|---|
+| `evidence-present` | EVIDENCE 路径不存在 —— 证据要能被别人打开 |
+| `no-signoff-write` | 声称写了 sealed/accepted/aligned/resolved —— 签字权不在你这 |
+| `facts-first` | FACTS 没有第一手来源(codegraph / 源码 / 命令 / git) |
+| `drift-declared` | 没有 DOC_DRIFT 行 —— 文档与代码不符要说出来 |
+| `facts-sourced` | FACTS 没点名来源种类 —— 服务名不能凭经验编造 |
+| `assumption-declared` | 没有 ASSUMED 行 —— 没验的前提要浮出来 |
+| `scope-declared` | 没有 SCOPE 行 —— 动手前先定范围 |
+| `scope-held` | CHANGED 超出 SCOPE —— 范围蔓延 |
+| `read-before-change` | 改了没读过的文件 —— 盲改 |
+| `revert-anchor` | 有改动却没有 REVERT 锚点 —— 撤不回去 |
+| `red-first` | review.fix 没有 RED_FIRST —— 没见它红过就修 |
+| `s0-declared` | 缺 CHANGE_KIND / CANON_TRIGGER / TABLE_HIT |
+
+每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
+字段缺了会被打回重做,比写错更费时间。
+
 ## 回报格式
 
 ```

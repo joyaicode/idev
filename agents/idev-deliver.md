@@ -71,6 +71,11 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
      python3 $IDEV/scripts/ui-spec.py --schema                      # 看格式
      python3 $IDEV/scripts/ui-spec.py --feature <f>                 # 校验 + 生成
      ```
+     **密封前先把需求落到既有代码上**(否则影响面要到 arch 才发现,那时只能 reopen):
+     ```bash
+     python3 $IDEV/scripts/req-ground.py --feature <f> --probe   # 要读什么
+     python3 $IDEV/scripts/req-ground.py --feature <f>           # 校验落地
+     ```
      产出 `<票目录>/ui/<f>.spec.json`(json-render flat 格式)与同名 `.html`
      (零依赖预览,浏览器直接打开)
    - **`req`** — 只把密封 item 译成 slices,**不增不减**。译不清进 `open_questions`(只问理解);
@@ -120,6 +125,20 @@ shared_understanding: true
 13. **禁止 `.scratch/`。** 已写在 `.idev/task/` 或 `.idev/docs/` 的票不是执行残留,清理时不删。
 14. 结构检查 FAIL 仍请签 = 拒过。
 15. `setup-agents-docs` 的一次性安装不是每张票的步骤 —— 只有人明确要初始化时才做。
+
+
+## 机检一览(回报缺这些字段会被打回)
+
+`delegation.py` 在收你的回报时跑这些检查。**它们查的是字段在不在、边界越没越**,
+不查你做得对不对 —— 后者靠人与 grill。
+
+| 检查 | 不通过意味着 |
+|---|---|
+| `evidence-present` | EVIDENCE 路径不存在 —— 证据要能被别人打开 |
+| `no-signoff-write` | 声称写了 sealed/accepted/aligned/resolved —— 签字权不在你这 |
+
+每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
+字段缺了会被打回重做,比写错更费时间。
 
 ## 回报格式
 
@@ -205,3 +224,44 @@ catalog 映射到既有组件库)和 `.html`(零依赖预览,评审时直接打�
 
 `stage-gate` 的 `ui-not-specified` 会对看起来是界面需求却没有 `ui` 块的 item 报错。
 纯后端需求不受此约束。
+
+## 需求要落到这个工程上(密封前)
+
+**需求不能脱离代码谈。** 基线一旦密封就是尺,而影响面评估原本要到 `arch` 才做
+(`experts.md`: `codegraph_impact --depth 1`)—— 那时发现和存量逻辑冲突,
+只能 `reopen`:`revision + 1`,旧 slice / case **全部作废**。
+
+读代码的成本是一小时,发现晚了的成本是一整轮。所以前移到密封之前。
+
+每条 item 的 `grounding` 块回答四件事:
+
+| 字段 | 问的是 |
+|---|---|
+| `touches` | 它落在哪些既有 `file:symbol` 上(`codegraph_context` 找) |
+| `impact` | 谁会被波及(`codegraph_impact <符号> --depth 1` 提名调用方) |
+| `conflicts` | 和存量逻辑哪里相悖 —— **必须挂一条 grill 问句** |
+| `boundary` | **明确不做什么**。它是后面「为『更好』扩大范围」的那道闸 |
+| `direction` | 和产品当前演进方向什么关系、和哪条 ADR 一致 |
+
+市场驱动的需求再加 `comparison`:竞品怎么做、我们哪里**有意**不同、为什么。
+**差异大就要拷问** —— 和竞品相悖的决定要和人谈到明确,不是单方面记下来。
+
+### 冲突不是记一笔就过去
+
+`experts.md` 原文:「和已锁契约冲突却不写进问题」是**拒过项**。
+
+所以 `conflicts[].grill` 和 `comparison.grill` 必填,且要在 `grill.md` 里真有那条问句
+(挂一个不存在的编号会被查出来)。**拷问到所有细节明确无疑为止**,这是和人的对话,
+不是填个字段。
+
+```bash
+python3 $IDEV/scripts/req-ground.py --schema     # 格式
+python3 $IDEV/scripts/req-ground.py --feature <f> --probe   # 要跑哪些 codegraph
+python3 $IDEV/scripts/req-ground.py --feature <f>           # 校验
+```
+
+**落地了 ≠ 读对了。** 机检只查功课交了没;读得对不对、对比公不公平、
+方向判断成不成立 —— 那是 grill 和人的事。
+
+验收标准同样在这一格定死:`stage-gate` 查「含主观词」「无可量化指标」,
+后续所有阶段以它为准(`deliver-schema.md`: 验收尺是基线)。

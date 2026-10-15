@@ -34,6 +34,7 @@ script imports them rather than keeping a second copy that would drift.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -176,6 +177,21 @@ def check_files(agent_dir: Path, strict_roster: bool, errors: list[str], warns: 
                     )
         # agent-accuracy.md: the guards are only real if the field is in
         # the report format — delegation.py cannot check a line nobody emits.
+        # The 机检一览 table is a second place that names checks. Left
+        # unverified it drifts, and a definition promising a check nobody
+        # runs is worse than no table — the agent believes it.
+        section = ""
+        m = re.search(r"(?s)##\s*机检一览.*?(?=\n##\s|\Z)", body)
+        if m:
+            section = m.group(0)
+        table = re.findall(r"(?m)^\|\s*`([a-z0-9-]+)`\s*\|", section)
+        if table:
+            unknown = sorted(set(table) - emitted_checks())
+            if unknown:
+                errors.append(
+                    f"{path.name}: 机检一览 names {', '.join(unknown)}, "
+                    "which delegation.py never emits — the table drifted")
+
         if name in kind_agents.FACTS_AGENTS and "ASSUMED:" not in body:
             errors.append(
                 f"{path.name}: no ASSUMED: line; delegation.py checks assumption-declared"
@@ -210,6 +226,17 @@ def check_files(agent_dir: Path, strict_roster: bool, errors: list[str], warns: 
             for needed in TOOL_NEEDS.get(name, ()):
                 if needed not in tools:
                     errors.append(f"{path.name}: needs {needed} to run the boost scripts, but tools omits it")
+
+
+def emitted_checks() -> set[str]:
+    """Check names delegation.py can produce, read from its source.
+
+    Reading the strings rather than importing keeps this honest if the
+    checks move between functions: what matters is that the name exists
+    somewhere delegation.py assigns it.
+    """
+    src = (REPO / "scripts" / "delegation.py").read_text(encoding="utf-8")
+    return set(re.findall(r"""(?:checks|out)\[["\']([a-z0-9-]+)["\']\]""", src))
 
 
 def main() -> int:

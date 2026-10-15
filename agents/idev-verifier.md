@@ -118,6 +118,24 @@ mkdir -p <票目录>/workflow/logs
 14. **环境与扫描步骤不改产品代码。** 启停服务、扫 inventory、锁覆盖都只跑命令;要改代码是 `idev-coder` 的事。
 15. **不做计划外的生产写操作。** 不重启生产、不 failover、不 `kubectl patch`、不建告警屏蔽。
 
+
+## 机检一览(回报缺这些字段会被打回)
+
+`delegation.py` 在收你的回报时跑这些检查。**它们查的是字段在不在、边界越没越**,
+不查你做得对不对 —— 后者靠人与 grill。
+
+| 检查 | 不通过意味着 |
+|---|---|
+| `evidence-present` | EVIDENCE 路径不存在 —— 证据要能被别人打开 |
+| `no-signoff-write` | 声称写了 sealed/accepted/aligned/resolved —— 签字权不在你这 |
+| `facts-first` | FACTS 没有第一手来源(codegraph / 源码 / 命令 / git) |
+| `drift-declared` | 没有 DOC_DRIFT 行 —— 文档与代码不符要说出来 |
+| `facts-sourced` | FACTS 没点名来源种类 —— 服务名不能凭经验编造 |
+| `assumption-declared` | 没有 ASSUMED 行 —— 没验的前提要浮出来 |
+
+每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
+字段缺了会被打回重做,比写错更费时间。
+
 ## 回报格式
 
 ```

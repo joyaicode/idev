@@ -4,7 +4,7 @@
 
 | stage | 身份 | 必须做到 | 拒过（有一条就不能请人 accepted） |
 |-------|------|----------|-----------------------------------|
-| `req-review` | 资深产品 / 领域评审 | 拷问到目标、非目标、边界、细节无 `open` 异议；与 CONTEXT / ADR / 现有契约不打架；goal 有可量化 SMART 指标、验收可证伪（[req-quality.md](req-quality.md)） | 未拷问就请人密封；用猜测补细节；和已锁契约冲突却不写进问题；无一条可证伪 item；`objections` 未清空；验收含主观词（合理/友好/流畅）不可测；用解决方案冒充需求 |
+| `req-review` | 资深产品 / 领域评审 | 拷问到目标、非目标、边界、细节无 `open` 异议；**密封前把需求落到既有代码上**（`grounding`：落点 / 影响面 / 与存量的冲突 / 边界 / 演进方向，见 `scripts/req-ground.py`）；与 CONTEXT / ADR / 现有契约不打架；goal 有可量化 SMART 指标、验收可证伪（[req-quality.md](req-quality.md)） | 未拷问就请人密封；用猜测补细节；和已锁契约冲突却不写进问题；无一条可证伪 item；`objections` 未清空；验收含主观词（合理/友好/流畅）不可测；用解决方案冒充需求 |
 | `req` | 资深分析 | 把**已密封基线**译成 slices，不增不减 must；`slice.must` 原文锁 + [semantic-gate.md](semantic-gate.md)；每条 slice 过 INVEST（[req-quality.md](req-quality.md)） | slice 的 must 对不上 `baseline.items` 原文；新增基线没有的义务；丢掉基线一条 item；`baseline_revision` 对不上；缺上一阶段 `semantic_gate`；故事 > 8 点未拆 |
 | `arch` | 资深架构 | 方案只实现基线；影响面诚实（`codegraph_impact --depth 1` 提名调用方）；用例意图覆盖基线 item；**写明回退**（开关 / 灰度 / 降级） | 方案改写目标/非目标；为「更好」扩大范围；case_intent 不挂 `baseline_item_id`；与现有 SPI / 路由契约重复发明；要改多处却没有 `impact_candidates`；没有回退路径 |
 | `arch`（设计透镜） | 资深设计 | 涉及新领域概念先过 [domain-modeling.md](../../conventions/domain-modeling.md) 建通用语言；对外契约（API / 事件 / 存储结构）先定再实现；命名在票内一致 | 术语在票里前后不一致；契约边界没定就开始写实现；用实现细节命名领域概念；同一概念三处不同叫法 |
@@ -28,7 +28,8 @@ python3 scripts/stage-gate.py --list                   # 各档查什么
 
 | stage | 已机检 |
 |---|---|
-| `req-review` | 验收含主观词 · 验收无可量化指标 · 无验收 · 解决方案冒充需求 · `objections` 未清空 · goal 含主观词 · 界面需求无 `ui` 块 |
+| `req-review` | 验收含主观词 · 验收无可量化指标 · 无验收 · 解决方案冒充需求 · `objections` 未清空 · goal 含主观词 · 界面需求无 `ui` 块 · 已密封却无 `grounding` |
+| `req-review` 的 `grounding` | `touches` 空或没到 `file:symbol` · 冲突没挂 grill 问句 · 挂的问句在 `grill.md` 里不存在 · 无 `boundary` · 无 `direction` · 与竞品有差异却没写 why 或没拷问（`req-ground.py`） |
 | `req-review` 的 `ui` 块 | 缺 screen/intent · 必填字段无 `on_invalid` · action 无 `on_success`/`on_failure` · 缺 `states.loading`/`error` · 写了实现细节(`el-xxx`/class/css) · 含主观词（`ui-spec.py`） |
 | `req` | 故事 > 8 点 · slice 不挂 `baseline_item_id` · 丢掉基线 item |
 | `arch` | `case_intent` 不挂 item · 要改多处却无 `impact_candidates` · 无回退路径 |

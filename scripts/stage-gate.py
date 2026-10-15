@@ -150,6 +150,18 @@ def gate_req_review(home: Path, out: list[Finding]) -> None:
         out.append(Finding("req-review", "open-objections", "baseline.yaml",
                            f"还有 {len(objections)} 条未清空的 objections"))
 
+    # 需求脱离工程谈 = 影响面要到 arch 才发现，那时只能 reopen。
+    # 只在已密封或准备密封时要求：起草中的基线还在收集阶段。
+    if baseline.get("sealed"):
+        ungrounded = [str(i.get("id", "?")) for i in items
+                      if isinstance(i, dict) and not isinstance(i.get("grounding"), dict)]
+        if ungrounded:
+            out.append(Finding(
+                "req-review", "not-grounded", f"items[{', '.join(ungrounded[:4])}]",
+                f"{len(ungrounded)} 条 item 没有 grounding 块 —— 需求没落到既有代码上就密封了。"
+                "影响面原本要到 arch 才评估,那时发现冲突只能 reopen。"
+                "`scripts/req-ground.py --probe` 给出要读什么"))
+
     # 界面类需求没有 ui 规则 = 交互留给实现阶段各自发挥，测试阶段没有尺可量。
     # 只对看起来涉及界面的 item 要求，避免纯后端票被迫编一个 ui 块。
     for item in items:
