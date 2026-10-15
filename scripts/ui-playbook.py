@@ -168,7 +168,9 @@ def check_flow(path: Path, out: list[Finding]) -> None:
         out.append(Finding(
             flow, "phase-order",
             f"阶段顺序是 {' → '.join(seen)}{note},应为 {' → '.join(expected)}。"
-            "读回要在变更之前(否则分不清写没写进去),清理要在最后"))
+            "读回要在变更之前(否则分不清写没写进去),清理要在最后。"
+            "调整 `test.step` / `@phase` 的先后,或把 cleanup 挪进 "
+            "`afterEach`(放那里写在前面也算最后执行)"))
 
     # The entity must be recognisable as test-made.
     if "create" in found and not TAG_RE.search(text):
@@ -183,11 +185,14 @@ def check_flow(path: Path, out: list[Finding]) -> None:
         out.append(Finding(
             flow, "cleanup-not-guaranteed",
             "cleanup 没有放在 afterEach / afterAll / finally 里 —— "
-            "用例中途失败时它不会执行,下一轮继承垃圾"))
+            "用例中途失败时它不会执行,下一轮继承垃圾。"
+            "把删除动作挪进 `test.afterEach(...)`,并用 create 阶段存下的 id"))
 
     if not ASSERT_RE.search(text):
         out.append(Finding(flow, "no-assertion",
-                           "整个 flow 没有任何断言 —— 它只是点了一遍界面"))
+                           "整个 flow 没有任何断言 —— 它只是点了一遍界面。"
+                           "每个阶段至少断言一件可观察的事:create 后断言拿到了 id,"
+                           "read 后断言字段值,change 后断言变化生效"))
 
     # A fixed id is how a flow quietly starts depending on someone's data.
     m = FIXED_ID.search(text)

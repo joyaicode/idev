@@ -48,6 +48,22 @@ import zipfile
 from pathlib import Path
 
 ZIP_SUFFIXES = (".jar", ".war", ".ear", ".zip", ".nar")
+# Paths that cannot be the reason a built artifact behaves differently.
+# Ticket files and docs change constantly; leaving them in the suspect list
+# buries the one file that actually shipped.
+NOT_SHIPPED = re.compile(
+    # Ticket and tooling directories: these are never inside a build.
+    r"(?:^|/)(?:\.idev|\.github|\.vscode|\.idea|\.git)/"
+    # Top-level docs directories and the usual root documents.
+    r"|^docs?/|(?:^|/)(?:README|CHANGELOG|LICENSE|CONTRIBUTING)[^/]*$"
+    # Test trees. A test change cannot alter what the shipped code does.
+    r"|(?:^|/)(?:e2e|src/test|tests?)/"
+    # Lock files record how the build resolved, not what it does.
+    r"|(?:^|/)[\w.-]*lock(?:\.\w+)?$")
+# Deliberately NOT filtered by suffix: src/main/resources/messages.txt and
+# src/config.json DO get packaged. Filtering by extension would hide the
+# real culprit, which is worse than the noise it removes — so only
+# locations that cannot be in a build are dropped.(?:e2e|test|tests|spec)/")
 GIT_PROPS = ("git.properties", "BOOT-INF/classes/git.properties", "WEB-INF/classes/git.properties")
 COMMIT_KEYS = ("git.commit.id.full", "git.commit.id", "git.commit.id.abbrev")
 
@@ -253,11 +269,24 @@ def main() -> int:
                     ["git", "diff", "--name-only", f"{ident.commit}..{head}"], repo)
                 if rc_f == 0 and files:
                     changed = files.splitlines()
-                    detail.append(f"这期间动过 {len(changed)} 个文件;排查时优先怀疑它们:")
-                    for f in changed[:12]:
-                        detail.append(f"    {f}")
-                    if len(changed) > 12:
-                        detail.append(f"    … 另 {len(changed) - 12} 个")
+                    # Only what could actually be inside the artifact. A
+                    # ticket file changing between two builds explains
+                    # nothing about how the running code behaves.
+                    shipped = [f for f in changed if not NOT_SHIPPED.search(f)]
+                    skipped = len(changed) - len(shipped)
+                    if shipped:
+                        detail.append(
+                            f"这期间动过 {len(shipped)} 个会进产物的文件;排查时优先怀疑它们:")
+                        for f in shipped[:12]:
+                            detail.append(f"    {f}")
+                        if len(shipped) > 12:
+                            detail.append(f"    … 另 {len(shipped) - 12} 个")
+                    else:
+                        detail.append(
+                            f"这期间 {len(changed)} 个文件改动都不进产物(票据 / 文档 / 测试)—— "
+                            "产物行为的差异不在源码这一侧,查构建或部署")
+                    if skipped:
+                        detail.append(f"    (另有 {skipped} 个票据 / 文档 / 测试改动,已略去)")
             else:
                 verdict = "AHEAD"
                 detail.append(f"产物的 {short} 不在当前分支的历史里 —— "

@@ -199,6 +199,7 @@ brief:
   repo: ${TMP}
   stage: ops
   must_read: ops/SKILL.md
+  artifact: /tmp/app.jar
   idev_root: ${REPO}
 report: {raw: "STATUS: PASS\nCONCLUSION: no path given\n"}
 YAML
@@ -361,6 +362,7 @@ brief:
   repo: ${TMP}
   stage: ops
   must_read: ops/SKILL.md
+  artifact: /tmp/app.jar
   idev_root: ${REPO}
 report:
   raw: |
@@ -385,6 +387,7 @@ brief:
   repo: ${TMP}
   stage: ops
   must_read: ops/SKILL.md
+  artifact: /tmp/app.jar
   idev_root: ${REPO}
 report:
   raw: |
@@ -536,6 +539,7 @@ brief:
   repo: ${TMP}
   stage: ops
   must_read: ops/SKILL.md
+  artifact: /tmp/app.jar
   idev_root: ${REPO}
 report:
   raw: |
@@ -1418,6 +1422,25 @@ else
     python3 "${S}/artifact-match.py" --artifact "${TMP}/old.jar" --repo "$AM"
   contains "源码比产物新 1 个提交" "counts how far the source moved"
   contains "b.txt" "names the file changed since the build"
+  # The suspect list drops ticket/doc/test paths, but must NOT drop things
+  # that actually get packaged — hiding the real culprit is worse than the
+  # noise. Filtering is by location, never by extension.
+  python3 - <<'PYX'
+import importlib.util, sys, pathlib
+spec = importlib.util.spec_from_file_location("am", "scripts/artifact-match.py")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+cases = [("src/auth/login.py", False), (".idev/task/x/req.yaml", True),
+         ("src/main/resources/messages.txt", False), ("src/config.json", False),
+         ("e2e/flows/a.spec.ts", True), ("docs/guide.md", True),
+         ("package-lock.json", True), ("src/test/java/T.java", True)]
+bad = [f for f, want in cases if bool(m.NOT_SHIPPED.search(f)) != want]
+sys.exit(1 if bad else 0)
+PYX
+  if [ $? -eq 0 ]; then
+    ok "the suspect filter keeps packaged files and drops ticket paths"
+  else
+    bad "the suspect filter misclassifies a path"
+  fi
   contains "不要用当前源码的逻辑解释线上现象" "refuses reasoning from newer source"
 
   # No build identity at all must be UNKNOWN, and UNKNOWN is not a pass.
@@ -1445,6 +1468,7 @@ brief:
   repo: ${TMP}
   stage: ops
   must_read: ops/SKILL.md
+  artifact: /tmp/app.jar
   idev_root: ${REPO}
 report:
   raw: |
@@ -1468,6 +1492,7 @@ brief:
   repo: ${TMP}
   stage: ops
   must_read: ops/SKILL.md
+  artifact: /tmp/app.jar
   idev_root: ${REPO}
 report:
   raw: |
@@ -2186,6 +2211,7 @@ brief:
   repo: ${TMP}
   stage: ops
   must_read: ops/SKILL.md
+  artifact: /tmp/app.jar
   idev_root: ${REPO}
 report:
   raw: |
@@ -2310,6 +2336,374 @@ expect 1 "catch a check the code never emits" -- \
 contains "totally-made-up" "names the invented check"
 contains "drifted" "says the table drifted"
 rm -rf "$IDX_DIR"
+
+say "26 replay carries why it failed, and eval counts it"
+
+# An agent re-delegated after three failed checks must be told which three.
+# Told only "last time: PASS" it repeats the same omission — which is the
+# one thing re-delegating is supposed to prevent.
+RP_REPO="$(mktemp -d)"
+git init -q "$RP_REPO" >/dev/null 2>&1 || true
+RP_HOME="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$RP_REPO" --feature rp --key task 2>/dev/null)"
+mkdir -p "${RP_HOME:?rp ticket home unresolved}"
+echo "review ok" > "${RP_HOME}/review.md"
+
+cat > "${RP_REPO}/r1.yaml" <<YAML
+step: code-pass
+kind: deliver.code_pass
+agent: idev-coder
+brief:
+  ticket_home: ${RP_HOME}
+  repo: ${RP_REPO}
+  stage: code
+  must_read: conventions/coding.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${RP_HOME}/review.md
+    FACTS: 源码 src/a.py:1
+    DOC_DRIFT: 无
+YAML
+expect 1 "a report missing fields is refused" -- \
+  python3 "${S}/delegation.py" --repo "$RP_REPO" write --feature rp --file "${RP_REPO}/r1.yaml"
+
+expect 0 "replay reproduces the brief" -- \
+  python3 "${S}/delegation.py" --repo "$RP_REPO" replay --feature rp --step code-pass
+contains "本次必须修掉的" "tells the agent what to fix"
+contains "s0-declared" "names the failed check"
+contains "assumption-declared" "names every failed check"
+RP_OUT="$(python3 "${S}/delegation.py" --repo "$RP_REPO" replay --feature rp --step code-pass 2>&1)"
+if printf '%s' "$RP_OUT" | grep -qE "prior_failure: PASS —"; then
+  bad "replay reported a clean PASS after checks failed"
+else
+  ok "replay does not report a failed round as clean"
+fi
+
+# rejected must be derived: it used to read an `outcome` field nothing ever
+# wrote, so it was permanently 0 — which reads as "never rejected" rather
+# than "never measured".
+expect 0 "eval reports the counts" -- \
+  python3 "${S}/delegation.py" --repo "$RP_REPO" eval --feature rp
+contains "rejected: 1" "counts the round whose checks failed"
+contains "不打分" "stays a count, not a score"
+rm -rf "$RP_REPO"
+
+say "27 suggest reaches the people who can act on it"
+
+# SUGGEST is how an agent says "your definition is unclear here" — the input
+# to improving it. It was written in the report body and read from a
+# top-level key nothing ever set, so every suggestion was silently dropped.
+SG_REPO="$(mktemp -d)"
+git init -q "$SG_REPO" >/dev/null 2>&1 || true
+SG_HOME="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$SG_REPO" --feature sg --key task 2>/dev/null)"
+mkdir -p "${SG_HOME:?sg ticket home unresolved}"
+echo "review ok" > "${SG_HOME}/review.md"
+cat > "${SG_REPO}/r.yaml" <<YAML
+step: s1
+kind: review.report
+agent: idev-reviewer
+brief:
+  ticket_home: ${SG_HOME}
+  repo: ${SG_REPO}
+  stage: code
+  must_read: conventions/coding.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${SG_HOME}/review.md
+    FACTS: 源码 scripts/delegation.py:1
+    DOC_DRIFT: 无
+    ASSUMED: 无
+    CHECKS: evidence-present
+    SUGGEST: 定义里「认语言」那一步没说清多语言仓怎么办
+YAML
+expect 0 "record a report carrying a suggestion" -- \
+  python3 "${S}/delegation.py" --repo "$SG_REPO" write --feature sg --file "${SG_REPO}/r.yaml"
+
+expect 0 "eval counts the suggestion" -- \
+  python3 "${S}/delegation.py" --repo "$SG_REPO" eval --feature sg
+contains "suggest: 1" "the suggestion is counted, not dropped"
+
+expect 0 "timeline shows what was suggested" -- \
+  python3 "${S}/delegation.py" --repo "$SG_REPO" timeline --feature sg
+contains "多语言仓" "the suggestion text survives to the timeline"
+
+# A report with no suggestion must not be counted as having one.
+python3 - "${SG_REPO}" <<'PYX'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1]) / "r.yaml"
+t = p.read_text(encoding="utf-8")
+p.write_text(t.replace("SUGGEST: 定义里「认语言」那一步没说清多语言仓怎么办", "SUGGEST: 无")
+             .replace("step: s1", "step: s2"), encoding="utf-8")
+PYX
+expect 0 "record a report with no suggestion" -- \
+  python3 "${S}/delegation.py" --repo "$SG_REPO" write --feature sg --file "${SG_REPO}/r.yaml"
+SG_OUT="$(python3 "${S}/delegation.py" --repo "$SG_REPO" eval --feature sg 2>&1)"
+if printf '%s' "$SG_OUT" | grep -q "suggest: 1"; then
+  ok "an empty suggestion is not counted"
+else
+  bad "the empty suggestion was counted, or the real one was lost"
+fi
+rm -rf "$SG_REPO"
+
+say "28 paired definitions must not drift apart"
+
+# hypothesis.py once carried two lists of evidence kinds: TIERS stopped at
+# four while EVIDENCE_KINDS grew to eight, so monitoring, traces, config,
+# release records and artifact identity were all silently collapsed into
+# "log" — five different strengths reported as the weakest one.
+python3 - <<'PYX'
+import importlib.util, sys
+sys.path.insert(0, "scripts/lib")
+spec = importlib.util.spec_from_file_location("h", "scripts/hypothesis.py")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+problems = m.tier_check()
+if problems:
+    print("\n".join(problems))
+    sys.exit(1)
+# And the ranking must actually discriminate, not just exist.
+cases = [(["监控 p99 突增 grafana"], "metric"),
+         (["artifact-match 判定 AHEAD"], "artifact"),
+         (["src/a.py:10"], "code"),
+         (["README.md 里写的"], "doc")]
+bad = [(e, want, m.tier_of(e)) for e, want in cases if m.tier_of(e) != want]
+if bad:
+    print("tier_of misranks:", bad)
+    sys.exit(1)
+PYX
+if [ $? -eq 0 ]; then
+  ok "evidence kinds, ranks and explanations agree"
+else
+  bad "the evidence-kind lists drifted apart"
+fi
+
+# lessons.py and stage-gate.py carry the same shape of pairing.
+python3 - <<'PYX'
+import importlib.util, sys
+sys.path.insert(0, "scripts/lib")
+out = []
+for mod, path, fn in (("l", "scripts/lessons.py", "pair_check"),
+                      ("sg", "scripts/stage-gate.py", "gate_check")):
+    spec = importlib.util.spec_from_file_location(mod, path)
+    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+    out += getattr(m, fn)()
+if out:
+    print("\n".join(out))
+    sys.exit(1)
+PYX
+if [ $? -eq 0 ]; then
+  ok "lessons and stage-gate pairings are complete"
+else
+  bad "a paired definition drifted"
+fi
+
+# The guards must actually fire — a self-check that cannot fail is decoration.
+python3 - <<'PYX'
+import importlib.util, sys
+sys.path.insert(0, "scripts/lib")
+spec = importlib.util.spec_from_file_location("h", "scripts/hypothesis.py")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.EVIDENCE_KINDS["invented"] = m.re.compile("x")
+sys.exit(0 if m.tier_check() else 1)
+PYX
+if [ $? -eq 0 ]; then
+  ok "adding an unranked evidence kind is caught"
+else
+  bad "tier_check does not notice a new unranked kind"
+fi
+
+say "29 one blacklist, and a hit declaration people can actually write"
+
+# check-feature.py carried its own copy of the agent-name blacklist and it
+# had already drifted: a blank name passed there and was rejected by
+# workflow_spec. Every call site happened to add `not who` as a backstop —
+# correctness that depends on each caller remembering.
+python3 - <<'PYX'
+import importlib.util, sys
+sys.path.insert(0, "scripts"); sys.path.insert(0, "scripts/lib")
+spec = importlib.util.spec_from_file_location("cf", "scripts/check-feature.py")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+import workflow_spec as w
+bad = [n for n in ("agent", "AI", "Cursor", "assistant", "", "  ", "wangwei794", "claude")
+       if m.agent_signoff(n) != (not w.is_human(n))]
+sys.exit(1 if bad else 0)
+PYX
+if [ $? -eq 0 ]; then
+  ok "check-feature and workflow_spec agree on who may sign"
+else
+  bad "the two signoff blacklists disagree"
+fi
+if grep -q "AGENT_BY" "${REPO}/scripts/check-feature.py"; then
+  bad "check-feature still carries its own blacklist"
+else
+  ok "there is only one blacklist"
+fi
+
+# 「无」 is the natural way to write a zero hit; requiring exactly 「零命中」
+# turned a wording difference into a failure, with a bare FAIL that did not
+# say which of the two problems it was.
+TH_REPO="$(mktemp -d)"
+git init -q "$TH_REPO" >/dev/null 2>&1 || true
+TH_HOME="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$TH_REPO" --feature th --key task 2>/dev/null)"
+mkdir -p "${TH_HOME:?th ticket home unresolved}"
+echo "零命中" > "${TH_HOME}/review.md"
+th_report() {  # th_report <TABLE_HIT value> <step>
+  cat > "${TH_REPO}/r.yaml" <<YAML
+step: $2
+kind: deliver.code_pass
+agent: idev-coder
+brief:
+  ticket_home: ${TH_HOME}
+  repo: ${TH_REPO}
+  stage: code
+  must_read: conventions/coding.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${TH_HOME}/review.md
+    CHANGE_KIND: 追加行为
+    CANON_TRIGGER: 无
+    TABLE_HIT: $1
+    FACTS: 源码 a.py:1
+    DOC_DRIFT: 无
+    ASSUMED: 无
+    SCOPE: a.py:f
+YAML
+}
+th_report "无" "s1"
+expect 0 "「无」 counts as a zero hit" -- \
+  python3 "${S}/delegation.py" --repo "$TH_REPO" write --feature th --file "${TH_REPO}/r.yaml"
+th_report "零命中" "s2"
+expect 0 "「零命中」 counts too" -- \
+  python3 "${S}/delegation.py" --repo "$TH_REPO" write --feature th --file "${TH_REPO}/r.yaml"
+th_report "§1.3 预置模式" "s3"
+expect 1 "a real hit with no sign of being applied is refused" -- \
+  python3 "${S}/delegation.py" --repo "$TH_REPO" write --feature th --file "${TH_REPO}/r.yaml"
+contains "命中必须当轮改掉" "says what to do about a real hit"
+contains "若其实是零命中" "says how to declare it if there was no hit"
+rm -rf "$TH_REPO"
+
+say "30 every failure must say what to do about it"
+
+# A bare "FAIL" tells the agent it was wrong without telling it which of
+# several things to change. These three were the most important checks in
+# the file and said exactly that for a long time.
+python3 - <<'PYX'
+import pathlib, re, sys
+t = pathlib.Path("scripts/delegation.py").read_text(encoding="utf-8")
+bare = re.findall(r'=\s*"(FAIL|WARN)"\s*$', t, re.M)
+if bare:
+    print(f"{len(bare)} bare FAIL/WARN with no explanation")
+    sys.exit(1)
+PYX
+if [ $? -eq 0 ]; then
+  ok "no check answers with a bare FAIL"
+else
+  bad "a check answers with a bare FAIL"
+fi
+
+# And the messages must be actionable, not just longer.
+FM_REPO="$(mktemp -d)"
+git init -q "$FM_REPO" >/dev/null 2>&1 || true
+FM_HOME="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$FM_REPO" --feature fm --key task 2>/dev/null)"
+mkdir -p "${FM_HOME:?fm ticket home unresolved}"
+cat > "${FM_REPO}/r.yaml" <<YAML
+step: s1
+kind: deliver.code_pass
+agent: idev-coder
+brief:
+  ticket_home: ${FM_HOME}
+  repo: ${FM_REPO}
+  stage: code
+  must_read: conventions/coding.md
+  idev_root: ${REPO}
+report:
+  raw: |
+    STATUS: PASS
+    CHANGE_KIND: 追加
+    CANON_TRIGGER: 无
+    TABLE_HIT: 无
+    SCOPE: a.py:f
+    READ: a.py:f
+    CHANGED: a.py:f, b.py:g
+    REVERT: abc123
+YAML
+expect 1 "a report with several problems is refused" -- \
+  python3 "${S}/delegation.py" --repo "$FM_REPO" write --feature fm --file "${FM_REPO}/r.yaml"
+contains "写产出文件的路径" "evidence-present says what to write"
+contains "第一手材料" "facts-first says what counts"
+contains "没遇到就写「无」" "drift-declared says what to do when there is none"
+contains "另开一轮" "scope-held says how to resolve it"
+contains "先读再改" "read-before-change says the order"
+
+# brief-complete must point at the conductor, not leave the agent guessing.
+cat > "${FM_REPO}/r2.yaml" <<YAML
+step: s2
+kind: deliver.code_pass
+agent: idev-coder
+brief:
+  repo: ${FM_REPO}
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: ${FM_HOME}
+YAML
+expect 1 "an incomplete brief is refused" -- \
+  python3 "${S}/delegation.py" --repo "$FM_REPO" write --feature fm --file "${FM_REPO}/r2.yaml"
+contains "这是导体的问题" "brief-complete names who must fix it"
+contains "replay" "tells the conductor how to rebuild the brief"
+rm -rf "$FM_REPO"
+
+say "31 realign and ui-playbook tell you how to fix it"
+
+# realign is read by someone who has just had a requirement corrected and
+# is looking at a dozen drifts. "Here is what is wrong" without "here is
+# what to do" leaves them to work out the order and the edits themselves.
+RA2="$(mktemp -d)"
+git init -q "$RA2" >/dev/null 2>&1 || true
+RA2_HOME="$(python3 "${IDEV_LIB}/doc_home.py" --repo "$RA2" --feature ra --key task 2>/dev/null)"
+mkdir -p "${RA2_HOME:?ra ticket home unresolved}/verify"
+printf 'revision: 2\nsealed: false\nitems: [{id: B3, must: x, acceptance: 3 秒}]\n' > "${RA2_HOME}/baseline.yaml"
+printf 'stage: req-review\nreopen_baseline: true\nlast_rewind: {origin: req}\n' > "${RA2_HOME}/deliver.yaml"
+printf 'baseline_revision: 1\naccepted: true\nslices: [{id: S1, baseline_item_id: B1}]\n' > "${RA2_HOME}/req.yaml"
+printf 'cases: [{id: c1, baseline_item_id: B1, status: PASS, evidence: x.log}]\n' > "${RA2_HOME}/verify/plan.yaml"
+# arch is after the rewind origin, so its accepted is void by schema — that
+# is the case this assertion is about.
+printf 'baseline_revision: 1\naccepted: true\ncase_intents: [{id: CI1, baseline_item_id: B1}]\n' > "${RA2_HOME}/arch.yaml"
+
+expect 1 "realign finds the drift" -- python3 "${S}/realign.py" --repo "$RA2" --feature ra
+contains "改法:" "every drift class carries a fix"
+contains "不要只改这个数字" "warns against the shortcut that silences the check"
+contains "人手清掉这些字段" "says who clears a stale signoff"
+contains "证据保留" "says the old evidence is kept, not deleted"
+rm -rf "$RA2"
+
+# Same standard for the playbook checks.
+PB2="$(mktemp -d)"
+mkdir -p "${PB2}/e2e/flows"
+cat > "${PB2}/e2e/flows/x.spec.ts" <<'TSX'
+import { test } from '@playwright/test';
+const TAG = 'AUTOTEST_x';
+test('无断言且清理不保证', async ({ page }) => {
+  // @phase: create
+  await page.fill('.n', TAG);
+  // @phase: read
+  await page.goto('/x');
+  // @phase: change
+  await page.click('.s');
+  // @phase: restore
+  await page.click('.undo');
+  // @phase: cleanup
+  await page.click('.del');
+});
+TSX
+expect 1 "the playbook checks fire" -- python3 "${S}/ui-playbook.py" --repo "$PB2"
+contains "afterEach" "says where cleanup belongs"
+contains "每个阶段至少断言一件可观察的事" "says what to assert"
+rm -rf "$PB2"
 
 printf '\n== result\n'
 printf '  pass %d   fail %d\n' "$PASS" "$FAIL"

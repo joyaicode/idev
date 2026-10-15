@@ -176,10 +176,13 @@ def check_item(item: dict, grills: set[str], out: list[Finding]) -> None:
                 "冲突不是记一笔就过去的事,要拷问到明确为止"))
         else:
             q = ref if ref.startswith("Q") else f"Q{ref}"
-            if grills and q not in grills:
+            if q not in grills:
+                where_msg = ("grill.md 还不存在 —— 冲突记了一笔,但拷问从没发生过"
+                             if not grills else "在 grill.md 里找不到")
                 out.append(Finding(
                     iid, "grill-ref-dangling",
-                    f"conflicts[{where}] 挂的 {q} 在 grill.md 里找不到"))
+                    f"conflicts[{where}] 挂的 {q} {where_msg}。"
+                    "experts.md:「和已锁契约冲突却不写进问题」是拒过项"))
 
     if not safeyaml.as_list(g.get("boundary")):
         out.append(Finding(iid, "no-boundary",
@@ -213,9 +216,11 @@ def check_item(item: dict, grills: set[str], out: list[Finding]) -> None:
                     "与竞品相悖的决定要和人谈到明确,不是单方面记下来"))
             else:
                 q = ref if ref.startswith("Q") else f"Q{ref}"
-                if grills and q not in grills:
+                if q not in grills:
+                    where_msg = ("grill.md 还不存在 —— 差异记了一笔,但讨论从没发生过"
+                                 if not grills else "在 grill.md 里找不到")
                     out.append(Finding(iid, "grill-ref-dangling",
-                                       f"comparison 挂的 {q} 在 grill.md 里找不到"))
+                                       f"comparison 挂的 {q} {where_msg}"))
 
 
 def probe(items: list) -> None:

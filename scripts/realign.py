@@ -252,11 +252,36 @@ def main() -> int:
         "stale-evidence": "证的是旧需求",
         "pending-rewind": "回退没落实",
     }
+    # What to do about each class. Without this the report tells someone who
+    # has just had a requirement corrected that eleven things are wrong, and
+    # leaves them to work out the order and the edits themselves.
+    howto = {
+        "revision": "重做该阶段并把 baseline_revision 改成当前值。"
+                    "**不要只改这个数字** —— 产物内容是按旧基线写的,数字对上了"
+                    "只是让检查闭嘴",
+        "dangling": "按当前基线重新拆解 / 重新挂 case。"
+                    "旧 id 的产物作废(证据保留,status 不改写为 PASS)——"
+                    "`deliver-schema.md`:reopen 后旧 id 的 slice / case 全部作废",
+        "uncovered": "给它补 slice。订正新增的义务没人实现,会一路空到交付",
+        "unproven-item": "给它补 case。没有 case 的 item 在提测门是 `UNPROVEN`,"
+                         "不能当通过",
+        "stale-signoff": "**人手清掉这些字段**(写进 `revisions`,不删证据),"
+                         "然后重走该阶段重新请签。留着的话下一轮会读成当前有效 ——"
+                         "于是新需求被旧证据验收",
+        "stale-evidence": "旧 PASS 的证据保留,但不算当前基线的达标。"
+                          "按新基线重跑一次,产出新的证据路径",
+        "pending-rewind": "把 `deliver.last_rewind` 补上(origin + note),"
+                          "`deliver.yaml.stage` 回到 origin,再往后走",
+    }
     for kind, items in groups.items():
         print(f"## {labels.get(kind, kind)}  ({len(items)})")
         print()
         for d in items:
             print(f"  {tw.ljust(d.where, 36)} {d.detail}")
+        fix = howto.get(kind)
+        if fix:
+            print()
+            print(f"  改法: {fix}")
         print()
 
     print(f"realign FAIL  {len(drifts)} 处未对准")

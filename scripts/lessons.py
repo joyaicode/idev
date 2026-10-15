@@ -121,6 +121,23 @@ SCHEMA = """\
 """
 
 
+def pair_check() -> list[str]:
+    """Every enum must have its explanation, and vice versa.
+
+    hypothesis.py once had two lists of evidence kinds drift apart in
+    silence; these pairs are the same shape, so they get the same guard.
+    """
+    out = []
+    for name, keys, why in (("EVENT", EVENT, EVENT_WHY), ("SIX", SIX, SIX_Q)):
+        for k in keys:
+            if k not in why:
+                out.append(f"{name}: {k} 没有说明")
+        for k in why:
+            if k not in keys:
+                out.append(f"{name}: {k} 有说明但不在清单里")
+    return out
+
+
 def now() -> str:
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -314,7 +331,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     path = ledger_path(args.repo, args.feature)
     data = load(path)
     lessons = [x for x in safeyaml.as_list(data.get("lessons")) if isinstance(x, dict)]
-    errors: list[str] = []
+    errors: list[str] = [f"内部不一致 — {p}" for p in pair_check()]
     warns: list[str] = []
 
     for x in lessons:

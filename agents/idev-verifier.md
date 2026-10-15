@@ -287,3 +287,21 @@ Playwright 的 trace viewer 里,排查时就在那儿看。
 
 **阶段齐 ≠ 测得对。** 断言是否有意义要人评审,红绿仍走 verify 的 `mode=test`。
 覆盖面由 `ui-coverage-check.py` 管(required token 要挂 wave),本工具管 flow 自身。
+
+## 可选:报件数(metrics)
+
+回报里可以带一个扁平的件数表,`delegation.py` 会存下来供 `eval` 汇总:
+
+```yaml
+metrics:
+  cases_total: 24
+  cases_pass: 22
+  cases_unproven: 2
+  dimensions_covered: 6
+```
+
+**只能是件数,不能是分数,也不能嵌套。** `metrics-shape` 检查会拒绝嵌套结构 ——
+嵌套会邀请出第二套 eval,而这一层的规矩是**件数指向下一刀改哪里,不评价好坏**
+(`verify/references/evolve.md` 禁分数门禁)。
+
+不填也可以。填了的好处是周期性汇总时能看出趋势,比如维度覆盖一直停在 4 族。

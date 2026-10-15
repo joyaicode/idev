@@ -157,7 +157,7 @@ EVIDENCE: <review.md 路径>
 
 CHANGE_KIND: <校验|换协议|追加行为|加头|两通道|纯结构|结构+行为>
 CANON_TRIGGER: <无|新增一层|拆分|缓存|队列|重试|重写|新依赖>
-TABLE_HIT: <§1 行号/名称 | 零命中>
+TABLE_HIT: <§1 行号/名称 | 零命中 | 无>
 IMPACT: codegraph depth=1,候选 <n> 个(<列表或路径>)| 查不到:<原因>
 
 SCOPE: <动手前就定好:本轮打算改哪些 file:symbol>
@@ -304,3 +304,21 @@ python3 $IDEV/scripts/ui-evolve.py --repo <仓>
 
 它还抓**没声明就改开关**(后续场景无法预见,也无法被检出冲突)和**跑完遗留未归位**
 (会污染下一轮)。
+
+## 可选:报件数(metrics)
+
+回报里可以带一个扁平的件数表,`delegation.py` 会存下来供 `eval` 汇总:
+
+```yaml
+metrics:
+  cases_total: 24
+  cases_pass: 22
+  cases_unproven: 2
+  dimensions_covered: 6
+```
+
+**只能是件数,不能是分数,也不能嵌套。** `metrics-shape` 检查会拒绝嵌套结构 ——
+嵌套会邀请出第二套 eval,而这一层的规矩是**件数指向下一刀改哪里,不评价好坏**
+(`verify/references/evolve.md` 禁分数门禁)。
+
+不填也可以。填了的好处是周期性汇总时能看出趋势,比如维度覆盖一直停在 4 族。

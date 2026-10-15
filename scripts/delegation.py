@@ -52,6 +52,10 @@ except ImportError:
 
 BRIEF_REQUIRED = ("ticket_home", "repo", "stage", "must_read")
 SIGNOFF_FIELDS = ("sealed", "accepted", "aligned", "resolved", "reopen_baseline", "semantic_gate")
+# The agent writes SUGGEST: in the report body; everything downstream read a
+# top-level `suggest` key that nothing ever set. This is the channel agents
+# use to say "your definition is unclear here" — the input to improving it.
+SUGGEST_LINE = re.compile(r"(?mi)^\s*SUGGEST:\s*(.+?)\s*$")
 
 STATUS_LINE = re.compile(r"(?mi)^\s*STATUS:\s*(\S+)")
 EVIDENCE_LINE = re.compile(r"(?mi)^\s*EVIDENCE:\s*(.+?)\s*$")
@@ -74,7 +78,7 @@ T_NUMBER = re.compile(r"\bT\d+\b")
 # Anchored to the start of the value and allowing a parenthesised note, so
 # that a row name containing "none" ("§1 nonexistent-row") is not read as a
 # zero-hit declaration, and "无(纯追加)" still counts as no trigger.
-NO_HIT = re.compile(r"(?i)^\s*(?:零命中|no\s*hit|none|-)\s*(?:[(（].*)?$")
+NO_HIT = re.compile(r"(?i)^\s*(?:零命中|无命中|无|no\s*hit|none|-)\s*(?:[(（].*)?$")
 NO_TRIGGER = re.compile(r"(?i)^\s*(?:无|none|-)\s*(?:[(（].*)?$")
 STRUCT_GATE = re.compile(r"§\s*3|满足条件|两顶帽子")
 APPLIED = re.compile(r"运用|纠正|已改|当轮改")
@@ -193,16 +197,24 @@ def check_accuracy(record: dict) -> dict[str, str]:
     if agent in kind_agents.FACTS_AGENTS:
         # Saying "I assumed X" costs one line and saves the conductor from
         # re-verifying the whole report. Writing 无 counts as declaring.
-        out["assumption-declared"] = "PASS" if ASSUMED_LINE.search(raw) else "FAIL:no ASSUMED line"
+        out["assumption-declared"] = (
+            "PASS" if ASSUMED_LINE.search(raw)
+            else "FAIL:没有 ASSUMED 行 —— 列出这轮没验、但结论依赖的前提;"
+                 "没有就写「无」。导体只需核那一条,比重验整份回报便宜")
 
     if agent in kind_agents.FACTS_AGENTS:
         # A FACTS line that names no source kind is indistinguishable from
         # recall. 「禁止凭经验编造」 only bites if the source is stated.
         fm = FACTS_LINE.search(raw)
-        if fm and not SOURCED.search(fm.group(1)):
+        if fm:
+            # Explicit PASS: a check that only speaks when it fails makes
+            # "checked and clean" indistinguishable from "never ran" in the
+            # records — the false-green this layer keeps guarding against.
             out["facts-sourced"] = (
-                "FAIL:FACTS 没点名来源 —— 服务名/符号名只能来自拓扑(codegraph)、"
-                "工具返回、源码或用户输入,禁止凭经验编造")
+                "PASS" if SOURCED.search(fm.group(1))
+                else "FAIL:FACTS 没点名来源 —— 服务名/符号名只能来自拓扑(codegraph)、"
+                     "工具返回、源码或用户输入,禁止凭经验编造")
+        # No FACTS line at all is facts-first's finding, not this one's.
 
     if agent == "idev-ops" and kind == "ops.classify":
         # Only for kind=feature: onboard/runtime are handed off, and patrol
@@ -220,7 +232,10 @@ def check_accuracy(record: dict) -> dict[str, str]:
     read = READ_LINE.search(raw)
     changed = CHANGED_LINE.search(raw)
 
-    out["scope-declared"] = "PASS" if scope else "FAIL:no SCOPE line"
+    out["scope-declared"] = (
+        "PASS" if scope
+        else "FAIL:没有 SCOPE 行 —— 动手前先写明这轮打算改哪些 file:symbol。"
+             "它和 CHANGED 对照,挡的是「顺手又改了三处」")
 
     changed_paths = _paths(changed.group(1)) if changed else set()
     touched = bool(changed_paths) and not NONE_VALUE.match(changed.group(1) if changed else "")
@@ -228,21 +243,31 @@ def check_accuracy(record: dict) -> dict[str, str]:
     # scope-held: nothing outside the declared scope. This is the one that
     # catches scope creep — "while I was in there I also fixed...".
     if not scope:
-        out["scope-held"] = "WARN:no SCOPE to compare"
+        out["scope-held"] = "WARN:没有 SCOPE 可对照 —— 先补 SCOPE 行,这项才有意义"
     elif not touched:
         out["scope-held"] = "PASS"
     else:
         extra = changed_paths - _paths(scope.group(1))
-        out["scope-held"] = "PASS" if not extra else "FAIL:outside SCOPE: " + ",".join(sorted(extra))
+        out["scope-held"] = (
+            "PASS" if not extra
+            else "FAIL:改了 SCOPE 之外的 " + ",".join(sorted(extra))
+                 + " —— 要么把它们写进 SCOPE 并说明为什么本轮必须一起改,"
+                   "要么撤掉这部分改动另开一轮。顺手改的那几处,正是别人假设没变的地方")
 
     # read-before-change: Claude's Edit enforces this at the tool layer.
     if not touched:
         out["read-before-change"] = "PASS"
     elif not read:
-        out["read-before-change"] = "FAIL:no READ line"
+        out["read-before-change"] = (
+            "FAIL:改了文件却没有 READ 行 —— 列出动手前读过的 file:symbol。"
+            "改一个没读过的地方,多半是按名字猜它在干什么")
     else:
         unread = changed_paths - _paths(read.group(1))
-        out["read-before-change"] = "PASS" if not unread else "FAIL:changed unread: " + ",".join(sorted(unread))
+        out["read-before-change"] = (
+            "PASS" if not unread
+            else "FAIL:改了没读过的 " + ",".join(sorted(unread))
+                 + " —— 先读再改,然后把 file:symbol 补进 READ。"
+                   "名字和文档都不可信,只有读过那段代码才知道它在干什么")
 
     # revert-anchor: a checkpoint, so undoing a delegation is one command.
     if not touched:
@@ -343,9 +368,15 @@ def check_boost(record: dict, repo: Path | None) -> dict[str, str]:
     if NO_HIT.search(hit_value):
         out["hit-applied"] = "PASS"
     elif review is None:
-        out["hit-applied"] = "WARN"
+        out["hit-applied"] = "WARN:no review.md to check the hit against"
     else:
-        out["hit-applied"] = "PASS" if APPLIED.search(review) else "FAIL"
+        # Say what is missing. A bare FAIL here used to leave the agent
+        # guessing between "write it differently" and "go fix the code".
+        out["hit-applied"] = (
+            "PASS" if APPLIED.search(review)
+            else f"FAIL:TABLE_HIT 写了「{hit_value[:30]}」,但 review.md 里看不到"
+                 "「运用 / 纠正 / 已改 / 当轮改」—— 命中必须当轮改掉,不能只记账。"
+                 "若其实是零命中,写「零命中」或「无」")
 
     return out
 
@@ -365,14 +396,20 @@ def check_facts(record: dict) -> dict[str, str]:
 
     facts = FACTS_LINE.search(raw)
     if facts is None:
-        out["facts-first"] = "FAIL:no FACTS line"
+        out["facts-first"] = (
+            "FAIL:没有 FACTS 行 —— 写你这轮的结论建立在什么第一手材料上:"
+            "codegraph 查到的符号 / 读过的源码 file:line / 跑过的命令 / git 记录。"
+            "「看了文档」不算 —— 文档会过时,见 references/boost.md 第零节")
     elif not FIRSTHAND.search(facts.group(1)):
         # 只写"文档"或"看了一下"不算事实来源。
         out["facts-first"] = "FAIL:no first-hand source (codegraph / 源码 / 命令 / git)"
     else:
         out["facts-first"] = "PASS"
 
-    out["drift-declared"] = "PASS" if DRIFT_LINE.search(raw) else "FAIL:no DOC_DRIFT line"
+    out["drift-declared"] = (
+        "PASS" if DRIFT_LINE.search(raw)
+        else "FAIL:没有 DOC_DRIFT 行 —— 文档与代码不符时要说出来(写清哪一页哪一句);"
+             "没遇到就写「无」。沉默会让下一个人再踩一次")
     return out
 
 
@@ -387,34 +424,62 @@ def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     evidence = report_evidence(record)
     if status.startswith("PASS"):
         if not evidence or evidence == "-":
-            checks["evidence-present"] = "FAIL"
+            # These two are the most important checks in the file, and they
+            # used to answer with a bare "FAIL" — the agent could not tell
+            # whether it wrote the wrong thing or did the wrong thing.
+            checks["evidence-present"] = (
+                "FAIL:STATUS 是 PASS 却没有 EVIDENCE 路径 —— "
+                "PASS 要能被别人打开看。写产出文件的路径(报告 / 日志 / plan),"
+                "不是一句话描述")
         else:
             base = (repo or Path.cwd()).resolve()
             candidate = Path(evidence)
             exists = candidate.exists() or (base / evidence).exists()
-            checks["evidence-present"] = "PASS" if exists else "WARN"
+            checks["evidence-present"] = (
+                "PASS" if exists
+                else f"WARN:EVIDENCE 指向 {evidence},但在 {base} 下找不到 —— "
+                     "路径写错了,还是文件没真的产出?")
     else:
         checks["evidence-present"] = "PASS"
 
     # 2 no-signoff-write: an agent must never claim to have signed.
     if SIGNOFF_WRITE.search(raw) and not SIGNOFF_NEG.search(raw):
-        checks["no-signoff-write"] = "FAIL"
+        hit = SIGNOFF_WRITE.search(raw)
+        checks["no-signoff-write"] = (
+            f"FAIL:回报里出现「{hit.group(0)[:30]}」—— 签字字段只有导体能写,"
+            "而且要有人本轮的确认用语。你要做的是把事实回报上去,"
+            "由导体请人签。改成陈述(如「已满足 accepted 的条件,待人确认」)")
     else:
         checks["no-signoff-write"] = "PASS"
 
     # 3 brief-complete: this one points at the conductor, not the agent.
     brief = record.get("brief") or {}
     required = list(BRIEF_REQUIRED)
+    # ops.classify on a feature defect must confirm the artifact matches the
+    # source (artifact-verified). An agent that was never told which artifact
+    # is running can only come back BLOCKED — so the brief has to carry it,
+    # and failing here points at the conductor rather than wasting a round.
+    if str(record.get("kind", "")) == "ops.classify":
+        required.append("artifact")
     if str(record.get("agent", "")) in kind_agents.BOOST_AGENTS:
         # The boost scripts live in idev itself now, so idev_root is the only
         # root there is. Before the merge this was a separate agent_root, and
         # requiring both only gave the conductor one more field to get wrong.
         required.append("idev_root")
     missing = [k for k in required if not str(brief.get(k, "")).strip()]
-    checks["brief-complete"] = "PASS" if not missing else "FAIL:" + ",".join(missing)
+    checks["brief-complete"] = (
+        "PASS" if not missing
+        else "FAIL:委派包缺 " + ",".join(missing)
+             + " —— **这是导体的问题,不是执行者的**。格式照抄 "
+               "references/agents.md「委派包(固定格式)」;重派前用 "
+               "`delegation.py replay` 取回上次那份,别凭记忆重组")
 
     # 4 report-parsed: the report has to be machine-readable.
-    checks["report-parsed"] = "PASS" if STATUS_LINE.search(raw) else "FAIL"
+    checks["report-parsed"] = (
+        "PASS" if STATUS_LINE.search(raw)
+        else "FAIL:回报里找不到 STATUS 行 —— 第一行写 "
+             "`STATUS: PASS|FAIL|UNPROVEN|BLOCKED(brief|env|logic)`。"
+             "没有它,导体无法机读这次委派的结果")
 
     # Per-agent §0 declarations (idev-coder only; empty for the rest).
     checks.update(check_boost(record, repo))
@@ -512,6 +577,12 @@ def cmd_write(args: argparse.Namespace) -> int:
     record.setdefault("at", now())
     record.setdefault("attempt", 1)
     record.setdefault("outcome", "recorded")
+    # Lift SUGGEST out of the report body so eval and timeline can see it.
+    raw_report = str((record.get("report") or {}).get("raw", ""))
+    sm = SUGGEST_LINE.search(raw_report)
+    lifted = sm.group(1).strip() if sm else ""
+    if lifted and not NONE_VALUE.match(lifted):
+        record["suggest"] = lifted
     record.setdefault("suggest", "")
 
     attempt = safeyaml.as_int(record.get("attempt"), 1)
@@ -600,8 +671,24 @@ def cmd_replay(args: argparse.Namespace) -> int:
     if brief.get("with"):
         print(f"with: {brief['with']}")
     print(f"本步: {record.get('step')}  kind={record.get('kind')}")
-    prior = report_status(record)
-    print(f"prior_failure: {prior} — {(record.get('report') or {}).get('evidence', '') or '见上次留痕'}")
+    # prior_failure must carry *why* it failed, not just the status the
+    # agent self-reported. An agent told "last time: PASS" after three
+    # checks failed will repeat the same omission — the whole point of
+    # re-delegating is that it knows what to fix.
+    prior = report_status(record) or "?"
+    failed = [f"{k}={v}" for k, v in sorted((record.get("checks") or {}).items())
+              if isinstance(v, str) and v.startswith("FAIL")]
+    if failed:
+        print(f"prior_failure: 上次 STATUS={prior},但有 {len(failed)} 项检查未过,"
+              "**这些是本次必须修掉的**:")
+        for f in failed:
+            print(f"  - {f}")
+        ev = (record.get("report") or {}).get("evidence", "")
+        if ev:
+            print(f"  上次证据: {ev}")
+    else:
+        print(f"prior_failure: {prior} — "
+              f"{(record.get('report') or {}).get('evidence', '') or '见上次留痕'}")
     print("禁止: 写 sealed/accepted/aligned/resolved/reopen_baseline/semantic_gate.*;改密封基线正文")
     print("回报: 按你定义里的回报格式,STATUS + EVIDENCE 必填")
     print()
@@ -722,7 +809,13 @@ def cmd_eval(args: argparse.Namespace) -> int:
             blocked[hit.group(1) if hit else "unclassified"] += 1
         if safeyaml.as_int(record.get("attempt"), 1) > 1:
             retried += 1
-        if str(record.get("outcome")) == "rejected":
+        # Derived, not hand-labelled. `outcome: rejected` was read here but
+        # nothing ever wrote it, so this counter was permanently 0 — which
+        # reads as "never rejected" rather than "never measured". A record
+        # whose checks failed IS a rejected round, whatever the agent's
+        # self-reported STATUS said.
+        if any(isinstance(v, str) and v.startswith("FAIL")
+               for v in (record.get("checks") or {}).values()):
             rejected += 1
         if str(record.get("suggest", "")).strip():
             suggests += 1

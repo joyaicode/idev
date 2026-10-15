@@ -155,6 +155,7 @@ feature / stage / risk_tier: <来自 deliver.yaml>
 attempt: <第几次;>1 时必须附 prior_failure>
 必读: <该 kind 的落点页绝对路径>
 IDEV_ROOT: <idev 根,默认 ~/.cursor/skills/idev>
+artifact: <线上跑的那份产物路径;kind=ops.classify 必填>
 禁止: 写 sealed/accepted/aligned/resolved/reopen_baseline/semantic_gate.*;改密封基线正文
 回报: 按你定义里的回报格式,STATUS + EVIDENCE 必填
 ```
@@ -165,6 +166,10 @@ IDEV_ROOT: <idev 根,默认 ~/.cursor/skills/idev>
 
 合并进 idev 之前这里还有一个独立的 `AGENT_ROOT`(agent 层单独一个仓)。合并后两者是同一个
 路径,要求填两遍只是给导体多一次填错的机会,所以只保留 `IDEV_ROOT`。
+
+`kind=ops.classify` 必须带 `artifact`:`idev-ops` 要用 `artifact-match.py` 核对产物与源码
+是否同源(回报的 `ARTIFACT:` 行)。**没告诉它产物是哪一份,它只能 `BLOCKED` 回来** ——
+`brief-complete` 在这里失败指向导体,省掉一次白跑。
 
 `attempt > 1` 时 `prior_failure` 必填,且别凭记忆重组委派包:用
 `delegation.py replay --feature <f> --step <step>` 把上次那份原样取回来。

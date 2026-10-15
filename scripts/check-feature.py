@@ -157,7 +157,17 @@ def check_review_coding(review_text: str, errors: list) -> None:
             ok("review.md has 增强扫描")
 
 
-AGENT_BY = re.compile(r"^(agent|ai|cursor|assistant)$", re.I)
+# One blacklist, not two. This file used to carry its own copy, and it had
+# already drifted: a blank name passed here and was rejected by
+# workflow_spec. Every call site happened to add `not who` as a backstop —
+# correctness that depends on each caller remembering is correctness waiting
+# to break. agent_signoff() asks the one authority instead.
+import workflow_spec as _wspec  # noqa: E402
+
+
+def agent_signoff(who: str) -> bool:
+    """True when `who` cannot sign: an agent name, or nothing at all."""
+    return not _wspec.is_human(str(who or ""))
 
 OPS_KINDS = ("onboard", "runtime", "feature", "patrol", "unknown")
 OPS_STATUSES = (
@@ -234,7 +244,7 @@ def _semantic_missing(gate, needed):
         body = semantic_stage(gate, st)
         passed = as_str(body.get("passed"))
         who = as_str(body.get("by"))
-        if passed != "true" or not who or AGENT_BY.match(who):
+        if passed != "true" or agent_signoff(who):
             missing.append(st)
     return missing
 
@@ -295,7 +305,7 @@ def check_semantic_recorded(deliver, stage, errors, root=None):
         if passed != "true":
             fail("semantic_gate.%s.passed is not true" % st, errors)
             missing.append(st)
-        elif not who or AGENT_BY.match(who):
+        elif agent_signoff(who):
             fail("semantic_gate.%s requires human by" % st, errors)
             missing.append(st)
         else:
@@ -327,7 +337,7 @@ def dry_run_semantic_backfill(repo, feature, stage):
     gate = deliver.get("semantic_gate") if isinstance(deliver.get("semantic_gate"), dict) else {}
     missing = _semantic_missing(gate, needed)
     who = as_str(deliver.get("by"))
-    if not who or AGENT_BY.match(who):
+    if agent_signoff(who):
         who = "<HUMAN_BY>"
     print("# dry-run only — not written. After human confirm, merge into deliver.yaml:")
     print("semantic_gate:")
@@ -886,7 +896,7 @@ def main() -> int:
                 fail("ops.defect_origin must be req|arch|code", errors)
             if scalar(ops, "resolved") == "true":
                 who = scalar(ops, "by")
-                if not who or AGENT_BY.match(who):
+                if agent_signoff(who):
                     fail("resolved=true requires human by", errors)
                 else:
                     ok("resolved has human by")
@@ -911,7 +921,7 @@ def main() -> int:
         aligned = scalar(deliver, "aligned")
         if aligned == "true" or stage == "done":
             who = scalar(deliver, "by")
-            if not who or AGENT_BY.match(who):
+            if agent_signoff(who):
                 fail("aligned/done requires human by", errors)
             else:
                 ok("aligned/done has human by")
@@ -930,7 +940,7 @@ def main() -> int:
         ("ops", ops),
     ):
         for who in signoff_bys(text):
-            if AGENT_BY.match(who):
+            if agent_signoff(who):
                 forged.append("%s.by=%s" % (label, who))
     if forged:
         fail("agent filled signoff by: %s" % ", ".join(forged), errors)

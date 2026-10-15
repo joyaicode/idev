@@ -62,13 +62,22 @@ REPRO = ("pending", "yes", "no")
 
 # Evidence tiers, weakest to strongest. evidence.md: 代码逻辑可信, 文档不可信.
 # A log proves the symptom occurred; only code logic explains why.
-TIERS = ("doc", "log", "repro", "code")
+# Evidence strength. Two lists drifted here once — TIERS stopped at four
+# kinds while EVIDENCE_KINDS grew to eight, so monitoring, traces, config,
+# release records and artifact identity were all collapsed into "log".
+# TIERS is now derived from one place: EVIDENCE_KINDS below, ordered.
 TIER_WHY = {
     "doc": "文档/注释 —— 不可信,只是线索",
     "log": "日志/响应 —— 证明现象发生了,不证明为什么",
+    "metric": "监控曲线 —— 证明影响范围与时间窗,不证明机制",
+    "trace": "调用链 —— 证明走到了哪里,不证明为什么那样走",
+    "config": "配置 —— 证明当时的设定是什么",
+    "change": "发布/变更记录 —— 证明什么时候动过什么",
+    "artifact": "产物身份 —— 证明跑的是哪一份代码(与源码逻辑互证)",
     "repro": "可复现用例 —— 证明能触发,仍需解释机制",
     "code": "代码逻辑(file:line)—— 解释机制的那一层",
 }
+
 # A file:line reference is what "code tier" means in practice.
 CODE_REF = re.compile(r"[\w./-]+\.\w+:\d+")
 
@@ -77,13 +86,38 @@ CODE_REF = re.compile(r"[\w./-]+\.\w+:\d+")
 # error log with monitoring, code path with a config change.
 EVIDENCE_KINDS = {
     "code": re.compile(r"[\w./-]+\.\w+:\d+"),
+    "doc": re.compile(r"(?i)\.md\b|readme|wiki|文档|注释"),
     "log": re.compile(r"(?i)\.log\b|logs?/|日志|stderr|stdout"),
     "metric": re.compile(r"(?i)监控|metric|grafana|dashboard|qps|latency|p99"),
     "trace": re.compile(r"(?i)trace|调用链|span|traceid"),
     "config": re.compile(r"(?i)\.ya?ml\b|\.properties\b|\.conf\b|配置|config"),
     "change": re.compile(r"(?i)发布|变更|deploy|release|commit\s*[0-9a-f]{7}|回滚"),
     "repro": re.compile(r"(?i)用例|case|复现|repro|test"),
+    # The artifact's own build identity: a different question from "what
+    # does the code say", which is why the two corroborate each other.
+    "artifact": re.compile(
+        r"(?i)artifact-match|git\.properties|MANIFEST|产物.*(?:commit|版本|身份)|"
+        r"\bAHEAD\b|产物自述|构建时间"),
 }
+# Weakest to strongest. Derived from EVIDENCE_KINDS so the two can never
+# disagree again: adding a kind without placing it here fails tier_check().
+TIER_ORDER = ("doc", "log", "metric", "trace", "config", "change",
+              "artifact", "repro", "code")
+TIERS = TIER_ORDER
+
+
+def tier_check() -> list[str]:
+    """Every evidence kind must have a rank and a reason. One list, checked."""
+    problems = []
+    for k in EVIDENCE_KINDS:
+        if k not in TIER_ORDER:
+            problems.append(f"{k} 有匹配规则但没有强度排序(TIER_ORDER)")
+        if k not in TIER_WHY:
+            problems.append(f"{k} 有匹配规则但没有说明(TIER_WHY)")
+    for k in TIER_ORDER:
+        if k not in EVIDENCE_KINDS:
+            problems.append(f"{k} 在排序里但没有匹配规则(EVIDENCE_KINDS)")
+    return problems
 # 调用链必须穿透: a service that merely reports an error is usually relaying
 # someone else's failure. The root cause has to bottom out somewhere that
 # cannot pass the blame on.
@@ -247,19 +281,12 @@ def kinds_of(evidence: list) -> set[str]:
 
 
 def tier_of(evidence: list) -> str:
-    """The strongest tier this evidence reaches."""
+    """The strongest tier this evidence reaches, by TIER_ORDER."""
+    kinds = kinds_of(evidence)
     best = ""
-    for e in evidence:
-        s = str(e)
-        if CODE_REF.search(s):
-            return "code"
-        low = s.lower()
-        if any(k in low for k in (".log", "logs/", "target/", "response", "curl")):
-            best = best or "log"
-        elif any(k in low for k in (".md", "doc", "readme", "wiki")):
-            best = best or "doc"
-        else:
-            best = best or "log"
+    for k in TIER_ORDER:
+        if k in kinds:
+            best = k
     return best
 
 

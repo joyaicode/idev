@@ -213,12 +213,20 @@ python3 scripts/failure_signature.py check --feature <f>       # 命中红线则
 
 `evidence.md` 的可信度表把材料分了级,所以证据也分级:
 
-| 级别 | 是什么 | 证明了什么 |
+| 级别(弱→强) | 是什么 | 证明了什么 |
 |---|---|---|
 | `doc` | 文档 / 注释 | **什么都没证明** —— 它不可信,只是线索 |
 | `log` | 日志 / 响应 / 抓包 | 现象**发生过**。不证明为什么 |
+| `metric` | 监控曲线 | 影响**范围与时间窗**。不证明机制 |
+| `trace` | 调用链 | 走到了**哪里**。不证明为什么那样走 |
+| `config` | 配置 | 当时的**设定**是什么 |
+| `change` | 发布 / 变更记录 | **什么时候动过什么** |
+| `artifact` | 产物身份(`artifact-match`) | 跑的是**哪一份代码** —— 与源码逻辑互证 |
 | `repro` | 可复现用例 | 能**触发**。仍没解释机制 |
 | `code` | `file:line` 的代码逻辑 | **解释机制的那一层** |
+
+这张表与 `hypothesis.py` 的 `EVIDENCE_KINDS` / `TIER_ORDER` 同源,`tier_check()` 守着
+它们不漂移 —— 曾经这里有两份清单各管一半,于是监控、调用链、产物身份全被当成日志一级。
 
 **`status: proven` 必须有 `code` 级证据** —— 即至少一条 `file:line`。机检
 `proven-needs-code-evidence`。

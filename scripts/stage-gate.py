@@ -105,18 +105,21 @@ def vague_hits(text: str) -> list[str]:
 def gate_req_review(home: Path, out: list[Finding]) -> None:
     baseline = safeyaml.mapping(home / "baseline.yaml")
     if baseline is None:
-        out.append(Finding("req-review", "inputs", "baseline.yaml", "缺失或不是 mapping"))
+        out.append(Finding("req-review", "inputs", "baseline.yaml", "缺失或不是 mapping —— 这一格还没开始,或文件写坏了。`check-feature.sh <f> req-review` 看结构"))
         return
 
     items = safeyaml.as_list(baseline.get("items"))
     if not items:
-        out.append(Finding("req-review", "no-items", "baseline.yaml", "没有 items,无法评审"))
+        out.append(Finding("req-review", "no-items", "baseline.yaml", "没有 items,无法评审 —— 每条义务一个 item,带 must 与可证伪的 acceptance"))
 
     for item in items:
         if not isinstance(item, dict):
             continue
         iid = str(item.get("id", "?"))
-        accept = text_of(item.get("acceptance") or item.get("验收") or "")
+        # Only the documented key. Accepting an undocumented Chinese alias
+        # means two people writing from two sources produce different
+        # tickets — and whichever key a check forgets, it silently passes.
+        accept = text_of(item.get("acceptance") or "")
         must = text_of(item.get("must") or "")
 
         # 拒过:验收含主观词不可测
@@ -135,6 +138,16 @@ def gate_req_review(home: Path, out: list[Finding]) -> None:
             out.append(Finding(
                 "req-review", "no-acceptance", f"items[{iid}]",
                 "没有验收标准 —— 这条 item 无法证伪"))
+
+        # must 同样不能含主观词。原本只查 acceptance —— 但「要给出友好的提示」
+        # 写在 must 里一样不可测,而且它会被原文锁带进 slice,一路传到下游。
+        if must:
+            hits = vague_hits(must)
+            if hits:
+                out.append(Finding(
+                    "req-review", "untestable-must", f"items[{iid}].must",
+                    f"含主观词 {'/'.join(hits)} —— must 会被原文锁带进 slice 一路传到下游,"
+                    "含糊的义务在每一格都会被重新解释一遍"))
 
         # 拒过:用解决方案冒充需求
         for w in SOLUTION_WORDS:
@@ -190,13 +203,13 @@ def gate_req_review(home: Path, out: list[Finding]) -> None:
 def gate_req(home: Path, out: list[Finding]) -> None:
     req = safeyaml.mapping(home / "req.yaml")
     if req is None:
-        out.append(Finding("req", "inputs", "req.yaml", "缺失或不是 mapping"))
+        out.append(Finding("req", "inputs", "req.yaml", "缺失或不是 mapping —— 拆解还没做,或文件写坏了"))
         return
     baseline = safeyaml.mapping(home / "baseline.yaml") or {}
 
     slices = safeyaml.as_list(req.get("slices"))
     if not slices:
-        out.append(Finding("req", "no-slices", "req.yaml", "没有 slices"))
+        out.append(Finding("req", "no-slices", "req.yaml", "没有 slices —— 把每条基线 item 译成可执行的 slice,挂 baseline_item_id"))
 
     for s in slices:
         if not isinstance(s, dict):
@@ -229,7 +242,7 @@ def gate_req(home: Path, out: list[Finding]) -> None:
 def gate_arch(home: Path, out: list[Finding]) -> None:
     arch = safeyaml.mapping(home / "arch.yaml")
     if arch is None:
-        out.append(Finding("arch", "inputs", "arch.yaml", "缺失或不是 mapping"))
+        out.append(Finding("arch", "inputs", "arch.yaml", "缺失或不是 mapping —— 架构方案还没写,或文件写坏了"))
         return
 
     intents = safeyaml.as_list(arch.get("case_intents"))
@@ -259,7 +272,7 @@ def gate_arch(home: Path, out: list[Finding]) -> None:
 def gate_code(home: Path, out: list[Finding]) -> None:
     review = home / "review.md"
     if not review.is_file():
-        out.append(Finding("code", "inputs", "review.md", "缺失"))
+        out.append(Finding("code", "inputs", "review.md", "缺失 —— 编码阶段要留 review.md,写明 §1 扫表结果与五轴"))
         return
     text = review.read_text(encoding="utf-8", errors="replace")
 
@@ -280,12 +293,12 @@ def gate_code(home: Path, out: list[Finding]) -> None:
 def gate_test(home: Path, out: list[Finding]) -> None:
     plan = safeyaml.mapping(home / "verify" / "plan.yaml")
     if plan is None:
-        out.append(Finding("test", "inputs", "verify/plan.yaml", "缺失或不是 mapping"))
+        out.append(Finding("test", "inputs", "verify/plan.yaml", "缺失或不是 mapping —— 用例计划还没起草。`verify` 模块的 plan 骨架先铺维度表"))
         return
 
     cases = safeyaml.as_list(plan.get("cases"))
     if not cases:
-        out.append(Finding("test", "no-cases", "plan.yaml", "没有 cases"))
+        out.append(Finding("test", "no-cases", "plan.yaml", "没有 cases —— 先按维度表铺满骨架,再逐条填断言"))
 
     for c in cases:
         if not isinstance(c, dict):
@@ -301,7 +314,7 @@ def gate_test(home: Path, out: list[Finding]) -> None:
             out.append(Finding("test", "unanchored-case", f"cases[{cid}]",
                                "没挂 baseline_item_id —— 它在证明哪条基线?"))
         # 断言是「进程没挂」这类无效断言
-        assertion = text_of(c.get("assert") or c.get("断言") or "")
+        assertion = text_of(c.get("assert") or "")
         if assertion and re.search(r"不报错|没有异常|进程还在|返回\s*200\s*$|能启动", assertion):
             out.append(Finding("test", "weak-assertion", f"cases[{cid}].assert",
                                f"「{assertion[:40]}」断言的是「没崩」,不是用户那条现象"))
@@ -312,7 +325,7 @@ def gate_test(home: Path, out: list[Finding]) -> None:
 def gate_ops(home: Path, out: list[Finding]) -> None:
     ops = safeyaml.mapping(home / "ops.yaml")
     if ops is None:
-        out.append(Finding("ops", "inputs", "ops.yaml", "缺失或不是 mapping"))
+        out.append(Finding("ops", "inputs", "ops.yaml", "缺失或不是 mapping —— 还没做现象分类"))
         return
 
     # 拒过:现场四件齐
@@ -354,6 +367,22 @@ GATES = {
 }
 
 
+def gate_check() -> list[str]:
+    """STAGES 与 GATES 必须一一对应。
+
+    A stage listed but not wired silently checks nothing; a gate not listed
+    never runs under --all. Either way the gap is invisible at the call site.
+    """
+    out = []
+    for s in STAGES:
+        if s not in GATES:
+            out.append(f"{s} 在 STAGES 里但没有 gate 函数 —— 它什么都不查")
+    for s in GATES:
+        if s not in STAGES:
+            out.append(f"{s} 有 gate 函数但不在 STAGES 里 —— --all 不会跑它")
+    return out
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--repo", type=Path, help="product checkout (default: cwd)")
@@ -385,7 +414,10 @@ def main() -> int:
         return 2
 
     stages = [args.stage] if args.stage else list(STAGES)
-    findings: list[Finding] = []
+    findings: list[Finding] = [
+        Finding("stage-gate", "internal-inconsistency", "stage-gate.py", p)
+        for p in gate_check()
+    ]
     ran: list[str] = []
     for s in stages:
         if args.all:
@@ -398,10 +430,24 @@ def main() -> int:
         ran.append(s)
         GATES[s](home, findings)
 
+    # A corrected baseline needs realign as well: stage-gate reads each
+    # stage's own file, so it cannot see that a PASS case is still anchored
+    # to an item the correction removed. Running only this one leaves the
+    # most dangerous drift invisible.
+    deliver = safeyaml.mapping(home / "deliver.yaml") or {}
+    baseline_now = safeyaml.mapping(home / "baseline.yaml") or {}
+    corrected = bool(deliver.get("reopen_baseline") or deliver.get("last_rewind")
+                     or safeyaml.as_int(baseline_now.get("revision"), 1) > 1)
+
     print(f"# stage-gate  {args.feature}")
     print(f"# {home}")
     print(f"# stages: {', '.join(ran) or '(none)'}")
     print()
+    if corrected:
+        print("NOTE 这张票的基线被订正过(reopen / 回退 / revision > 1)。")
+        print("     **本工具按阶段各查各的文件,看不出「一条 PASS 还挂在已删除的 item 上」。**")
+        print(f"     那类漂移要跑:python3 scripts/realign.py --feature {args.feature}")
+        print()
     if findings:
         for f in findings:
             print(f)
