@@ -50,6 +50,10 @@ linters:
         app-no-adapters:
           files:
             - "**/internal/app/**"
+            # Production code only. A test that drives a service against the
+            # real registry rather than a stand-in is the contract test, and
+            # faking the registry there would test the fake.
+            - "!$test"
           deny:
             - pkg: github.com/idev/internal/adapters
               desc: "app depends on ports, and cmd/ decides the adapter"

@@ -280,6 +280,15 @@ def targets(data: dict) -> list:
     return [
         (ROOT / "scripts" / "lib" / "_generated_kinds.py", gen_python(data)),
         (ROOT / "api" / "schemas" / "kinds.schema.json", gen_schema(data)),
+        # The Go side embeds the registry, and go:embed cannot reach a parent
+        # directory. A hand-made copy would be a second source of truth, so
+        # the copy is generated and --check keeps it in step.
+        (
+            ROOT / "internal" / "adapters" / "kindreg" / "kinds.yaml",
+            "# Generated from registry/kinds.yaml by scripts/gen-kinds.py. Do not edit.\n"
+            "# Present only because go:embed cannot reach a parent directory.\n"
+            + REGISTRY.read_text(encoding="utf-8"),
+        ),
         (
             ROOT / "references" / "workflow-schema.md",
             splice(ROOT / "references" / "workflow-schema.md", "kinds", gen_schema_prose(data)),
