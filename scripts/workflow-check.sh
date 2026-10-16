@@ -4,7 +4,11 @@
 # no extension_root), the same place workflow.py and s8-preflight read them.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-IDEV="${HOME}/.cursor/skills/idev"
+# Resolved, not hardcoded: this used to read ${HOME}/.cursor/skills/idev, so
+# running the checker from a second checkout validated the first checkout's
+# recipes and reported PASS about files the caller never touched. roots.py is
+# the one resolver (and the only one that honours IDEV_ROOT).
+IDEV="$(python3 "${ROOT}/lib/roots.py")"
 RECIPES="${IDEV}/workflows"
 EXTRA=()
 PROD="$(python3 "${IDEV}/scripts/lib/product_sink.py" --print-repo || true)"

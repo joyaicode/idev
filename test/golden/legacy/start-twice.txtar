@@ -1,0 +1,7 @@
+# a second start while a run is live is refused
+# cmd: W start lite-change --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED run already live at $WORK/.idev/task/demo/workflow/run.yaml; continue it or abort it

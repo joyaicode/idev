@@ -14,19 +14,22 @@ agent 层已合并进 idev，六道自检的结果：
 
 | 自检 | 结果 |
 |---|---|
-| `scripts/syntax-check.sh` | **PASS** — 12 个脚本可解析 |
+| `scripts/syntax-check.sh` | **PASS** — 75 个脚本可解析 |
 | `scripts/agents-check.py` | **PASS** — 5 agents / 29 kinds（24 委派 / 5 导体保留） |
 | `scripts/workflow-check.sh` | **PASS** — 配方与 run 契约 |
-| `scripts/selfcheck.sh` | **PASS** — 内核 61 条锁 |
-| `scripts/agent-smoke.sh` | **PASS** — 143 条断言，0 失败 |
-| `scripts/healthcheck.sh` | **4 个 FAIL，与本层无关** — 它要求 `~/.cursor/skills/idev` 是真目录，而当前拓扑是「git 仓是真源、那里是 symlink」 |
+| `scripts/refs-check.sh` | **PASS** — 文档交叉引用 |
+| `scripts/selfcheck.sh` | **PASS** — 内核 23 道锁 |
+| `scripts/agent-smoke.sh` | **PASS** — 481 条断言，0 失败 |
+| `scripts/healthcheck.sh` | **PASS** — warns=0 |
+| `scripts/test_signoff.py` | **PASS** — 140 条共享签字用例 |
+| `scripts/test_concurrency.py` | **PASS** — 三条写盘路径并发不丢失 |
 
 **按顺序跑，前一道过不了后面的结论就不成立：**
 
 ```bash
 bash scripts/syntax-check.sh     # 纯解析，零副作用
 python3 scripts/agents-check.py  # 定义 + 回报格式 + 登记表
-bash scripts/agent-smoke.sh      # 端到端 143 条
+bash scripts/agent-smoke.sh      # 端到端 481 条
 ```
 
 `syntax-check` 必须第一个跑 —— **smoke 抓不到 smoke 自己的语法错**。详见

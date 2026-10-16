@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from doc_home import homes  # noqa: E402
 from product_marker import load_marker, resolve_extension_repo  # noqa: E402
 from product_sink import product_repo  # noqa: E402
+from roots import kernel_root as roots_kernel_root  # noqa: E402
 
 try:
     import yaml
@@ -64,7 +65,8 @@ def _stage_mod():
 
 
 def kernel_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    """Re-exported from roots so this file cannot drift from the other four."""
+    return roots_kernel_root()
 
 
 def session_repo(raw: str) -> Path | None:

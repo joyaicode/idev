@@ -1,0 +1,7 @@
+# a gate PASS with a person but no quote
+# cmd: W record gate-plan PASS --by tester --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED human.gate PASS needs --quote with the person's confirm words (确认 / 全签 / 同意 / LGTM); it does not start with one of those words

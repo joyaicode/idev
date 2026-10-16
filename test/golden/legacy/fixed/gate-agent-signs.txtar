@@ -1,0 +1,7 @@
+# an agent name in --by. BEFORE P0: exit 0, the gate passed and run.yaml recorded signoff.by=idev-coder — is_human() only blacklisted agent/ai/cursor/assistant. AFTER: BLOCKED. Review §3.1.
+# cmd: W record gate-plan PASS --by idev-coder --quote 确认 --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED human.gate PASS needs --by with a person's name, not an agent

@@ -1,0 +1,10 @@
+# record the first step PASS with evidence
+# cmd: W record preflight PASS --evidence docs/x.md --feature demo
+
+-- exit --
+0
+-- output --
+NEXT scope-guard  kind=route.s4  status=pending
+OPEN conventions/SKILL.md
+DELEGATE idev-ops
+LABEL 确认不改 goal/baseline；小范围论证后改码

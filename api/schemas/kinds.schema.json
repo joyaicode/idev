@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/kinds.schema.json",
+  "title": "idev kind registry",
+  "description": "Generated from registry/kinds.yaml by scripts/gen-kinds.py. Do not edit.",
+  "type": "object",
+  "$defs": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "preflight.inputs",
+        "human.gate",
+        "shell.confirmed",
+        "ui.clean_pass_loop",
+        "ui.product_batch",
+        "route.s4",
+        "deliver.advance",
+        "deliver.code_pass",
+        "docs.backfill",
+        "docs.changelog",
+        "review.report",
+        "review.fix",
+        "verify.plan",
+        "verify.run",
+        "ops.classify",
+        "localdev.start",
+        "localdev.stop",
+        "localdev.approval_off",
+        "ui.lifecycle_run",
+        "ui.surface_scan",
+        "ui.coverage_lock",
+        "ui.playbook_sync",
+        "ui.fix_deposit",
+        "frontend.lint_fix",
+        "java.build",
+        "git.replace_check",
+        "git.sensitive_shield",
+        "git.sensitive_restore",
+        "git.commit_push"
+      ]
+    },
+    "agent": {
+      "type": "string",
+      "enum": [
+        "idev-deliver",
+        "idev-coder",
+        "idev-reviewer",
+        "idev-verifier",
+        "idev-ops"
+      ]
+    },
+    "executor": {
+      "type": "string",
+      "enum": [
+        "-",
+        "idev-deliver",
+        "idev-coder",
+        "idev-reviewer",
+        "idev-verifier",
+        "idev-ops"
+      ]
+    },
+    "lease": {
+      "type": "string",
+      "enum": [
+        "none",
+        "write",
+        "verify"
+      ]
+    },
+    "forbiddenKind": {
+      "type": "string",
+      "enum": [
+        "auto.accepted",
+        "auto.seal",
+        "multi.module.load",
+        "skip.signoff"
+      ]
+    }
+  }
+}

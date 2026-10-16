@@ -13,15 +13,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from product_marker import is_marked, resolve_extension_repo  # noqa: E402
+from roots import kernel_root  # noqa: E402
 
 try:
     import yaml
 except ImportError:
     yaml = None
-
-
-def kernel_root() -> Path:
-    return Path(__file__).resolve().parents[1]
 
 
 def install_product() -> Path | None:

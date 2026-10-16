@@ -603,7 +603,18 @@ def cmd_write(args: argparse.Namespace) -> int:
     target = dir_for(args.feature, args.repo)
     target.mkdir(parents=True, exist_ok=True)
     path = target / f"{record['step']}-{attempt}.yaml"
-    path.write_text(safeyaml.dump(record), encoding="utf-8")
+    # The filename is the only key a record has, and `attempt` defaults to 1.
+    # So writing a second record for the same step silently replaced the
+    # first: the failure that caused the retry disappeared, taking the reason
+    # for the retry with it. Create exclusively and make the caller say which
+    # attempt this is.
+    try:
+        with open(path, "x", encoding="utf-8") as fh:
+            fh.write(safeyaml.dump(record))
+    except FileExistsError:
+        print(f"BLOCKED {path} already records {record['step']} attempt {attempt}", file=sys.stderr)
+        print(f"HINT    set attempt: {attempt + 1} in the record (with brief.prior_failure) to log a retry", file=sys.stderr)
+        return 2
     print(f"OK   {path}" + (f"  ({human_secs(seconds)})" if seconds is not None else ""))
     if seconds is None:
         print("HINT no timing: pass started_at + finished_at to make duration observable")

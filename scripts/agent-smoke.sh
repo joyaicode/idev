@@ -115,6 +115,19 @@ expect 0 "write a clean record" -- \
   python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/good.yaml"
 contains "3m05s" "duration derived from started_at/finished_at (185s)"
 expect 0 "check passes" -- python3 "${S}/delegation.py" --repo "$TMP" check --feature "$FEATURE"
+
+# A record's filename is <step>-<attempt>.yaml, and attempt defaults to 1, so
+# writing twice used to replace the first record and report OK — losing the
+# failure that caused the retry. The second write is now BLOCKED.
+expect 2 "the same step and attempt cannot be written twice" -- \
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/good.yaml"
+contains "already records" "it says the record already exists"
+contains "attempt: 2" "it says how to log a retry instead"
+if grep -q "CONCLUSION: smoke" "${TICKET}/workflow/delegations/report-1.yaml"; then
+  ok "the first record survived the second write"
+else
+  bad "the blocked write damaged the record it refused to replace"
+fi
 expect 0 "replay prints the brief" -- \
   python3 "${S}/delegation.py" --repo "$TMP" replay --feature "$FEATURE" --step report
 contains "ticket_home" "replay includes the brief"
@@ -342,8 +355,35 @@ expect 0 "a complete §0 declaration passes" -- \
   python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/s0ok.yaml"
 
 # The §0 checks must not fire for other agents.
+# Its own step id, not a second write of good.yaml: since P0 a record is
+# created with O_EXCL, so re-writing the same step and attempt is BLOCKED
+# (exit 2) rather than silently replacing the first record.
+cat > "${TMP}/s0other.yaml" <<YAML
+step: report-s0
+kind: review.report
+agent: idev-reviewer
+attempt: 1
+brief:
+  ticket_home: ${TICKET}
+  repo: ${TMP}
+  stage: code
+  risk_tier: P1
+  must_read: conventions/coding.md
+  idev_root: ${REPO}
+metrics:
+  findings: 3
+  blocking: 1
+report:
+  raw: |
+    STATUS: PASS
+    FACTS: codegraph_context + 源码 scripts/delegation.py:1
+    DOC_DRIFT: 无
+    ASSUMED: 无
+    EVIDENCE: ${TICKET}/review.md
+    CONCLUSION: smoke
+YAML
 expect 0 "§0 checks do not apply to non-coder agents" -- \
-  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/good.yaml"
+  python3 "${S}/delegation.py" --repo "$TMP" write --feature "$FEATURE" --file "${TMP}/s0other.yaml"
 if printf '%s' "$LAST_OUT" | grep -q "s0-declared"; then
   bad "s0-declared fired for idev-reviewer"
 else

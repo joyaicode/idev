@@ -15,58 +15,28 @@ equal to KINDS.
 """
 from __future__ import annotations
 
-import os
-from pathlib import Path
+try:
+    import roots
+except ImportError:  # loaded as lib.kind_agents, with scripts/ on the path
+    from lib import roots  # type: ignore[no-redef]
 
 # The conductor (the session talking to the person) keeps these steps.
 CONDUCTOR = "-"
 
-# Agents that reach a judgement and therefore must declare where the facts
-# came from (references/boost.md 第零节). idev-deliver is out: its output is
-# the document, so "the document says" is not circular there.
-FACTS_AGENTS: tuple[str, ...] = (
-    "idev-ops",
-    "idev-coder",
-    "idev-reviewer",
-    "idev-verifier",
-)
+try:
+    import _generated_kinds as _gen
+except ImportError:  # loaded as lib.kind_agents, with scripts/ on the path
+    from lib import _generated_kinds as _gen  # type: ignore[no-redef]
 
-# The agent that declares coding.md §0 (CHANGE_KIND / CANON_TRIGGER /
-# TABLE_HIT). delegation.py runs the §0 checks against this name only, so
-# keeping it here means a rename stays visible: agents-check verifies the
-# name is really on the roster, instead of the checks silently going quiet.
-S0_AGENT = "idev-coder"
-
-AGENTS: tuple[str, ...] = (
-    "idev-deliver",
-    "idev-coder",
-    "idev-reviewer",
-    "idev-verifier",
-    "idev-ops",
-)
-
-# Agents that run this repo's boost scripts (failure_signature, hypothesis)
-# and refer to the repo root as $AGENT in their definitions. A brief without
-# agent_root sends them to an empty path, so delegation.py requires it for
-# these and agents-check.py requires the definitions to name $AGENT.
-# Single source: both scripts import this, they do not keep their own copy.
-BOOST_AGENTS: tuple[str, ...] = (
-    "idev-coder",
-    "idev-verifier",
-    "idev-ops",
-)
-
-# Why no agent sets Cursor's readonly: true. Cursor's readonly blocks every
-# write AND every state-changing shell command, so it breaks each of these
-# for the reason given. agents-check.py refuses readonly: true against this
-# table.
-READONLY_BREAKS: dict[str, str] = {
-    "idev-deliver": "写票 YAML、规格与产线文档",
-    "idev-coder": "改代码、跑构建与 git commit",
-    "idev-reviewer": "写 review.md",
-    "idev-verifier": "写 plan.yaml、report.md,启停本地服务",
-    "idev-ops": "写 ops.yaml、假设台账与 lessons",
-}
+# Generated from registry/kinds.yaml. FACTS_AGENTS are the agents that reach a
+# judgement and so must say where the facts came from (references/boost.md 第
+# 零节); idev-deliver is out because its output *is* the document, so "the
+# document says" would be circular there.
+FACTS_AGENTS: tuple = _gen.FACTS_AGENTS
+AGENTS: tuple = _gen.AGENTS
+BOOST_AGENTS: tuple = _gen.BOOST_AGENTS
+S0_AGENT = _gen.S0_AGENT
+READONLY_BREAKS: dict[str, str] = _gen.READONLY_BREAKS
 
 # kind -> the agent that executes it. CONDUCTOR = never delegate.
 #
@@ -83,65 +53,15 @@ READONLY_BREAKS: dict[str, str] = {
 # cannot sign. preflight.inputs is a probe, shell.confirmed is a single
 # pre-approved command, and ui.clean_pass_loop is the outer loop — all
 # cheaper for the conductor to run than to brief an agent for.
-KIND_AGENTS: dict[str, str] = {
-    "preflight.inputs": CONDUCTOR,
-    "route.s4": "idev-ops",
-    "deliver.advance": "idev-deliver",
-    "deliver.code_pass": "idev-coder",
-    "review.report": "idev-reviewer",
-    "review.fix": "idev-coder",
-    "verify.plan": "idev-verifier",
-    "verify.run": "idev-verifier",
-    "docs.backfill": "idev-deliver",
-    "docs.changelog": "idev-deliver",
-    "ops.classify": "idev-ops",
-    "human.gate": CONDUCTOR,
-    "shell.confirmed": CONDUCTOR,
-    "localdev.start": "idev-verifier",
-    "localdev.approval_off": "idev-verifier",
-    "localdev.stop": "idev-verifier",
-    "ui.lifecycle_run": "idev-verifier",
-    "ui.surface_scan": "idev-verifier",
-    "ui.playbook_sync": "idev-coder",
-    "ui.coverage_lock": "idev-verifier",
-    "ui.fix_deposit": "idev-ops",
-    "ui.clean_pass_loop": CONDUCTOR,
-    "ui.product_batch": CONDUCTOR,
-    "git.replace_check": "idev-coder",
-    "frontend.lint_fix": "idev-coder",
-    "java.build": "idev-coder",
-    "git.sensitive_shield": "idev-coder",
-    "git.sensitive_restore": "idev-coder",
-    "git.commit_push": "idev-coder",
-}
+KIND_AGENTS: dict[str, str] = _gen.KIND_AGENTS
 
 
-def kernel_root() -> Path:
-    """The idev root. This file lives inside it, so it is self-evident.
-
-    Before the agent layer merged into idev this had to probe a list of
-    aliases and verify each one, because the layer sat in its own repo and
-    took over the ~/.cursor/skills/idev name — so $IDEV could silently
-    resolve to the agent layer and every convention reference would dangle.
-    Merging deleted that entire problem: scripts/lib/ is two levels under
-    the root, and the conventions and the 44 scripts are right here.
-
-    IDEV_ROOT still overrides, for driving one checkout's agents against
-    another checkout's kernel.
-    """
-    env = os.environ.get("IDEV_ROOT", "").strip()
-    if env:
-        return Path(env).expanduser().resolve()
-    return Path(__file__).resolve().parents[2]
-
-
-# Files only the kernel has — used to verify an explicit IDEV_ROOT.
-KERNEL_MARKERS = ("scripts/lib/workflow_spec.py", "conventions/SKILL.md")
-
-
-def is_kernel(path: Path) -> bool:
-    base = path.expanduser()
-    return all((base / marker).is_file() for marker in KERNEL_MARKERS)
+# Root resolution moved to roots.py once it became clear this file was the
+# only one of five callers that honoured IDEV_ROOT. Re-exported so the names
+# stay importable from here.
+KERNEL_MARKERS = roots.KERNEL_MARKERS
+is_kernel = roots.is_kernel
+kernel_root = roots.kernel_root
 
 
 def agent_for(kind: str) -> str:
@@ -184,16 +104,23 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.kernel:
-        root = kernel_root()
-        if not is_kernel(root):
+        found = roots.resolve()
+        # roots.resolve() falls back rather than exploding, so a bad override
+        # no longer reaches here as a non-kernel path. Say so anyway: silently
+        # ignoring IDEV_ROOT is how someone audits the wrong checkout for an
+        # afternoon. The exit code stays 0 because the root is usable.
+        if found.note:
+            print(f"WARN    {found.note}", file=sys.stderr)
+            print(f"HINT    looked for {', '.join(KERNEL_MARKERS)}", file=sys.stderr)
+        if not is_kernel(found.path):
             print(
-                f"BLOCKED {root} does not look like an idev root\n"
+                f"BLOCKED {found.path} does not look like an idev root\n"
                 f"HINT    looked for {', '.join(KERNEL_MARKERS)}\n"
-                f"HINT    unset IDEV_ROOT to use this checkout, or point it at a real one",
+                f"HINT    this checkout is incomplete, not misconfigured",
                 file=sys.stderr,
             )
             return 2
-        print(root)
+        print(found.path)
         return 0
 
     if args.kind:

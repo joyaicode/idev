@@ -1641,4 +1641,23 @@ WFA="$(mktemp -d)"
 rm -rf "$WFA"
 echo "OK  workflow syntax, checker, driver"
 
+echo "=== lock: the kind table has one source and the copies are current ==="
+# registry/kinds.yaml is the source; five copies are generated from it
+# (two Python tables, one JSON enum, two prose tables). A stale copy is how
+# the old five-way duplication came back, so check it here rather than
+# trusting whoever added the kind to have run the generator.
+python3 "${HOME}/.cursor/skills/idev/scripts/gen-kinds.py" --check >/dev/null 2>&1 \
+  || fail "kind generated files are stale; run python3 scripts/gen-kinds.py"
+# The tables the rest of the kernel imports must come from the registry, not
+# from a hand-written dict that happens to agree with it today.
+for name in KINDS FORBIDDEN LEGACY_KINDS; do
+  grep -qE "^${name}(: [^=]+)? = _gen\.${name}" "${HOME}/.cursor/skills/idev/scripts/lib/workflow_spec.py" \
+    || fail "workflow_spec.${name} no longer comes from the registry"
+done
+grep -q "^KIND_AGENTS: dict\[str, str\] = _gen.KIND_AGENTS" "${HOME}/.cursor/skills/idev/scripts/lib/kind_agents.py" \
+  || fail "kind_agents.KIND_AGENTS no longer comes from the registry"
+grep -q "^KIND_COMMANDS = _gen.KIND_COMMANDS" "${HOME}/.cursor/skills/idev/scripts/lib/workflow_defaults.py" \
+  || fail "workflow_defaults.KIND_COMMANDS no longer comes from the registry"
+echo "OK  one kind source"
+
 echo "selfcheck PASS"

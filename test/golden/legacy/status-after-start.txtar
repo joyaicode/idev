@@ -1,0 +1,14 @@
+# the whole run as a table
+# cmd: W status --feature demo
+
+-- exit --
+0
+-- output --
+RUN $WORK/.idev/task/demo/workflow/run.yaml  lite-change  running
+  pending   preflight  preflight.inputs
+  pending   scope-guard  route.s4
+  pending   code-pass  deliver.code_pass
+  pending   plan  verify.plan
+  pending   gate-plan  human.gate
+  pending   run  verify.run
+  pending   gate-next  human.gate

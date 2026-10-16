@@ -1,0 +1,315 @@
+# The kind table. One source, five generated copies.
+#
+# Before this file the same 29 kinds were enumerated in five places:
+#   1. scripts/lib/workflow_spec.py        KINDS          (kind -> page)
+#   2. scripts/lib/kind_agents.py          KIND_AGENTS    (kind -> agent)
+#   3. scripts/lib/workflow_defaults.py    KIND_COMMANDS  (kind -> command key)
+#   4. references/workflow-schema.md       the prose table
+#   5. references/agents.md                the same table, inverted by agent
+# Two of them were locked against each other (selfcheck compares 4 to 1,
+# agents-check compares 2 to 1). Nothing checked 3 or 5 — and 5 carries a
+# hand-written tally ("29 个 kind:24 个委派,5 个导体保留") that no tool reads.
+# Adding a kind meant five edits and hoping.
+#
+# Now: edit this file, run `python3 scripts/gen-kinds.py`, and CI checks the
+# generated copies are current. Design §6.5, invariant I-7.
+#
+# Fields
+#   page       where the executor goes to read what this step means ("-" = none)
+#   agent      which subagent executes it; omit for `executor: conductor`
+#   lease      none | write | verify   (write = product code, verify = ticket artifacts only)
+#   verify     none | independent      (independent = a second agent must confirm the PASS)
+#   verifier   who confirms, when verify: independent
+#   command_key   the workflow-defaults.yaml key this kind reads, if any
+#   requires      brief fields that must be present
+#   requires_with step.with keys that must be present
+#   requires_gate_before  true when a human gate must have passed first
+#   legacy     true for kinds kept only so old runs still parse
+schema_version: 1
+
+agents:
+  idev-deliver:
+    role: deliver
+    stage: "deliver 阶段机 + 产线文档"
+    role_label: "需求 / 架构 / 文档"
+    facts: false
+    boost: false
+    readonly_breaks: "写票 YAML、规格与产线文档"
+  idev-coder:
+    role: deliver
+    stage: "`code` 阶段 + 构建提交"
+    role_label: "开发"
+    facts: true
+    boost: true
+    s0: true
+    readonly_breaks: "改代码、跑构建与 git commit"
+  idev-reviewer:
+    role: verify
+    stage: "评审"
+    role_label: "审查(**独立于开发**)"
+    facts: true
+    boost: false
+    readonly_breaks: "写 review.md"
+  idev-verifier:
+    role: verify
+    stage: "verify 模块 + 用例所需环境"
+    role_label: "测试"
+    facts: true
+    boost: true
+    readonly_breaks: "写 plan.yaml、report.md,启停本地服务"
+  idev-ops:
+    role: ops
+    stage: "ops 模块 + S4 论证"
+    role_label: "排障 / 诊断"
+    facts: true
+    boost: true
+    readonly_breaks: "写 ops.yaml、假设台账与 lessons"
+
+# The conductor is not an agent — it holds the signing authority — but it owns
+# rows in the same table, so the prose generator needs its labels too.
+conductor:
+  stage: "—"
+  role_label: "持签字权"
+
+# A run that names one of these is refused outright: they are the shapes of
+# "skip the human" that the kernel exists to prevent.
+forbidden: [auto.seal, auto.accepted, skip.signoff, multi.module.load]
+
+kinds:
+  # --- the conductor keeps these five -------------------------------------
+  preflight.inputs:
+    page: scripts/s8-preflight.sh
+    lands: "—"
+    note: "S8 前置可读性探针：缺票/缺路径/缺巡检包 → BLOCKED 并列缺项；不改代码"
+    executor: conductor
+    lease: none
+    why_kept: "纯可读性探针,导体自跑一条命令即可,委派反而多一跳"
+  human.gate:
+    page: references/chat-confirm-signoff.md
+    lands: "—"
+    note: "显式停问；无确认用语不前进；`label` 或 `with.will_write` 必须能还原一行 `将代写: …` + 证明上下文（见 chat-confirm）"
+    executor: conductor
+    lease: none
+    gate: true
+    why_kept: "签字权在导体,且只有人能给出确认原话"
+  shell.confirmed:
+    page: "-"
+    lands: "—"
+    note: "仅跑人已在配方或本轮确认的一条命令"
+    executor: conductor
+    lease: none
+    why_kept: "就一条人已确认的命令,组委派包比直接跑更贵"
+  ui.clean_pass_loop:
+    page: "-"
+    lands: "—"
+    note: "外层：本轮若曾有 FAIL，必须从 lifecycle_run **重头**再跑，直到一次全绿；受 `policy.max_clean_attempts` 限制"
+    executor: conductor
+    lease: none
+    command_key: commands.lifecycle
+    why_kept: "外层整轮循环控制(policy.max_clean_attempts),跨多个 step,不属于单步执行"
+  ui.product_batch:
+    page: "-"
+    lands: "—"
+    note: "历史 kind（旧 run 仍可校验）；新配方不要用"
+    executor: conductor
+    lease: none
+    legacy: true
+    why_kept: "历史 kind,新配方不用"
+
+  # --- deliver ------------------------------------------------------------
+  route.s4:
+    page: conventions/SKILL.md
+    lands: "conventions"
+    note: "分析论证 / evidence；改代码再开该类页"
+    agent: idev-ops
+    lease: verify
+    verify: none
+  deliver.advance:
+    page: deliver/SKILL.md
+    lands: "deliver"
+    note: "当前 stage 内推进允许动作；不跳阶段、不跳签字"
+    agent: idev-deliver
+    lease: write
+    verify: none
+  deliver.code_pass:
+    page: deliver/SKILL.md
+    lands: "deliver `code`"
+    note: "编码纪律：§0 匹配 + review.md + 扫描"
+    agent: idev-coder
+    lease: write
+    verify: independent
+    verifier: idev-reviewer
+  docs.backfill:
+    page: docs/SKILL.md
+    lands: "docs/SKILL.md"
+    note: "契约 / 经验回填（S5）。打开该技能，再按 setup-agents-docs 归类"
+    agent: idev-deliver
+    lease: write
+    verify: none
+  docs.changelog:
+    page: docs/SKILL.md
+    lands: "docs/SKILL.md"
+    note: "变更说明 / 任务小结。打开该技能后写入解析出的票目录"
+    agent: idev-deliver
+    lease: write
+    verify: none
+
+  # --- review -------------------------------------------------------------
+  review.report:
+    page: conventions/coding.md
+    lands: "conventions/coding"
+    note: "认语言 + 出审查报告；**不改代码**；命中标待签收（C14 例外）"
+    agent: idev-reviewer
+    lease: verify
+    verify: none
+  review.fix:
+    page: conventions/coding.md
+    lands: "conventions/coding"
+    note: "只改已签收 `I*`（及显式纳入的 `O*`）；此步恢复当轮必改"
+    agent: idev-coder
+    lease: write
+    verify: independent
+    verifier: idev-reviewer
+
+  # --- verify -------------------------------------------------------------
+  verify.plan:
+    page: verify/SKILL.md
+    lands: "verify"
+    note: "起草/调整 plan；请人 accepted（已 accepted 且未改用例 → 跳过，H4）"
+    agent: idev-verifier
+    lease: verify
+    verify: none
+    requires_with: [mode]
+  verify.run:
+    page: verify/SKILL.md
+    lands: "verify"
+    note: "跑已 accepted 且勾选的 cases"
+    agent: idev-verifier
+    lease: verify
+    verify: none
+    requires_with: [mode]
+
+  # --- ops ----------------------------------------------------------------
+  ops.classify:
+    page: ops/SKILL.md
+    lands: "ops"
+    note: "现象分类"
+    agent: idev-ops
+    lease: verify
+    verify: none
+    requires: [artifact]
+
+  # --- local environment ----------------------------------------------------
+  localdev.start:
+    page: "workflow-defaults.yaml commands.start"
+    lands: "—"
+    note: "执行扩展根 `.idev/workflow-defaults.yaml` 的 `commands.start`。`{target}` 换服务名，缺省 `all`。工作目录用 `coding_root` 与 `products.<product>.dir`。没有这些键 → 预检 BLOCKED，不猜命令"
+    agent: idev-verifier
+    lease: verify
+    verify: none
+    command_key: commands.start
+  localdev.stop:
+    page: "workflow-defaults.yaml commands.stop"
+    lands: "—"
+    note: "执行扩展根 `commands.stop`。没有该键 → 预检 BLOCKED。目录与 start 相同"
+    agent: idev-verifier
+    lease: verify
+    verify: none
+    command_key: commands.stop
+  localdev.approval_off:
+    page: "workflow-defaults.yaml commands.approval_off"
+    lands: "—"
+    note: "执行扩展根 `commands.approval_off`。没有该键 → 预检 BLOCKED。不要改产线路由或配置里的审批开关"
+    agent: idev-verifier
+    lease: verify
+    verify: none
+    command_key: commands.approval_off
+
+  # --- UI lifecycle ---------------------------------------------------------
+  ui.lifecycle_run:
+    page: "workflow-defaults.yaml commands.lifecycle"
+    lands: "verify / shell"
+    note: "全量生命周期 UI：执行扩展根 `commands.lifecycle`（或 plan 勾选的全量 suite）；没有该键 → 预检 BLOCKED。首红即停"
+    agent: idev-verifier
+    lease: verify
+    verify: none
+    command_key: commands.lifecycle
+  ui.surface_scan:
+    page: scripts/ui-surface-scan.py
+    lands: "shell"
+    note: "扫描 frontend views + locale → `e2e/inventory.json`（`ui-surface-scan.py`）"
+    agent: idev-verifier
+    lease: verify
+    verify: none
+  ui.coverage_lock:
+    page: scripts/ui-coverage-check.py
+    lands: "shell"
+    note: "`required` token 必须出现在 e2e 且挂 wave（`ui-coverage-check.py`）"
+    agent: idev-verifier
+    lease: verify
+    verify: none
+  ui.playbook_sync:
+    page: conventions/coding.md
+    lands: "conventions/coding"
+    note: "按 inventory 建设或进化 wave / helper；写只打本轮资源"
+    agent: idev-coder
+    lease: write
+    verify: independent
+    verifier: idev-reviewer
+  ui.fix_deposit:
+    page: conventions/evidence.md
+    lands: "conventions/docs + evidence"
+    note: "根因分析 → 修复 → 沉淀 lessons；回填 inventory.wave 后再锁"
+    agent: idev-ops
+    lease: verify
+    verify: none
+
+  # --- build and frontend ---------------------------------------------------
+  frontend.lint_fix:
+    page: "workflow-defaults.yaml commands.lint_fix"
+    lands: "conventions/coding"
+    note: "执行扩展根 `commands.lint_fix`。没有该键 → 预检 BLOCKED。残留 lint = FAIL"
+    agent: idev-coder
+    lease: write
+    verify: independent
+    verifier: idev-reviewer
+    command_key: commands.lint_fix
+  java.build:
+    page: "-"
+    lands: "—"
+    note: "有 `pom.xml` 则 `mvn … package`；`with.skip_tests: true`（默认）用 `-DskipTests`；`false` 跑单测"
+    agent: idev-coder
+    lease: write
+    verify: none
+
+  # --- git ------------------------------------------------------------------
+  git.replace_check:
+    page: "-"
+    lands: "—"
+    note: "扫描仓内 `go.mod`：未注释的本地 `replace => ./|../|/Users|绝对路径` → FAIL（须注释掉再提交）"
+    agent: idev-coder
+    lease: write
+    verify: independent
+    verifier: idev-reviewer
+  git.sensitive_shield:
+    page: references/workflow-repo-commit.md
+    lands: "—"
+    note: "提交前屏蔽敏感配置（备份 → 占位符写入工作区）；清单见 workflow-repo-commit"
+    agent: idev-coder
+    lease: write
+    verify: none
+  git.sensitive_restore:
+    page: references/workflow-repo-commit.md
+    lands: "—"
+    note: "提交推送后从备份还原本地敏感配置"
+    agent: idev-coder
+    lease: write
+    verify: none
+  git.commit_push:
+    page: references/workflow-repo-commit.md
+    lands: "—"
+    note: "整仓 `git add -A` → commit → push 当前分支；须已过 human.gate"
+    agent: idev-coder
+    lease: write
+    verify: none
+    requires_gate_before: true

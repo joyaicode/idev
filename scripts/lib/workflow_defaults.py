@@ -21,14 +21,13 @@ except ImportError:
     yaml = None
 
 # Step kinds that read a command from workflow-defaults.yaml.
-KIND_COMMANDS = {
-    "localdev.start": "commands.start",
-    "localdev.stop": "commands.stop",
-    "localdev.approval_off": "commands.approval_off",
-    "ui.lifecycle_run": "commands.lifecycle",
-    "ui.clean_pass_loop": "commands.lifecycle",
-    "frontend.lint_fix": "commands.lint_fix",
-}
+try:
+    import _generated_kinds as _gen
+except ImportError:  # loaded as lib.<module>, with scripts/ on the path
+    from lib import _generated_kinds as _gen  # type: ignore[no-redef]
+
+# Generated from registry/kinds.yaml (the `command_key` field).
+KIND_COMMANDS = _gen.KIND_COMMANDS
 
 
 def defaults_file(repo: str | Path) -> tuple[Path | None, str]:

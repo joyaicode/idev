@@ -1,0 +1,7 @@
+# an unknown status
+# cmd: W record scope-guard MAYBE --feature demo
+
+-- exit --
+1
+-- output --
+status must be one of ['BLOCKED', 'FAIL', 'PASS', 'SKIPPED', 'UNPROVEN']

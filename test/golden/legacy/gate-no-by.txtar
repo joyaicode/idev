@@ -1,0 +1,7 @@
+# a gate PASS with no --by
+# cmd: W record gate-plan PASS --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED human.gate PASS needs --by with a person's name, not an agent

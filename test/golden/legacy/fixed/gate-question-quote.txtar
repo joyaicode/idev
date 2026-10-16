@@ -1,0 +1,7 @@
+# a question as the confirmation. BEFORE P0: exit 0 — is_confirm() was a prefix test, so 同意吗 started with 同意 and counted. AFTER: BLOCKED, reason=question. Review §3.1.
+# cmd: W record gate-plan PASS --by tester --quote 同意吗 --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED human.gate PASS needs --quote with the person's confirm words (确认 / 全签 / 同意 / LGTM); it reads as a question, not a decision

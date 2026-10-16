@@ -63,6 +63,10 @@ echo "  security-and-hardening: ${SEC:-MISSING}"
 
 echo "=== product code pages ==="
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+# The guide paths below are printed for a person or an agent to open, so they
+# have to be the paths that actually exist on this machine rather than the
+# conventional alias — which may not be installed in a fresh checkout.
+IDEV="$(python3 "${ROOT}/lib/roots.py")"
 ctx=(python3 "$ROOT/session-context.py" --repo "$REPO" --stage code)
 if [ -n "${IDEV_PRODUCT:-}" ]; then
   ctx+=(--product "$IDEV_PRODUCT")
@@ -76,8 +80,8 @@ else
 fi
 
 echo "=== open these guides (then map hits to P#/C#/R#) ==="
-echo "1) ALWAYS: ~/.cursor/skills/idev/conventions/coding.md  (§0)"
-echo "   tables: ~/.cursor/skills/idev/conventions/coding-tables.md  (§1/§2/§3)"
+echo "1) ALWAYS: ${IDEV}/conventions/coding.md  (§0)"
+echo "   tables: ${IDEV}/conventions/coding-tables.md  (§1/§2/§3)"
 [ -n "$CQ" ] && echo "2) five-axis: $CQ/SKILL.md"
 [ -n "$CR" ] && echo "3) checklist: $CR/assets/review-checklist.md"
 [ -n "$SEC" ] && echo "4) security: $SEC/SKILL.md"
@@ -85,7 +89,7 @@ echo "   tables: ~/.cursor/skills/idev/conventions/coding-tables.md  (§1/§2/§
 
 if [ "$has_java" = 1 ]; then
   echo "=== Java stack ==="
-  echo "  idev: ~/.cursor/skills/idev/conventions/java.md"
+  echo "  idev: ${IDEV}/conventions/java.md"
   if [ -n "$CR" ]; then
     if [ "$java_level" = "8" ] || [ "$java_level" = "unknown" ]; then
       echo "  guide: $CR/reference/java8.md"
@@ -105,7 +109,7 @@ fi
 
 if [ "$has_vue" = 1 ] || [ "$has_ts" = 1 ]; then
   echo "=== Frontend ==="
-  echo "  idev: ~/.cursor/skills/idev/conventions/coding.md"
+  echo "  idev: ${IDEV}/conventions/coding.md"
   [ -n "$CR" ] && echo "  guide: $CR/reference/vue.md"
   [ -n "$CR" ] && [ "$has_ts" = 1 ] && echo "  guide: $CR/reference/typescript.md"
 fi
@@ -117,7 +121,7 @@ if [ "$has_go" = 1 ]; then
 fi
 
 echo "=== 架构范式 ==="
-echo "  idev: ~/.cursor/skills/idev/conventions/canon.md  (T1-T12 念头表 / A1-A8 出门)"
+echo "  idev: ${IDEV}/conventions/canon.md  (T1-T12 念头表 / A1-A8 出门)"
 echo "  涉及加层/拆分/缓存/队列/重写 → 按 canon §1 协议扫 §2 信号，review.md 按 §7 模板记 T#"
 
 echo "=== review.md must record ==="

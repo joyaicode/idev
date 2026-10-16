@@ -1,0 +1,7 @@
+# changing a recorded step needs --note
+# cmd: W record preflight FAIL --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED preflight is already PASS; changing it needs --note

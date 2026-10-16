@@ -20,13 +20,17 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import doc_home  # noqa: E402
+import ids  # noqa: E402
 import kind_agents  # noqa: E402
+import safeyaml  # noqa: E402
 import workflow_defaults  # noqa: E402
 from product_marker import resolve_extension_repo  # noqa: E402
 from product_sink import kernel_root, product_repo, sink_dir  # noqa: E402
@@ -37,8 +41,8 @@ from workflow_spec import (  # noqa: E402
     STEP_STOP,
     check_recipe,
     check_run,
-    is_confirm,
     is_human,
+    parse_confirm,
     will_write_line,
 )
 
@@ -52,6 +56,19 @@ class Blocked(Exception):
     pass
 
 
+# Why a quote was refused, in the words a person would use. The parser knows
+# the reason; saying only "needs confirm words" sends them to re-type the
+# same sentence.
+WHY = {
+    "no-verb": "it does not start with one of those words",
+    "question": "it reads as a question, not a decision",
+    "negation": "it contains a refusal",
+    "hesitation": "it reads as hesitation, not a decision",
+    "unparsed-tail": "there is more in it than a confirmation",
+    "keyword-mismatch": "this gate needs its keyword (origin=… / 解除密封)",
+}
+
+
 def now() -> str:
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -63,8 +80,32 @@ def load_yaml(path: Path) -> Any:
 
 
 def dump_yaml(path: Path, data: Any) -> None:
+    """Write a run file so a reader never sees it half-written.
+
+    `path.write_text` truncates first, so a crash — or a reader arriving in
+    the middle — leaves a run.yaml that parses as something other than the
+    run. Temp file plus `os.replace` makes the swap atomic on the same
+    filesystem. Serialization goes through safeyaml so this file and the
+    three ledgers cannot drift into two dialects of yaml.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    _atomic_write(path, safeyaml.dump(data))
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def session_repo(arg: str) -> Path | None:
@@ -187,7 +228,8 @@ def write_report(run_path: Path, run: dict) -> Path:
     if run.get("revisions"):
         rows += ["", "## revisions", ""]
         rows += [f"- {r['at']} {r.get('step', '')} {r['note']}" for r in run["revisions"]]
-    report.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    report.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write(report, "\n".join(rows) + "\n")
     return report
 
 
@@ -239,6 +281,10 @@ def cmd_start(args: argparse.Namespace) -> int:
         run_path.rename(run_path.with_name(f"run-{dt.datetime.now():%Y%m%d-%H%M%S}.yaml"))
     run = {
         "schema_version": 1,
+        # Written, never read. idevd keys runs on this from P2 on; writing it
+        # now means the runs created during the migration already have the
+        # identity the Go side will look for.
+        "run_id": ids.ulid(),
         "workflow_id": recipe["id"],
         "recipe": str(recipe_path),
         "feature": feature or "-",
@@ -277,52 +323,73 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 def cmd_record(args: argparse.Namespace) -> int:
     path = find_run(args)
-    run = load_yaml(path)
-    if run["status"] not in ("running", "blocked"):
-        raise Blocked(f"run is {run['status']}; start a new one")
     status = args.status.upper()
     if status not in STEP_STATUS:
         raise SystemExit(f"status must be one of {sorted(STEP_STATUS)}")
-    steps = {s["id"]: s for s in run["steps"]}
-    step = steps.get(args.step)
-    if step is None:
-        raise Blocked(f"no step {args.step} in this run")
-    cur = current_step(run)
-    if cur is not None and step is not cur:
-        if "status" not in step:
-            raise Blocked(f"finish {cur['id']} first; record it SKIPPED to skip")
-        if not args.note:
-            raise Blocked(f"{step['id']} is already {step['status']}; changing it needs --note")
-    if step["kind"] == "human.gate":
-        if status == "PASS":
-            if not is_human(args.by or ""):
-                raise Blocked("human.gate PASS needs --by with a person's name, not an agent")
-            if not is_confirm(args.quote or ""):
-                raise Blocked("human.gate PASS needs --quote with the person's confirm words (确认 / 全签 / 同意 / LGTM)")
-            step["signoff"] = {"by": args.by.strip(), "quote": args.quote.strip(), "at": now()}
-        elif status == "SKIPPED" and not args.evidence:
-            raise Blocked("a gate is skipped only with --evidence of the earlier signoff")
-    if "status" in step:
-        note = args.note or "recorded again"
-        run["revisions"].append({"at": now(), "step": step["id"], "note": f"{step['status']} -> {status}: {note}"})
-    elif args.note:
-        step["note"] = args.note
-    step["status"] = status
-    step["at"] = now()
-    if args.evidence:
-        step["evidence"] = args.evidence
-    if any(s.get("status") in STEP_STOP for s in run["steps"]):
-        run["status"] = "blocked"
-    elif current_step(run) is None:
-        run["status"] = "done"
-    else:
-        run["status"] = "running"
-    errors: list[str] = []
-    check_run(run, path, errors)
-    if errors:
-        raise Blocked("; ".join(errors))
-    dump_yaml(path, run)
-    write_report(path, run)
+
+    # Read, decide and write under one lock. Before this, two `record` calls
+    # that overlapped each read the run, each applied its own step, and the
+    # second write erased the first — both of them printing the next step as
+    # if nothing had happened. check_run runs inside the lock too, so what is
+    # validated is what gets written.
+    done: dict = {}
+
+    def mutate(run: dict) -> dict:
+        if not run or "steps" not in run:
+            raise Blocked(f"{path} is empty or unreadable; not overwriting it")
+        if run["status"] not in ("running", "blocked"):
+            raise Blocked(f"run is {run['status']}; start a new one")
+        steps = {s["id"]: s for s in run["steps"]}
+        step = steps.get(args.step)
+        if step is None:
+            raise Blocked(f"no step {args.step} in this run")
+        cur = current_step(run)
+        if cur is not None and step is not cur:
+            if "status" not in step:
+                raise Blocked(f"finish {cur['id']} first; record it SKIPPED to skip")
+            if not args.note:
+                raise Blocked(f"{step['id']} is already {step['status']}; changing it needs --note")
+        if step["kind"] == "human.gate":
+            if status == "PASS":
+                if not is_human(args.by or ""):
+                    raise Blocked("human.gate PASS needs --by with a person's name, not an agent")
+                parsed = parse_confirm(args.quote or "")
+                if not parsed.ok:
+                    raise Blocked(
+                        f"human.gate PASS needs --quote with the person's confirm words "
+                        f"(确认 / 全签 / 同意 / LGTM); {WHY[parsed.reason]}"
+                    )
+                step["signoff"] = {"by": args.by.strip(), "quote": args.quote.strip(), "at": now()}
+            elif status == "SKIPPED" and not args.evidence:
+                raise Blocked("a gate is skipped only with --evidence of the earlier signoff")
+        if "status" in step:
+            note = args.note or "recorded again"
+            run.setdefault("revisions", []).append(
+                {"at": now(), "step": step["id"], "note": f"{step['status']} -> {status}: {note}"}
+            )
+        elif args.note:
+            step["note"] = args.note
+        step["status"] = status
+        step["at"] = now()
+        if args.evidence:
+            step["evidence"] = args.evidence
+        if any(s.get("status") in STEP_STOP for s in run["steps"]):
+            run["status"] = "blocked"
+        elif current_step(run) is None:
+            run["status"] = "done"
+        else:
+            run["status"] = "running"
+        errors: list[str] = []
+        check_run(run, path, errors)
+        if errors:
+            raise Blocked("; ".join(errors))
+        write_report(path, run)
+        done["run"] = run
+        done["step"] = step
+        return run
+
+    safeyaml.save_locked(path, mutate)
+    run, step = done["run"], done["step"]
     if status in STEP_STOP:
         ask = (run.get("policy") or {}).get("on_fail") == "ask"
         print(f"BLOCKED {step['id']} {status}; " + ("ask the person how to go on" if ask else "stop; fix and record again"))
@@ -332,11 +399,16 @@ def cmd_record(args: argparse.Namespace) -> int:
 
 def cmd_abort(args: argparse.Namespace) -> int:
     path = find_run(args)
-    run = load_yaml(path)
-    run["status"] = "aborted"
-    run["revisions"].append({"at": now(), "note": f"aborted: {args.note}"})
-    dump_yaml(path, run)
-    write_report(path, run)
+
+    def mutate(run: dict) -> dict:
+        if not run or "steps" not in run:
+            raise Blocked(f"{path} is empty or unreadable; not overwriting it")
+        run["status"] = "aborted"
+        run.setdefault("revisions", []).append({"at": now(), "note": f"aborted: {args.note}"})
+        write_report(path, run)
+        return run
+
+    safeyaml.save_locked(path, mutate)
     print(f"RUN ABORTED {path}")
     return 0
 

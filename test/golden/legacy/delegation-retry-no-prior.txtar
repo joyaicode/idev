@@ -1,0 +1,7 @@
+# attempt 2 with no brief.prior_failure
+# cmd: D write --feature demo --file $WORK/rec2.yaml
+
+-- exit --
+2
+-- output --
+BLOCKED attempt > 1 needs brief.prior_failure (the agent must read it)

@@ -1,0 +1,11 @@
+# start a 7-step recipe on a fresh ticket
+# cmd: W start lite-change --feature demo
+
+-- exit --
+0
+-- output --
+RUN $WORK/.idev/task/demo/workflow/run.yaml
+NEXT preflight  kind=preflight.inputs  status=pending
+OPEN scripts/s8-preflight.sh
+DELEGATE none; the conductor does this step
+LABEL 前置探针（票/路径/配方依赖可读；缺则 BLOCKED）

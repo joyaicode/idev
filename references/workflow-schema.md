@@ -39,39 +39,41 @@
 
 ## kind 登记表（加行，不新开 Skill）
 
+<!-- kinds:begin -->
 | kind | 落到 | 说明 |
 |------|------|------|
 | `preflight.inputs` | — | S8 前置可读性探针：缺票/缺路径/缺巡检包 → BLOCKED 并列缺项；不改代码 |
+| `human.gate` | — | 显式停问；无确认用语不前进；`label` 或 `with.will_write` 必须能还原一行 `将代写: …` + 证明上下文（见 chat-confirm） |
+| `shell.confirmed` | — | 仅跑人已在配方或本轮确认的一条命令 |
+| `ui.clean_pass_loop` | — | 外层：本轮若曾有 FAIL，必须从 lifecycle_run **重头**再跑，直到一次全绿；受 `policy.max_clean_attempts` 限制 |
+| `ui.product_batch` | — | 历史 kind（旧 run 仍可校验）；新配方不要用 |
 | `route.s4` | conventions | 分析论证 / evidence；改代码再开该类页 |
 | `deliver.advance` | deliver | 当前 stage 内推进允许动作；不跳阶段、不跳签字 |
 | `deliver.code_pass` | deliver `code` | 编码纪律：§0 匹配 + review.md + 扫描 |
+| `docs.backfill` | docs/SKILL.md | 契约 / 经验回填（S5）。打开该技能，再按 setup-agents-docs 归类 |
+| `docs.changelog` | docs/SKILL.md | 变更说明 / 任务小结。打开该技能后写入解析出的票目录 |
 | `review.report` | conventions/coding | 认语言 + 出审查报告；**不改代码**；命中标待签收（C14 例外） |
 | `review.fix` | conventions/coding | 只改已签收 `I*`（及显式纳入的 `O*`）；此步恢复当轮必改 |
 | `verify.plan` | verify | 起草/调整 plan；请人 accepted（已 accepted 且未改用例 → 跳过，H4） |
 | `verify.run` | verify | 跑已 accepted 且勾选的 cases |
-| `docs.backfill` | docs/SKILL.md | 契约 / 经验回填（S5）。打开该技能，再按 setup-agents-docs 归类 |
-| `docs.changelog` | docs/SKILL.md | 变更说明 / 任务小结。打开该技能后写入解析出的票目录 |
 | `ops.classify` | ops | 现象分类 |
-| `human.gate` | — | 显式停问；无确认用语不前进；`label` 或 `with.will_write` 必须能还原一行 `将代写: …` + 证明上下文（见 chat-confirm） |
-| `shell.confirmed` | — | 仅跑人已在配方或本轮确认的一条命令 |
 | `localdev.start` | — | 执行扩展根 `.idev/workflow-defaults.yaml` 的 `commands.start`。`{target}` 换服务名，缺省 `all`。工作目录用 `coding_root` 与 `products.<product>.dir`。没有这些键 → 预检 BLOCKED，不猜命令 |
-| `localdev.approval_off` | — | 执行扩展根 `commands.approval_off`。没有该键 → 预检 BLOCKED。不要改产线路由或配置里的审批开关 |
 | `localdev.stop` | — | 执行扩展根 `commands.stop`。没有该键 → 预检 BLOCKED。目录与 start 相同 |
+| `localdev.approval_off` | — | 执行扩展根 `commands.approval_off`。没有该键 → 预检 BLOCKED。不要改产线路由或配置里的审批开关 |
 | `ui.lifecycle_run` | verify / shell | 全量生命周期 UI：执行扩展根 `commands.lifecycle`（或 plan 勾选的全量 suite）；没有该键 → 预检 BLOCKED。首红即停 |
 | `ui.surface_scan` | shell | 扫描 frontend views + locale → `e2e/inventory.json`（`ui-surface-scan.py`） |
-| `ui.playbook_sync` | conventions/coding | 按 inventory 建设或进化 wave / helper；写只打本轮资源 |
 | `ui.coverage_lock` | shell | `required` token 必须出现在 e2e 且挂 wave（`ui-coverage-check.py`） |
+| `ui.playbook_sync` | conventions/coding | 按 inventory 建设或进化 wave / helper；写只打本轮资源 |
 | `ui.fix_deposit` | conventions/docs + evidence | 根因分析 → 修复 → 沉淀 lessons；回填 inventory.wave 后再锁 |
-| `ui.clean_pass_loop` | — | 外层：本轮若曾有 FAIL，必须从 lifecycle_run **重头**再跑，直到一次全绿；受 `policy.max_clean_attempts` 限制 |
-| `ui.product_batch` | — | 历史 kind（旧 run 仍可校验）；新配方不要用 |
-| `git.replace_check` | — | 扫描仓内 `go.mod`：未注释的本地 `replace => ./|../|/Users|绝对路径` → FAIL（须注释掉再提交） |
 | `frontend.lint_fix` | conventions/coding | 执行扩展根 `commands.lint_fix`。没有该键 → 预检 BLOCKED。残留 lint = FAIL |
 | `java.build` | — | 有 `pom.xml` 则 `mvn … package`；`with.skip_tests: true`（默认）用 `-DskipTests`；`false` 跑单测 |
+| `git.replace_check` | — | 扫描仓内 `go.mod`：未注释的本地 `replace => ./|../|/Users|绝对路径` → FAIL（须注释掉再提交） |
 | `git.sensitive_shield` | — | 提交前屏蔽敏感配置（备份 → 占位符写入工作区）；清单见 workflow-repo-commit |
 | `git.sensitive_restore` | — | 提交推送后从备份还原本地敏感配置 |
 | `git.commit_push` | — | 整仓 `git add -A` → commit → push 当前分支；须已过 human.gate |
 
 禁止 kind：`auto.seal` / `auto.accepted` / `skip.signoff` / `multi.module.load`。
+<!-- kinds:end -->
 
 ## run 实例（仓内）
 

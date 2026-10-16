@@ -456,7 +456,17 @@ def render(text: str) -> str:
     return "\n".join(lines)
 
 
-def next_path(folder: Path, when: dt.datetime) -> Path:
+def next_path(folder: Path, when: dt.datetime, tries: int = 999) -> Path:
+    """Reserve the next free YYYYMMDD-NNN name, atomically.
+
+    Globbing for the highest number and adding one is a race: two rounds
+    appended in the same moment both saw 002, both computed 003, and the
+    second write erased the first — silently, because each one reported the
+    name it thought it had written. O_EXCL makes the reservation the same
+    operation as the check, so the loser gets 004 instead of nothing.
+
+    The file is created empty; the caller writes into the reserved name.
+    """
     folder.mkdir(parents=True, exist_ok=True)
     prefix = when.strftime("%Y%m%d")
     existing = sorted(folder.glob(prefix + "-*.yaml"))
@@ -467,7 +477,14 @@ def next_path(folder: Path, when: dt.datetime) -> Path:
             n = int(last) + 1
         except ValueError:
             n = len(existing) + 1
-    return folder / ("%s-%03d.yaml" % (prefix, n))
+    for _ in range(tries):
+        candidate = folder / ("%s-%03d.yaml" % (prefix, n))
+        try:
+            os.close(os.open(candidate, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644))
+            return candidate
+        except FileExistsError:
+            n += 1
+    raise SystemExit(f"BLOCKED no free trace name under {folder} after {tries} tries")
 
 
 def cmd_check(path: str) -> int:

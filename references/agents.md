@@ -77,17 +77,20 @@
 
 按内核自己的**生命周期阶段与模块**归并,一个 agent 端到端拥有一个阶段,而不是按动作切碎:
 
+<!-- agents-table:begin -->
 | agent | 对应阶段 / 模块 | 角色 | 承接 kind |
 |---|---|---|---|
 | `idev-deliver` | deliver 阶段机 + 产线文档 | 需求 / 架构 / 文档 | `deliver.advance` · `docs.backfill` · `docs.changelog` |
 | `idev-coder` | `code` 阶段 + 构建提交 | 开发 | `deliver.code_pass` · `review.fix` · `ui.playbook_sync` · `frontend.lint_fix` · `java.build` · `git.replace_check` · `git.sensitive_shield` · `git.sensitive_restore` · `git.commit_push` |
 | `idev-reviewer` | 评审 | 审查(**独立于开发**) | `review.report` |
-| `idev-verifier` | verify 模块 + 用例所需环境 | 测试 | `verify.plan` · `verify.run` · `ui.lifecycle_run` · `ui.surface_scan` · `ui.coverage_lock` · `localdev.start` · `localdev.stop` · `localdev.approval_off` |
+| `idev-verifier` | verify 模块 + 用例所需环境 | 测试 | `verify.plan` · `verify.run` · `localdev.start` · `localdev.stop` · `localdev.approval_off` · `ui.lifecycle_run` · `ui.surface_scan` · `ui.coverage_lock` |
 | `idev-ops` | ops 模块 + S4 论证 | 排障 / 诊断 | `route.s4` · `ops.classify` · `ui.fix_deposit` |
 | **导体** | — | 持签字权 | `preflight.inputs` · `human.gate` · `shell.confirmed` · `ui.clean_pass_loop` · `ui.product_batch` |
 
-29 个 kind:24 个委派,5 个导体保留。每个 kind 的**落点页**仍只认内核 `workflow_spec.KINDS`,
-本页不复制那一列。
+29 个 kind:24 个委派,5 个导体保留。每个 kind 的**落点页**见 `registry/kinds.yaml` 的 `page`,本页不复制那一列。
+
+这张表由 `scripts/gen-kinds.py` 从 `registry/kinds.yaml` 生成。加一个 kind 只改那一个文件。
+<!-- agents-table:end -->
 
 **为什么这样分而不是更细:** 一个阶段里的动作天然同进同退 —— 写完代码就要构建和提交,
 跑用例就要先起环境,论证和排障都走 `evidence.md` 的同一套闭环。切得更碎只会让导体
@@ -109,7 +112,7 @@
 
 ## 导体回路(每步五动作)
 
-1. `python3 scripts/workflow-agent.py next --feature <f>` → 读 `NEXT` / `OPEN` / `DELEGATE` 三行
+1. `python3 scripts/workflow.py next --feature <f>` → 读 `NEXT` / `OPEN` / `DELEGATE` 三行
 2. `DELEGATE none` → 导体自己做这一步;`DELEGATE <agent>` → 组委派包(见下)
 3. **记下 `started_at`**,然后委派:Claude Code 用 Agent 工具,Cursor 用 `/<agent-name>`。
    **一步只派一个 agent**
@@ -121,7 +124,7 @@
    ```
    它会算五项诚实性检查并写回,`duration_s` 由两个时间戳算出。
    `no-signoff-write` 或 `metrics-shape` 失败 → 退出码 2,**停下来**,不要 record
-6. `workflow-agent.py record <step> <STATUS> --evidence <路径>`。`human.gate` 另须
+6. `workflow.py record <step> <STATUS> --evidence <路径>`。`human.gate` 另须
    `--by <人名> --quote "<确认原话>"`
 
 两个时间戳是**可选**的 —— 可观测性不该挡住一次正常委派。但缺了就没有耗时视图,
@@ -218,7 +221,7 @@ CALL_KINDS = ("script", "module", "skill", "repo", "tool", "agent")
 
 委派记成 `calls[].kind: agent`,`target` 写 agent 名。**不要记成 `module`** —— 否则一轮里多次委派会被周审计的 `multi-exec-calls` 当成「calls 跨多执行模块」硬报警。
 
-补丁见 `patches/0002-trace-agent-call-kind.patch`。打之前 `calls[].kind` 先用 `tool`,周审计不会报警,但区分度差。
+`calls[].kind: agent` 已经在 `CALL_KINDS` 里，直接用即可。记成 `tool` 也不会被周审计报警，但分不出「这一轮委派了谁」。
 
 ## 自检
 

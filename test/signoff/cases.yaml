@@ -1,0 +1,198 @@
+# Shared signoff cases: Python reads this today, Go reads it from P1 on.
+#
+# The point of one file is that the two implementations cannot drift while
+# both exist. `scripts/test_signoff.py` and `internal/domain/signoff` must
+# agree on every row here.
+#
+# The `confirm` rows marked `source: design-10.3` are the table in
+# ~/Downloads/idev-refactor-design.md §10.3 verbatim; four of them pass under
+# the old prefix matcher and must not.
+#
+# `human` rows assume blacklist-only mode (no people.yaml in force). The
+# runner asserts that, because a whitelist would change every `ok: true` row.
+schema_version: 1
+mode: blacklist-only
+
+confirm:
+  # --- design §10.3, the authoritative table -------------------------------
+  - { quote: "确认", ok: true, reason: ok, source: design-10.3 }
+  - { quote: "全签!", ok: true, reason: ok, source: design-10.3 }
+  - { quote: "LGTM。", ok: true, reason: ok, source: design-10.3 }
+  - { quote: "同意", ok: true, reason: ok, source: design-10.3 }
+  - { quote: "确认 origin=code", gate_type: defect_origin, origin: code,
+      ok: true, reason: ok, source: design-10.3 }
+  - { quote: "确认 origin=arch", gate_type: defect_origin, origin: code,
+      ok: false, reason: keyword-mismatch, source: design-10.3 }
+  # These four were True under `low.startswith(word)`.
+  - { quote: "确认不了", ok: false, reason: unparsed-tail, source: design-10.3, regression: true }
+  - { quote: "同意吗", ok: false, reason: question, source: design-10.3, regression: true }
+  - { quote: "LGTM but wait", ok: false, reason: unparsed-tail, source: design-10.3, regression: true }
+  - { quote: "确认？", ok: false, reason: question, source: design-10.3, regression: true }
+  - { quote: "继续", ok: false, reason: no-verb, source: design-10.3 }
+
+  # --- verbs alone ---------------------------------------------------------
+  - { quote: "全签", ok: true, reason: ok }
+  - { quote: "lgtm", ok: true, reason: ok }
+  - { quote: "LGTM", ok: true, reason: ok }
+  - { quote: "Lgtm", ok: true, reason: ok }
+
+  # --- trailing punctuation is noise, not meaning ---------------------------
+  - { quote: "确认。", ok: true, reason: ok }
+  - { quote: "确认！", ok: true, reason: ok }
+  - { quote: "确认.", ok: true, reason: ok }
+  - { quote: "确认!!!", ok: true, reason: ok }
+  - { quote: "确认。。。", ok: true, reason: ok }
+  - { quote: "确认～", ok: true, reason: ok }
+  - { quote: "确认~", ok: true, reason: ok }
+  - { quote: "  确认  ", ok: true, reason: ok }
+
+  # --- NFKC folds the full-width forms -------------------------------------
+  - { quote: "ＬＧＴＭ", ok: true, reason: ok }
+  - { quote: "同意，sealed", ok: true, reason: ok }
+  - { quote: "确认：提测", ok: true, reason: ok }
+  - { quote: "确认, accepted", ok: true, reason: ok }
+  - { quote: "确认:aligned", ok: true, reason: ok }
+
+  # --- qualifiers the grammar allows ---------------------------------------
+  - { quote: "确认 plan", ok: true, reason: ok }
+  - { quote: "确认 方案", ok: true, reason: ok }
+  - { quote: "确认 拆解", ok: true, reason: ok }
+  - { quote: "确认 基线", ok: true, reason: ok }
+  - { quote: "确认 提测", ok: true, reason: ok }
+  - { quote: "同意 sealed", ok: true, reason: ok }
+  - { quote: "确认 resolved", ok: true, reason: ok }
+  - { quote: "lgtm 提测", ok: true, reason: ok }
+  - { quote: "LGTM  提测", ok: true, reason: ok }
+  - { quote: "确认 sealed accepted", ok: true, reason: ok }
+  - { quote: "确认 sealed, accepted", ok: true, reason: ok }
+
+  # --- destructive gates need their keyword --------------------------------
+  - { quote: "确认 解除密封", gate_type: reopen_baseline, ok: true, reason: ok }
+  - { quote: "确认 reopen", gate_type: reopen_baseline, ok: true, reason: ok }
+  - { quote: "确认", gate_type: reopen_baseline, ok: false, reason: keyword-mismatch }
+  - { quote: "确认 基线", gate_type: reopen_baseline, ok: false, reason: keyword-mismatch }
+  - { quote: "确认 origin=req", gate_type: defect_origin, origin: req, ok: true, reason: ok }
+  - { quote: "确认 origin=arch", gate_type: defect_origin, origin: arch, ok: true, reason: ok }
+  - { quote: "确认", gate_type: defect_origin, origin: code, ok: false, reason: keyword-mismatch }
+  - { quote: "确认 origin=test", gate_type: defect_origin, origin: test, ok: false, reason: unparsed-tail }
+  # A plain gate does not demand a keyword.
+  - { quote: "确认", gate_type: step_confirm, ok: true, reason: ok }
+
+  # --- questions -----------------------------------------------------------
+  - { quote: "确认吗", ok: false, reason: question }
+  - { quote: "同意么", ok: false, reason: question }
+  - { quote: "确认嘛", ok: false, reason: question }
+  - { quote: "确认呢", ok: false, reason: question }
+  - { quote: "是否确认", ok: false, reason: question }
+  - { quote: "能否确认", ok: false, reason: question }
+  - { quote: "可否确认", ok: false, reason: question }
+  - { quote: "要不要确认", ok: false, reason: question }
+  - { quote: "确认?", ok: false, reason: question }
+
+  # --- refusals and hesitations --------------------------------------------
+  - { quote: "不确认", ok: false, reason: no-verb }
+  - { quote: "没确认", ok: false, reason: no-verb }
+  - { quote: "别确认", ok: false, reason: no-verb }
+  - { quote: "确认一下", ok: false, reason: unparsed-tail }
+  - { quote: "同意了", ok: false, reason: unparsed-tail }
+  - { quote: "确认吧", ok: false, reason: unparsed-tail }
+  - { quote: "确认 待定", ok: false, reason: unparsed-tail }
+  - { quote: "确认，但是", ok: false, reason: unparsed-tail }
+  - { quote: "lgtm later", ok: false, reason: unparsed-tail }
+  - { quote: "确认 hold", ok: false, reason: unparsed-tail }
+  - { quote: "lgtm, not yet", ok: false, reason: unparsed-tail }
+  - { quote: "确认 先等等", ok: false, reason: unparsed-tail }
+  - { quote: "我确认", ok: false, reason: no-verb }
+  - { quote: "确认确认", ok: false, reason: unparsed-tail }
+
+  # --- words that are not confirmations ------------------------------------
+  - { quote: "", ok: false, reason: no-verb }
+  - { quote: "   ", ok: false, reason: no-verb }
+  - { quote: "ok", ok: false, reason: no-verb }
+  - { quote: "OK", ok: false, reason: no-verb }
+  - { quote: "ＯＫ", ok: false, reason: no-verb }
+  - { quote: "好", ok: false, reason: no-verb }
+  - { quote: "好的", ok: false, reason: no-verb }
+  - { quote: "continue", ok: false, reason: no-verb }
+  - { quote: "go", ok: false, reason: no-verb }
+  - { quote: "驳回", ok: false, reason: no-verb }
+  - { quote: "驳回 origin=code", ok: false, reason: no-verb }
+
+  # --- injection shapes: a stray invisible character is not a signoff ------
+  # NFKC leaves zero-width characters in place, so the verb no longer matches
+  # and the quote is refused rather than silently accepted.
+  - { quote: "确​认", ok: false, reason: no-verb }
+  - { quote: "​确认", ok: false, reason: no-verb }
+  - { quote: "确认​", ok: false, reason: unparsed-tail }
+  - { quote: "确认 👍", ok: false, reason: unparsed-tail }
+  - { quote: "👍", ok: false, reason: no-verb }
+  - { quote: "确认\norigin=code", gate_type: defect_origin, origin: code, ok: true, reason: ok }
+  - { quote: "确认\t提测", ok: true, reason: ok }
+
+reject:
+  - { quote: "驳回", ok: true }
+  - { quote: "驳回 origin=code", ok: true }
+  - { quote: "驳回。", ok: true }
+  - { quote: "确认", ok: false }
+  - { quote: "驳回吗", ok: false }
+  - { quote: "驳回一下", ok: false }
+  - { quote: "", ok: false }
+
+human:
+  # --- the five kernel agents, by name and by prefix ----------------------
+  - { name: "idev-coder", ok: false, source: design-10.3, regression: true }
+  - { name: "idev-deliver", ok: false }
+  - { name: "idev-reviewer", ok: false }
+  - { name: "idev-verifier", ok: false }
+  - { name: "idev-ops", ok: false }
+  - { name: "idev-selftest", ok: false }
+  - { name: "idev_coder", ok: false }
+  - { name: "IDEV-CODER", ok: false }
+
+  # --- models signing under their product name ----------------------------
+  - { name: "Claude", ok: false, source: design-10.3, regression: true }
+  - { name: "claude", ok: false }
+  - { name: "CLAUDE", ok: false }
+  - { name: "gpt", ok: false }
+  - { name: "chatgpt", ok: false }
+  - { name: "codex", ok: false }
+  - { name: "gemini", ok: false }
+  - { name: "grok", ok: false }
+  - { name: "copilot", ok: false }
+  - { name: "composer", ok: false }
+  - { name: "sonnet", ok: false }
+  - { name: "opus", ok: false }
+
+  # --- roles are not people ----------------------------------------------
+  - { name: "llm", ok: false }
+  - { name: "bot", ok: false }
+  - { name: "model", ok: false }
+  - { name: "subagent", ok: false }
+  - { name: "conductor", ok: false }
+  - { name: "system", ok: false }
+  - { name: "root", ok: false }
+  - { name: "human", ok: false }
+
+  # --- the original four -------------------------------------------------
+  - { name: "agent", ok: false }
+  - { name: "ai", ok: false }
+  - { name: "cursor", ok: false }
+  - { name: "assistant", ok: false }
+  - { name: "AI", ok: false }
+  - { name: "Cursor", ok: false }
+
+  # --- substring rule ----------------------------------------------------
+  - { name: "MyAgent", ok: false }
+  - { name: "some-assistant", ok: false }
+  - { name: "agent-7", ok: false }
+
+  # --- nothing at all ----------------------------------------------------
+  - { name: "", ok: false }
+  - { name: "   ", ok: false }
+
+  # --- people, under blacklist-only --------------------------------------
+  - { name: "wangwei794", ok: true }
+  - { name: "tester", ok: true }
+  - { name: "张三", ok: true }
+  - { name: "Alice", ok: true }
+  - { name: "evolve-curator", ok: true }

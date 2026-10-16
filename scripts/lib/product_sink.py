@@ -23,16 +23,11 @@ KINDS = {
 }
 
 
-def kernel_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def _inside(child: Path, parent: Path) -> bool:
-    try:
-        child.resolve().relative_to(parent.resolve())
-        return True
-    except ValueError:
-        return False
+# kernel_root and the "is this path inside the kernel" helper both live in
+# roots.py now. This file's copy ignored IDEV_ROOT while kind_agents honoured
+# it, so an override moved the agent table but not the sink.
+from roots import inside as _inside  # noqa: E402
+from roots import kernel_root  # noqa: E402
 
 
 def product_repo(start: Path | None = None) -> Path | None:

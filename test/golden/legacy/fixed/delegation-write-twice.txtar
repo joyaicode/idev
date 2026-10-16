@@ -1,0 +1,8 @@
+# the same step and attempt written twice. BEFORE P0: exit 0 and the first record was replaced — the failure that caused the retry vanished, with both calls reporting OK. AFTER: exit 2, the first record is intact. Review §3.2.
+# cmd: D write --feature demo --file $WORK/rec.yaml
+
+-- exit --
+2
+-- output --
+BLOCKED $WORK/.idev/task/demo/workflow/delegations/code-pass-1.yaml already records code-pass attempt 1
+HINT    set attempt: 2 in the record (with brief.prior_failure) to log a retry

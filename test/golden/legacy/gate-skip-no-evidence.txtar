@@ -1,0 +1,7 @@
+# skipping a gate without evidence
+# cmd: W record gate-plan SKIPPED --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED a gate is skipped only with --evidence of the earlier signoff

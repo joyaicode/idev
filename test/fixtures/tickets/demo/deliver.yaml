@@ -1,0 +1,30 @@
+schema_version: 2
+feature: demo
+stage: code
+risk_tier: P1
+goal: "A fixture ticket. It exists so the golden recording has something real to drive."
+baseline:
+  sealed: true
+  revision: 1
+  by: tester
+  at: "2026-10-01T09:00:00+08:00"
+semantic_gate:
+  req-review:
+    passed: true
+    by: tester
+    at: "2026-10-01T09:00:00+08:00"
+  req:
+    passed: true
+    by: tester
+    at: "2026-10-02T09:00:00+08:00"
+  arch:
+    passed: true
+    by: tester
+    at: "2026-10-03T09:00:00+08:00"
+req:
+  accepted: true
+  by: tester
+arch:
+  accepted: true
+  by: tester
+revisions: []

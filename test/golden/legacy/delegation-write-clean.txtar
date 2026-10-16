@@ -1,0 +1,8 @@
+# a clean delegation record
+# cmd: D write --feature demo --file $WORK/rec.yaml
+
+-- exit --
+0
+-- output --
+OK   $WORK/.idev/task/demo/workflow/delegations/code-pass-1.yaml
+HINT no timing: pass started_at + finished_at to make duration observable

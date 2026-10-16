@@ -33,16 +33,11 @@ SKIP_DIRS = {
 }
 
 
-def kernel_root() -> Path:
-    return Path(__file__).resolve().parents[2]
-
-
-def _inside(child: Path, parent: Path) -> bool:
-    try:
-        child.resolve().relative_to(parent.resolve())
-        return True
-    except ValueError:
-        return False
+# One root resolver for all five callers; see roots.py. Imported under the
+# old private name because `roots` is already a local variable in three
+# functions below.
+from roots import inside as _inside  # noqa: E402
+from roots import kernel_root  # noqa: E402
 
 
 def load_marker(repo: str | Path) -> dict[str, Any]:

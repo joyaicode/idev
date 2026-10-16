@@ -1,0 +1,7 @@
+# recording a later step before the current one
+# cmd: W record run PASS --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED finish scope-guard first; record it SKIPPED to skip
