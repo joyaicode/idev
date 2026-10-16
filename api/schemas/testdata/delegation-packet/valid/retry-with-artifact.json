@@ -1,0 +1,28 @@
+{
+  "schema": "idev.delegation-packet/1",
+  "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ84",
+  "run_id": "01M4ZS7F90PJA5BGZKRQGE4V78",
+  "repo_root": "/repo",
+  "ticket_dir": "/repo/.idev/task/demo",
+  "idev_root": "/idev",
+  "feature": { "key": "demo", "stage": "ops", "risk_tier": "P0" },
+  "step": { "id": "classify", "kind": "ops.classify", "label": "现象分类" },
+  "agent": "idev-ops",
+  "attempt": 2,
+  "prior_failure": "evidence-present FAIL: 回报里没有产物路径",
+  "must_read": ["/idev/ops/SKILL.md"],
+  "artifact": "/opt/app/app-1.2.3.jar",
+  "forbidden": ["改代码"],
+  "lease": {
+    "id": "l-02",
+    "token": "idv_l_def",
+    "fencing_token": 1,
+    "purpose": "verify",
+    "write_paths": [".idev/task/demo/**"],
+    "expires_at": "2026-10-16T14:00:00Z"
+  },
+  "return_contract": {
+    "schema": "idev.delegation-return/1",
+    "required_fields": ["status", "evidence", "assumed", "facts"]
+  }
+}

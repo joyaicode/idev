@@ -1,0 +1,41 @@
+{
+  "schema": "idev.delegation-packet/1",
+  "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+  "run_id": "01M4ZS7F90PJA5BGZKRQGE4V78",
+  "repo_root": "/Users/x/go/src/product",
+  "ticket_dir": "/Users/x/go/src/product/.idev/task/demo",
+  "idev_root": "/Users/x/go/src/github.com/idev",
+  "feature": { "key": "demo", "stage": "code", "risk_tier": "P1" },
+  "step": {
+    "id": "code-pass",
+    "kind": "deliver.code_pass",
+    "label": "编码纪律与 review",
+    "with": {}
+  },
+  "agent": "idev-coder",
+  "attempt": 1,
+  "must_read": ["/Users/x/go/src/github.com/idev/deliver/SKILL.md"],
+  "forbidden": ["写 sealed/accepted/aligned/resolved", "改密封基线正文"],
+  "lease": {
+    "id": "l-01",
+    "token": "idv_l_abc",
+    "fencing_token": 3,
+    "purpose": "write",
+    "write_paths": ["src/**", "go.mod"],
+    "expires_at": "2026-10-16T13:00:00Z"
+  },
+  "baseline": {
+    "revision": 1,
+    "manifest_root": "sha256:2b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfe"
+  },
+  "assets": {
+    "bundle_version": "2026.10.1",
+    "bundle_digest": "sha256:3b7e151628aed2a6abf7158809cf4f3c762e7160f38b4da56a784d9045190cfe"
+  },
+  "trace": { "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" },
+  "deadline": "2026-10-16T13:00:00Z",
+  "return_contract": {
+    "schema": "idev.delegation-return/1",
+    "required_fields": ["status", "evidence", "scope", "changed", "revert", "assumed"]
+  }
+}

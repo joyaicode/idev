@@ -1,0 +1,28 @@
+{
+  "schema": "idev.delegation-return/1",
+  "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+  "status": "PASS",
+  "evidence": [".idev/task/demo/review.md"],
+  "conclusion": "零命中，写了具体类型",
+  "assumed": "无",
+  "scope": ["src/export.go"],
+  "read": ["src/export.go", "src/export_test.go"],
+  "changed": ["src/export.go"],
+  "revert": { "base_ref": "a1b2c3d", "note": "git revert a1b2c3d" },
+  "signoff_writes": [],
+  "facts": [
+    { "source": "codegraph", "ref": "ExportUsers", "note": "单一调用点" },
+    { "source": "source", "ref": "src/export.go:42" }
+  ],
+  "doc_drift": "无",
+  "change_kind": "追加行为",
+  "canon_trigger": "无",
+  "table_hit": "零命中",
+  "command": "go test ./...",
+  "exit_code": 0,
+  "started_at": "2026-10-16T12:00:00Z",
+  "finished_at": "2026-10-16T12:03:05Z",
+  "lease_token": "idv_l_abc",
+  "fencing_token": 3,
+  "parsed_from": "json"
+}

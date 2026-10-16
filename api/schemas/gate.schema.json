@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/gate.schema.json",
+  "title": "idev human gate",
+  "description": "A question put to a person. The fields exist so that what was shown before the answer is recoverable afterwards: will_write, proof and the subject digest together are what make an approval auditable rather than a boolean.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "gate_id", "gate_type", "subject", "will_write",
+    "required_assurance", "status", "created_at", "expires_at"
+  ],
+  "properties": {
+    "schema": { "const": "idev.gate/1" },
+    "gate_id": { "$ref": "common.schema.json#/$defs/ulid" },
+    "gate_type": { "$ref": "#/$defs/gateType" },
+    "run_id": { "$ref": "common.schema.json#/$defs/ulid" },
+    "step_id": { "type": "string" },
+    "feature": { "$ref": "common.schema.json#/$defs/featureKey" },
+    "risk_tier": { "$ref": "common.schema.json#/$defs/riskTier" },
+
+    "params": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "origin": { "enum": ["req", "arch", "code"] } }
+    },
+
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "digest"],
+      "properties": {
+        "kind": { "enum": ["baseline", "artifact_set", "run_step"] },
+        "digest": { "$ref": "common.schema.json#/$defs/digest" },
+        "baseline_revision": { "type": "integer", "minimum": 1 }
+      }
+    },
+
+    "will_write": {
+      "description": "The fields this approval authorises writing. Shown to the person first; writing anything outside it is not the approval they gave.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "proof": {
+      "description": "The evidence shown alongside the question. Asking for a signature on an agent summary alone is forbidden.",
+      "type": "string"
+    },
+    "summary_md": { "type": "string" },
+    "approve_url": { "type": "string" },
+    "approve_cli": { "type": "string" },
+    "challenge": { "type": "string" },
+
+    "required_assurance": { "enum": ["low", "high"] },
+    "required_keywords": {
+      "description": "A disjunction: reopen_baseline accepts either word.",
+      "type": "array",
+      "items": { "enum": ["origin=req", "origin=arch", "origin=code", "解除密封", "reopen"] }
+    },
+
+    "status": { "enum": ["pending", "approved", "rejected", "expired", "withdrawn"] },
+    "created_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+    "expires_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+  },
+
+  "allOf": [
+    {
+      "description": "defect_origin has to name the origin it is asking about, and demand the matching keyword.",
+      "if": {
+        "properties": { "gate_type": { "const": "defect_origin" } },
+        "required": ["gate_type"]
+      },
+      "then": {
+        "required": ["params", "required_keywords"],
+        "properties": {
+          "params": { "required": ["origin"] },
+          "required_keywords": { "minItems": 1 }
+        }
+      }
+    },
+    {
+      "description": "Sealing or reopening signs a baseline revision, not an arbitrary subject.",
+      "if": {
+        "properties": { "gate_type": { "enum": ["sealed", "reopen_baseline"] } },
+        "required": ["gate_type"]
+      },
+      "then": {
+        "properties": {
+          "subject": {
+            "properties": { "kind": { "const": "baseline" } },
+            "required": ["baseline_revision"]
+          }
+        }
+      }
+    },
+    {
+      "description": "Every gate but a plain step confirmation names the fields it writes and shows its proof.",
+      "if": {
+        "not": { "properties": { "gate_type": { "const": "step_confirm" } } }
+      },
+      "then": {
+        "required": ["proof"],
+        "properties": {
+          "will_write": { "minItems": 1 },
+          "proof": { "minLength": 1 }
+        }
+      }
+    }
+  ],
+
+  "$defs": {
+    "gateType": {
+      "enum": [
+        "sealed", "accepted_req", "accepted_arch", "accepted_plan",
+        "aligned", "resolved", "step_confirm", "defect_origin", "reopen_baseline"
+      ]
+    }
+  }
+}

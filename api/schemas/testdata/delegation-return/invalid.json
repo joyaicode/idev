@@ -1,0 +1,121 @@
+[
+  {
+    "name": "PASS with no evidence",
+    "why": "The oldest rule in the kernel: a PASS nobody can check is not a PASS.",
+    "pointer": "",
+    "instance": {
+      "schema": "idev.delegation-return/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "status": "PASS",
+      "conclusion": "done",
+      "assumed": "无"
+    }
+  },
+  {
+    "name": "changed files with no revert anchor",
+    "why": "A change nobody can undo is not a reviewable change.",
+    "pointer": "",
+    "instance": {
+      "schema": "idev.delegation-return/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "status": "FAIL",
+      "conclusion": "broke the build",
+      "assumed": "无",
+      "changed": ["src/a.go"]
+    }
+  },
+  {
+    "name": "an agent claiming it wrote a signature",
+    "why": "Agents do not sign. A non-empty signoff_writes stops the run.",
+    "pointer": "/signoff_writes",
+    "instance": {
+      "schema": "idev.delegation-return/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "status": "PASS",
+      "evidence": ["review.md"],
+      "conclusion": "done",
+      "assumed": "无",
+      "signoff_writes": ["baseline.sealed"]
+    }
+  },
+  {
+    "name": "assumed left blank",
+    "why": "'无' is a valid answer and has to be written: silence is not the same as nothing.",
+    "pointer": "/assumed",
+    "instance": {
+      "schema": "idev.delegation-return/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "status": "PASS",
+      "evidence": ["review.md"],
+      "conclusion": "done",
+      "assumed": ""
+    }
+  },
+  {
+    "name": "assumed omitted entirely",
+    "why": "Same rule, the other way of avoiding it.",
+    "pointer": "",
+    "instance": {
+      "schema": "idev.delegation-return/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "status": "PASS",
+      "evidence": ["review.md"],
+      "conclusion": "done"
+    }
+  },
+  {
+    "name": "case counts with no mode",
+    "why": "Counts without the dimension they came from cannot be compared across runs.",
+    "pointer": "",
+    "instance": {
+      "schema": "idev.delegation-return/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "status": "UNPROVEN",
+      "evidence": ["report.md"],
+      "conclusion": "no runner",
+      "assumed": "无",
+      "cases": { "pass": 1 }
+    }
+  },
+  {
+    "name": "an invented status",
+    "why": "The status set is closed; a new one would silently bypass the stop set.",
+    "pointer": "/status",
+    "instance": {
+      "schema": "idev.delegation-return/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "status": "MOSTLY_FINE",
+      "evidence": ["review.md"],
+      "conclusion": "done",
+      "assumed": "无"
+    }
+  },
+  {
+    "name": "a fact with no reference",
+    "why": "'the source says so' without a location is not a first-hand fact.",
+    "pointer": "/facts/0",
+    "instance": {
+      "schema": "idev.delegation-return/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "status": "PASS",
+      "evidence": ["review.md"],
+      "conclusion": "done",
+      "assumed": "无",
+      "facts": [{ "source": "codegraph" }]
+    }
+  },
+  {
+    "name": "a changed path that escapes the repository",
+    "why": "Compared against the lease by string, so an escaping path cannot be bounded.",
+    "pointer": "/changed/0",
+    "instance": {
+      "schema": "idev.delegation-return/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "status": "FAIL",
+      "conclusion": "x",
+      "assumed": "无",
+      "changed": ["../elsewhere/a.go"],
+      "revert": { "base_ref": "a1b2c3d" }
+    }
+  }
+]

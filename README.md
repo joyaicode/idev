@@ -80,14 +80,43 @@ bash scripts/syntax-check.sh       # 1 纯解析全部脚本，零副作用
 python3 scripts/agents-check.py    # 2 agent 定义 + 回报格式 + 登记表同步
 bash scripts/workflow-check.sh     # 3 配方与 run 契约
 bash scripts/refs-check.sh         # 4 文档交叉引用
-bash scripts/selfcheck.sh          # 5 内核锁
-bash scripts/agent-smoke.sh        # 6 委派层端到端 143 条
+bash scripts/selfcheck.sh          # 5 内核锁 23 道
+bash scripts/agent-smoke.sh        # 6 委派层端到端 481 条
 bash scripts/healthcheck.sh        # 7 环境与拓扑
 ```
 
 全部期望 `PASS`。`syntax-check` 必须第一个跑——**smoke 抓不到 smoke 自己的语法错**，
 不能解析的脚本一条断言都不会执行。详见
 [references/failure-modes.md](references/failure-modes.md) 第十一条。
+
+两个单测另跑，不进上面这条链（它们不依赖内核拓扑）：
+
+```bash
+python3 scripts/test_signoff.py      # 签字文法与身份，140 条共享用例
+python3 scripts/test_concurrency.py  # 三条写盘路径的并发不丢失
+bash test/golden/record.sh --verify  # 旧 CLI 输出的 21 个 golden 场景
+python3 scripts/gen-kinds.py --check # kind 表的五份生成物是否最新
+```
+
+## Go 核心（迁移中）
+
+idev 正在按 `Go 核心服务 idevd + MCP + Markdown 资产` 重构。当前落到 **P1**：契约
+真源与纯逻辑层已就位，服务端（存储、MCP、HTTP）尚未开始。Python 仍然是唯一写盘者。
+
+```bash
+go test -race ./...            # 纯逻辑层，domain 覆盖率门槛 90%
+golangci-lint run ./...        # depguard 守住 domain 零 IO
+python3 scripts/gen-kinds.py   # 改 registry/kinds.yaml 后重新生成五份副本
+```
+
+- `registry/kinds.yaml` 是 **kind 表的唯一真源**。加一个 kind 只改这个文件，再跑
+  生成器；`selfcheck` 会检查生成物是否最新。
+- `api/schemas/` 是契约真源（JSON Schema Draft 2020-12，10 份）。`recipe.schema.json`
+  与 Python 的 `workflow_spec.check_recipe` 对同一批配方给出相同判断，有测试守着。
+- `internal/domain/` 零 IO：状态机与策略都是纯函数。这条约束由 `.golangci.yml` 的
+  depguard 规则强制，CI 里有一个探针确认它真的会拦。
+- `pkg/canonical` 与 `pkg/schemas` 可被仓外 import：离线核验一份密封或一条批准记录
+  不需要跑 idevd。
 
 ## 驱动一次配方（产品仓内）
 

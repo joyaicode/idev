@@ -1,0 +1,159 @@
+[
+  {
+    "name": "retry with no prior_failure",
+    "why": "A retry whose reason nobody wrote down is how a fix loop runs away.",
+    "pointer": "",
+    "instance": {
+      "schema": "idev.delegation-packet/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "run_id": "01M4ZS7F90PJA5BGZKRQGE4V78",
+      "repo_root": "/repo",
+      "ticket_dir": "/repo/.idev/task/demo",
+      "idev_root": "/idev",
+      "feature": { "key": "demo", "stage": "code", "risk_tier": "P1" },
+      "step": { "id": "code-pass", "kind": "deliver.code_pass", "label": "x" },
+      "agent": "idev-coder",
+      "attempt": 2,
+      "must_read": ["/idev/deliver/SKILL.md"],
+      "forbidden": ["x"],
+      "return_contract": { "schema": "idev.delegation-return/1", "required_fields": ["status"] }
+    }
+  },
+  {
+    "name": "ops.classify with no artifact",
+    "why": "Classifying a symptom against the wrong build is worse than not classifying it.",
+    "pointer": "",
+    "instance": {
+      "schema": "idev.delegation-packet/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "run_id": "01M4ZS7F90PJA5BGZKRQGE4V78",
+      "repo_root": "/repo",
+      "ticket_dir": "/repo/.idev/task/demo",
+      "idev_root": "/idev",
+      "feature": { "key": "demo", "stage": "ops", "risk_tier": "P1" },
+      "step": { "id": "classify", "kind": "ops.classify", "label": "x" },
+      "agent": "idev-ops",
+      "attempt": 1,
+      "must_read": ["/idev/ops/SKILL.md"],
+      "forbidden": ["x"],
+      "return_contract": { "schema": "idev.delegation-return/1", "required_fields": ["status"] }
+    }
+  },
+  {
+    "name": "unknown kind",
+    "why": "The kind enum is generated from registry/kinds.yaml; an invented kind has no landing page and no agent.",
+    "pointer": "/step/kind",
+    "instance": {
+      "schema": "idev.delegation-packet/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "run_id": "01M4ZS7F90PJA5BGZKRQGE4V78",
+      "repo_root": "/repo",
+      "ticket_dir": "/repo/.idev/task/demo",
+      "idev_root": "/idev",
+      "feature": { "key": "demo", "stage": "code", "risk_tier": "P1" },
+      "step": { "id": "s", "kind": "deliver.invented", "label": "x" },
+      "agent": "idev-coder",
+      "attempt": 1,
+      "must_read": ["/idev/deliver/SKILL.md"],
+      "forbidden": ["x"],
+      "return_contract": { "schema": "idev.delegation-return/1", "required_fields": ["status"] }
+    }
+  },
+  {
+    "name": "lease write path escapes the repository",
+    "why": "A lease boundary is checked by string comparison, so a path that escapes cannot be compared.",
+    "pointer": "/lease/write_paths/0",
+    "instance": {
+      "schema": "idev.delegation-packet/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "run_id": "01M4ZS7F90PJA5BGZKRQGE4V78",
+      "repo_root": "/repo",
+      "ticket_dir": "/repo/.idev/task/demo",
+      "idev_root": "/idev",
+      "feature": { "key": "demo", "stage": "code", "risk_tier": "P1" },
+      "step": { "id": "s", "kind": "deliver.code_pass", "label": "x" },
+      "agent": "idev-coder",
+      "attempt": 1,
+      "must_read": ["/idev/deliver/SKILL.md"],
+      "forbidden": ["x"],
+      "lease": {
+        "id": "l",
+        "token": "t",
+        "fencing_token": 1,
+        "purpose": "write",
+        "write_paths": ["../outside/**"],
+        "expires_at": "2026-10-16T13:00:00Z"
+      },
+      "return_contract": { "schema": "idev.delegation-return/1", "required_fields": ["status"] }
+    }
+  },
+  {
+    "name": "fencing token of zero",
+    "why": "Fencing is monotonic from one; zero cannot be distinguished from absent.",
+    "pointer": "/lease/fencing_token",
+    "instance": {
+      "schema": "idev.delegation-packet/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "run_id": "01M4ZS7F90PJA5BGZKRQGE4V78",
+      "repo_root": "/repo",
+      "ticket_dir": "/repo/.idev/task/demo",
+      "idev_root": "/idev",
+      "feature": { "key": "demo", "stage": "code", "risk_tier": "P1" },
+      "step": { "id": "s", "kind": "deliver.code_pass", "label": "x" },
+      "agent": "idev-coder",
+      "attempt": 1,
+      "must_read": ["/idev/deliver/SKILL.md"],
+      "forbidden": ["x"],
+      "lease": {
+        "id": "l",
+        "token": "t",
+        "fencing_token": 0,
+        "purpose": "write",
+        "write_paths": ["src/**"],
+        "expires_at": "2026-10-16T13:00:00Z"
+      },
+      "return_contract": { "schema": "idev.delegation-return/1", "required_fields": ["status"] }
+    }
+  },
+  {
+    "name": "a packet with no landing page",
+    "why": "must_read is the one thing that makes a delegation reproducible by a different agent.",
+    "pointer": "/must_read",
+    "instance": {
+      "schema": "idev.delegation-packet/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "run_id": "01M4ZS7F90PJA5BGZKRQGE4V78",
+      "repo_root": "/repo",
+      "ticket_dir": "/repo/.idev/task/demo",
+      "idev_root": "/idev",
+      "feature": { "key": "demo", "stage": "code", "risk_tier": "P1" },
+      "step": { "id": "s", "kind": "deliver.code_pass", "label": "x" },
+      "agent": "idev-coder",
+      "attempt": 1,
+      "must_read": [],
+      "forbidden": ["x"],
+      "return_contract": { "schema": "idev.delegation-return/1", "required_fields": ["status"] }
+    }
+  },
+  {
+    "name": "an extra top-level field",
+    "why": "Strict decoding: an unknown key is a contract mismatch, not something to ignore.",
+    "pointer": "",
+    "instance": {
+      "schema": "idev.delegation-packet/1",
+      "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ83",
+      "run_id": "01M4ZS7F90PJA5BGZKRQGE4V78",
+      "repo_root": "/repo",
+      "ticket_dir": "/repo/.idev/task/demo",
+      "idev_root": "/idev",
+      "feature": { "key": "demo", "stage": "code", "risk_tier": "P1" },
+      "step": { "id": "s", "kind": "deliver.code_pass", "label": "x" },
+      "agent": "idev-coder",
+      "attempt": 1,
+      "must_read": ["/idev/deliver/SKILL.md"],
+      "forbidden": ["x"],
+      "return_contract": { "schema": "idev.delegation-return/1", "required_fields": ["status"] },
+      "please_skip_the_gate": true
+    }
+  }
+]

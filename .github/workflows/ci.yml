@@ -1,0 +1,189 @@
+# CI for the strangler migration: the Python kernel and the Go core have to
+# stay green at the same time, because during P0–P4 both are live and the
+# Python side is still the one writing to disk.
+#
+# Job order is not cosmetic. `generate` runs before `test` because a stale
+# generated kind table makes every other failure a red herring, and the
+# Python chain's own ordering rule (syntax first — smoke cannot catch smoke's
+# own syntax errors) is preserved inside its job.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Keep module and toolchain fetches reproducible, and never write bytecode
+  # into the checkout.
+  GOTOOLCHAIN: auto
+  PYTHONDONTWRITEBYTECODE: "1"
+
+jobs:
+  generate:
+    name: generated files are current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.9"
+      - run: pip install pyyaml
+      # registry/kinds.yaml is the one source for the kind table; five copies
+      # are generated from it. A stale copy is how the old five-way
+      # duplication would come back.
+      - name: kind table
+        run: |
+          python3 scripts/gen-kinds.py --check
+          python3 scripts/gen-kinds.py
+          git diff --exit-code
+
+  go:
+    name: go ${{ matrix.go }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both supported majors, per the floor in go.mod.
+        go: ["1.26.x", "1.27.x"]
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - run: go build ./...
+      - run: go vet ./...
+      - name: test with the race detector
+        run: go test -race -count=1 -coverprofile=cover.out ./...
+      # The design's floor: domain is pure logic, so there is no excuse for
+      # gaps in it. Checked per package rather than overall, because a high
+      # average hides a package nobody tested.
+      - name: domain coverage floor
+        run: |
+          fail=0
+          while read -r pkg pct; do
+            case "$pkg" in
+              # storetest is a library *of* tests, exercised through each
+              # store adapter. It has no tests of its own by construction,
+              # so a floor on it would be a floor on nothing.
+              */store/storetest)                   continue ;;
+              */internal/domain/*|*/pkg/canonical) floor=90 ;;
+              */internal/app/*)                    floor=75 ;;
+              */internal/adapters/*)               floor=70 ;;
+              *)                                   continue ;;
+            esac
+            if awk "BEGIN{exit !($pct < $floor)}"; then
+              echo "FAIL $pkg at ${pct}%, floor ${floor}%"
+              fail=1
+            else
+              echo "ok   $pkg at ${pct}%"
+            fi
+          done < <(go test -cover ./... 2>/dev/null \
+            | awk '/coverage:/ {gsub("%","",$(NF-2)); print $2, $(NF-2)}')
+          exit $fail
+      - name: fuzz the signoff grammar briefly
+        run: go test -run XXX -fuzz FuzzParseConfirm -fuzztime 30s ./internal/domain/signoff/
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: "1.27.x"
+      # depguard in .golangci.yml is what keeps `domain` zero-IO. Without
+      # this job that rule is a comment.
+      - uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.14.0
+      - name: depguard actually fires
+        run: |
+          cat > internal/domain/signoff/zz_ci_probe.go <<'EOF'
+          package signoff
+
+          import "database/sql"
+
+          var _ *sql.DB
+          EOF
+          if golangci-lint run ./internal/domain/signoff/ 2>&1 | grep -q depguard; then
+            echo "ok   depguard rejects database/sql in domain"
+          else
+            echo "FAIL depguard did not reject an IO import in domain"
+            rm -f internal/domain/signoff/zz_ci_probe.go
+            exit 1
+          fi
+          rm -f internal/domain/signoff/zz_ci_probe.go
+
+  vuln:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version: "1.27.x"
+      - run: go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+      - run: govulncheck ./...
+
+  python:
+    name: python kernel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          # The kernel has to keep running on what macOS ships.
+          python-version: "3.9"
+      - run: pip install pyyaml
+      - name: compile every script
+        run: bash scripts/syntax-check.sh
+      - name: agent definitions and the kind registry
+        run: python3 scripts/agents-check.py
+      - name: recipe and run contracts
+        run: bash scripts/workflow-check.sh
+      - name: documentation cross-references
+        run: bash scripts/refs-check.sh
+      - name: signoff grammar, shared with Go
+        run: python3 scripts/test_signoff.py
+      - name: concurrent writes lose nothing
+        run: python3 scripts/test_concurrency.py
+
+  golden:
+    name: golden replay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.9"
+      - run: pip install pyyaml
+      # The safety net for the whole migration: the Python CLI's output is
+      # recorded, and P2 replays the same scenarios against the Go
+      # compatibility subcommands.
+      - run: bash test/golden/record.sh --verify
+
+  # selfcheck and agent-smoke need ~/.cursor/skills/idev to resolve to the
+  # checkout, which is the local topology rather than a CI one. Set it up
+  # explicitly rather than skipping them: between them they are 23 locks and
+  # 481 assertions, and they are the only thing covering the delegation layer
+  # end to end until P5 ports those assertions to Go.
+  kernel-locks:
+    name: kernel locks and delegation smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.9"
+      - run: pip install pyyaml
+      - name: install the conventional alias
+        run: |
+          mkdir -p "$HOME/.cursor/skills"
+          ln -s "$GITHUB_WORKSPACE" "$HOME/.cursor/skills/idev"
+      - run: bash scripts/selfcheck.sh
+      - run: bash scripts/agent-smoke.sh

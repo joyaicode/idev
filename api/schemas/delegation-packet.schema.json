@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/delegation-packet.schema.json",
+  "title": "idev delegation packet",
+  "description": "What the conductor hands a subagent. JSON is the source of truth; the server also renders the nine-line text form from references/agents.md so an unmodified agent definition keeps working during the migration (design §6.1).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "delegation_id", "run_id", "step", "feature", "repo_root", "ticket_dir",
+    "agent", "attempt", "must_read", "forbidden", "return_contract", "idev_root"
+  ],
+  "properties": {
+    "schema": { "const": "idev.delegation-packet/1" },
+    "delegation_id": { "$ref": "common.schema.json#/$defs/ulid" },
+    "run_id": { "$ref": "common.schema.json#/$defs/ulid" },
+
+    "repo_root": { "type": "string", "minLength": 1 },
+    "ticket_dir": { "type": "string", "minLength": 1 },
+    "idev_root": {
+      "description": "The kernel root, resolved. Required because three of the five agents read convention pages from it.",
+      "type": "string",
+      "minLength": 1
+    },
+
+    "feature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "stage", "risk_tier"],
+      "properties": {
+        "key": { "$ref": "common.schema.json#/$defs/featureKey" },
+        "stage": { "$ref": "common.schema.json#/$defs/stage" },
+        "risk_tier": { "$ref": "common.schema.json#/$defs/riskTier" }
+      }
+    },
+
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "label"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "kinds.schema.json#/$defs/kind" },
+        "label": { "type": "string", "minLength": 1 },
+        "with": { "type": "object" }
+      }
+    },
+
+    "agent": { "$ref": "kinds.schema.json#/$defs/agent" },
+
+    "attempt": { "type": "integer", "minimum": 1 },
+    "prior_failure": {
+      "description": "Why the previous attempt failed, taken from its report. Required past attempt 1: a retry with no stated reason is how a fix loop runs away.",
+      "type": "string"
+    },
+
+    "must_read": {
+      "description": "The kind's landing page, resolved to absolute paths inside the asset bundle.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "artifact": {
+      "description": "The build actually running in the environment. Required for ops.classify: classifying a symptom against the wrong artefact is worse than not classifying it.",
+      "type": "string"
+    },
+    "forbidden": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+
+    "lease": { "$ref": "common.schema.json#/$defs/lease" },
+    "baseline": { "$ref": "common.schema.json#/$defs/baselineRef" },
+    "assets": { "$ref": "common.schema.json#/$defs/assetsRef" },
+
+    "trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "traceparent": {
+          "type": "string",
+          "pattern": "^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"
+        }
+      }
+    },
+    "deadline": { "$ref": "common.schema.json#/$defs/timestamp" },
+
+    "return_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "required_fields"],
+      "properties": {
+        "schema": { "const": "idev.delegation-return/1" },
+        "required_fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+
+  "allOf": [
+    {
+      "description": "A retry has to carry the reason the previous attempt failed.",
+      "if": {
+        "properties": { "attempt": { "minimum": 2 } },
+        "required": ["attempt"]
+      },
+      "then": {
+        "required": ["prior_failure"],
+        "properties": { "prior_failure": { "minLength": 1 } }
+      }
+    },
+    {
+      "description": "ops.classify without the running artefact classifies the wrong thing.",
+      "if": {
+        "properties": { "step": { "properties": { "kind": { "const": "ops.classify" } }, "required": ["kind"] } },
+        "required": ["step"]
+      },
+      "then": {
+        "required": ["artifact"],
+        "properties": { "artifact": { "minLength": 1 } }
+      }
+    },
+    {
+      "description": "A writing or verifying step needs the lease that bounds it.",
+      "if": {
+        "properties": {
+          "lease": { "properties": { "purpose": { "enum": ["write", "verify"] } } }
+        },
+        "required": ["lease"]
+      },
+      "then": {
+        "properties": {
+          "lease": {
+            "properties": { "write_paths": { "minItems": 1 } },
+            "required": ["write_paths"]
+          }
+        }
+      }
+    }
+  ]
+}

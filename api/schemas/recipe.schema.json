@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/recipe.schema.json",
+  "title": "idev workflow recipe",
+  "description": "A capability recipe (workflows/<id>.yaml). The field sets mirror workflow_spec.TOP_FIELDS, PARAM_FIELDS, STEP_FIELDS and POLICY exactly, because during the migration both validators are live and a recipe that one accepts and the other rejects is worse than either rule alone.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "summary", "steps"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "aliases": {
+      "description": "What a person might say to reach this recipe. Matched longest-first, which is why overlapping aliases across two recipes are refused at load.",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "summary": { "type": "string", "minLength": 1 },
+    "doc": { "type": "string" },
+    "risk_tier": { "$ref": "common.schema.json#/$defs/riskTier" },
+    "needs_ticket": {
+      "description": "Defaults to true. A recipe that needs no ticket is the exception and has to say so.",
+      "type": "boolean"
+    },
+    "roles": { "type": "object" },
+    "rules": { "type": "array", "items": { "type": "string" } },
+
+    "params": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "from"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "from": { "enum": ["user", "default", "product", "deliver.yaml"] },
+          "required": { "type": "boolean" },
+          "default": {},
+          "product_key": {
+            "description": "The workflow-defaults.yaml key to read when from=product.",
+            "type": "string"
+          }
+        },
+        "allOf": [
+          {
+            "description": "from=default without a default value binds to nothing.",
+            "if": { "properties": { "from": { "const": "default" } }, "required": ["from"] },
+            "then": { "required": ["default"] }
+          }
+        ]
+      }
+    },
+
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "on_fail": { "enum": ["stop", "ask"] },
+        "on_gate": { "const": "stop" },
+        "on_case_fail": { "const": "stop_fix_continue" },
+        "require_clean_pass": { "type": "boolean" },
+        "max_clean_attempts": { "type": "integer", "minimum": 1 }
+      }
+    },
+
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "kind"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "kind": { "$ref": "kinds.schema.json#/$defs/kind" },
+          "label": { "type": "string" },
+          "with": { "type": "object" }
+        },
+        "allOf": [
+          {
+            "description": "A gate must let the conductor reconstruct the line that tells the person what will be written.",
+            "if": {
+              "properties": { "kind": { "const": "human.gate" } },
+              "required": ["kind"]
+            },
+            "then": {
+              "anyOf": [
+                {
+                  "properties": {
+                    "with": { "required": ["will_write"] }
+                  },
+                  "required": ["with"]
+                },
+                {
+                  "properties": { "label": { "pattern": "将代写" } },
+                  "required": ["label"]
+                }
+              ]
+            }
+          },
+          {
+            "description": "verify.plan and verify.run name the dimension they operate on.",
+            "if": {
+              "properties": { "kind": { "enum": ["verify.plan", "verify.run"] } },
+              "required": ["kind"]
+            },
+            "then": {
+              "required": ["with"],
+              "properties": { "with": { "required": ["mode"] } }
+            }
+          }
+        ]
+      }
+    }
+  },
+
+  "not": {
+    "description": "The forbidden kinds are the shapes of skipping the human. A recipe naming one is refused outright.",
+    "properties": {
+      "steps": {
+        "contains": {
+          "properties": { "kind": { "$ref": "kinds.schema.json#/$defs/forbiddenKind" } },
+          "required": ["kind"]
+        }
+      }
+    },
+    "required": ["steps"]
+  }
+}

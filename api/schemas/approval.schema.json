@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/approval.schema.json",
+  "title": "idev approval record",
+  "description": "The signed record of one human decision. Separate from the gate because this is the part that has to stand up on its own: an auditor with this record, the server public key and the manifest can verify the signature offline, without the service that produced it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "approval_id", "gate_id", "gate_type", "decision",
+    "subject_digest", "approver", "assurance", "quote", "decided_at", "signature"
+  ],
+  "properties": {
+    "schema": { "const": "idev.approval/1" },
+    "approval_id": { "$ref": "common.schema.json#/$defs/ulid" },
+    "gate_id": { "$ref": "common.schema.json#/$defs/ulid" },
+    "gate_type": { "$ref": "gate.schema.json#/$defs/gateType" },
+    "decision": { "enum": ["approve", "reject"] },
+
+    "subject_digest": {
+      "description": "What was actually signed. Recomputed at every later check; a mismatch is baseline-drift.",
+      "$ref": "common.schema.json#/$defs/digest"
+    },
+
+    "approver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["handle", "kind"],
+      "properties": {
+        "handle": { "type": "string", "minLength": 1 },
+        "kind": {
+          "description": "Always human. The field exists so the constraint is visible in the record rather than only in the code that wrote it.",
+          "const": "human"
+        },
+        "principal_id": { "$ref": "common.schema.json#/$defs/ulid" }
+      }
+    },
+
+    "assurance": { "enum": ["low", "high"] },
+    "assurance_downgraded": {
+      "description": "True when a high requirement was met at low under the transition switch. Recorded so the window is auditable after it closes.",
+      "type": "boolean"
+    },
+
+    "quote": {
+      "description": "What the person actually wrote, kept verbatim. The parse result is not a substitute: a dispute is about the words.",
+      "type": "string",
+      "minLength": 1
+    },
+    "quote_tokens": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+
+    "channel": { "enum": ["local_token_tty", "webauthn", "oidc_webauthn", "oidc"] },
+    "credential": {
+      "description": "The authenticator that signed, when assurance is high. Its public key lets the device signature be checked offline too.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "public_key"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "public_key": { "type": "string", "minLength": 1 },
+        "sign_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "decided_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+
+    "signature": {
+      "description": "Server ed25519 over the JCS form of the payload, so the record cannot be edited in the database without detection.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alg", "key_id", "value"],
+      "properties": {
+        "alg": { "const": "ed25519" },
+        "key_id": { "type": "string", "pattern": "^ed25519:[0-9a-f]{16}$" },
+        "value": { "type": "string", "minLength": 1 }
+      }
+    }
+  },
+
+  "allOf": [
+    {
+      "description": "A high-assurance approval has to say which authenticator produced it.",
+      "if": {
+        "properties": {
+          "assurance": { "const": "high" },
+          "assurance_downgraded": { "const": false }
+        },
+        "required": ["assurance"]
+      },
+      "then": { "required": ["credential"] }
+    }
+  ]
+}

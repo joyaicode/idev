@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/trace-round.schema.json",
+  "title": "idev trace round",
+  "description": "One conductor turn. Schema v2 of the existing state/traces files: route, what was opened, what was called. The weekly audit reads these, which is why feature accepts '-' — an unbound round is a finding, not a parse error.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "scenario", "feature", "calls"],
+  "properties": {
+    "schema": { "const": "idev.trace-round/2" },
+    "round_id": { "$ref": "common.schema.json#/$defs/ulid" },
+    "run_id": { "$ref": "common.schema.json#/$defs/ulid" },
+    "at": { "$ref": "common.schema.json#/$defs/timestamp" },
+
+    "scenario": {
+      "description": "Which of S1–S8 the conductor decided this was.",
+      "enum": ["S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"]
+    },
+    "feature": { "$ref": "common.schema.json#/$defs/featureKey" },
+    "stage": { "$ref": "common.schema.json#/$defs/stage" },
+
+    "route": { "type": "string" },
+    "invoke": { "type": "string" },
+    "thinking_summary": {
+      "description": "Why this route. Empty is a finding the audit counts, not a reason to reject the round.",
+      "type": "string"
+    },
+
+    "calls": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "name"],
+        "properties": {
+          "kind": {
+            "description": "A delegation is `agent`, not `module`: recording it as a module makes several delegations in one round read as crossing execution modules, which the audit flags.",
+            "enum": ["script", "module", "skill", "repo", "tool", "agent"]
+          },
+          "name": { "type": "string", "minLength": 1 },
+          "target": { "type": "string" },
+          "exit_code": { "type": "integer" }
+        }
+      }
+    },
+    "opened": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "signoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "by": { "type": "string" },
+        "at": { "$ref": "common.schema.json#/$defs/timestamp" },
+        "approval_id": { "$ref": "common.schema.json#/$defs/ulid" }
+      }
+    },
+    "traceparent": {
+      "type": "string",
+      "pattern": "^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"
+    }
+  }
+}

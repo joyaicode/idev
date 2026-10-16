@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/baseline-manifest.schema.json",
+  "title": "idev baseline manifest",
+  "description": "The fingerprint of one sealed baseline revision. This is what replaces `sealed: true`: a boolean said the baseline was sealed, a manifest says what it said (review §3.3).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "feature", "revision", "files", "manifest_root", "raw_root", "created_at"],
+  "properties": {
+    "schema": { "const": "idev.baseline-manifest/1" },
+    "feature": { "$ref": "common.schema.json#/$defs/featureKey" },
+    "revision": { "type": "integer", "minimum": 1 },
+
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "mode", "semantic_sha256", "raw_sha256", "size"],
+        "properties": {
+          "path": { "$ref": "common.schema.json#/$defs/repoRelativePath" },
+          "mode": {
+            "description": "yaml-fields digests only the sealed fields, so reformatting is not a change. text-normalized folds line endings and trailing whitespace.",
+            "enum": ["yaml-fields", "text-normalized"]
+          },
+          "fields": {
+            "description": "Which sealed fields were present. Recorded because a baseline that never had non_goal and one where it was deleted are different facts.",
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "semantic_sha256": { "$ref": "common.schema.json#/$defs/digest" },
+          "raw_sha256": { "$ref": "common.schema.json#/$defs/digest" },
+          "size": { "type": "integer", "minimum": 0 }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "mode": { "const": "yaml-fields" } }, "required": ["mode"] },
+            "then": { "required": ["fields"] }
+          }
+        ]
+      }
+    },
+
+    "manifest_root": { "$ref": "common.schema.json#/$defs/digest" },
+    "raw_root": { "$ref": "common.schema.json#/$defs/digest" },
+
+    "repo_head": { "type": "string" },
+    "dirty": {
+      "description": "True when the checkout had uncommitted changes. A seal over a dirty tree cannot be recomputed from the remote.",
+      "type": "boolean"
+    },
+    "created_at": { "$ref": "common.schema.json#/$defs/timestamp" }
+  }
+}

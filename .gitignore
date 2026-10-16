@@ -7,3 +7,18 @@
 !.idev/workflows/**
 !.idev/pack/
 !.idev/pack/**
+
+# Go build and test residue.
+/cover.out
+/coverage.out
+
+# rapid writes a failfile when a property test fails, to replay that exact
+# input. They are repro artefacts tied to one run's draw sequence — and the
+# ones that show up during mutation testing come from deliberately broken
+# code, so committing them would preserve a "failure" of something that was
+# never wrong. A property worth keeping becomes a named test instead.
+testdata/rapid/
+
+# Go fuzz corpora are cached in GOCACHE; a seed worth keeping goes in the
+# test as an f.Add.
+testdata/fuzz/

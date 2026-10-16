@@ -1,0 +1,14 @@
+{
+  "schema": "idev.delegation-return/1",
+  "delegation_id": "01M4ZS7F8ZZDZJ2XY6TXSSDJ85",
+  "status": "UNPROVEN",
+  "evidence": [".idev/task/demo/verify/report.md"],
+  "conclusion": "embed 维没有 runner，按 no-runner 计数，不编故事",
+  "assumed": "无",
+  "mode": "selftest",
+  "cases": { "pass": 8, "fail": 0, "unproven": 3, "skipped": 0 },
+  "unproven_reasons": { "not_accepted": 0, "no_baseline": 0, "no_runner": 3, "unknown_id": 0 },
+  "signoff_writes": [],
+  "facts": [{ "source": "command", "ref": "npx playwright test --list" }],
+  "parsed_from": "json"
+}

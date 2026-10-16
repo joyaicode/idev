@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/common.schema.json",
+  "title": "idev shared definitions",
+  "description": "Types more than one contract needs. Referenced by $ref so a change lands in one place; the kind and agent enums are generated from registry/kinds.yaml and live in kinds.schema.json.",
+  "$defs": {
+    "ulid": {
+      "description": "A ULID: 26 Crockford base32 characters, timestamp first so ids sort chronologically.",
+      "type": "string",
+      "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "digest": {
+      "description": "A prefixed sha256, so a bare hex value can never be mistaken for another algorithm's.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "featureKey": {
+      "description": "A ticket slug. '-' means the round is not bound to a ticket, which the weekly audit counts.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(-|[a-z0-9][a-z0-9-]*)$"
+    },
+    "stage": {
+      "enum": ["req-review", "req", "arch", "code", "test", "done", "ops"]
+    },
+    "riskTier": {
+      "enum": ["P0", "P1", "P2"]
+    },
+    "stepStatus": {
+      "description": "The terminal step values. UNPROVEN is an honest outcome, not a failure: it means no runner exists for that dimension.",
+      "enum": ["PASS", "FAIL", "UNPROVEN", "SKIPPED", "BLOCKED"]
+    },
+    "runStatus": {
+      "enum": ["pending", "running", "awaiting_human", "blocked", "done", "aborted"]
+    },
+    "leasePurpose": {
+      "enum": ["none", "write", "verify"]
+    },
+    "repoRelativePath": {
+      "description": "A path inside the repository. Absolute paths and escapes are refused so a lease boundary can be checked by string comparison.",
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "anyOf": [
+          { "pattern": "^/" },
+          { "pattern": "(^|/)\\.\\.(/|$)" }
+        ]
+      }
+    },
+    "pathGlob": {
+      "description": "A repo-relative glob. '**' crosses separators; '*' and '?' do not.",
+      "type": "string",
+      "minLength": 1,
+      "not": { "anyOf": [{ "pattern": "^/" }, { "pattern": "(^|/)\\.\\.(/|$)" }] }
+    },
+    "evidence": {
+      "description": "Where to look to see that this is true. A PASS with no evidence does not count.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "lease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "token", "fencing_token", "purpose", "write_paths", "expires_at"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "token": { "type": "string", "minLength": 1 },
+        "fencing_token": {
+          "description": "Monotonic per feature. A late report from a superseded holder carries the old value.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "purpose": { "$ref": "#/$defs/leasePurpose" },
+        "write_paths": { "type": "array", "items": { "$ref": "#/$defs/pathGlob" } },
+        "expires_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "baselineRef": {
+      "description": "Which baseline revision the work was done against. Compared with the recomputed value at acceptance, which is how sign-then-edit is caught.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "manifest_root"],
+      "properties": {
+        "revision": { "type": "integer", "minimum": 1 },
+        "manifest_root": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "assetsRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bundle_version", "bundle_digest"],
+      "properties": {
+        "bundle_version": { "type": "string", "minLength": 1 },
+        "bundle_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "errorPayload": {
+      "description": "The structured half of an MCP or HTTP error. `stop` means the conductor must halt rather than retry.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "enum": [
+            "blocked", "conflict", "lease_held", "fencing_mismatch", "schema_invalid",
+            "baseline_drift", "forbidden", "not_found", "idempotency_key_reuse", "in_progress"
+          ]
+        },
+        "message": { "type": "string", "minLength": 1 },
+        "hint": { "type": "string" },
+        "stop": { "type": "boolean" }
+      }
+    }
+  }
+}

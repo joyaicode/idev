@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/delegation-return.schema.json",
+  "title": "idev delegation return",
+  "description": "What a subagent reports back. The old protocol was free text parsed by regex (review §3.7); this is the structured form. The field names match the report lines in agents/*.md so a person reading either sees the same words.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "delegation_id", "status", "conclusion", "assumed"],
+  "properties": {
+    "schema": { "const": "idev.delegation-return/1" },
+    "delegation_id": { "$ref": "common.schema.json#/$defs/ulid" },
+
+    "status": {
+      "description": "BLOCKED carries whose fault it is: brief means the conductor must re-brief, env means the product checkout, logic means a person has to decide.",
+      "oneOf": [
+        { "$ref": "common.schema.json#/$defs/stepStatus" },
+        { "enum": ["BLOCKED(brief)", "BLOCKED(env)", "BLOCKED(logic)"] }
+      ]
+    },
+    "evidence": { "$ref": "common.schema.json#/$defs/evidence" },
+    "conclusion": { "type": "string", "minLength": 1 },
+
+    "assumed": {
+      "description": "What was taken on faith. '无' is a valid answer and has to be written: silence is not the same as nothing.",
+      "type": "string",
+      "minLength": 1
+    },
+
+    "scope": {
+      "description": "What the agent intended to change, decided before touching anything.",
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/repoRelativePath" }
+    },
+    "read": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/repoRelativePath" }
+    },
+    "changed": {
+      "type": "array",
+      "items": { "$ref": "common.schema.json#/$defs/repoRelativePath" }
+    },
+    "revert": {
+      "description": "How to undo this. Required once anything changed, because a change nobody can revert is not a reviewable change.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_ref"],
+      "properties": {
+        "base_ref": { "type": "string", "minLength": 1 },
+        "note": { "type": "string" }
+      }
+    },
+
+    "signoff_writes": {
+      "description": "Signature fields this agent claims to have written. Must be empty: agents do not sign. A non-empty value stops the run.",
+      "type": "array",
+      "maxItems": 0,
+      "items": { "type": "string" }
+    },
+
+    "facts": {
+      "description": "Where the judgement came from. First-hand sources only; 'the document says' is circular for the agents that write documents.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "ref"],
+        "properties": {
+          "source": { "enum": ["codegraph", "source", "command", "git", "doc"] },
+          "ref": { "type": "string", "minLength": 1 },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "doc_drift": { "type": "string" },
+
+    "change_kind": { "type": "string" },
+    "canon_trigger": { "type": "string" },
+    "table_hit": { "type": "string" },
+
+    "red_first": {
+      "description": "The failing run that proves the fix fixes something. Required for review.fix.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["log"],
+      "properties": {
+        "log": { "type": "string", "minLength": 1 },
+        "note": { "type": "string" }
+      }
+    },
+
+    "mode": { "enum": ["logic", "selftest", "debug", "test", "patrol", "lifecycle"] },
+    "cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pass": { "type": "integer", "minimum": 0 },
+        "fail": { "type": "integer", "minimum": 0 },
+        "unproven": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "unproven_reasons": {
+      "description": "Counted, not scored. The kernel reports why a dimension is unproven and leaves the judgement to a person.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "not_accepted": { "type": "integer", "minimum": 0 },
+        "no_baseline": { "type": "integer", "minimum": 0 },
+        "no_runner": { "type": "integer", "minimum": 0 },
+        "unknown_id": { "type": "integer", "minimum": 0 }
+      }
+    },
+
+    "command": { "type": "string" },
+    "exit_code": { "type": "integer" },
+    "started_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+    "finished_at": { "$ref": "common.schema.json#/$defs/timestamp" },
+
+    "lease_token": { "type": "string" },
+    "fencing_token": { "type": "integer", "minimum": 1 },
+
+    "suggest": { "type": "string" },
+    "parsed_from": {
+      "description": "Set to legacy-regex when this was recovered from free text, so the weekly audit can count how often the old path is still used.",
+      "enum": ["json", "legacy-regex"]
+    }
+  },
+
+  "allOf": [
+    {
+      "description": "A PASS with no evidence does not count. This is the oldest rule in the kernel.",
+      "if": {
+        "properties": { "status": { "const": "PASS" } },
+        "required": ["status"]
+      },
+      "then": { "required": ["evidence"] }
+    },
+    {
+      "description": "Anything changed needs a revert anchor.",
+      "if": {
+        "properties": { "changed": { "minItems": 1 } },
+        "required": ["changed"]
+      },
+      "then": { "required": ["revert"] }
+    },
+    {
+      "description": "A verification report says which dimension it ran.",
+      "if": {
+        "properties": { "cases": { "type": "object" } },
+        "required": ["cases"]
+      },
+      "then": { "required": ["mode"] }
+    }
+  ]
+}

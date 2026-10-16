@@ -1,0 +1,79 @@
+# The dependency rule that keeps the layering real.
+#
+# The design's whole shape depends on `domain` being pure: state machines and
+# policies that can be tested as functions, with no database, no HTTP and no
+# subprocess anywhere in their import closure (design §3.3). That is an
+# architectural claim, and an architectural claim nobody checks is a comment.
+# depguard checks it on every PR.
+version: "2"
+
+linters:
+  enable:
+    - depguard
+    - errorlint
+    - revive
+    - bodyclose
+    - sqlclosecheck
+    - gosec
+
+  settings:
+    depguard:
+      rules:
+        domain-pure:
+          files:
+            - "**/internal/domain/**"
+            # Tests are excluded: the claim being enforced is about the
+            # package's production import closure, and the shared-cases test
+            # has to read test/signoff/cases.yaml to drive it.
+            - "!$test"
+          allow:
+            - $gostd
+            - github.com/idev/internal/domain
+            # pkg/canonical is itself zero-IO (sha256, JCS, text
+            # normalisation). The rule being enforced is "no side effects in
+            # domain", not "no dependencies": the deny list below is the
+            # actual boundary.
+            - github.com/idev/pkg/canonical
+            - golang.org/x/text
+          deny:
+            - pkg: database/sql
+              desc: "domain is zero-IO; take a ports.Store in app instead"
+            - pkg: net/http
+              desc: "domain is zero-IO; adapters/httpapi owns transport"
+            - pkg: os/exec
+              desc: "domain is zero-IO; adapters/legacy owns subprocesses"
+            - pkg: github.com/idev/internal/adapters
+              desc: "domain must not know which adapter is wired in"
+            - pkg: github.com/idev/internal/app
+              desc: "dependencies point inwards: app uses domain, not the reverse"
+
+        app-no-adapters:
+          files:
+            - "**/internal/app/**"
+          deny:
+            - pkg: github.com/idev/internal/adapters
+              desc: "app depends on ports, and cmd/ decides the adapter"
+
+    revive:
+      rules:
+        - name: exported
+          disabled: false
+
+  exclusions:
+    rules:
+      # Tests read their fixture corpus by iterating a directory, so the path
+      # is always a variable. G304 is about untrusted input reaching the
+      # filesystem; a committed testdata tree is not that, and silencing it
+      # at each call site would be more noise than rule.
+      - path: _test\.go
+        linters: [gosec]
+        text: "G304"
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
