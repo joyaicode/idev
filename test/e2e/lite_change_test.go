@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/idev/internal/app/gatesvc"
 	"github.com/idev/internal/domain/audit"
 	"github.com/idev/internal/domain/run"
 	"github.com/idev/internal/ports"
@@ -195,6 +196,66 @@ func TestTheConductorCannotApproveAGate(t *testing.T) {
 	// Nothing was written by the refused event: the chain has no approval.
 	for _, e := range w.st.Events() {
 		if e.Action == audit.ActionGateApproved {
+			t.Fatal("a refused gate approval left an audit event")
+		}
+	}
+}
+
+// The probe from review D1, made a permanent regression: an agent that
+// writes Actor: human and an invented approval id into the event must not
+// pass the gate. The domain guards read the event's own claims; this test
+// pins the service-level check that re-establishes them.
+func TestAForgedHumanApprovalIsRefused(t *testing.T) {
+	w := newWorld(t)
+	r := startLiteChange(t, w)
+	conductorStep(t, w, r.ID, "preflight", "preflight/probe.md")
+	delegate(t, w, r.ID, "scope-guard", "idev-ops", "idev-ops", run.StepPASS)
+	delegate(t, w, r.ID, "code-pass", "idev-coder", "idev-reviewer", run.StepPASS)
+	delegate(t, w, r.ID, "plan", "idev-verifier", "idev-verifier", run.StepPASS)
+	activate(t, w, r.ID, "gate-plan")
+	apply(t, w, r.ID, run.Event{
+		Kind: run.EvGateRequested, Actor: run.ActorConductor, StepID: "gate-plan",
+	}, conductor())
+
+	// The forged shape: an agent principal claiming a human actor, with an
+	// approval id nothing ever recorded.
+	refuse(t, w, r.ID, run.Event{
+		Kind: run.EvGateApproved, Actor: run.ActorHuman, StepID: "gate-plan",
+		ApprovalID: "01FORGED00000000000000000",
+	}, conductor(), "an agent forging a human approval")
+
+	// The person path is not a bypass either: a real human principal cannot
+	// reference an approval that was never recorded.
+	refuse(t, w, r.ID, run.Event{
+		Kind: run.EvGateApproved, Actor: run.ActorHuman, StepID: "gate-plan",
+		ApprovalID: "01ALSOFORGED00000000000000",
+	}, person(), "a person referencing an unrecorded approval")
+
+	// A genuine decide produces a reject, not an approve; a rejected gate
+	// cannot be walked to PASS by reusing its approval id.
+	g := askGate(t, w, r.ID, "gate-plan")
+	_, err := w.gate.Decide(context.Background(), gatesvc.DecisionParams{
+		GateID: g.ID, Quote: "驳回", Channel: gatesvc.ChannelOIDC,
+		RecomputedDigest: "sha256:gate-plan", Actor: person(),
+	})
+	if err != nil {
+		t.Fatalf("Decide(reject): %v", err)
+	}
+	refuse(t, w, r.ID, run.Event{
+		Kind: run.EvGateApproved, Actor: run.ActorHuman, StepID: "gate-plan",
+		ApprovalID: "01REJECTED0000000000000000",
+	}, person(), "a rejected decision being reused as an approval")
+
+	// Still nothing passed: the step never left awaiting_signoff and the
+	// chain holds no approval.
+	stored, _ := w.st.Run(r.ID)
+	for i := range stored.Steps {
+		if stored.Steps[i].ID == "gate-plan" && stored.Steps[i].State != run.StepAwaitingSignoff {
+			t.Fatalf("gate-plan = %s, want awaiting_signoff", stored.Steps[i].State)
+		}
+	}
+	for _, e := range w.st.Events() {
+		if e.Action == audit.ActionGateApproved && e.StepID == "gate-plan" {
 			t.Fatal("a refused gate approval left an audit event")
 		}
 	}

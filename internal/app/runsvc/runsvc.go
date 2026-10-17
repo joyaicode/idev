@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"github.com/idev/internal/domain/audit"
+	"github.com/idev/internal/domain/gate"
 	"github.com/idev/internal/domain/run"
 	"github.com/idev/internal/ports"
 )
@@ -153,11 +154,21 @@ func withExecutors(steps []run.Step, reg ports.KindRegistry) []run.Step {
 // Every caller goes through this rather than touching the repo, so there is
 // one place where "the domain said yes" and "the audit recorded it" are
 // tied together.
+//
+// The event's Actor field is a claim, and the guards that matter read it
+// (only a person approves a gate). Since the caller constructs the event,
+// checkEvent re-establishes the claim against the authenticated principal
+// and — for the events that carry one — the recorded approval, inside the
+// same transaction. Without this, an agent that writes Actor: human and an
+// invented approval id passes every domain guard (review D1).
 func (s Service) Apply(ctx context.Context, runID string, ev run.Event, actor ports.Principal) (run.Run, error) {
 	var out run.Run
 	err := s.Store.InTx(ctx, func(tx ports.Tx) error {
 		current, version, err := tx.Runs().Get(ctx, runID)
 		if err != nil {
+			return err
+		}
+		if err := checkEvent(ctx, tx, current, ev, actor); err != nil {
 			return err
 		}
 		next, effects, err := run.Apply(current, ev)
@@ -177,6 +188,70 @@ func (s Service) Apply(ctx context.Context, runID string, ev run.Event, actor po
 		return nil
 	})
 	return out, err
+}
+
+// checkEvent re-verifies, in the transaction Apply runs in, the claims an
+// event makes about identity and approvals. The domain guards read those
+// claims as facts; this is where they become facts.
+//
+// A refusal here writes nothing: not the run, not an audit event.
+func checkEvent(ctx context.Context, tx ports.Tx, current run.Run, ev run.Event, actor ports.Principal) error {
+	// Only an authenticated human principal can claim a human actor. The
+	// claim is one-way: a human principal may still raise conductor or
+	// system-shaped events, which the domain guards check by themselves.
+	if ev.Actor == run.ActorHuman && actor.Kind != "human" {
+		return fmt.Errorf(
+			"runsvc: %s claims a person raised it, but %s (%s) is not one",
+			ev.Kind, actor.Handle, actor.Kind)
+	}
+
+	switch ev.Kind {
+	case run.EvGateApproved, run.EvStepSkipped:
+		// A gate PASS — directly or by skip — must reference a recorded
+		// approval that belongs to this run and step, decided as an approve
+		// by the same person whose principal is submitting the event.
+		if ev.Kind == run.EvStepSkipped && !gateStep(current, ev.StepID) {
+			// Skipping an ordinary step needs a note, which the domain
+			// checks; there is no approval to verify.
+			return nil
+		}
+		a, err := tx.Gates().Approval(ctx, ev.ApprovalID)
+		if err != nil {
+			return fmt.Errorf(
+				"runsvc: %s references approval %q, which is not recorded: %w",
+				ev.Kind, ev.ApprovalID, err)
+		}
+		g, err := tx.Gates().Get(ctx, a.GateID)
+		if err != nil {
+			return fmt.Errorf("runsvc: loading gate %s: %w", a.GateID, err)
+		}
+		if g.RunID != current.ID || g.StepID != ev.StepID {
+			return fmt.Errorf(
+				"runsvc: approval %s belongs to %s/%s, not %s/%s",
+				a.ID, g.RunID, g.StepID, current.ID, ev.StepID)
+		}
+		if a.Decision != string(gate.DecisionApprove) {
+			return fmt.Errorf(
+				"runsvc: approval %s is a %s; only an approve passes a gate",
+				a.ID, a.Decision)
+		}
+		if a.Handle != actor.Handle || a.Kind != "human" {
+			return fmt.Errorf(
+				"runsvc: approval %s was given by %s (%s), not by the submitting principal",
+				a.ID, a.Handle, a.Kind)
+		}
+	}
+	return nil
+}
+
+// gateStep reports whether the named step of the run is a gate.
+func gateStep(r run.Run, stepID string) bool {
+	for i := range r.Steps {
+		if r.Steps[i].ID == stepID {
+			return r.Steps[i].IsGate
+		}
+	}
+	return false
 }
 
 // performEffects executes the declarative effects the domain asked for.

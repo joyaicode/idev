@@ -219,6 +219,16 @@ func (s *Store) SeedBaseline(featureID, id string, m baseline.Manifest) {
 	s.baseline[id] = &baselineRow{id: id, feature: featureID, manifest: m, status: "sealed"}
 }
 
+// SeedGateApproval puts a gate and its recorded approval in place, the way
+// gatesvc.Decide leaves them, for tests that walk the run side of the loop.
+func (s *Store) SeedGateApproval(g gate.Gate, featureID string, a ports.Approval) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.gates[g.ID] = &gateRow{g: g, featureID: featureID}
+	cp := a
+	s.approvs[a.ID] = &cp
+}
+
 func conflict(kind, detail string) error {
 	return &ports.ConflictError{Kind: kind, Detail: detail}
 }

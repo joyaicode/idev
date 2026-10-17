@@ -301,17 +301,9 @@ func delegate(t *testing.T, w *world, runID, stepID, agent, verifier string, out
 // approveGate puts a person's real answer through gatesvc and feeds the
 // recorded approval back into the run — the loop P3's clients will run:
 // ask, decide, then EvGateApproved with the approval id.
-func approveGate(t *testing.T, w *world, runID, stepID string, quote string) {
+func askGate(t *testing.T, w *world, runID, stepID string) gate.Gate {
 	t.Helper()
 	ctx := context.Background()
-	r, ok := w.st.Run(runID)
-	if !ok {
-		t.Fatalf("no run %s", runID)
-	}
-	if cur := r.Current(); cur == nil || cur.ID != stepID {
-		t.Fatalf("step %s is not current (current is %v)", stepID, r.Current())
-	}
-
 	g, err := w.gate.Ask(ctx, gatesvc.AskParams{
 		Type: gate.TypeAcceptedPlan, RunID: runID, StepID: stepID, Feature: "f-1",
 		Risk: gate.RiskP1,
@@ -325,6 +317,23 @@ func approveGate(t *testing.T, w *world, runID, stepID string, quote string) {
 	if err != nil {
 		t.Fatalf("Ask(%s): %v", stepID, err)
 	}
+	return g
+}
+
+// approveGate asks, activates, and decides a gate, then applies the
+// recorded approval to the run.
+func approveGate(t *testing.T, w *world, runID, stepID string, quote string) {
+	t.Helper()
+	ctx := context.Background()
+	r, ok := w.st.Run(runID)
+	if !ok {
+		t.Fatalf("no run %s", runID)
+	}
+	if cur := r.Current(); cur == nil || cur.ID != stepID {
+		t.Fatalf("step %s is not current (current is %v)", stepID, r.Current())
+	}
+
+	g := askGate(t, w, runID, stepID)
 	activate(t, w, runID, stepID)
 	apply(t, w, runID, run.Event{
 		Kind: run.EvGateRequested, Actor: run.ActorConductor, StepID: stepID,

@@ -12,6 +12,7 @@ import (
 	"github.com/idev/internal/adapters/memstore"
 	"github.com/idev/internal/app/runsvc"
 	"github.com/idev/internal/domain/audit"
+	"github.com/idev/internal/domain/gate"
 	"github.com/idev/internal/domain/run"
 	"github.com/idev/internal/ports"
 )
@@ -44,6 +45,21 @@ func conductor() ports.Principal {
 
 func person() ports.Principal {
 	return ports.Principal{Handle: "wangwei794", Kind: "human"}
+}
+
+// seedApproval records a gate and its approval the way gatesvc.Decide
+// leaves them, so a test can feed the run the id it was recorded under.
+func seedApproval(t *testing.T, st *memstore.Store, runID, stepID, approvalID, handle string) {
+	t.Helper()
+	g := gate.Gate{
+		ID: "01GATE00000000000000000000", Type: gate.TypeAcceptedPlan,
+		RunID: runID, StepID: stepID, Feature: "demo",
+		Status: gate.StatusApproved,
+	}
+	st.SeedGateApproval(g, "f-1", ports.Approval{
+		ID: approvalID, GateID: g.ID, GateType: string(g.Type),
+		Decision: "approve", Handle: handle, Kind: "human",
+	})
 }
 
 // A lite-change shaped recipe: a conductor probe, a delegated step needing
@@ -354,6 +370,19 @@ func TestGateApprovalRecordsTheApprovalID(t *testing.T) {
 	}, conductor()); err == nil {
 		t.Fatal("the conductor approved a gate")
 	}
+
+	// An approval id nobody recorded is a claim, not a fact; the machine
+	// must refuse it even when the actor line says human (review D1).
+	if _, err := s.Apply(ctx, r.ID, run.Event{
+		Kind: run.EvGateApproved, Actor: run.ActorHuman, StepID: "gate-plan",
+		ApprovalID: "01FORGED000000000000000000",
+	}, person()); err == nil {
+		t.Fatal("an invented approval id passed the gate")
+	}
+
+	// Record the real approval — a person decided this gate — and feed the
+	// run the id it was recorded under.
+	seedApproval(t, st, r.ID, "gate-plan", "01APPROVAL000000000000001", "wangwei794")
 
 	final, err := s.Apply(ctx, r.ID, run.Event{
 		Kind: run.EvGateApproved, Actor: run.ActorHuman, StepID: "gate-plan",
