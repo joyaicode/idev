@@ -264,6 +264,7 @@ func delegate(t *testing.T, w *world, runID, stepID, agent, verifier string, out
 
 	apply(t, w, runID, run.Event{
 		Kind: run.EvDelegationReturned, Actor: run.ActorAgent, StepID: stepID, Agent: agent,
+		Fencing: held.Lease.Fencing,
 	}, ports.Principal{Handle: agent, Kind: "agent"})
 
 	if outcome == run.StepPASS {
@@ -276,7 +277,7 @@ func delegate(t *testing.T, w *world, runID, stepID, agent, verifier string, out
 		}, conductor())
 		step := after.Current()
 		if step != nil && step.ID == stepID && step.State == run.StepVerifying {
-			_, err := w.lease.Acquire(ctx, leasesvc.AcquireParams{
+			vheld, err := w.lease.Acquire(ctx, leasesvc.AcquireParams{
 				Purpose: lease.PurposeVerify, Feature: "f-1", RunID: runID, StepID: stepID,
 				Agent: verifier, TicketDir: "tickets/demo",
 				WritePaths: []string{"tickets/demo/**"}, Actor: conductor(),
@@ -287,6 +288,7 @@ func delegate(t *testing.T, w *world, runID, stepID, agent, verifier string, out
 			apply(t, w, runID, run.Event{
 				Kind: run.EvVerificationRecorded, Actor: run.ActorAgent, StepID: stepID,
 				Agent: verifier, Outcome: run.StepPASS, Evidence: stepID + "/verify.md",
+				Fencing: vheld.Lease.Fencing,
 			}, ports.Principal{Handle: verifier, Kind: "agent"})
 		}
 	} else {

@@ -22,6 +22,7 @@ import (
 
 	"github.com/idev/internal/domain/audit"
 	"github.com/idev/internal/domain/lease"
+	"github.com/idev/internal/domain/run"
 	"github.com/idev/internal/ports"
 	"github.com/idev/pkg/canonical"
 )
@@ -78,6 +79,11 @@ type Held struct {
 // storing the raw token, which is exactly what the hash-only design
 // refuses. A retry after a timeout either hits the I-1 conflict (the first
 // attempt won) or issues a fresh lease, and both are safe.
+//
+// The lease is bound to the step the run says it is for: a write lease only
+// when the step is delegated to this agent, a verify lease only while the
+// step is verifying. Without this, "release, then acquire" would hand the
+// feature to whoever asked first (review D2).
 func (s Service) Acquire(ctx context.Context, p AcquireParams) (Held, error) {
 	if p.Purpose != lease.PurposeWrite && p.Purpose != lease.PurposeVerify {
 		return Held{}, fmt.Errorf("leasesvc: a %s step needs no lease", p.Purpose)
@@ -108,6 +114,9 @@ func (s Service) Acquire(ctx context.Context, p AcquireParams) (Held, error) {
 
 	var held Held
 	err = s.Store.InTx(ctx, func(tx ports.Tx) error {
+		if err := checkStepForPurpose(ctx, tx, p); err != nil {
+			return err
+		}
 		// Fencing before Issue: if the store refuses the lease (I-1), the
 		// increment rolls back with it, so a refused acquire does not burn
 		// a fencing token.
@@ -151,6 +160,44 @@ func (s Service) Acquire(ctx context.Context, p AcquireParams) (Held, error) {
 	return held, err
 }
 
+// checkStepForPurpose binds a lease to the state the run says the step is
+// in: a write lease goes to the agent the step was delegated to, a verify
+// lease only while the step is verifying. Anything else is an attempt to
+// hold a step the caller has no claim on.
+func checkStepForPurpose(ctx context.Context, tx ports.Tx, p AcquireParams) error {
+	r, _, err := tx.Runs().Get(ctx, p.RunID)
+	if err != nil {
+		return err
+	}
+	for i := range r.Steps {
+		if r.Steps[i].ID != p.StepID {
+			continue
+		}
+		st := r.Steps[i]
+		switch p.Purpose {
+		case lease.PurposeWrite:
+			if st.State != run.StepDelegated {
+				return fmt.Errorf(
+					"leasesvc: %s is %s, not delegated; a write lease follows a delegation",
+					p.StepID, st.State)
+			}
+			if st.Writer != p.Agent {
+				return fmt.Errorf(
+					"leasesvc: %s holds the delegation for %s, not %s",
+					st.Writer, p.StepID, p.Agent)
+			}
+		case lease.PurposeVerify:
+			if st.State != run.StepVerifying {
+				return fmt.Errorf(
+					"leasesvc: %s is %s, not verifying; a verify lease follows an accepted report",
+					p.StepID, st.State)
+			}
+		}
+		return nil
+	}
+	return fmt.Errorf("leasesvc: run %s has no step %s", p.RunID, p.StepID)
+}
+
 // Renew pushes a live lease's deadline out. It is a keepalive: no audit
 // event, because none of the lease's facts — holder, purpose, fencing —
 // changed, and a chain that logged every heartbeat would drown the events
@@ -166,14 +213,15 @@ func (s Service) Renew(ctx context.Context, leaseID, token string) (lease.Lease,
 	return out, err
 }
 
-// Release retires a lease without a token. Giving a lease up is the safe
-// direction — it can only cost the holder its turn — and the conductor,
-// which releases a lease when the delegation it fed is accepted, never
-// held the token to begin with.
+// Release retires a lease. The bearer token proves the caller is the
+// holder: without it, anyone could retire anyone else's lease and then
+// acquire the freed feature — the two-step I-1 bypass of review D2. The
+// one caller that legitimately holds no token is runsvc, which releases
+// inside the run's own transaction when the domain's effects say so.
 //
 // Release is idempotent, and every already-gone path returns nil without
 // an audit event, so a retry cannot forge a second release record.
-func (s Service) Release(ctx context.Context, leaseID string, actor ports.Principal) error {
+func (s Service) Release(ctx context.Context, leaseID, token string, actor ports.Principal) error {
 	now := s.now()
 	return s.Store.InTx(ctx, func(tx ports.Tx) error {
 		l, err := tx.Leases().Get(ctx, leaseID)
@@ -182,6 +230,17 @@ func (s Service) Release(ctx context.Context, leaseID string, actor ports.Princi
 		}
 		if err != nil {
 			return err
+		}
+		// The token decides, before any state does: a caller that cannot
+		// present it has no claim on this lease, whatever shape the lease
+		// is in (review D2).
+		if hash, err := tx.Leases().TokenHash(ctx, leaseID); err != nil {
+			return err
+		} else if hash != string(canonical.Hash([]byte(token))) {
+			return &ports.ConflictError{
+				Kind:   ports.ConflictLeaseHeld,
+				Detail: fmt.Sprintf("%s is not the holder of %s; releasing a lease needs its token", actor.Handle, leaseID),
+			}
 		}
 		if l.Expired(now) {
 			// Past its deadline the lease is the sweeper's to record; a

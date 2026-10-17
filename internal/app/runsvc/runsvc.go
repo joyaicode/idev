@@ -206,6 +206,25 @@ func checkEvent(ctx context.Context, tx ports.Tx, current run.Run, ev run.Event,
 	}
 
 	switch ev.Kind {
+	case run.EvDelegationReturned, run.EvVerificationRecorded:
+		// A report must arrive on the lease that is live now. One that
+		// references a lease already swept or superseded — or presents a
+		// stale fencing counter — is a late report from a holder who lost
+		// the step, and applying it would write over the new holder's work
+		// (E15, review D2: the fencing tokens existed but were never
+		// checked).
+		l, err := tx.Leases().ActiveFor(ctx, current.ID, ev.StepID)
+		if err != nil {
+			return fmt.Errorf(
+				"runsvc: %s on %s: no live lease holds this step: %w",
+				ev.Kind, ev.StepID, err)
+		}
+		if err := l.CheckFencing(ev.Fencing); err != nil {
+			return fmt.Errorf("runsvc: %s on %s: %w", ev.Kind, ev.StepID, err)
+		}
+		if err := l.CheckHolder(ev.Agent); err != nil {
+			return fmt.Errorf("runsvc: %s on %s: %w", ev.Kind, ev.StepID, err)
+		}
 	case run.EvGateApproved, run.EvStepSkipped:
 		// A gate PASS — directly or by skip — must reference a recorded
 		// approval that belongs to this run and step, decided as an approve
@@ -275,6 +294,21 @@ func (s Service) performEffects(
 				return err
 			}
 			if err := tx.Leases().Release(ctx, l.ID); err != nil {
+				return err
+			}
+			// The domain's own release path needs no token — the state
+			// machine said the step is done with the lease — but it still
+			// owes the chain its record, which leasesvc.Release would have
+			// written for a token-holding caller.
+			if err := appendAudit(ctx, tx, audit.Event{
+				Action:  audit.ActionLeaseReleased,
+				Actor:   audit.Actor{Handle: "run", Kind: "system"},
+				RunID:   r.ID,
+				StepID:  ev.StepID,
+				Feature: r.Feature,
+				Subject: l.ID,
+				Detail:  map[string]any{"agent": l.Agent, "via": "run-state-machine"},
+			}, s.Clock); err != nil {
 				return err
 			}
 		case run.EffectStop, run.EffectEmitAudit, run.EffectProjectRun,

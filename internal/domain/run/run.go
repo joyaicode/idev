@@ -202,6 +202,12 @@ type Event struct {
 	// referenced still covers the current content (design I-4). A skip of a
 	// gate with a stale digest is a skipped signature.
 	DigestMatches bool
+	// Fencing is the lease token's fencing counter, presented by the agent
+	// with a delegation return or a verification. A report from a holder
+	// whose lease was superseded carries the old counter and is refused
+	// (E15's fencing_mismatch; the service checks it against the live
+	// lease, the same way it checks ApprovalID against the approvals).
+	Fencing uint64
 	// Command and ExitCode are required by shell.confirmed (E7).
 	Command  string
 	ExitCode *int

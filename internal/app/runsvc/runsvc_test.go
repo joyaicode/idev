@@ -13,6 +13,7 @@ import (
 	"github.com/idev/internal/app/runsvc"
 	"github.com/idev/internal/domain/audit"
 	"github.com/idev/internal/domain/gate"
+	"github.com/idev/internal/domain/lease"
 	"github.com/idev/internal/domain/run"
 	"github.com/idev/internal/ports"
 )
@@ -83,6 +84,37 @@ func start(t *testing.T, s runsvc.Service) run.Run {
 		t.Fatalf("Start: %v", err)
 	}
 	return r
+}
+
+// issueLease mints a lease a delegated or verifying step needs, so a test
+// can present its fencing counter with the return event. A prior lease on
+// the same feature is retired first: the writer's lease ends when the
+// report is accepted, which is exactly the handoff the sequence walks.
+func issueLease(t *testing.T, st *memstore.Store, runID, stepID, agent string, fencing uint64) {
+	t.Helper()
+	err := st.InTx(context.Background(), func(tx ports.Tx) error {
+		if prior, err := tx.Leases().ActiveFor(context.Background(), runID, stepID); err == nil {
+			if err := tx.Leases().Release(context.Background(), prior.ID); err != nil {
+				return err
+			}
+		} else if !isNotFoundErr(err) {
+			return err
+		}
+		return tx.Leases().Issue(context.Background(), lease.Lease{
+			ID:      "01LSE" + strings.Repeat("0", 20) + fmt.Sprintf("%03d", fencing),
+			Purpose: lease.PurposeWrite, Feature: "f-1", RunID: runID, StepID: stepID,
+			Agent: agent, Fencing: fencing,
+			ExpiresAt: time.Date(2026, 10, 16, 13, 0, 0, 0, time.UTC),
+		}, "hash-of-token-"+fmt.Sprint(fencing))
+	})
+	if err != nil {
+		t.Fatalf("seed lease for %s: %v", stepID, err)
+	}
+}
+
+func isNotFoundErr(err error) bool {
+	var ce *ports.ConflictError
+	return errors.As(err, &ce) && ce.Kind == ports.ConflictNotFound
 }
 
 func TestStartCreatesARunAndActivatesTheFirstStep(t *testing.T) {
@@ -287,34 +319,78 @@ func TestEveryTransitionIsAudited(t *testing.T) {
 			Kind: run.EvDelegationIssued, Actor: run.ActorConductor, StepID: "code-pass",
 			Agent: "idev-coder",
 		}, audit.ActionDelegationIssued},
-		{run.Event{
-			Kind: run.EvDelegationReturned, Actor: run.ActorAgent, StepID: "code-pass",
-			Agent: "idev-coder",
-		}, audit.ActionDelegationReturned},
-		{run.Event{
-			Kind: run.EvDelegationAccepted, Actor: run.ActorConductor, StepID: "code-pass",
-			Outcome: run.StepPASS, Evidence: "review.md",
-		}, audit.ActionDelegationAccepted},
-		{run.Event{
-			Kind: run.EvVerificationRecorded, Actor: run.ActorAgent, StepID: "code-pass",
-			Agent: "idev-reviewer", Outcome: run.StepPASS,
-		}, audit.ActionVerification},
 	}
+	// The walk up to the delegation: conductor probe, then the handoff to
+	// the agent.
 	for _, step := range seq {
 		if _, err := s.Apply(ctx, r.ID, step.ev, conductor()); err != nil {
 			t.Fatalf("%s: %v", step.ev.Kind, err)
 		}
 	}
 
-	events := st.Events()
-	// One for the start, one per transition.
-	if len(events) != len(seq)+1 {
-		t.Fatalf("%d audit events, want %d", len(events), len(seq)+1)
-	}
-	for i, step := range seq {
-		if got := events[i+1].Action; got != step.want {
-			t.Errorf("event %d = %s, want %s (from %s)", i+1, got, step.want, step.ev.Kind)
+	// The return and the verification each ride a lease: the writer's first,
+	// the verifier's second after the writer's is retired. Each lease is
+	// seeded just before the event that presents it, the way leasesvc would
+	// leave it at that point in the walk.
+	issueLease(t, st, r.ID, "code-pass", "idev-coder", 1)
+	for _, step := range []struct {
+		seed func() // the lease this event's fencing must match, if any
+		ev   run.Event
+		want audit.Action
+	}{
+		{nil, run.Event{
+			Kind: run.EvDelegationReturned, Actor: run.ActorAgent, StepID: "code-pass",
+			Agent: "idev-coder", Fencing: 1,
+		}, audit.ActionDelegationReturned},
+		{nil, run.Event{
+			Kind: run.EvDelegationAccepted, Actor: run.ActorConductor, StepID: "code-pass",
+			Outcome: run.StepPASS, Evidence: "review.md",
+		}, audit.ActionDelegationAccepted},
+		{func() { issueLease(t, st, r.ID, "code-pass", "idev-reviewer", 2) }, run.Event{
+			Kind: run.EvVerificationRecorded, Actor: run.ActorAgent, StepID: "code-pass",
+			Agent: "idev-reviewer", Outcome: run.StepPASS, Fencing: 2,
+		}, audit.ActionVerification},
+	} {
+		if step.seed != nil {
+			step.seed()
 		}
+		if _, err := s.Apply(ctx, r.ID, step.ev, conductor()); err != nil {
+			t.Fatalf("%s: %v", step.ev.Kind, err)
+		}
+		// The audits the whole walk must leave, one per event so far: E4's
+		// return retires the writer's lease, E5's accept moves it on, and E6
+		// retires the verifier's.
+		seq = append(seq, struct {
+			ev   run.Event
+			want audit.Action
+		}{step.ev, step.want})
+	}
+
+	events := st.Events()
+	// One for the start, one per transition, one for each lease the state
+	// machine retired along the way.
+	wantEvents := len(seq) + 1 + 2
+	if len(events) != wantEvents {
+		t.Fatalf("%d audit events, want %d", len(events), wantEvents)
+	}
+	// The transitions, in order, with the lease releases between: a lease
+	// released by the state machine must not masquerade as a transition.
+	var actions []audit.Action
+	for _, e := range events {
+		actions = append(actions, e.Action)
+	}
+	var wantActions []audit.Action
+	wantActions = append(wantActions, audit.ActionRunStarted)
+	for _, step := range seq {
+		wantActions = append(wantActions, step.want)
+		if step.ev.Kind == run.EvDelegationAccepted ||
+			step.ev.Kind == run.EvVerificationRecorded ||
+			step.ev.Kind == run.EvDelegationReturned && false {
+			wantActions = append(wantActions, audit.ActionLeaseReleased)
+		}
+	}
+	if fmt.Sprint(actions) != fmt.Sprint(wantActions) {
+		t.Errorf("actions = %v, want %v", actions, wantActions)
 	}
 	// And the chain holds: an edited or removed event would break it.
 	if err := audit.Verify(audit.Genesis, events); err != nil {

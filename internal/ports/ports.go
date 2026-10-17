@@ -96,6 +96,9 @@ type LeaseRepo interface {
 	// services release leases they did not issue, so it is never an error
 	// for the lease to already be gone.
 	Release(ctx context.Context, leaseID string) error
+	// TokenHash returns the hash of the lease's bearer token, so a service
+	// can prove a caller holds it before retiring the lease.
+	TokenHash(ctx context.Context, leaseID string) (string, error)
 	// Extend pushes a live lease's deadline to `until`, proving ownership
 	// with the token hash. A mismatched token, a lease that is no longer
 	// active, or one that already ran out fails with ConflictLeaseHeld: a

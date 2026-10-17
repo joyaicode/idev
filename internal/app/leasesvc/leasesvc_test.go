@@ -13,6 +13,7 @@ import (
 	"github.com/idev/internal/app/leasesvc"
 	"github.com/idev/internal/domain/audit"
 	"github.com/idev/internal/domain/lease"
+	"github.com/idev/internal/domain/run"
 	"github.com/idev/internal/ports"
 )
 
@@ -36,7 +37,22 @@ func (g *seqIDs) New() string {
 func newSvc(t *testing.T) (leasesvc.Service, *memstore.Store) {
 	t.Helper()
 	st := memstore.New()
+	// The run a lease is bound to: a delegated step for the writer, a
+	// verifying step for the verifier (review D2's binding).
+	st.SeedRun(delegatedRun(), "f-1")
 	return leasesvc.Service{Store: st, Clock: fixedClock{t: at}, IDs: &seqIDs{}}, st
+}
+
+// delegatedRun is the run the acquire params point at: code-pass delegated
+// to the coder, verify-plan accepted and awaiting its verifier.
+func delegatedRun() run.Run {
+	return run.Run{
+		ID: "r-1", WorkflowID: "lite-change", Feature: "demo",
+		Steps: []run.Step{
+			{ID: "code-pass", Kind: "deliver.code_pass", State: run.StepDelegated, Writer: "coder@claude"},
+			{ID: "verify-plan", Kind: "verify.plan", State: run.StepVerifying, Writer: "verifier@claude"},
+		},
+	}
 }
 
 func conductor() ports.Principal {
@@ -173,12 +189,37 @@ func TestAcquireIssuesALeaseAndRecordsIt(t *testing.T) {
 	}
 }
 
+// seedDelegated extends the seeded run with another delegated step, for
+// tests that race a second writer onto the same feature.
+func seedDelegated(st *memstore.Store, runID, stepID, agent string) {
+	r, ok := st.Run(runID)
+	if !ok {
+		return
+	}
+	r.Steps = append(r.Steps, run.Step{
+		ID: stepID, Kind: "deliver.code_pass", State: run.StepDelegated, Writer: agent,
+	})
+	st.SeedRun(r, "f-1")
+}
+
+// seedDelegatedRun seeds a whole run (ID runID, feature featureID) whose
+// single step stepID is delegated to agent.
+func seedDelegatedRun(st *memstore.Store, runID, featureID, stepID, agent string) {
+	st.SeedRun(run.Run{
+		ID: runID, WorkflowID: "lite-change", Feature: "demo",
+		Steps: []run.Step{
+			{ID: stepID, Kind: "deliver.code_pass", State: run.StepDelegated, Writer: agent},
+		},
+	}, featureID)
+}
+
 func TestAcquireRefusesASecondWriteLeaseOnTheFeature(t *testing.T) {
 	s, st := newSvc(t)
 	acquire(t, s, writeParams())
 
 	p := writeParams() // same feature, another step and agent
 	p.StepID, p.Agent = "code-pass-2", "other-coder@claude"
+	seedDelegated(st, "r-1", "code-pass-2", "other-coder@claude")
 	_, err := s.Acquire(context.Background(), p)
 	wantConflict(t, err, ports.ConflictLeaseHeld, "a second write lease on the feature")
 	if len(st.Events()) != 1 {
@@ -275,7 +316,7 @@ func TestRenewIsRefusedForAnyoneButTheLiveHolder(t *testing.T) {
 	wantConflict(t, err, ports.ConflictNotFound, "an unknown lease")
 
 	// A released lease stays down.
-	if err := s.Release(context.Background(), h.Lease.ID, conductor()); err != nil {
+	if err := s.Release(context.Background(), h.Lease.ID, h.Token, conductor()); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 	_, err = s.Renew(context.Background(), h.Lease.ID, h.Token)
@@ -316,7 +357,14 @@ func TestReleaseRetiresTheLeaseAndAudits(t *testing.T) {
 	s, st := newSvc(t)
 	h := acquire(t, s, writeParams())
 
-	if err := s.Release(context.Background(), h.Lease.ID, conductor()); err != nil {
+	// Not the holder: releasing a lease needs its token (review D2).
+	err := s.Release(context.Background(), h.Lease.ID, "a-forged-token", conductor())
+	wantConflict(t, err, ports.ConflictLeaseHeld, "a forged release token")
+	if _, ok := activeLease(t, st, "r-1", "code-pass"); !ok {
+		t.Error("a forged token retired the lease")
+	}
+
+	if err := s.Release(context.Background(), h.Lease.ID, h.Token, conductor()); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 	if _, ok := activeLease(t, st, "r-1", "code-pass"); ok {
@@ -331,7 +379,7 @@ func TestReleaseRetiresTheLeaseAndAudits(t *testing.T) {
 	}
 
 	// A retry is not a second release.
-	if err := s.Release(context.Background(), h.Lease.ID, conductor()); err != nil {
+	if err := s.Release(context.Background(), h.Lease.ID, h.Token, conductor()); err != nil {
 		t.Fatalf("second Release: %v", err)
 	}
 	if len(st.Events()) != 2 {
@@ -344,7 +392,7 @@ func TestReleaseRetiresTheLeaseAndAudits(t *testing.T) {
 	if h2.Lease.Fencing != 2 {
 		t.Errorf("fencing = %d, want 2 for the feature's second lease", h2.Lease.Fencing)
 	}
-	if err := s.Release(context.Background(), h.Lease.ID, conductor()); err != nil {
+	if err := s.Release(context.Background(), h.Lease.ID, h.Token, conductor()); err != nil {
 		t.Fatalf("Release of the superseded lease: %v", err)
 	}
 	if len(st.Events()) != 3 {
@@ -360,7 +408,7 @@ func TestReleaseOfAnExpiredLeaseLeavesItToTheSweeper(t *testing.T) {
 	h := acquire(t, s, writeParams())
 
 	s.Clock = fixedClock{t: at.Add(31 * time.Minute)}
-	if err := s.Release(context.Background(), h.Lease.ID, conductor()); err != nil {
+	if err := s.Release(context.Background(), h.Lease.ID, h.Token, conductor()); err != nil {
 		t.Fatalf("Release: %v", err)
 	}
 	if len(st.Events()) != 1 {
@@ -388,7 +436,8 @@ func TestSweepExpiresOnlyWhatRanOut(t *testing.T) {
 	h1 := acquire(t, s, writeParams()) // f-1, runs out at 12:30
 	p2 := writeParams()
 	p2.Feature, p2.RunID, p2.StepID = "f-2", "r-2", "code-pass"
-	h2 := acquire(t, s, p2) // f-2, runs out at 12:30 too
+	seedDelegatedRun(st, "r-2", "f-2", "code-pass", "coder@claude") // its own delegated run
+	h2 := acquire(t, s, p2)                                         // f-2, runs out at 12:30 too
 
 	// Taken twenty minutes later, this one outlives the sweep.
 	s.Clock = fixedClock{t: at.Add(20 * time.Minute)}
@@ -429,6 +478,7 @@ func TestSweepBatchesAtAHundred(t *testing.T) {
 		p := writeParams()
 		p.Feature = fmt.Sprintf("f-%03d", i)
 		p.RunID = fmt.Sprintf("r-%03d", i)
+		seedDelegatedRun(st, p.RunID, p.Feature, "code-pass", "coder@claude")
 		acquire(t, s, p)
 	}
 
@@ -480,6 +530,7 @@ func TestAnUnsweptExpiredLeaseStillHoldsTheFeature(t *testing.T) {
 	s.Clock = fixedClock{t: at.Add(31 * time.Minute)}
 	p := writeParams() // same feature, a new step and holder
 	p.StepID, p.Agent = "code-pass-2", "other-coder@claude"
+	seedDelegated(st, "r-1", "code-pass-2", "other-coder@claude")
 	_, err := s.Acquire(context.Background(), p)
 	wantConflict(t, err, ports.ConflictLeaseHeld, "an expired but unswept lease")
 	if len(st.Events()) != 1 {

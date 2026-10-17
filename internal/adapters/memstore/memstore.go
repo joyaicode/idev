@@ -398,6 +398,14 @@ func (l leaseRepo) Release(_ context.Context, id string) error {
 	return nil
 }
 
+func (l leaseRepo) TokenHash(_ context.Context, id string) (string, error) {
+	row, ok := l.s.leases[id]
+	if !ok {
+		return "", conflict(ports.ConflictNotFound, "lease "+id)
+	}
+	return row.tokenHash, nil
+}
+
 func (l leaseRepo) NextFencing(_ context.Context, featureID string) (uint64, error) {
 	l.s.fencing[featureID]++
 	return l.s.fencing[featureID], nil
