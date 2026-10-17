@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""check_review_coding's refactor branch, table-driven.
+r"""check_review_coding's refactor branch, table-driven.
 
 The second Python unit test in this repo (test_signoff.py was the first),
 same ground rules: unittest rather than pytest so the macOS system
@@ -127,7 +127,7 @@ class GuardGrammar(unittest.TestCase):
         )
 
     def test_guard_empty_fails(self) -> None:
-        """A bare 护栏: with nothing after the colon.
+        r"""A bare 护栏: with nothing after the colon.
 
         The old search matched through the newline into the next bullet —
         the follow-on 五轴 line satisfied \s*\S and the empty guard passed.
