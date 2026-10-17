@@ -22,7 +22,10 @@ cd "$REPO"
 fail=0
 
 echo "== bash"
-for f in scripts/*.sh; do
+# scripts/*.sh plus the shell helpers under test/: record.sh is the golden
+# recorder, so a parse error there kills the golden job mid-run, and smoke
+# cannot catch it — the same blind spot that hid the heredoc bug above.
+for f in scripts/*.sh test/*.sh test/*/*.sh; do
   [ -e "$f" ] || continue
   out="$(bash -n "$f" 2>&1)"
   if [ -n "$out" ]; then
@@ -41,7 +44,12 @@ import pathlib
 import sys
 
 bad = 0
-for path in sorted(pathlib.Path("scripts").rglob("*.py")):
+# scripts/ plus the python fixtures under test/: r2_check.py is exec'd by
+# promptfoo configs, so the only thing that ever parses it is this loop —
+# an eval run is far too late to learn about a syntax error.
+roots = (pathlib.Path("scripts"), pathlib.Path("test"))
+paths = sorted(p for root in roots for p in root.rglob("*.py"))
+for path in paths:
     try:
         ast.parse(path.read_text(encoding="utf-8"))
     except SyntaxError as exc:

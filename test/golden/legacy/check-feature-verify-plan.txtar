@@ -1,0 +1,28 @@
+# check-feature verify-plan on the assembled example ticket
+# cmd: C --repo $WORK --feature example-change --stage verify-plan
+
+-- exit --
+0
+-- output --
+OK  no idev marker
+PASS  no stage extensions
+# idev product-checks
+OK  current product has no idev marker
+product-checks PASS
+PASS  product checks
+PASS  baseline sealed
+PASS  plan.goal matches baseline.goal
+PASS  every baseline item has a plan case
+PASS  no PASS without run evidence
+PASS  every plan case has slice_id
+PASS  plan slice_id exists in req
+PASS  plan baseline_item_id matches req slice
+PASS  no agent-filled signoff by
+PASS  no staged generatedverify
+PASS  no tracked generatedverify
+PASS  grill.md convention grilling
+PASS  grill.md uses grilling question lines
+PASS  grill.md closed with sealed baseline
+PASS  human spec .idev/docs/spec/example-change.md
+---
+0 FAIL

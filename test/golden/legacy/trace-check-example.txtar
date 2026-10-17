@@ -1,0 +1,8 @@
+# trace check on the example trace
+# cmd: T check $IDEV/references/trace.example.yaml
+
+-- exit --
+0
+-- output --
+PASS  trace schema
+0 FAIL

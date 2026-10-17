@@ -15,6 +15,15 @@
 # no golden file.
 set -uo pipefail
 
+# Goldens must be byte-for-byte reproducible on any machine. Under the
+# $(cmd 2>&1) capture below, Python's stdout is block-buffered while stderr
+# is not, so a command that prints stdout lines *before* stderr lines
+# (delegation write: OK/HINT then FAIL/STOP) interleaves them differently
+# depending on whether the invoking shell exported PYTHONUNBUFFERED. Pin the
+# unbuffered order — the program's logical order — so recording and --verify
+# agree in every environment.
+export PYTHONUNBUFFERED=1
+
 IDEV="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${IDEV}/test/golden/legacy"
 FIXED="${OUT}/fixed"
@@ -83,6 +92,9 @@ record() {
 
 W() { python3 "${IDEV}/scripts/workflow.py" --repo "$WORK" "$@"; }
 D() { python3 "${IDEV}/scripts/delegation.py" --repo "$WORK" "$@"; }
+C() { python3 "${IDEV}/scripts/check-feature.py" "$@"; }
+G() { python3 "${IDEV}/scripts/stage-gate.py" "$@"; }
+T() { python3 "${IDEV}/scripts/trace.py" "$@"; }
 
 # --- workflow: start, read, record ----------------------------------------
 record start-lite-change "$OUT" "start a 7-step recipe on a fresh ticket" -- \
@@ -192,7 +204,173 @@ record delegation-signoff-claim "$OUT" "an agent claiming it wrote a signoff fie
 record delegation-timeline "$OUT" "the attempt timeline" -- \
   D timeline --feature "$FEATURE"
 
-# --- summary --------------------------------------------------------------
+# The three exit codes of `delegation write` (design §20.4): 0 clean, 1 the
+# record landed but a check failed (conductor must read the report), 2 the
+# write itself was refused. The 0 and 2 paths above cover clean, twice,
+# retry-without-prior and the signoff STOP; these two close the set with the
+# conductor-owned kind, the wrong agent for the kind, and the check-FAIL
+# exit that still wrote the record.
+cat > "$WORK/rec-conductor.yaml" <<YAML
+step: preflight
+kind: preflight.inputs
+agent: idev-coder
+attempt: 1
+report:
+  raw: |
+    STATUS: PASS
+YAML
+record delegation-kind-kept "$OUT" "a record for a kind the conductor keeps" -- \
+  D write --feature "$FEATURE" --file "$WORK/rec-conductor.yaml"
+
+cat > "$WORK/rec-mismatch.yaml" <<YAML
+step: report
+kind: review.report
+agent: idev-coder
+attempt: 1
+report:
+  raw: |
+    STATUS: PASS
+YAML
+record delegation-agent-mismatch "$OUT" "the right kind delegated to the wrong agent" -- \
+  D write --feature "$FEATURE" --file "$WORK/rec-mismatch.yaml"
+
+cat > "$WORK/rec-checks-fail.yaml" <<YAML
+step: plan
+kind: verify.plan
+agent: idev-verifier
+attempt: 1
+report:
+  raw: |
+    STATUS: PASS
+    EVIDENCE: $WORK/.idev/task/${FEATURE}/review.md
+YAML
+record delegation-checks-fail "$OUT" "a record that lands (exit 1) with a brief the conductor owes" -- \
+  D write --feature "$FEATURE" --file "$WORK/rec-checks-fail.yaml"
+
+# --- check-feature: all six stages on one example ticket --------------------
+# The skill's own example fixtures assemble into a ticket that passes every
+# stage — the same set selfcheck.sh drives, but recorded once so the Go port
+# can replay byte-for-byte what each stage prints on the way through.
+EX="$WORK/.idev/task/example-change"
+mkdir -p "$EX/verify" "$WORK/.idev/docs/spec"
+python3 - "$IDEV" "$EX" "$WORK" <<'PY'
+import shutil, sys
+from pathlib import Path
+
+idev, ex, work = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
+base = idev / "deliver" / "references"
+ver = idev / "verify" / "references"
+ops = idev / "ops" / "references"
+b = (base / "baseline.example.yaml").read_text()
+(ex / "baseline.yaml").write_text(b.replace("sealed: false", "sealed: true"))
+for src, dst in (
+    ("req.example.yaml", "req.yaml"),
+    ("arch.example.yaml", "arch.yaml"),
+    ("deliver.example.yaml", "deliver.yaml"),
+    ("review.example.md", "review.md"),
+    ("deliver-eval.example.md", "deliver-eval.md"),
+):
+    shutil.copy(base / src, ex / dst)
+(ex / "grill.md").write_text(
+    "convention: grilling\n"
+    "frontier: empty\n"
+    "shared_understanding: true\n"
+    "\n"
+    "❓ **Q1** - **scope**: settled in the example baseline\n"
+    "➡️ keep the sealed baseline\n"
+)
+shutil.copy(ver / "plan.example.yaml", ex / "verify" / "plan.yaml")
+shutil.copy(ver / "unproven.example.md", ex / "unproven.md")
+shutil.copy(ops / "ops.example.yaml", ex / "ops.yaml")
+(work / ".idev" / "docs" / "spec" / "example-change.md").write_text(
+    "restates the sealed baseline\n"
+)
+PY
+
+for s in req-review req arch code verify-plan; do
+  record "check-feature-$s" "$OUT" "check-feature $s on the assembled example ticket" -- \
+    C --repo "$WORK" --feature example-change --stage "$s"
+done
+
+# The test stage demands plan.mode: test and the unproven surfaces; the
+# swap is the one the selfcheck performs too.
+sed 's/^mode: selftest$/mode: test/' "$EX/verify/plan.yaml" > "$EX/verify/plan.test.yaml"
+mv "$EX/verify/plan.test.yaml" "$EX/verify/plan.yaml"
+record check-feature-test "$OUT" "check-feature test with mode: test and unproven.md in place" -- \
+  C --repo "$WORK" --feature example-change --stage test
+record check-feature-ops "$OUT" "check-feature ops on the example ops ticket" -- \
+  C --repo "$WORK" --feature example-change --stage ops
+
+# --- trace: append into an isolated sink, then read it back -----------------
+# IDEV_TRACE_DIR points the sink away from the repo's real traces; the date
+# names normalise to <DATE>-<NNN>.yaml, and the second append proves the
+# O_EXCL reservation gave the next round a fresh name.
+export IDEV_TRACE_DIR="$WORK/traces"
+record trace-append "$OUT" "trace append writes the next reserved name and renders it" -- \
+  T append "$IDEV/references/trace.example.yaml"
+record trace-append-again "$OUT" "a second append gets the next name (O_EXCL reservation)" -- \
+  T append "$IDEV/references/trace.example.yaml"
+record trace-list "$OUT" "trace list over the two appended rounds" -- \
+  T list
+record trace-last "$OUT" "trace last renders the newest round" -- \
+  T last
+record trace-check-example "$OUT" "trace check on the example trace" -- \
+  T check "$IDEV/references/trace.example.yaml"
+
+# --- the ticketless verify-plan path (needs_ticket: false) -----------------
+# A recipe that does not build a baseline must not be gated on sealed —
+# but only while the run really points at it. The same directory with a
+# ticketed recipe in the run stays on the strict path (design §20.4's
+# "behaviour P0 deliberately changed" spirit: the pair of goldens is the
+# proof the waiver is narrow).
+CR="$WORK/.idev/task/code-review"
+mkdir -p "$CR/workflow" "$CR/verify"
+cp "${IDEV}/workflows/code-review.yaml" "$WORK/code-review.yaml"
+sed -e "s|^recipe: .*|recipe: ${WORK}/code-review.yaml|" > "$CR/workflow/run.yaml" <<'RUN'
+schema_version: 1
+run_id: 01GOLDEN0000000000000000000
+workflow_id: code-review
+recipe: replaced-above
+feature: code-review
+status: running
+started_at: "2026-10-17T00:00:00+08:00"
+params: {}
+policy: {on_fail: stop, on_gate: stop}
+steps:
+  - {id: report, kind: review.report, status: PASS}
+  - {id: gate-report, kind: human.gate, status: PASS}
+  - {id: plan, kind: verify.plan, status: running}
+revisions: []
+feedback: {status: pending}
+RUN
+cat > "$CR/verify/plan.yaml" <<'PLAN'
+schema_version: 1
+mode: selftest
+goal: 修掉已签收 I1
+non_goal: []
+cases:
+  - id: self-i1
+    dimension: correctness
+    status: PASS
+    evidence: review.md
+    assert: 修复后 I1 对应场景返回 400
+PLAN
+
+record verify-plan-ticketless "$OUT" "verify-plan on a needs_ticket:false recipe (no baseline)" -- \
+  C --repo "$WORK" --feature code-review --stage verify-plan
+record stage-gate-test-ticketless "$OUT" "stage-gate test with cases that carry no baseline_item_id" -- \
+  G --repo "$WORK" --feature code-review --stage test
+
+# The control: same ticket, run now points at a ticketed recipe. The
+# sealed demand must come back. (run.yaml is restored after, though the
+# recording ends here anyway.)
+cp "$CR/workflow/run.yaml" "$CR/workflow/run.ticketless.yaml"
+sed -e "s|^recipe: .*|recipe: ${IDEV}/workflows/lite-change.yaml|" \
+    -e "s|^workflow_id: .*|workflow_id: lite-change|" \
+    "$CR/workflow/run.ticketless.yaml" > "$CR/workflow/run.yaml"
+record verify-plan-ticketed-control "$OUT" "same ticket, ticketed recipe: sealed is demanded again" -- \
+  C --repo "$WORK" --feature code-review --stage verify-plan
+mv "$CR/workflow/run.ticketless.yaml" "$CR/workflow/run.yaml"
 echo
 if [ "$VERIFY" = 1 ]; then
   echo "golden verify: ${pass} same, ${diff_count} different"

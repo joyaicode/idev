@@ -1,0 +1,40 @@
+# a second append gets the next name (O_EXCL reservation)
+# cmd: T append $IDEV/references/trace.example.yaml
+
+-- exit --
+0
+-- output --
+wrote $WORK/traces/<DATE>-<NNN>.yaml
+## idev-trace
+| 项 | 值 |
+|----|----|
+| intent | Land the remaining approval interceptor tests. |
+| feature | example-change |
+| trigger | 把剩余审批拦截器测试补完 |
+| matched | 编码到提测 / deliver.yaml.stage=code |
+| route | deliver / code / P1 |
+| why | deliver.yaml.stage=code; user asked to implement include paths, not a phenomenon. |
+| rejected | ops（no env/artifact/observable; not a post-ship incident）; verify（plan not accepted yet; deliver still owns the turn） |
+| thinking | 看到 stage=code 与「补测试」诉求；排除 ops（无现象）与直接 verify（plan 未 accepted）；先走 deliver/code，并打开 java 规约。 |
+| calls | module:deliver/SKILL.md; repo:docs/task/example-change/deliver.yaml; script:check-feature.sh |
+| opened | conventions/java.md; deliver/SKILL.md; docs/task/example-change/deliver.yaml |
+| conventions | java |
+| decisions | route→deliver; open→conventions/java.md; refuse→do not write aligned |
+| stop | wait for human to accept verify/plan.yaml |
+| check | skipped |
+| next | draft plan (goal copied from baseline) then check-feature code |
+## 运行路径
+trace:    <DATE>-<NNN>.yaml
+feature:  example-change
+trigger:  把剩余审批拦截器测试补完
+matched:  编码到提测 / deliver.yaml.stage=code
+route:    S1 → deliver → code → P1
+why:      deliver.yaml.stage=code; user asked to implement include paths, not a phenomenon.
+steps:    1.读 deliver.yaml.stage→仍在 code，不是 ops → 2.对照 invoke 表：编码/自测归 deliver→本轮 module=deliver → 3.改动面是 starter Java→深读 conventions/java.md
+calls:    1.module:deliver/SKILL.md(stage=code)→continue implement → 2.repo:docs/task/example-change/deliver.yaml→stage=code risk_tier=P1 → 3.script:check-feature.sh(example-change code)→skipped-until-before-signoff
+opened:   conventions/java.md · deliver/SKILL.md · docs/task/example-change/deliver.yaml
+rejected: ops, verify
+stop:     wait for human to accept verify/plan.yaml
+next:     draft plan (goal copied from baseline) then check-feature code
+
+一行: 「把剩余审批拦截器测试补完」 → S1 → deliver → code → P1 → calls[1.module:deliver/SKILL.md(stage=code)→continue implement → 2.repo:docs/task/example-change/deliver.yaml→stage=code ri...] → next:draft plan (goal copied from baseline) t

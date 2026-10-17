@@ -92,9 +92,9 @@ bash scripts/healthcheck.sh        # 7 环境与拓扑
 两个单测另跑，不进上面这条链（它们不依赖内核拓扑）：
 
 ```bash
-python3 scripts/test_signoff.py      # 签字文法与身份，140 条共享用例
+python3 scripts/test_signoff.py      # 签字文法与身份，156 条共享用例
 python3 scripts/test_concurrency.py  # 三条写盘路径的并发不丢失
-bash test/golden/record.sh --verify  # 旧 CLI 输出的 21 个 golden 场景
+bash test/golden/record.sh --verify  # 39 个 golden 场景：CLI 输出快照（Go 迁移安全网）
 python3 scripts/gen-kinds.py --check # kind 表的五份生成物是否最新
 ```
 

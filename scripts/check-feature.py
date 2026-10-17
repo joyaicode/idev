@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from doc_home import homes, layout_for, reconcile_spec  # noqa: E402
+from ticketless import skips_baseline  # noqa: E402
 from ticket_yaml import (
     TicketYamlError,
     as_str,
@@ -96,13 +97,47 @@ def check_review_coding(review_text: str, errors: list) -> None:
         or re.search(r"结构调整\s*[:：]\s*有", body)
     )
     if refactor_claimed:
-        has_r = bool(re.search(r"R\s*条件\s*[:：].*R[1-6]|\bR[1-6]\b.*满足", body)) or bool(
-            re.search(r"^\s*[-*]?\s*R\s*条件\s*[:：]\s*.*\S", body, re.M)
+        # R 条件 has the same none-word hazard as 护栏, for the same reason:
+        # the line exists but names nothing. The value must carry an R#
+        # or the word 满足 — whether all six conditions truly hold stays
+        # with the human reviewer (§3.4), not with this regex.
+        has_r = False
+        m = re.search(
+            r"^\s*(?:[-*+]|\d+[.)、])?\s*R\s*条件\s*[:：][ \t]*([^\n]*)$", body, re.M
         )
-        has_guard = bool(re.search(r"护栏\s*[:：]\s*\S", body))
-        if has_guard and re.search(r"护栏\s*[:：]\s*$", body, re.M):
-            has_guard = bool(re.search(r"护栏\s*[:：]\s*\S+", body))
-        if not has_r and not has_guard:
+        if m:
+            val = m.group(1).strip()
+            has_r = bool(val) and (
+                re.search(r"R\s*[1-6]", val) is not None or "满足" in val
+            )
+        # The guard field is line-anchored. The old search's \s* ate the
+        # newline after a bare "护栏:" and matched the next line's bullet,
+        # so an empty guard counted as a named one — and "护栏: 无" passed
+        # because \S counts 无 as a value. coding-tables.md §3.1 R1: an
+        # explicit none is the same as no guard; 先补最小护栏再动结构.
+        guard_val = ""
+        m = re.search(
+            r"^\s*(?:[-*+]|\d+[.)、])?\s*护栏\s*[:：][ \t]*([^\n]*)$", body, re.M
+        )
+        if m:
+            guard_val = m.group(1).strip()
+        none_guard = bool(guard_val) and (
+            re.fullmatch(
+                r"(?:无|暂无|没有|待补|todo|none)\s*(?:[（(][^）)]*[）)])?\s*[。．.!！]?",
+                guard_val,
+                re.I,
+            )
+            is not None
+            or guard_val.startswith(("无，", "无。", "无;"))
+        )
+        has_guard = bool(guard_val) and not none_guard
+        if none_guard:
+            fail(
+                "review.md refactor claim names no guard (护栏: %s): 先补最小护栏再动结构"
+                % guard_val,
+                errors,
+            )
+        elif not has_r and not has_guard:
             fail("review.md refactor claim needs R1-R6 or 护栏:", errors)
         else:
             ok("review.md refactor guard noted")
@@ -693,7 +728,11 @@ def main() -> int:
                 ok("review_questions empty")
 
     if args.stage in ("req", "arch", "code", "test", "verify-plan"):
-        if scalar(baseline, "sealed") != "true":
+        # code-review and other needs_ticket:false runs have no baseline.
+        # A baseline file that exists is still required to be sealed.
+        if args.stage == "verify-plan" and skips_baseline(root):
+            ok("verify-plan without baseline (recipe needs_ticket false)")
+        elif scalar(baseline, "sealed") != "true":
             fail("baseline.sealed is not true", errors)
         else:
             ok("baseline sealed")

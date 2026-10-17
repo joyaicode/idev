@@ -13,7 +13,7 @@
 
 | 名 | 必填 | 说明 |
 |----|------|------|
-| `feature` | 否 | 默认 `code-review`。工件落在 `doc_home.py --repo <被审查仓> --feature <feature> --key task` 给出的目录 |
+| `feature` | 否 | 默认 `code-review`。工件落在 `doc_home.py --repo <被审查仓> --feature <feature> --key task` 给出的目录。配方 `needs_ticket: false`，不要求 `deliver.yaml` |
 
 ## 步骤顺序（硬）
 
@@ -59,7 +59,7 @@ review.report → human.gate → verify.plan → human.gate → review.fix → v
 
 只为已签收项起草 `doc_home.py --key plan` 给出的 `plan.yaml`。  
 无 `deliver.yaml`：`goal` / `non_goal` 人写或从已签收 `I*` 复述；case 不挂 `slice_id` / `baseline_item_id`。  
-起草或改了 `cases[]` 后跑 `check-feature.sh <feature> verify-plan`（无 deliver 票则按 verify 规则能过再请签）。FAIL 不准请签。
+起草或改了 `cases[]` 后跑 `check-feature.sh <feature> verify-plan`。没有 `baseline.yaml`、且当前 `workflow/run.yaml` 指向的配方 `needs_ticket: false` 时，这道门禁不要求 `sealed`，`stage-gate --stage test` 也不要求 case 挂 `baseline_item_id`。已有 `baseline.yaml` 时仍要求密封。FAIL 不准请签。
 
 ## 4. `human.gate`（accepted plan）
 

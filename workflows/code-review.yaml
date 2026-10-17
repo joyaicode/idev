@@ -1,5 +1,6 @@
 schema_version: 1
 id: code-review
+needs_ticket: false
 aliases:
   - 代码审查
   - 规范审查

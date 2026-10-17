@@ -1,0 +1,8 @@
+# trace list over the two appended rounds
+# cmd: T list
+
+-- exit --
+0
+-- output --
+<DATE>-<NNN>.yaml	v2	deliver	example-change	Land the remaining approval interceptor tests.
+<DATE>-<NNN>.yaml	v2	deliver	example-change	Land the remaining approval interceptor tests.

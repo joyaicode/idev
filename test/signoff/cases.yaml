@@ -129,6 +129,41 @@ confirm:
   - { quote: "确认\norigin=code", gate_type: defect_origin, origin: code, ok: true, reason: ok }
   - { quote: "确认\t提测", ok: true, reason: ok }
 
+  # --- more zero-width and separator tricks (2026-10-17, Python/Go 对拍过) --
+  # U+FEFF/BOM, U+2060 word joiner, U+200D ZWJ: all survive NFKC and break
+  # the verb, which must read as a refusal — not as a confirmation someone
+  # "mostly" typed. U+2062/U+2061 repeat the trick on the 同意/LGTM verbs
+  # without reusing U+200B from the section above. The invisible chars are
+  # \uXXXX escapes so a reviewer can see exactly what is being tested.
+  - { quote: "\uFEFF确认", ok: false, reason: no-verb }
+  - { quote: "确\u2060认", ok: false, reason: no-verb }
+  - { quote: "确认\u200D", ok: false, reason: unparsed-tail }
+  - { quote: "同\u2062意", ok: false, reason: no-verb }
+  - { quote: "LG\u2061TM", ok: false, reason: no-verb }
+  # U+00A0 NBSP is a separator, not a verb-breaker: NFKC folds it to a
+  # plain space, so the verb still matches and only the qualifier remains.
+  - { quote: "确认\u00A0提测", ok: true, reason: ok }
+
+  # --- emoji are not qualifiers --------------------------------------------
+  # U+2728 sparkle prefix breaks the verb; visible emoji after a matched
+  # verb are an unparsed tail. \uXXXX for the task probes, literal for the
+  # rest, so the invisible/invisible boundary stays reviewable.
+  - { quote: "\u2728确认", ok: false, reason: no-verb }
+  - { quote: "确认 🎉", ok: false, reason: unparsed-tail }
+  - { quote: "LGTM 🚀", ok: false, reason: unparsed-tail }
+  - { quote: "同意 \u2705", ok: false, reason: unparsed-tail }
+  - { quote: "确认 🎉🚀", ok: false, reason: unparsed-tail }
+
+  # --- full-width forms NFKC does fold ------------------------------------
+  # The whole qualifier in full-width (origin＝code), the verb in full-width
+  # with a qualifier, and U+3000 as the separator — all fold to the ASCII
+  # grammar and confirm.
+  - { quote: "确认 ｏｒｉｇｉｎ＝ｃｏｄｅ", gate_type: defect_origin, origin: code, ok: true, reason: ok }
+  - { quote: "ＬＧＴＭ 提测", ok: true, reason: ok }
+  - { quote: "ＬＧＴＭ。", ok: true, reason: ok }
+  - { quote: "确认　提测", ok: true, reason: ok }
+  - { quote: "同意　sealed", ok: true, reason: ok }
+
 reject:
   - { quote: "驳回", ok: true }
   - { quote: "驳回 origin=code", ok: true }

@@ -1,0 +1,34 @@
+# check-feature ops on the example ops ticket
+# cmd: C --repo $WORK --feature example-change --stage ops
+
+-- exit --
+0
+-- output --
+OK  no idev marker
+PASS  no stage extensions
+# idev product-checks
+OK  current product has no idev marker
+product-checks PASS
+PASS  product checks
+PASS  ops.yaml exists
+PASS  ops.phenomenon set
+PASS  ops.env set
+PASS  ops.artifact set
+PASS  ops.observable set
+PASS  ops.kind = feature
+PASS  baseline sealed
+PASS  suspect_item_ids in baseline
+note: current product $WORK
+=== idev outbound skills ===
+note: 当前产品还没有 handoff
+=== all outbound skills present ===
+PASS  outbound required skills present
+PASS  no agent-filled signoff by
+PASS  no staged generatedverify
+PASS  no tracked generatedverify
+PASS  grill.md convention grilling
+PASS  grill.md uses grilling question lines
+PASS  grill.md closed with sealed baseline
+PASS  human spec .idev/docs/spec/example-change.md
+---
+0 FAIL

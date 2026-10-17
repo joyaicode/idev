@@ -1,0 +1,7 @@
+# the right kind delegated to the wrong agent
+# cmd: D write --feature demo --file $WORK/rec-mismatch.yaml
+
+-- exit --
+2
+-- output --
+BLOCKED kind review.report delegates to idev-reviewer, not idev-coder

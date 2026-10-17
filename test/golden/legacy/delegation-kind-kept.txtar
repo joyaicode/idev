@@ -1,0 +1,7 @@
+# a record for a kind the conductor keeps
+# cmd: D write --feature demo --file $WORK/rec-conductor.yaml
+
+-- exit --
+2
+-- output --
+BLOCKED kind preflight.inputs is kept by the conductor; it is not delegated

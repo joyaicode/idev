@@ -1,0 +1,29 @@
+# check-feature req-review on the assembled example ticket
+# cmd: C --repo $WORK --feature example-change --stage req-review
+
+-- exit --
+0
+-- output --
+OK  no idev marker
+PASS  no stage extensions
+# idev product-checks
+OK  current product has no idev marker
+product-checks PASS
+PASS  product checks
+PASS  baseline.yaml exists
+PASS  baseline.goal set
+PASS  baseline.non_goal set
+PASS  baseline.items = B1,B2,B3
+PASS  no status: open in baseline
+PASS  objections empty
+PASS  review_questions empty
+PASS  deliver-eval.md exists
+PASS  no agent-filled signoff by
+PASS  no staged generatedverify
+PASS  no tracked generatedverify
+PASS  grill.md convention grilling
+PASS  grill.md uses grilling question lines
+PASS  grill.md closed with sealed baseline
+PASS  human spec .idev/docs/spec/example-change.md
+---
+0 FAIL

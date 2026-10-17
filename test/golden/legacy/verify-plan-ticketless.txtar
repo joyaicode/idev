@@ -1,0 +1,21 @@
+# verify-plan on a needs_ticket:false recipe (no baseline)
+# cmd: C --repo $WORK --feature code-review --stage verify-plan
+
+-- exit --
+0
+-- output --
+OK  no idev marker
+PASS  no stage extensions
+# idev product-checks
+OK  current product has no idev marker
+product-checks PASS
+PASS  product checks
+PASS  verify-plan without baseline (recipe needs_ticket false)
+PASS  plan.goal matches baseline.goal
+PASS  every baseline item has a plan case
+PASS  no PASS without run evidence
+PASS  no agent-filled signoff by
+PASS  no staged generatedverify
+PASS  no tracked generatedverify
+---
+0 FAIL

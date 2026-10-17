@@ -92,7 +92,17 @@ type LeaseRepo interface {
 	Get(ctx context.Context, leaseID string) (lease.Lease, error)
 	// ActiveFor returns the live lease on a step, if any.
 	ActiveFor(ctx context.Context, runID, stepID string) (lease.Lease, error)
+	// Release retires a lease. It is idempotent at the service layer: the
+	// services release leases they did not issue, so it is never an error
+	// for the lease to already be gone.
 	Release(ctx context.Context, leaseID string) error
+	// Extend pushes a live lease's deadline to `until`, proving ownership
+	// with the token hash. A mismatched token, a lease that is no longer
+	// active, or one that already ran out fails with ConflictLeaseHeld: a
+	// late renewal must not resurrect a lease, the holder has to acquire a
+	// fresh one. The fencing token and holder are immutable, so both stay
+	// as they are.
+	Extend(ctx context.Context, leaseID, tokenHash string, now, until time.Time) (lease.Lease, error)
 	// NextFencing returns the next monotonic token for a feature.
 	NextFencing(ctx context.Context, featureID string) (uint64, error)
 	// Expire marks leases past their deadline and returns them, for the
@@ -169,7 +179,8 @@ type BaselineRepo interface {
 	Reopen(ctx context.Context, featureID string) error
 }
 
-// AuditRepo appends to the chain.
+// AuditRepo appends to the chain and stores the checkpoints that make a
+// long chain worth verifying.
 type AuditRepo interface {
 	// Append seals the event against the current head and stores it. The
 	// repo owns the sequence number and the head, so two concurrent writers
@@ -177,6 +188,12 @@ type AuditRepo interface {
 	Append(ctx context.Context, e audit.Event) (audit.Event, error)
 	Head(ctx context.Context) (canonical.Digest, int64, error)
 	Range(ctx context.Context, fromSeq int64, limit int) ([]audit.Event, error)
+	// SaveCheckpoint records a signed position. The chain stays the truth;
+	// the checkpoint is only a promise about it from the signer's key.
+	SaveCheckpoint(ctx context.Context, cp audit.Checkpoint) error
+	// Checkpoint returns the latest signed position, or ConflictNotFound
+	// when nobody has signed yet.
+	Checkpoint(ctx context.Context) (audit.Checkpoint, error)
 }
 
 // IdempotencyRepo makes a retried request safe.

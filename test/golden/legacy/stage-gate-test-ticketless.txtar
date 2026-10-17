@@ -1,0 +1,14 @@
+# stage-gate test with cases that carry no baseline_item_id
+# cmd: G --repo $WORK --feature code-review --stage test
+
+-- exit --
+0
+-- output --
+# stage-gate  code-review
+# $WORK/.idev/task/code-review
+# stages: test
+
+stage-gate PASS  1 stage(s), 0 findings
+
+**没发现 ≠ 没问题。** 这里只查机器能判的那一半;拒过清单的另一半
+(专业判断)仍要人过 —— experts.md,以及 grill。

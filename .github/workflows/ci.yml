@@ -61,30 +61,14 @@ jobs:
         run: go test -race -count=1 -coverprofile=cover.out ./...
       # The design's floor: domain is pure logic, so there is no excuse for
       # gaps in it. Checked per package rather than overall, because a high
-      # average hides a package nobody tested.
-      - name: domain coverage floor
-        run: |
-          fail=0
-          while read -r pkg pct; do
-            case "$pkg" in
-              # storetest is a library *of* tests, exercised through each
-              # store adapter. It has no tests of its own by construction,
-              # so a floor on it would be a floor on nothing.
-              */store/storetest)                   continue ;;
-              */internal/domain/*|*/pkg/canonical) floor=90 ;;
-              */internal/app/*)                    floor=75 ;;
-              */internal/adapters/*)               floor=70 ;;
-              *)                                   continue ;;
-            esac
-            if awk "BEGIN{exit !($pct < $floor)}"; then
-              echo "FAIL $pkg at ${pct}%, floor ${floor}%"
-              fail=1
-            else
-              echo "ok   $pkg at ${pct}%"
-            fi
-          done < <(go test -cover ./... 2>/dev/null \
-            | awk '/coverage:/ {gsub("%","",$(NF-2)); print $2, $(NF-2)}')
-          exit $fail
+      # average hides a package nobody tested. tools/covergate reads the
+      # profile the race step just wrote (no second test run), judges the
+      # exact hit ratio instead of the percent go test prints rounded, and
+      # fails a floored package that never made it into the profile at all.
+      # memstore and storetest are waived inside the tool: test doubles,
+      # exercised by the packages that use them.
+      - name: coverage floors
+        run: go run ./tools/covergate -profile cover.out ./internal/... ./pkg/...
       - name: fuzz the signoff grammar briefly
         run: go test -run XXX -fuzz FuzzParseConfirm -fuzztime 30s ./internal/domain/signoff/
 
@@ -152,6 +136,14 @@ jobs:
         run: python3 scripts/test_signoff.py
       - name: concurrent writes lose nothing
         run: python3 scripts/test_concurrency.py
+      - name: refactor guard grammar
+        run: python3 scripts/test_review_coding.py
+      - name: ticketless waiver stays narrow
+        run: python3 scripts/lib/test_ticketless.py
+      - name: r2 assertion harness
+        run: python3 test/promptfoo/test_r2_check.py
+      - name: promptfoo generator shape
+        run: python3 scripts/test_promptfoo_gen.py
 
   golden:
     name: golden replay

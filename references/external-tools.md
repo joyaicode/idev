@@ -46,16 +46,22 @@ python3 scripts/langfuse-export.py --feature <f> --post    # 需要 env + SDK
 ```bash
 python3 scripts/promptfoo-gen.py                  # 生成配置
 npx promptfoo@latest eval -c state/promptfoo/promptfooconfig.yaml
+npx promptfoo@latest eval -c state/promptfoo/promptfooconfig-refactor.yaml
 ```
 
-生成 5 个 prompt(每个 agent 定义的正文)+ 60 条断言,**0 个评分**。断言全是
-`contains` / `not-contains` / `regex`,人能逐条读懂:
+生成两份配置,**0 个评分**。断言全是 `contains` / `not-contains` / `regex`,
+外加**唯一一条会执行的** `python` 断言(C-3),人能逐条读懂:
 
-- 回报含 `STATUS` / `EVIDENCE` / `CHECKS` / `SUGGEST`
-- `STATUS` 可机读(`PASS|FAIL|UNPROVEN|BLOCKED(类)`)
-- `FACTS_AGENTS` 另含 `FACTS:` / `DOC_DRIFT:`,且**不许**出现 `FACTS: 看了文档`
-- `idev-coder` 另含 §0 三项交代
-- **任何 agent 都不许声称写了** `sealed`/`accepted`/`aligned`/`resolved`
+- 基础矩阵:5 个 prompt(每个 agent 定义的正文)+ 60 条断言 —— 回报含
+  `STATUS` / `EVIDENCE` / `CHECKS` / `SUGGEST`;`STATUS` 可机读
+  (`PASS|FAIL|UNPROVEN|BLOCKED(类)`);`FACTS_AGENTS` 另含 `FACTS:` / `DOC_DRIFT:`,
+  且**不许**出现 `FACTS: 看了文档`;`idev-coder` 另含 §0 三项交代;
+  **任何 agent 都不许声称写了** `sealed`/`accepted`/`aligned`/`resolved`
+- 重构轮(promptfooconfig-refactor.yaml,只钉 idev-coder):5 探针 92 断言 ——
+  C-1 无护栏的改动被拒或被要求先补护栏(R1);C-2 一张票两件事被拆轮(R3);
+  C-3 纯结构重构由 r2_check.py **真执行**:回报里的模块对 guard_r2.py 双跑,
+  前后输出逐字节一致才算过(R2);C-4 review.fix 声明 RED_FIRST 且非「无」;
+  C-5 密封基线不进 CHANGED(营地规则)
 
 **为什么不用它的评分能力:** 让模型评「这份审查有没有洞见」,正是 `evolve.md:4` 禁止的
 「LLM 自评代替人确认」。所以配置里没有一处 `llm-rubric`。
@@ -63,8 +69,10 @@ npx promptfoo@latest eval -c state/promptfoo/promptfooconfig.yaml
 **它答的是「改了定义之后回报还合规吗」,不是「回报写得好不好」。** 后者只能靠真票 ——
 见 [agents-todo.md](agents-todo.md) 的 P1。
 
-两者分工:`agent-smoke.sh` 测**脚本与契约**(170 条,不需要模型);promptfoo 测
-**定义改动后模型的实际输出**(需要 provider key)。
+两者分工:`agent-smoke.sh` 测**脚本与契约**(481 条,不需要模型);promptfoo 测
+**定义改动后模型的实际输出**(需要 provider key;本机未装,eval 需联网 `npx` 装)。
+生成器本身由 `scripts/test_promptfoo_gen.py`(10 条)与 `test/promptfoo/test_r2_check.py`
+(9 条)零依赖锁住,不跑 eval 也能验证配置形状。
 
 ## 三、DSPy —— 不装,只借思路
 
@@ -75,7 +83,7 @@ DSPy 的价值是 **signature(结构化 I/O)+ optimizer(按分数自动改 promp
 
 | DSPy 的成分 | 这一层的对应 | 差别 |
 |---|---|---|
-| signature:声明输入输出的结构 | agent 定义的**回报格式** + `delegation.py` 的五项检查 + promptfoo 的 60 条断言 | 一样是「声明结构然后校验」,但校验结果是 PASS/FAIL,不是分数 |
+| signature:声明输入输出的结构 | agent 定义的**回报格式** + `delegation.py` 的五项检查 + promptfoo 的 152 条断言 | 一样是「声明结构然后校验」,但校验结果是 PASS/FAIL,不是分数 |
 | metric:拿一个数衡量好坏 | `agent-metrics.py` 的**问题密度** + `check_fail` 件数 | 是**件数**不是质量分;它指向「下一刀改哪里」,不决定「哪个 prompt 更好」 |
 | optimizer:按 metric 自动改写 | `agent-review.sh` 起草提案 → **grill** → **人确认用语** → land | **人在回路里**,这是整条线不可替换的一环 |
 

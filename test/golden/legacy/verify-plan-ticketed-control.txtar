@@ -1,0 +1,21 @@
+# same ticket, ticketed recipe: sealed is demanded again
+# cmd: C --repo $WORK --feature code-review --stage verify-plan
+
+-- exit --
+1
+-- output --
+OK  no idev marker
+PASS  no stage extensions
+# idev product-checks
+OK  current product has no idev marker
+product-checks PASS
+PASS  product checks
+FAIL  baseline.sealed is not true
+PASS  plan.goal matches baseline.goal
+PASS  every baseline item has a plan case
+PASS  no PASS without run evidence
+PASS  no agent-filled signoff by
+PASS  no staged generatedverify
+PASS  no tracked generatedverify
+---
+1 FAIL

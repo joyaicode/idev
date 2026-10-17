@@ -46,6 +46,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import kind_agents  # noqa: E402
 import safeyaml  # noqa: E402
+import ticketless  # noqa: E402
 
 sys.path.insert(0, str(kind_agents.kernel_root() / "scripts" / "lib"))
 try:
@@ -309,8 +310,9 @@ def gate_test(home: Path, out: list[Finding]) -> None:
         if status.upper() == "PASS" and not str(c.get("evidence") or "").strip():
             out.append(Finding("test", "pass-without-evidence", f"cases[{cid}]",
                                "PASS 却没有 evidence 路径"))
-        # 拒过:对基线 item 无 case —— 反向：case 不挂 item
-        if not str(c.get("baseline_item_id") or "").strip():
+        # 拒过:对基线 item 无 case —— 反向：case 不挂 item。
+        # needs_ticket:false 且没有 baseline.yaml 时，case 不挂基线条目。
+        if not ticketless.skips_baseline(home) and not str(c.get("baseline_item_id") or "").strip():
             out.append(Finding("test", "unanchored-case", f"cases[{cid}]",
                                "没挂 baseline_item_id —— 它在证明哪条基线?"))
         # 断言是「进程没挂」这类无效断言

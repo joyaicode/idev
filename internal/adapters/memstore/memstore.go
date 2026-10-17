@@ -42,6 +42,7 @@ type Store struct {
 	approvs  map[string]*ports.Approval
 	baseline map[string]*baselineRow
 	events   []audit.Event
+	checkpts []audit.Checkpoint
 	idemp    map[string][]byte
 	fencing  map[string]uint64
 
@@ -145,6 +146,7 @@ func (s *Store) clone() *Store {
 		out.baseline[k] = &cp
 	}
 	out.events = append([]audit.Event{}, s.events...)
+	out.checkpts = append([]audit.Checkpoint{}, s.checkpts...)
 	for k, v := range s.idemp {
 		out.idemp[k] = v
 	}
@@ -158,6 +160,7 @@ func (s *Store) restore(from *Store) {
 	s.runs, s.leases, s.delegs, s.verifs = from.runs, from.leases, from.delegs, from.verifs
 	s.gates, s.approvs, s.baseline = from.gates, from.approvs, from.baseline
 	s.events, s.idemp, s.fencing = from.events, from.idemp, from.fencing
+	s.checkpts = from.checkpts
 }
 
 // Events returns the audit chain, for assertions.
@@ -165,6 +168,30 @@ func (s *Store) Events() []audit.Event {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]audit.Event{}, s.events...)
+}
+
+// Checkpoints returns every saved checkpoint, oldest first, for assertions.
+func (s *Store) Checkpoints() []audit.Checkpoint {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]audit.Checkpoint{}, s.checkpts...)
+}
+
+// TamperEvent rewrites one stored event in place — not through Append, not
+// through a use case. It exists because the audit chain's entire job is to
+// survive an attacker with write access to the store (threat T7), and the
+// use cases that defend against it must be tested against a tampered chain.
+// The mutate function receives a copy of the stored event and returns the
+// replacement; resealing inside it (audit.Seal) is the tamperer's own move.
+func (s *Store) TamperEvent(seq int64, mutate func(e audit.Event) audit.Event) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i := range s.events {
+		if s.events[i].Seq == seq {
+			s.events[i] = mutate(s.events[i])
+			return
+		}
+	}
 }
 
 // Run returns a stored run, for assertions.
@@ -318,6 +345,37 @@ func (l leaseRepo) ActiveFor(_ context.Context, runID, stepID string) (lease.Lea
 		}
 	}
 	return lease.Lease{}, conflict(ports.ConflictNotFound, "no active lease")
+}
+
+func (l leaseRepo) Extend(
+	_ context.Context, id, tokenHash string, now, until time.Time,
+) (lease.Lease, error) {
+	if err := l.s.fail("leases.Extend"); err != nil {
+		return lease.Lease{}, err
+	}
+	row, ok := l.s.leases[id]
+	if !ok {
+		return lease.Lease{}, conflict(ports.ConflictNotFound, "lease "+id)
+	}
+	if row.tokenHash != tokenHash {
+		// Only the holder can keep the lease; anyone else extending it
+		// would hand the write to a caller that never won it.
+		return lease.Lease{}, conflict(ports.ConflictLeaseHeld, "token does not match lease "+id)
+	}
+	if row.status != "active" {
+		return lease.Lease{}, conflict(ports.ConflictLeaseHeld,
+			fmt.Sprintf("lease %s is %s, not active", id, row.status))
+	}
+	if row.l.Expired(now) {
+		// The sweeper may not have marked it yet, but the deadline is the
+		// truth. Letting a late renewal through would resurrect a lease
+		// after another one may have claimed the feature.
+		return lease.Lease{}, conflict(ports.ConflictLeaseHeld,
+			fmt.Sprintf("lease %s ran out at %s; a late renewal cannot resurrect it",
+				id, row.l.ExpiresAt.Format(time.RFC3339)))
+	}
+	row.l.ExpiresAt = until
+	return row.l, nil
 }
 
 func (l leaseRepo) Release(_ context.Context, id string) error {
@@ -601,6 +659,21 @@ func (a auditRepo) Range(_ context.Context, fromSeq int64, limit int) ([]audit.E
 		}
 	}
 	return out, nil
+}
+
+func (a auditRepo) SaveCheckpoint(_ context.Context, cp audit.Checkpoint) error {
+	if err := a.s.fail("audit.SaveCheckpoint"); err != nil {
+		return err
+	}
+	a.s.checkpts = append(a.s.checkpts, cp)
+	return nil
+}
+
+func (a auditRepo) Checkpoint(_ context.Context) (audit.Checkpoint, error) {
+	if n := len(a.s.checkpts); n > 0 {
+		return a.s.checkpts[n-1], nil
+	}
+	return audit.Checkpoint{}, conflict(ports.ConflictNotFound, "no checkpoint yet")
 }
 
 // --- idempotency -----------------------------------------------------------
