@@ -14,8 +14,8 @@
 | 独占 | **签字权** · 与人交互 · 写 trace | 上下文隔离 |
 | 不能 | 亲自执行已委派的 step | 签字 · 问人 · 写 trace |
 
-**不是选择，是约束：** `scripts/lib/workflow_spec.py` 的 `is_human()` 黑名单正是
-`{agent, ai, cursor, assistant}`——**agent 签字在代码层就被拒**；subagent 看不到对话历史，
+**不是选择，是约束：** `scripts/lib/workflow_spec.py` 的 `is_human()` 按词表拒绝 agent / 模型 / 角色名，存在
+`config/people.yaml` 时还须在白名单里——**agent 名字签字在代码层就被拒**；subagent 看不到对话历史，
 无法与人往复确认；Cursor 的「subagent 启动的 subagent 不能再启动」也要求导体在主会话。
 把导体也做成 agent，等于把「人机共驾」降级成「无人值守」。
 
@@ -80,7 +80,7 @@ bash scripts/syntax-check.sh       # 1 纯解析全部脚本，零副作用
 python3 scripts/agents-check.py    # 2 agent 定义 + 回报格式 + 登记表同步
 bash scripts/workflow-check.sh     # 3 配方与 run 契约
 bash scripts/refs-check.sh         # 4 文档交叉引用
-bash scripts/selfcheck.sh          # 5 内核锁 23 道
+bash scripts/selfcheck.sh          # 5 内核锁 26 道
 bash scripts/agent-smoke.sh        # 6 委派层端到端 481 条
 bash scripts/healthcheck.sh        # 7 环境与拓扑
 ```
@@ -89,24 +89,44 @@ bash scripts/healthcheck.sh        # 7 环境与拓扑
 不能解析的脚本一条断言都不会执行。详见
 [references/failure-modes.md](references/failure-modes.md) 第十一条。
 
-两个单测另跑，不进上面这条链（它们不依赖内核拓扑）：
+单测与快照核对另跑，不进上面这条链（都不依赖内核拓扑）：
 
 ```bash
-python3 scripts/test_signoff.py      # 签字文法与身份，156 条共享用例
+python3 scripts/test_signoff.py      # 签字文法与身份，165 条共享用例
 python3 scripts/test_concurrency.py  # 三条写盘路径的并发不丢失
-bash test/golden/record.sh --verify  # 39 个 golden 场景：CLI 输出快照（Go 迁移安全网）
+python3 scripts/test_signals.py      # SIGNAL / 决策答复规则
+bash test/golden/record.sh --verify  # 50 个 golden 场景（46 + fixed 4）：CLI 输出快照（Go 迁移安全网）
 python3 scripts/gen-kinds.py --check # kind 表的五份生成物是否最新
 ```
 
+**两本引擎账，改 CLI 或改 `workflow.py` 时两本都要绿：**
+
+| 车道 | 引擎 | 覆盖 |
+|---|---|---|
+| `test/golden/record.sh --verify`（50 个 txtar，含 `fixed/` 4 个） | 钉死 `IDEV_ENGINE=python` | Python 驱动自己的行为（含签字文法），字节级快照 |
+| `scripts/selfcheck.sh` 驱动段 | 钉死 `IDEV_ENGINE=python` | run 状态机、AUTO、独立验证等语义锁 |
+| `test/gate-channel.sh`（14 例）/ `test/lease-channel.sh`（13 例） | 默认 go（自建 `bin/idev` + `IDEV_BIN`/`IDEV_DATA`） | gate/lease 通道：短码、TTY、白名单、租约 fencing |
+| `go test ./...` | Go 进程内 | runsvc / gatesvc / leasesvc / sqlite store、e2e 七步 |
+
 ## Go 核心（迁移中）
 
-idev 正在按 `Go 核心服务 idevd + MCP + Markdown 资产` 重构。当前落到 **P1**：契约
-真源与纯逻辑层已就位，服务端（存储、MCP、HTTP）尚未开始。Python 仍然是唯一写盘者。
+设计全文在 [design/idev-refactor-design-v3.md](design/idev-refactor-design-v3.md)
+（SHA-256 `7672a259…9824fea0`）。两套引擎各管各的账：
+
+- **Python `scripts/workflow.py` 拥有 `run.yaml`**：配方驱动、委派留痕、票 YAML
+  仍是它写。`IDEV_ENGINE=python` 是回退开关（golden 与 selfcheck 驱动段钉死用它）。
+- **Go CLI `cmd/idev` 拥有 gate、lease、审计**：A 类签字走终端短码
+  （`idev gate request/approve`），写租约走 `idev lease acquire/release`，
+  数据落在 `~/.idev`（`IDEV_DATA`）。默认引擎是 go——`workflow.py` 的
+  `record <gate> PASS` 与 `delegate` 会调 CLI（找 `bin/idev`，其次 PATH，或
+  `IDEV_BIN` 直指）；没有二进制时 A 类签字报错并给出两个出路
+  （`go build -o bin/idev ./cmd/idev`，或 `IDEV_ENGINE=python` 回退）。
 
 ```bash
-go test -race ./...            # 纯逻辑层，domain 覆盖率门槛 90%
-golangci-lint run ./...        # depguard 守住 domain 零 IO
-python3 scripts/gen-kinds.py   # 改 registry/kinds.yaml 后重新生成五份副本
+go build -o bin/idev ./cmd/idev   # workflow.py 默认找 bin/idev
+go test -race ./...               # 纯逻辑层，domain 覆盖率门槛 90%
+golangci-lint run ./...           # depguard 守住 domain 零 IO
+python3 scripts/gen-kinds.py      # 改 registry/kinds.yaml 后重新生成五份副本
 ```
 
 - `registry/kinds.yaml` 是 **kind 表的唯一真源**。加一个 kind 只改这个文件，再跑
