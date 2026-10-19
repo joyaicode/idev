@@ -4,7 +4,6 @@
       "name": "Default",
       "files": [
         "references/agents-todo.md",
-        "state/traces/20261019-002.yaml",
         ".vscode/changelists.json",
         "references/changelog.md"
       ]
