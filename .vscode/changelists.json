@@ -3,15 +3,10 @@
     {
       "name": "Default",
       "files": [
-        "scripts/link-idev-aliases.sh",
+        "references/agents-todo.md",
+        "state/traces/20261019-002.yaml",
         ".vscode/changelists.json",
-        "scripts/healthcheck.sh",
-        "README.md",
-        "state/traces/20261019-001.yaml",
-        "SKILL.md",
-        "references/portability-checklist.md",
-        "references/changelog.md",
-        "references/agents-todo.md"
+        "references/changelog.md"
       ]
     }
   ],
