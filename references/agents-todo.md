@@ -27,6 +27,11 @@ agent 层已合并进 idev，自检链的结果（2026-10-19 全量重跑）：
 | `scripts/test_concurrency.py` | **PASS** — 三条写盘路径并发不丢失 |
 | `scripts/test_signals.py` | **PASS** — SIGNAL 停跑与答复规则 6 组用例 |
 
+运行时验证（2026-10-19）：Claude Code v2.1.287 下 `/idev status` 经 `~/.claude/skills/idev`
+别名成功唤起——skill 列表含 idev（`Loaded 5 unique skills, user: 5`）、5 个 agent 全可见、
+debug 无 skip 记录、trace `20261019-001` 落盘（原 #3，完成即删）。`/doctor` 是交互命令
+无法批跑，以 debug 日志 + 真实唤起为证；Cursor 侧见 #4。
+
 **按顺序跑，前一道过不了后面的结论就不成立：**
 
 ```bash
@@ -49,7 +54,6 @@ NPE** —— 换语言或日志格式仍需自己验一次，见 P0 第 6 项。
 
 | # | 待办 | 状态 | 完成判据 |
 |---|---|---|---|
-| 3 | Claude Code：`/idev` 唤起导体，5 个 agent 可见 | **待验** | `claude --debug` 无 skip 记录；`/doctor` 不报重名 |
 | 4 | Cursor：`/idev-coder` 能否唤起，且它怎么处理 `tools` 字段 | **待验** | 装完在 Cursor 里敲 `/idev-` 看补全；`tools` 若不被识别，`readonly: true` 仍在 |
 | 5 | 自动唤起：不打 `/idev`，直接说交付类诉求 | **待验** | 两边都能按 description 命中 |
 | 6 | 签名归一化在**你自己的栈**上 | **待验** | 同错签名相同、不同错签名不同 |
@@ -58,6 +62,11 @@ NPE** —— 换语言或日志格式仍需自己验一次，见 P0 第 6 项。
 未实测的假设 —— 两处都装，多一条 symlink 换掉一个赌注。剩下待验的是 Cursor 怎么处理
 Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未识别字段；Cursor 侧
 无文档，也没实测过。如果那边 agent 加载异常，先只留一个最小文件试，别五个一起铺。
+
+**第 5 项受技能预算截断影响。** Claude Code（v2.1.287）技能列表超预算：17 个 7832 字符
+> 6000，description 会被截断（idev 装上后更超）。自动唤起靠 description 命中，截断会
+降低命中率；调法是用户级 settings 的 `skillListingBudgetFraction`（或 `/skills` 禁用部分
+技能），本仓不动，只在此备注。
 
 **第 6 项最该当心。** 归一化是启发式：**过度归一化会把两个不同的 bug 合成同一签名，
 误触「同签名 3 次」红线，把正常排查打断**。拿你真实的失败日志各试两份。
@@ -68,7 +77,7 @@ Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未�
 
 | # | 待办 | 状态 | 卡在什么上 |
 |---|---|---|---|
-| 7 | 端到端一轮：真票跑 `code-review` 全程 | 阻塞 | 要 #3 或 #4 之一能唤起 |
+| 7 | 端到端一轮：真票跑 `code-review` 全程 | 可做 | Claude Code 侧已能唤起（2026-10-19 实测，见上）；Cursor 侧 #4 仍待验 |
 | 8 | agent prompt 的真任务有效性 | 阻塞 | 要 #7；头几轮大概率要按 `SUGGEST` 回报改措辞 |
 
 ---

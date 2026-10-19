@@ -3,7 +3,7 @@
 人机共驾的 AI 端到端交付生命周期导体 —— **一个 skill 当导体，五个 agent 当执行者**。
 
 真源是这个 git checkout；`~/.cursor/skills/idev` 是指向它的 symlink，别名
-`~/.agents/skills/idev`、`~/.joycode/skills/idev` 再指向那里。只有一份内容。
+`~/.claude/skills/idev`、`~/.agents/skills/idev`、`~/.joycode/skills/idev` 再指向那里。只有一份内容。
 
 ## skill 与 agent：为什么要两种机制
 
@@ -67,8 +67,9 @@ bash scripts/link-agents.sh          # 装到 ~/.claude/agents 与 ~/.cursor/age
 bash scripts/link-agents.sh --check  # 核对两处是否齐全      # agents/*.md -> ~/.claude/agents/（Cursor 兼容读同一处）
 ```
 
-`/idev` 不需要安装——idev 本身就是 skill。待办与验证状态见
-[references/agents-todo.md](references/agents-todo.md)。
+`/idev` 的 skill 别名由 `bash scripts/link-idev-aliases.sh` 安装——Claude Code
+只从 `~/.claude/skills` 读用户级 skill，该别名必需（2026-10-19 实测验证）。
+待办与验证状态见 [references/agents-todo.md](references/agents-todo.md)。
 
 ## 本机自检
 

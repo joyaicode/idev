@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Soft-link ~/.agents and ~/.joycode idev dirs to the only true source:
-# ~/.cursor/skills/idev.
+# Soft-link the ~/.claude, ~/.agents and ~/.joycode idev dirs to the only
+# true source: ~/.cursor/skills/idev.
 #
 # That path may itself be a symlink into a git checkout. "True source" means
 # there is exactly ONE copy of the content, not that this path is a real
@@ -39,6 +39,10 @@ link_alias() {
 }
 
 fail=0
+# Claude Code reads user skills from ~/.claude/skills only (verified with
+# claude --debug 2.1.287: "Loading skills from: user=.../.claude/skills") —
+# without this alias /idev is invisible there, so this one is not optional.
+link_alias "${HOME}/.claude/skills/idev" || fail=1
 link_alias "${HOME}/.agents/skills/idev" || fail=1
 link_alias "${HOME}/.joycode/skills/idev" || fail=1
 if [ "$fail" -ne 0 ]; then

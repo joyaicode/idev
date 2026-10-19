@@ -42,7 +42,7 @@ if [[ -x "$ROOT/scripts/link-idev-aliases.sh" ]]; then
   alias_rc=$?
   set -e
   if [[ $alias_rc -eq 0 ]]; then
-    echo "OK  idev aliases (~/.agents + ~/.joycode -> true source)"
+    echo "OK  idev aliases (~/.claude + ~/.agents + ~/.joycode -> true source)"
     grep '^OK  ' $HC_TMP/idev-aliases.out || true
   else
     echo "FAIL idev aliases"

@@ -3,12 +3,15 @@
     {
       "name": "Default",
       "files": [
-        "state/proposals/20261019-signoff-by-signal.md",
+        "scripts/link-idev-aliases.sh",
         ".vscode/changelists.json",
-        "state/proposals/20261016-refactor-capability-acceptance.md",
-        ".joycode/memory/reference_design_doc_v3.md",
-        ".joycode/memory/MEMORY.md",
-        ".joycode/memory/project_go_migration_golden.md"
+        "scripts/healthcheck.sh",
+        "README.md",
+        "state/traces/20261019-001.yaml",
+        "SKILL.md",
+        "references/portability-checklist.md",
+        "references/changelog.md",
+        "references/agents-todo.md"
       ]
     }
   ],

@@ -9,7 +9,7 @@
 
 ## 步骤
 1. **放真源**：把 idev 目录放到 `~/.cursor/skills/idev/`（不要是 symlink）。grilling 同理放 `~/.cursor/skills/grilling/`。`setup-agents-docs` 放到 `~/.cursor/skills/setup-agents-docs/`（可以是指向它自己真源的软链）。
-2. **symlink 别名**：`bash ~/.cursor/skills/idev/scripts/link-idev-aliases.sh` 与 `scripts/link-companion-skills.sh`（建立 `~/.agents/skills/*`、`~/.joycode/skills/*` → 真源；不要复制第二份）。
+2. **symlink 别名**：`bash ~/.cursor/skills/idev/scripts/link-idev-aliases.sh` 与 `scripts/link-companion-skills.sh`（建立 `~/.claude/skills/*`、`~/.agents/skills/*`、`~/.joycode/skills/*` → 真源；不要复制第二份。Claude Code 只从 `~/.claude/skills` 读用户级 skill，该别名必需）。
 3. **outbound（产品交出口）**：交出口名单在产线工程 `.idev/handoff.yaml`，由 idev 在交付中识别后写入，并带上 `.idev/marker.yaml`。安装时 `bash ~/.cursor/skills/idev/scripts/bootstrap-outbound.sh --pack <id> [产品仓根]`。不写 `--pack` 且本机没有已记录的安装时，不会猜产品。`state/outbound-config.json` 是安装记录，含本机绝对路径，不要带到别的机器，也不是会话里的当前产品。需要续上的状态留在该工程 `.idev/`。
 4. **LaunchAgent（macOS）**：`scripts/install-weekly-audit.sh`（周六 10:00）、`scripts/install-weekly-evolve.sh`（周六 10:15）。不装则 `healthcheck.sh` 报 WARN，不影响核心 PASS。
 5. **同伴技能**：grilling 是 S1/S2 强依赖；产线文档目录认 setup-agents-docs，交付时打开 idev 的 `docs/SKILL.md`。缺则 `scripts/link-companion-skills.sh`。没有真源则 healthcheck 报 WARN，且 S1 不得请签 `sealed`、不得临场发明文档目录。
