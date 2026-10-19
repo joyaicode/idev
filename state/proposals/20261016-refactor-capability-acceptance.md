@@ -150,7 +150,7 @@ promptfoo-gen.py 把 `str(ROOT)` 绝对路径写进 briefs 与 C-3 的 file:// �
 
 ## D 组：质量门验收前瞻清单（v3 增量，2026-10-17 增补——纯清单，不启动实现）
 
-输入：设计文档 v3 相对 v2 的纯增量（v1.1 Qodana §6.6、v1.2 e2e §6.7、框架 §6.6.0）。当前仓库仍是 v1.0 形态（kinds.yaml 29 个 / api/schemas 11 份 / ports 仅 ports.go / adapters 无 quality/ / 迁移仅 00001_core.sql，2026-10-17 对账）——以下全部 PENDING，作为 T1.9/T2.8–T2.11/T3.7–T3.9/T4.8–T4.9 落地时的验收依据，逐项落地后回填判定。
+输入：设计文档 v3 相对 v2 的纯增量（v1.1 Qodana §6.6、v1.2 e2e §6.7、框架 §6.6.0）。2026-10-17 对账时仓库是 v1.0 形态（kinds.yaml 29 个 / api/schemas 11 份 / ports 仅 ports.go / adapters 无 quality/ / 迁移仅 00001_core.sql）。2026-10-19 起迁移已有 00001+00002（00002_gate_subjects，gate 绑定文件，出自签字信号提案），kinds 仍 29——以下全部 PENDING，作为 T1.9/T2.8–T2.11/T3.7–T3.9/T4.8–T4.9 落地时的验收依据，逐项落地后回填判定。
 
 ### D-0 存在性对账矩阵（v3 增量 vs 现状）
 
@@ -160,7 +160,7 @@ promptfoo-gen.py 把 `str(ROOT)` 绝对路径写进 briefs 与 C-3 的 file:// �
 | kinds 29→30（v1.1 +verify.qodana）→33（v1.2 +verify.e2e / deliver.e2e_author / ops.e2e_repro），delegated 24→28；`go generate` 四类生成物同步、selfcheck 过 | registry/kinds.yaml（T1.9） | 29/24 | PENDING |
 | `ports.GateAdapter`（Tool/Protected/Plan/Collect 四段）+ `domain/qualitygate.Evaluate(tool, …)` 纯函数 | internal/ports/qualitygate.go（T2.9） | 仅 ports.go | PENDING |
 | Qodana 适配器：argv allowlist、退出码映射（137 内存/7 crash/124 超时→error）、SARIF 解析与 baselineState 计数 | internal/adapters/quality/qodana（T2.8） | 无 | PENDING |
-| DDL 增量：quality_scans、quality_gate_runs（v1.1）+ e2e_runs、quality_gate_run_inputs（1 次 e2e run 归 1 个 verdict）、e2e_results（test_key 稳定）、e2e_evidence（sha256 重算 + producer 交叉核对）、test_asset_changes、test_asset_reviews、e2e_flake_events、e2e_quarantine（approval_id、ttl 336h、release_after_green 10）、inspection_runs（CI 巡检摄取）；gates.gate_type 增 test_assets_accept/flaky_quarantine；全表 append-only 触发器 | 迁移 00002（§7.3；SQLite 未发布并入初始 schema，pglast 仅验语法，P2 storetest 覆盖） | 仅 00001_core.sql | PENDING |
+| DDL 增量：quality_scans、quality_gate_runs（v1.1）+ e2e_runs、quality_gate_run_inputs（1 次 e2e run 归 1 个 verdict）、e2e_results（test_key 稳定）、e2e_evidence（sha256 重算 + producer 交叉核对）、test_asset_changes、test_asset_reviews、e2e_flake_events、e2e_quarantine（approval_id、ttl 336h、release_after_green 10）、inspection_runs（CI 巡检摄取）；gates.gate_type 增 test_assets_accept/flaky_quarantine；全表 append-only 触发器 | 迁移 00003+（00002 已被 gate_subjects 占用；§7.3；SQLite 未发布并入初始 schema，pglast 仅验语法，P2 storetest 覆盖） | 00001+00002（gate_subjects），质量门表无 | PENDING |
 | e2e 适配器核心：版本核对、argv allowlist 与 profile、env 注入（凭据/模型/遥测关闭）、只读缓存快照 `--cache-dir`、`--output` 搬运（T2.10）；测试资产审查 + flaky 隔离（E22–E26、`test_assets_accept`/`flaky_quarantine` 两门，T2.11） | internal/adapters/quality/e2e（T2.10/T2.11） | 无 | PENDING |
 | MCP 8 新工具：qodana_scan、quality_gate_check、qodana_findings（RO）、e2e_list、e2e_run、e2e_gate_check、e2e_report（RO）、e2e_explore_session（allowlist 拒生产、拒跨域 navigate） | §16（T2.8/T2.10/T3.8） | 无 | PENDING |
 | 质量门人签专用操作不上 MCP：quality_override、test_assets_accept、flaky_quarantine（gate approve/reject 形态）、qodana baseline update、e2e quarantine release、e2e cache snapshot refresh——只走 CLI/HTTP 且需人类凭据 | §16.5 | 无 | PENDING |

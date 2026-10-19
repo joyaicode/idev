@@ -121,6 +121,8 @@ P1 票从 S1 到 done：固定签字 3 次（密封、arch、提测），其余�
 
 ## 六、已完成（2026-10-19）
 
+入库：提交 `b96b6c9`（95 文件，含本文档与 `design/idev-refactor-design-v3.md` 进仓）；后续 `0d01c02` 对齐 todo/README 数字。
+
 | 项 | 改动 | 证据 |
 |---|---|---|
 | 跳过契约 | `workflow.py` 报错与 `workflow-schema.md`：`SKIPPED` 的 `--evidence` 可以是先前签字，或表明无可签内容的文件 | golden `gate-skip-no-evidence` 重录 |
