@@ -6,7 +6,7 @@ aliases:
   - 审计 traces
   - weekly audit
   - 跑 idev 周审计
-summary: 对最近 50 条 idev traces 做纪律抽检并输出报告（不改票、不签字）。
+summary: 对最近 50 条 idev traces 做纪律抽检并输出报告（不改票、不签字）。有硬项（multi-exec-calls / seal-write-without-signoff）时 --strict 退出非 0，run 停下请人点开样本；无硬项直接结束。
 risk_tier: P2
 params: []
 policy:
@@ -16,11 +16,5 @@ steps:
   - id: audit
     kind: shell.confirmed
     with:
-      cmd: bash ~/.cursor/skills/idev/scripts/audit-traces.sh 50
-    label: 跑 audit-traces.sh 50
-  - id: note
-    kind: human.gate
-    label: 若有 multi-exec-calls / seal-write-without-signoff，人工点开样本；深读统计可忽略
-    with:
-      will_write: []
-      proof: "audit-traces hard 计数"
+      cmd: bash ~/.cursor/skills/idev/scripts/audit-traces.sh 50 --strict
+    label: 跑 audit-traces.sh 50 --strict；有硬项则 FAIL 停下，人工点开样本；深读统计可忽略

@@ -6,5 +6,5 @@
 2. missing 配置：先真配置进页，再 mock 缺字段后 **reload**。
 3. error 态：优先调组件自身的错误回调，别依赖"早 mock 挂子应用"来触发。
 4. 文案对齐 i18n；改配置 body 时按该产线约定的结构写（扁平顶层 vs 嵌套，见该仓 `.idev/pack/`），别凭空造形状。
-5. lite-change **禁止**自动 promote / 改 sealed；人没说提测就停在 gate-next。
+5. lite-change **禁止**自动 promote / 改 sealed；跑完 selftest 即结束，人没说提测不问（H6）。
 6. 烟测：`bash ~/.cursor/skills/idev/scripts/lite-change-smoke.sh`

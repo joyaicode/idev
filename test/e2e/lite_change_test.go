@@ -11,9 +11,9 @@ import (
 	"github.com/idev/internal/ports"
 )
 
-// The seven steps of lite-change, walked end to end with no faults: two
-// conductor steps, three delegations (one with independent verification),
-// two human gates. The promise is that a run started through runsvc
+// The six steps of lite-change, walked end to end with no faults: one
+// conductor step, four delegations (one with independent verification),
+// one human gate. The promise is that a run started through runsvc
 // reaches done, every transition left one audit event, and the chain a
 // checkpoint is signed over verifies offline.
 func TestLiteChangeWalksToDone(t *testing.T) {
@@ -61,8 +61,8 @@ func TestLiteChangeWalksToDone(t *testing.T) {
 }
 
 // The same walk with the failure design §20.5 asks for injected: the
-// verify.run step FAILs, the run blocks, a second failed step cannot be
-// retried past the first, and after one retry the run reaches done.
+// verify.plan step FAILs, the run blocks, the gate behind it cannot be
+// reached, and after one retry the run reaches done.
 //
 // The blocked-and-retry shape is what `policy.on_fail: stop` means
 // mechanically: FAIL → blocked → nothing advances → EvStepRetried is the
@@ -74,11 +74,9 @@ func TestLiteChangeSurvivesAFailAndRetry(t *testing.T) {
 	conductorStep(t, w, r.ID, "preflight", "preflight/probe.md")
 	delegate(t, w, r.ID, "scope-guard", "idev-ops", "idev-ops", run.StepPASS)
 	delegate(t, w, r.ID, "code-pass", "idev-coder", "idev-reviewer", run.StepPASS)
-	delegate(t, w, r.ID, "plan", "idev-verifier", "idev-verifier", run.StepPASS)
-	approveGate(t, w, r.ID, "gate-plan", "确认")
 
-	// The injected failure: the run step reports FAIL.
-	delegate(t, w, r.ID, "run", "idev-verifier", "idev-verifier", run.StepFAIL)
+	// The injected failure: the plan step reports FAIL.
+	delegate(t, w, r.ID, "plan", "idev-verifier", "idev-verifier", run.StepFAIL)
 
 	blocked, err := w.run.Get(context.Background(), r.ID)
 	if err != nil {
@@ -91,22 +89,21 @@ func TestLiteChangeSurvivesAFailAndRetry(t *testing.T) {
 	// While blocked, the gate behind the failed step cannot be reached:
 	// nothing advances, and the conductor cannot skip ahead.
 	refuse(t, w, r.ID, run.Event{
-		Kind: run.EvStepActivated, Actor: run.ActorSystem, StepID: "gate-next",
+		Kind: run.EvStepActivated, Actor: run.ActorSystem, StepID: "gate-plan",
 	}, conductor(), "activating a step past a FAIL")
 
 	// The retry needs a note; an empty one is refused.
 	refuse(t, w, r.ID, run.Event{
-		Kind: run.EvStepRetried, Actor: run.ActorConductor, StepID: "run",
+		Kind: run.EvStepRetried, Actor: run.ActorConductor, StepID: "plan",
 	}, conductor(), "a retry without a note")
 
-	// A person's words are still needed at the last gate, and the person
-	// may refuse: a rejection stops the run for good.
 	apply(t, w, r.ID, run.Event{
-		Kind: run.EvStepRetried, Actor: run.ActorConductor, StepID: "run",
-		Note: "flaky case; re-ran with the fixture regenerated",
+		Kind: run.EvStepRetried, Actor: run.ActorConductor, StepID: "plan",
+		Note: "case missing baseline_item_id; re-drafted",
 	}, conductor())
+	delegate(t, w, r.ID, "plan", "idev-verifier", "idev-verifier", run.StepPASS)
+	approveGate(t, w, r.ID, "gate-plan", "确认")
 	delegate(t, w, r.ID, "run", "idev-verifier", "idev-verifier", run.StepPASS)
-	approveGate(t, w, r.ID, "gate-next", "确认")
 
 	final, err := w.run.Get(context.Background(), r.ID)
 	if err != nil {
@@ -116,15 +113,15 @@ func TestLiteChangeSurvivesAFailAndRetry(t *testing.T) {
 		t.Fatalf("status after retry = %s, want done", final.Status())
 	}
 
-	// The attempt counter recorded the retry: attempt 2 on the run step.
+	// The attempt counter recorded the retry: attempt 2 on the plan step.
 	var attempt int
 	for _, s := range final.Steps {
-		if s.ID == "run" {
+		if s.ID == "plan" {
 			attempt = s.Attempt
 		}
 	}
 	if attempt != 2 {
-		t.Errorf("run step attempt = %d, want 2", attempt)
+		t.Errorf("plan step attempt = %d, want 2", attempt)
 	}
 
 	// And the whole history, fail included, is one verifiable chain.
@@ -133,36 +130,33 @@ func TestLiteChangeSurvivesAFailAndRetry(t *testing.T) {
 	}
 }
 
-// A person's refusal at the last gate ends the run as blocked, not done:
-// "not promoting" is lite-change's default ending when the person does not
-// confirm, and the machine must not turn a rejection into a success.
+// A person's refusal at the plan gate ends the run as blocked, not done:
+// the machine must not turn a rejection into a success, and the run step
+// behind the gate never starts.
 func TestLiteChangeGateRejectionBlocksTheRun(t *testing.T) {
 	w := newWorld(t)
 	r := startLiteChange(t, w)
-	walkHappyPath(t, w, r)
-	// walkHappyPath already approved gate-next; start over with a fresh
-	// run for the rejection case.
-	r2 := startLiteChange(t, w)
-	conductorStep(t, w, r2.ID, "preflight", "preflight/probe.md")
-	delegate(t, w, r2.ID, "scope-guard", "idev-ops", "idev-ops", run.StepPASS)
-	delegate(t, w, r2.ID, "code-pass", "idev-coder", "idev-reviewer", run.StepPASS)
-	delegate(t, w, r2.ID, "plan", "idev-verifier", "idev-verifier", run.StepPASS)
-	approveGate(t, w, r2.ID, "gate-plan", "确认")
-	delegate(t, w, r2.ID, "run", "idev-verifier", "idev-verifier", run.StepPASS)
+	conductorStep(t, w, r.ID, "preflight", "preflight/probe.md")
+	delegate(t, w, r.ID, "scope-guard", "idev-ops", "idev-ops", run.StepPASS)
+	delegate(t, w, r.ID, "code-pass", "idev-coder", "idev-reviewer", run.StepPASS)
+	delegate(t, w, r.ID, "plan", "idev-verifier", "idev-verifier", run.StepPASS)
 
-	// The person rejects the final gate.
+	// The person rejects the plan gate.
 	ctx := context.Background()
-	activate(t, w, r2.ID, "gate-next")
-	apply(t, w, r2.ID, run.Event{
-		Kind: run.EvGateRequested, Actor: run.ActorConductor, StepID: "gate-next",
+	activate(t, w, r.ID, "gate-plan")
+	apply(t, w, r.ID, run.Event{
+		Kind: run.EvGateRequested, Actor: run.ActorConductor, StepID: "gate-plan",
 	}, conductor())
-	_, err := w.run.Apply(ctx, r2.ID, run.Event{
-		Kind: run.EvGateRejected, Actor: run.ActorHuman, StepID: "gate-next",
+	_, err := w.run.Apply(ctx, r.ID, run.Event{
+		Kind: run.EvGateRejected, Actor: run.ActorHuman, StepID: "gate-plan",
 	}, person())
 	if err != nil {
 		t.Fatalf("GateRejected: %v", err)
 	}
-	final, err := w.run.Get(ctx, r2.ID)
+	refuse(t, w, r.ID, run.Event{
+		Kind: run.EvStepActivated, Actor: run.ActorSystem, StepID: "run",
+	}, conductor(), "activating the run step behind a rejected gate")
+	final, err := w.run.Get(ctx, r.ID)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}

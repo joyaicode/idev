@@ -1,0 +1,7 @@
+# a verifier kind PASS with no independent verification
+# cmd: W record code-pass PASS --evidence docs/x.md --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED deliver.code_pass needs independent verification: --verified-by idev-reviewer --verify-evidence <its report>

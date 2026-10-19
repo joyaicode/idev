@@ -38,6 +38,7 @@ steps:
     with:
       will_write: ["verify/plan.yaml accepted"]
       proof: "verify-plan 门禁结果 / case 数"
+      auto_tiers: [P1, P2]
   - id: fix
     kind: review.fix
     label: 只改已签收 I*（及显式纳入的 O*）

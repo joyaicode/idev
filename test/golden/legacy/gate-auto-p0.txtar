@@ -1,0 +1,7 @@
+# AUTO on a P0 ticket: the gate does not list P0
+# cmd: W record gate-plan AUTO --evidence verify/plan-check.log --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED gate-plan may not pass on machine checks at P0; it needs a person's signoff

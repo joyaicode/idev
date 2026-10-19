@@ -41,7 +41,7 @@ import (
 
 // The lite-change recipe's steps, in order, with the kinds from
 // registry/kinds.yaml. The conductor step, the delegated steps with their
-// executors filled by the registry, and the two gates.
+// executors filled by the registry, and the plan gate.
 func liteChangeSteps() []run.Step {
 	return []run.Step{
 		{ID: "preflight", Kind: "preflight.inputs"},
@@ -50,7 +50,6 @@ func liteChangeSteps() []run.Step {
 		{ID: "plan", Kind: "verify.plan"},
 		{ID: "gate-plan", Kind: "human.gate"},
 		{ID: "run", Kind: "verify.run"},
-		{ID: "gate-next", Kind: "human.gate"},
 	}
 }
 
@@ -357,7 +356,7 @@ func approveGate(t *testing.T, w *world, runID, stepID string, quote string) {
 // table decides who walks each step: preflight.inputs stays with the
 // conductor, route.s4 belongs to idev-ops, deliver.code_pass to idev-coder
 // with independent verification by idev-reviewer, the verify steps to
-// idev-verifier, and the two gates to a person.
+// idev-verifier, and the plan gate to a person.
 func walkHappyPath(t *testing.T, w *world, r run.Run) {
 	t.Helper()
 	conductorStep(t, w, r.ID, "preflight", "preflight/probe.md")
@@ -366,7 +365,6 @@ func walkHappyPath(t *testing.T, w *world, r run.Run) {
 	delegate(t, w, r.ID, "plan", "idev-verifier", "idev-verifier", run.StepPASS)
 	approveGate(t, w, r.ID, "gate-plan", "确认")
 	delegate(t, w, r.ID, "run", "idev-verifier", "idev-verifier", run.StepPASS)
-	approveGate(t, w, r.ID, "gate-next", "确认")
 }
 
 // leasesvcAcquireParams is the writer lease the concurrency test races for.

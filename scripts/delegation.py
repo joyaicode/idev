@@ -157,6 +157,10 @@ CHANGED_LINE = re.compile(r"(?mi)^\s*CHANGED:\s*(.+?)\s*$")
 REVERT_LINE = re.compile(r"(?mi)^\s*REVERT:\s*(.+?)\s*$")
 RED_FIRST_LINE = re.compile(r"(?mi)^\s*RED_FIRST:\s*(.+?)\s*$")
 ASSUMED_LINE = re.compile(r"(?mi)^\s*ASSUMED:\s*(.+?)\s*$")
+# One assumption per ASSUMED line, tagged by whether the conclusion rests on
+# it. Only a load-bearing one stops the run for a person's decision.
+LOAD_BEARING = "[承重]"
+NOT_LOAD_BEARING = "[非承重]"
 # ops: 认产物不能只是声明。A feature defect sends the ticket back to deliver,
 # and that is only sound if the symptom was confirmed against *that* build.
 ARTIFACT_LINE = re.compile(r"(?mi)^\s*ARTIFACT:\s*(MATCH|AHEAD|UNKNOWN)\b")
@@ -201,6 +205,15 @@ def check_accuracy(record: dict) -> dict[str, str]:
             "PASS" if ASSUMED_LINE.search(raw)
             else "FAIL:没有 ASSUMED 行 —— 列出这轮没验、但结论依赖的前提;"
                  "没有就写「无」。导体只需核那一条,比重验整份回报便宜")
+        untagged = [
+            value for value in ASSUMED_LINE.findall(raw)
+            if not NONE_VALUE.match(value)
+            and not value.startswith((LOAD_BEARING, NOT_LOAD_BEARING))
+        ]
+        out["assumption-tagged"] = (
+            "PASS" if not untagged
+            else "FAIL:ASSUMED 没标 [承重] / [非承重]:" + ";".join(untagged)[:120]
+                 + " —— 一行一条,结论依赖它就标 [承重](会停下请人决定),否则标 [非承重]")
 
     if agent in kind_agents.FACTS_AGENTS:
         # A FACTS line that names no source kind is indistinguishable from
@@ -490,6 +503,21 @@ def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     return checks
 
 
+def signals_of(record: dict) -> list[str]:
+    """What in this report needs a person's decision before the step passes."""
+    raw = str((record.get("report") or {}).get("raw", ""))
+    out = []
+    if report_status(record) == "BLOCKED(LOGIC)":
+        out.append("BLOCKED(logic)")
+    out += [v for v in ASSUMED_LINE.findall(raw) if v.startswith(LOAD_BEARING)]
+    # AHEAD has a fixed next move (read the artifact's commit); UNKNOWN means
+    # nobody can say which code is running until a person supplies it.
+    artifact = ARTIFACT_LINE.search(raw)
+    if artifact and artifact.group(1).upper() == "UNKNOWN":
+        out.append("ARTIFACT UNKNOWN")
+    return out
+
+
 def check_metrics(record: dict) -> list[str]:
     """metrics is a flat map of counts. Nesting it invites a second eval."""
     metrics = record.get("metrics")
@@ -599,6 +627,7 @@ def cmd_write(args: argparse.Namespace) -> int:
         record["duration_s"] = seconds
 
     record["checks"] = run_checks(record, args.repo)
+    record["signals"] = signals_of(record)
 
     target = dir_for(args.feature, args.repo)
     target.mkdir(parents=True, exist_ok=True)
@@ -616,6 +645,8 @@ def cmd_write(args: argparse.Namespace) -> int:
         print(f"HINT    set attempt: {attempt + 1} in the record (with brief.prior_failure) to log a retry", file=sys.stderr)
         return 2
     print(f"OK   {path}" + (f"  ({human_secs(seconds)})" if seconds is not None else ""))
+    for signal in record["signals"]:
+        print(f"SIGNAL {signal}  (ask the person; record the answer with workflow.py decide)")
     if seconds is None:
         print("HINT no timing: pass started_at + finished_at to make duration observable")
 

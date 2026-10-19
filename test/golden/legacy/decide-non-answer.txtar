@@ -1,0 +1,7 @@
+# 继续 is not an answer to the question
+# cmd: W decide run --signal [承重] 测试库开跑前是空的 --question 测试库开跑前是空的吗 --answer 是 --quote 继续 --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED --quote must be the person's answer to the question; 继续 / ok choose nothing, ask again

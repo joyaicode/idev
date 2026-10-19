@@ -215,6 +215,12 @@ OPS_STATUSES = (
     "resolved",
 )
 
+# Tiers where a person signs the sealed baseline and req in one go, and
+# where plan / resolved pass on machine checks when no signal is raised.
+# P0 keeps every one of them a separate signoff.
+SEAL_WITH_REQ = ("P1", "P2")
+AUTO_TIERS = ("P1", "P2")
+
 SEMANTIC_PRIOR = {
     "req": ("req-review",),
     "arch": ("req-review", "req"),
@@ -317,9 +323,9 @@ def _hint_semantic_backfill(root, deliver, missing):
     print("HINT dry-run: check-feature.sh <feature> <stage> --backfill-semantic-gate-dry-run")
 
 
-def check_semantic_recorded(deliver, stage, errors, root=None):
-    # type: (dict, str, list, object) -> None
-    needed = SEMANTIC_PRIOR.get(stage)
+def check_semantic_recorded(deliver, stage, errors, root=None, deferred=()):
+    # type: (dict, str, list, object, tuple) -> None
+    needed = tuple(st for st in SEMANTIC_PRIOR.get(stage) or () if st not in deferred)
     if not needed:
         return
     gate = deliver.get("semantic_gate") if isinstance(deliver, dict) else None
@@ -386,6 +392,94 @@ def dry_run_semantic_backfill(repo, feature, stage):
             print("  %s:  # already ok by=%s" % (st, as_str(body.get("by"))))
     _hint_semantic_backfill(root, deliver, missing)
     return 0
+
+
+def check_correctness_runner(plan: dict, errors: list[str]) -> None:
+    """At plan time, correctness must already be runnable.
+
+    The test stage refuses an UNPROVEN correctness; finding that out after
+    the plan was accepted costs a second acceptance round. A case is
+    runnable when it names a runner, or has already PASSed with evidence.
+    """
+    raw = [c for c in (plan.get("cases") or []) if isinstance(c, dict)]
+    correctness = [
+        c for c in raw
+        if str(c.get("dimension") or "").strip().lower() in TEST_SURFACE_ALIASES["correctness"]
+    ]
+    if not correctness:
+        fail("plan has no correctness case (needs one with a runner)", errors)
+        return
+    stuck = [
+        str(c.get("id") or "?")
+        for c in correctness
+        if not c.get("runner") and not (as_str(c.get("status")) == "PASS" and as_str(c.get("evidence")))
+    ]
+    if stuck:
+        fail("correctness case with neither runner nor PASS evidence: %s" % ",".join(stuck), errors)
+    else:
+        ok("every correctness case is runnable")
+
+
+def check_ledger_settled(repo: Path, feature: str, errors: list[str]) -> None:
+    """resolved passes without a person only on a proven root cause and no open guess."""
+    import hypothesis
+
+    path = hypothesis.ledger_path(feature, repo)
+    if not path.is_file():
+        fail("ops.auto needs the hypothesis ledger: %s" % path, errors)
+        return
+    data = hypothesis.load(path, feature)
+    items = [i for i in data.get("items") or [] if isinstance(i, dict)]
+    still_open = [str(i.get("id") or "?") for i in items if str(i.get("status", "open")) == "open"]
+    if hypothesis.check(data, verbose=False) != 0:
+        fail("ops.auto but hypothesis.py check has findings; ask a person", errors)
+    elif still_open:
+        fail("ops.auto but hypotheses still open: %s; ask a person" % ",".join(still_open), errors)
+    elif not any(str(i.get("status")) == "proven" for i in items):
+        fail("ops.auto but no proven root cause; ask a person", errors)
+    else:
+        ok("hypothesis ledger settled (a proven root cause, nothing open)")
+
+
+def plan_signals(plan: dict, baseline_items: list[str], has_baseline: bool) -> list[str]:
+    """What a person must decide before the plan can pass without them.
+
+    Printed as SIGNAL lines; `workflow.py record <gate> AUTO` refuses an
+    evidence file that carries one.
+    """
+    raw = [c for c in (plan.get("cases") or []) if isinstance(c, dict)]
+    out = []
+    # A case that has not run yet is UNPROVEN too; only one with no runner
+    # is certain to stay that way.
+    unrunnable = [str(c.get("id") or "?") for c in raw
+                  if not c.get("runner") and as_str(c.get("status")) != "PASS"]
+    if unrunnable or plan.get("unproven_surfaces"):
+        out.append("plan leaves UNPROVEN for a person to accept: %s"
+                   % (",".join(unrunnable) or "unproven_surfaces"))
+    if has_baseline:
+        extra = [str(c.get("id") or "?") for c in raw
+                 if as_str(c.get("baseline_item_id")) not in baseline_items]
+        if extra:
+            out.append("cases not derived 1:1 from the baseline: %s" % ",".join(extra))
+    return out
+
+
+def check_auto_record(
+    label: str, data: dict, tier: str, root: Path, errors: list[str]
+) -> None:
+    """`auto: <path>` stands in for a person only at AUTO_TIERS, with readable evidence."""
+    auto = scalar(data, "auto")
+    if not auto:
+        return
+    evidence = Path(auto) if Path(auto).is_absolute() else root / auto
+    if tier not in AUTO_TIERS:
+        fail("%s.auto at %s: this tier needs a person's signoff" % (label, tier), errors)
+    elif signoff_bys(data):
+        fail("%s has both auto and by; pick one" % label, errors)
+    elif not evidence.is_file():
+        fail("%s.auto evidence not found: %s" % (label, auto), errors)
+    else:
+        ok("%s passed on machine checks (%s)" % (label, auto))
 
 
 def check_unproven_surfaces(
@@ -579,11 +673,16 @@ def _grill_fields(text: str) -> dict[str, list[str]]:
     return found
 
 
-def check_human_spec(repo: Path, feature: str, baseline: dict, errors: list[str]) -> None:
-    """Sealed tickets have one human spec. Two copies collapse onto the repo's spec directory."""
+def check_human_spec(
+    repo: Path, feature: str, baseline: dict, errors: list[str], sealing: bool = False
+) -> None:
+    """Sealed tickets have one human spec. Two copies collapse onto the repo's spec directory.
+
+    `sealing` holds a baseline about to be sealed to the same rule.
+    """
     layout = layout_for(repo, feature)
     spec = reconcile_spec(repo, feature, layout)
-    if scalar(baseline, "sealed") != "true":
+    if scalar(baseline, "sealed") != "true" and not sealing:
         return
     if spec.is_file() and spec.read_text(encoding="utf-8").strip():
         ok("human spec %s" % spec.relative_to(repo).as_posix())
@@ -591,10 +690,13 @@ def check_human_spec(repo: Path, feature: str, baseline: dict, errors: list[str]
     fail("sealed baseline missing %s" % spec.relative_to(repo).as_posix(), errors)
 
 
-def check_grill(root: Path, baseline: dict, errors: list[str]) -> None:
-    """grill.md is the only question write-up. A sealed baseline must close it."""
+def check_grill(root: Path, baseline: dict, errors: list[str], sealing: bool = False) -> None:
+    """grill.md is the only question write-up. A sealed baseline must close it.
+
+    `sealing` holds a baseline about to be sealed to the same rule.
+    """
     path = root / "grill.md"
-    sealed = scalar(baseline, "sealed") == "true"
+    sealed = scalar(baseline, "sealed") == "true" or sealing
     if not path.is_file():
         if sealed:
             fail("sealed baseline missing grill.md", errors)
@@ -625,6 +727,43 @@ def check_grill(root: Path, baseline: dict, errors: list[str]) -> None:
         fail("sealed baseline but grill.md frontier is not closed", errors)
     else:
         ok("grill.md closed with sealed baseline")
+
+
+def check_baseline_ready(root: Path, repo: Path, baseline: dict, errors: list[str]) -> None:
+    """What a baseline needs before anyone may seal it."""
+    if not (root / "baseline.yaml").is_file():
+        fail("missing %s" % (root / "baseline.yaml").relative_to(repo).as_posix(), errors)
+        return
+    if not baseline:
+        if not any("baseline.yaml" in e for e in errors):
+            fail("baseline.yaml is empty", errors)
+        return
+    ok("baseline.yaml exists")
+    if not scalar(baseline, "goal"):
+        fail("baseline.goal empty", errors)
+    else:
+        ok("baseline.goal set")
+    if not scalar(baseline, "non_goal"):
+        fail("baseline.non_goal empty", errors)
+    else:
+        ok("baseline.non_goal set")
+    items = section_ids(baseline, "items")
+    if not items:
+        fail("baseline.items has no id entries", errors)
+    else:
+        ok("baseline.items = %s" % ",".join(items))
+    if has_open_status(baseline):
+        fail("baseline still has status: open", errors)
+    else:
+        ok("no status: open in baseline")
+    if nonempty_list(baseline, "objections"):
+        fail("baseline.objections not empty", errors)
+    else:
+        ok("objections empty")
+    if nonempty_list(baseline, "review_questions"):
+        fail("baseline.review_questions must stay empty; questions belong in grill.md", errors)
+    else:
+        ok("review_questions empty")
 
 
 def load_ticket(path: Path, errors: list[str]) -> dict:
@@ -693,45 +832,21 @@ def main() -> int:
     plan = load_ticket(root / "verify" / "plan.yaml", errors)
     ops = load_ticket(root / "ops.yaml", errors)
 
-    if args.stage == "req-review":
-        if not (root / "baseline.yaml").is_file():
-            fail("missing %s" % (root / "baseline.yaml").relative_to(repo).as_posix(), errors)
-        elif not baseline:
-            if not any("baseline.yaml" in e for e in errors):
-                fail("baseline.yaml is empty", errors)
-        else:
-            ok("baseline.yaml exists")
-            if not scalar(baseline, "goal"):
-                fail("baseline.goal empty", errors)
-            else:
-                ok("baseline.goal set")
-            if not scalar(baseline, "non_goal"):
-                fail("baseline.non_goal empty", errors)
-            else:
-                ok("baseline.non_goal set")
-            items = section_ids(baseline, "items")
-            if not items:
-                fail("baseline.items has no id entries", errors)
-            else:
-                ok("baseline.items = %s" % ",".join(items))
-            if has_open_status(baseline):
-                fail("baseline still has status: open", errors)
-            else:
-                ok("no status: open in baseline")
-            if nonempty_list(baseline, "objections"):
-                fail("baseline.objections not empty", errors)
-            else:
-                ok("objections empty")
-            if nonempty_list(baseline, "review_questions"):
-                fail("baseline.review_questions must stay empty; questions belong in grill.md", errors)
-            else:
-                ok("review_questions empty")
+    tier = scalar(deliver, "risk_tier") or "P1"
+    # P1/P2 seal the baseline and accept req in one signoff at the end of
+    # req, so req is checked against a baseline that is ready but not sealed.
+    sealing = args.stage == "req" and tier in SEAL_WITH_REQ and scalar(baseline, "sealed") != "true"
+
+    if args.stage == "req-review" or sealing:
+        check_baseline_ready(root, repo, baseline, errors)
 
     if args.stage in ("req", "arch", "code", "test", "verify-plan"):
         # code-review and other needs_ticket:false runs have no baseline.
         # A baseline file that exists is still required to be sealed.
         if args.stage == "verify-plan" and skips_baseline(root):
             ok("verify-plan without baseline (recipe needs_ticket false)")
+        elif sealing:
+            ok("baseline seals with req at %s (one signoff: sealed + req.accepted)" % tier)
         elif scalar(baseline, "sealed") != "true":
             fail("baseline.sealed is not true", errors)
         else:
@@ -768,7 +883,10 @@ def main() -> int:
                 check_slice_must_lock(baseline, req, errors)
 
         if args.stage in ("req", "arch", "code", "test"):
-            check_semantic_recorded(deliver, args.stage, errors, root=root)
+            check_semantic_recorded(
+                deliver, args.stage, errors, root=root,
+                deferred=("req-review",) if sealing else (),
+            )
 
         if args.stage in ("arch", "code", "test"):
             if not arch:
@@ -816,6 +934,12 @@ def main() -> int:
                 cases = entries(plan, "cases")
                 if args.stage == "test":
                     check_unproven_surfaces(root, plan, cases, errors)
+                if args.stage == "verify-plan":
+                    check_correctness_runner(plan, errors)
+                    for signal in plan_signals(plan, items, bool(baseline) and not skips_baseline(root)):
+                        print("SIGNAL %s" % signal)
+                if args.stage == "test":
+                    check_auto_record("plan", plan, tier, root, errors)
                 case_refs = [c["baseline_item_id"] for c in cases if c["baseline_item_id"]]
                 missing = [i for i in items if i not in case_refs]
                 if missing:
@@ -933,7 +1057,10 @@ def main() -> int:
             origin = scalar(ops, "defect_origin")
             if origin and origin not in ("req", "arch", "code"):
                 fail("ops.defect_origin must be req|arch|code", errors)
-            if scalar(ops, "resolved") == "true":
+            if scalar(ops, "resolved") == "true" and scalar(ops, "auto"):
+                check_auto_record("ops", ops, tier, root, errors)
+                check_ledger_settled(repo, args.feature, errors)
+            elif scalar(ops, "resolved") == "true":
                 who = scalar(ops, "by")
                 if agent_signoff(who):
                     fail("resolved=true requires human by", errors)
@@ -997,8 +1124,8 @@ def main() -> int:
     else:
         ok("no tracked generatedverify")
 
-    check_grill(root, baseline, errors)
-    check_human_spec(repo, args.feature, baseline, errors)
+    check_grill(root, baseline, errors, sealing=sealing)
+    check_human_spec(repo, args.feature, baseline, errors, sealing=sealing)
 
     print("---")
     if errors:

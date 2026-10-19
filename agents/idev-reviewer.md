@@ -84,6 +84,7 @@ is_background: false
 | `drift-declared` | 没有 DOC_DRIFT 行 —— 文档与代码不符要说出来 |
 | `facts-sourced` | FACTS 没点名来源种类 —— 服务名不能凭经验编造 |
 | `assumption-declared` | 没有 ASSUMED 行 —— 没验的前提要浮出来 |
+| `assumption-tagged` | ASSUMED 有条目没标 [承重] / [非承重] —— 承重假设要停下来问人 |
 
 每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
 字段缺了会被打回重做,比写错更费时间。
@@ -99,7 +100,7 @@ FINDINGS: <I* 条数>(blocking <n> / 一般 <n>)
 UNRELATED: <条数>
 FACTS: codegraph <用了什么> | 源码 <路径:行> | 命令 <输出路径> | git <commit>
 DOC_DRIFT: 无 | <文档页> 说 X,代码实际 Y(建议派 docs.backfill)
-ASSUMED: <这轮没验的假设;没有写「无」>
+ASSUMED: <这轮没验的假设,每条以 [承重] 或 [非承重] 开头;没有写「无」>
 CHECKS: evidence-present=PASS|FAIL  no-signoff-write=PASS  report-parsed=PASS
 SUGGEST: <本定义里哪一步含糊,或空>
 CONCLUSION: <一句话>

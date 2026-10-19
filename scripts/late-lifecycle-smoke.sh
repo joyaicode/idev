@@ -126,7 +126,10 @@ text = p.read_text()
 text = text.replace("by: agent", "by: example-owner")
 p.write_text(text)
 PY
-"${CHECK[@]}" --repo "$SCRATCH" --feature "$FEATURE" --stage test \
+PEOPLE_ROOT="$SCRATCH/people-root"
+mkdir -p "$PEOPLE_ROOT/config"
+printf 'schema_version: 1\npeople:\n  - example-owner\n' > "$PEOPLE_ROOT/config/people.yaml"
+IDEV_ROOT="$PEOPLE_ROOT" "${CHECK[@]}" --repo "$SCRATCH" --feature "$FEATURE" --stage test \
   || fail "aligned with human by should PASS structure"
 echo "OK  aligned human by"
 

@@ -1,0 +1,7 @@
+# AUTO on a check output that did not end clean
+# cmd: W record gate-plan AUTO --evidence verify/plan-check.log --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED AUTO needs a clean check output (a '0 FAIL' line) in verify/plan-check.log

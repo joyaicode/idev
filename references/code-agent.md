@@ -64,8 +64,8 @@ python3 scripts/repl.py show --feature <f> --step <s>   # 回看某次
 
 ### 1. 不写签字字段 —— 这是代码层的禁令,不是约定
 
-`workflow_spec.is_human()` 的黑名单正是 `{agent, ai, cursor, assistant}`,**agent 签字在
-代码层就被拒**。REPL **不得成为绕过它的路**。
+`workflow_spec.is_human()` 按词表拒绝 agent / 模型 / 角色名,存在 `people.yaml` 时还须在白名单里,
+**agent 名字签字在代码层就被拒**。REPL **不得成为绕过它的路**。
 
 snippet 里出现 `accepted: True`、`sealed = "true"` 这类写法,`repl.py` 在**执行之前**就拒,
 一个字节都不会跑。写票 YAML 同理被拒 —— 工件用 agent 自己的 `Write`/`Edit`,台账用

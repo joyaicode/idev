@@ -5,7 +5,7 @@
 0
 -- output --
 # timeline  demo
-# run lite-change  status=running
+# run lite-change  status=done
 
 步骤              kind                  执行者          状态                 耗时  证据
 ---------------------------------------------------------------------------------------
@@ -14,11 +14,10 @@ scope-guard       route.s4              —               PASS                  
 code-pass         review.report         idev-reviewer   PASS                    -  $WORK/.idev/task/demo/review.md
 plan              verify.plan           —               PASS                    -  -
 gate-plan         human.gate            导体(签字)      PASS                    -  -
-run               verify.run            —               pending                 -  -
-gate-next         human.gate            导体(签字)      pending                 -  -
+run               verify.run            idev-verifier   PASS                    -  $WORK/.idev/task/demo/review.md
 sign-claim *      review.report         idev-reviewer   PASS!                   -  $WORK/.idev/task/demo/review.md
                                                         ↳ check_fail: no-signoff-write
 
-合计 2 次委派,无计时;重派 0 次;检查失败 1 项
-HINT 2 次委派没有计时,耗时视图不完整
+合计 3 次委派,无计时;重派 0 次;检查失败 1 项
+HINT 3 次委派没有计时,耗时视图不完整
 HINT * 的 1 个 step 不在 run.yaml 里(配方改过 step id?),按 step 名排在最后

@@ -41,24 +41,27 @@ class SignoffCases(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.data = load_cases()
 
-    def test_mode_is_blacklist_only(self) -> None:
-        """Every `human: ok: true` row assumes no whitelist is in force.
+    def test_mode_is_whitelist(self) -> None:
+        """The kernel ships config/people.yaml, and the `human` rows are
+        written against exactly that list.
 
-        If someone drops a people.yaml into the kernel or the data root, the
-        expectations in cases.yaml stop describing reality — so say that
-        plainly instead of failing forty rows with a confusing message.
+        The runner must see the whitelist in force from the repo root, the
+        way the conductor actually runs — so if people.yaml goes missing,
+        say that plainly instead of failing forty rows with a confusing
+        message.
         """
-        self.assertEqual(self.data.get("mode"), "blacklist-only")
+        self.assertEqual(self.data.get("mode"), "whitelist")
         w._PEOPLE_CACHE.clear()
+        allowed = w.people_whitelist()
         self.assertEqual(
-            w.people_whitelist(),
-            set(),
+            allowed,
+            {"wangwei794", "tester", "张三", "alice"},
             msg=(
-                "a people.yaml is in force, so the `human` rows no longer apply; "
-                "run this with IDEV_ROOT unset and no config/people.yaml"
+                "the people.yaml in force is not the one the `human` rows "
+                "assume; run this from the repo root with config/people.yaml"
             ),
         )
-        self.assertIn("blacklist-only", w.people_warning())
+        self.assertEqual(w.people_warning(), "")
 
     def test_confirm(self) -> None:
         for case in self.data.get("confirm") or []:
@@ -97,7 +100,23 @@ class SignoffCases(unittest.TestCase):
         }
         self.assertEqual(
             flagged,
-            {"确认不了", "同意吗", "LGTM but wait", "确认？", "idev-coder", "Claude"},
+            {
+                "确认不了",
+                "同意吗",
+                "LGTM but wait",
+                "确认？",
+                "idev-coder",
+                "Claude",
+                "claude-opus",
+                "GPT-4o",
+                "grok bot",
+                "DeepSeek",
+                "glm-4.6",
+                "Qwen",
+                "kimi",
+                "ai助手",
+                "evolve-curator",
+            },
             msg="the review's regression rows changed; update the review, not the test",
         )
 

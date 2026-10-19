@@ -27,8 +27,8 @@
 
 ### 为什么必须这样分(四条都是硬依据,不是偏好)
 
-1. **签字权** —— 内核 `workflow_spec.is_human()` 的黑名单正是
-   `{agent, ai, cursor, assistant}`。**subagent 签字在代码层就被拒**,不是约定而是实现。
+1. **签字权** —— 内核 `workflow_spec.is_human()` 按词表 `AGENT_WORDS` 拒绝 agent / 模型 / 角色名
+   (整名与分词都匹配),存在 `people.yaml` 时还须在白名单里。**subagent 用自己的名字签字在代码层就被拒**,不是约定而是实现。
 2. **与人交互** —— subagent 看不到对话历史,也无法与人往复确认。而
    `sealed`/`accepted`/`aligned` 必须有**人本轮的确认用语**(`继续` 不算)。
 3. **嵌套限制** —— Cursor 2.5 起 subagent 可以再派 subagent,但「由另一个 subagent 启动的
@@ -104,7 +104,7 @@
 
 | kind | 原因 |
 |---|---|
-| `human.gate` | **制度性,不是选择。** `workflow_spec.is_human()` 的黑名单正是 `{agent, ai, cursor, assistant}` —— subagent 签字在代码层就被拒。签字权不可下放。 |
+| `human.gate` | **制度性,不是选择。** `workflow_spec.is_human()` 按词表拒绝 agent / 模型 / 角色名 —— subagent 用自己的名字签字在代码层就被拒。签字权不可下放。 |
 | `preflight.inputs` | 纯可读性探针,导体自跑一条命令即可,委派反而多一跳 |
 | `shell.confirmed` | 就一条人已确认的命令,组委派包比直接跑更贵 |
 | `ui.clean_pass_loop` | 外层整轮循环控制(`policy.max_clean_attempts`),跨多个 step,不属于单步执行 |
@@ -123,9 +123,15 @@
    python3 scripts/delegation.py write --feature <f>    # brief + report 原文走 stdin
    ```
    它会算五项诚实性检查并写回,`duration_s` 由两个时间戳算出。
-   `no-signoff-write` 或 `metrics-shape` 失败 → 退出码 2,**停下来**,不要 record
+   `no-signoff-write` 或 `metrics-shape` 失败 → 退出码 2,**停下来**,不要 record。
+   打印 `SIGNAL …`(回报是 `BLOCKED(logic)`、有 `[承重]` 假设,或 `ARTIFACT: UNKNOWN`)→ **停下来问人**:
+   一个问题、选项、你的推荐;人答了用 `workflow.py decide <step> --signal "<原样>"
+   --question … --answer … --quote "<人的原话>"` 记进 `decisions.yaml`。
+   `继续` / `ok` 不是答案,再问一次。没有信号就不停
 6. `workflow.py record <step> <STATUS> --evidence <路径>`。`human.gate` 另须
-   `--by <人名> --quote "<确认原话>"`
+   `--by <人名> --quote "<确认原话>"`;
+   `KIND_VERIFIER` 里的 kind(`next` 打印 `VERIFY …`)PASS 前先派那个 agent 复核,
+   另加 `--verified-by <它> --verify-evidence <它的报告>`
 
 两个时间戳是**可选**的 —— 可观测性不该挡住一次正常委派。但缺了就没有耗时视图,
 「哪个 agent 慢、哪一步是瓶颈」就答不出来,所以默认记上。
@@ -213,15 +219,9 @@ Cursor 侧这些收紧不生效(它忽略 `tools`,subagent 继承父级全部工
 
 ## trace
 
-内核 `scripts/trace.py` 的 `CALL_KINDS` 是 `("script","module","skill","repo","tool")`,需要加 `"agent"`:
-
-```python
-CALL_KINDS = ("script", "module", "skill", "repo", "tool", "agent")
-```
-
-委派记成 `calls[].kind: agent`,`target` 写 agent 名。**不要记成 `module`** —— 否则一轮里多次委派会被周审计的 `multi-exec-calls` 当成「calls 跨多执行模块」硬报警。
-
-`calls[].kind: agent` 已经在 `CALL_KINDS` 里，直接用即可。记成 `tool` 也不会被周审计报警，但分不出「这一轮委派了谁」。
+委派记成 `calls[].kind: agent`(已在 `scripts/trace.py` 的 `CALL_KINDS` 里),`target` 写 agent 名。
+**不要记成 `module`** —— 否则一轮里多次委派会被周审计的 `multi-exec-calls` 当成「calls 跨多执行模块」硬报警。
+记成 `tool` 不会报警,但分不出「这一轮委派了谁」。
 
 ## 自检
 

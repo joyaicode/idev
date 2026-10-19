@@ -25,13 +25,19 @@ var agentWords = map[string]bool{
 	// models
 	"claude": true, "gpt": true, "chatgpt": true, "codex": true,
 	"gemini": true, "grok": true, "copilot": true, "composer": true,
-	"sonnet": true, "opus": true,
+	"sonnet": true, "opus": true, "deepseek": true, "glm": true,
+	"qwen": true, "kimi": true,
 	// roles, which are not people
 	"llm": true, "bot": true, "model": true, "subagent": true,
 	"conductor": true, "system": true, "root": true, "human": true,
 }
 
-var idevPrefix = regexp.MustCompile(`^idev[-_]`)
+var (
+	idevPrefix = regexp.MustCompile(`^idev[-_]`)
+	// nameTokens splits a name into [a-z0-9]+ runs, so "glm-4.6" and "Grok
+	// Bot" hit the word set token by token rather than only whole.
+	nameTokens = regexp.MustCompile(`[a-z0-9]+`)
+)
 
 // Identity is the signing policy for one workspace.
 //
@@ -69,7 +75,7 @@ func (id Identity) IsHuman(by string) bool {
 		return false
 	}
 	low := strings.ToLower(strings.TrimSpace(norm.NFKC.String(name)))
-	if agentWords[low] {
+	if namesAnAgent(low) {
 		return false
 	}
 	if idevPrefix.MatchString(low) {
@@ -87,4 +93,19 @@ func (id Identity) IsHuman(by string) bool {
 		return id.Whitelist[low]
 	}
 	return true
+}
+
+// namesAnAgent reports whether the lowercased name names an agent or a
+// model, whole or in any one of its word tokens — "glm-4.6" and "Grok Bot"
+// hit the set token by token rather than only whole.
+func namesAnAgent(low string) bool {
+	if agentWords[low] {
+		return true
+	}
+	for _, tok := range nameTokens.FindAllString(low, -1) {
+		if agentWords[tok] {
+			return true
+		}
+	}
+	return false
 }

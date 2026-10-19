@@ -21,7 +21,7 @@
 
 - 它们的 `name:` 是 **subagent 名**（`idev-coder` 等），由 Claude Code / Cursor 的 agent 机制读，
   **不是** skill 名——两套机制不同命名空间，`/idev` 仍然唯一。
-- 它们不持签字权（`workflow_spec.is_human()` 的黑名单正是 `{agent, ai, cursor, assistant}`）、
+- 它们不持签字权（`workflow_spec.is_human()` 按词表拒绝 agent / 模型 / 角色名，存在 `people.yaml` 时还须在白名单里）、
   不写 trace、不做路由。换的只是「这一步由谁执行」。
 - 扩展方式和别的模块一样：改 `scripts/lib/kind_agents.py` 的 `KIND_AGENTS` 一行 +
   `references/agents.md` 散文一行，两者不一致则 `agents-check.py` 失败。

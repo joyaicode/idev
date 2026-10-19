@@ -1,0 +1,7 @@
+# AUTO pointing at a check output that was never saved
+# cmd: W record gate-plan AUTO --evidence verify/plan-check.log --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED AUTO evidence not found: verify/plan-check.log (save the check output there first)

@@ -9,7 +9,7 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 |----|------|------|
 | 使用说明 | idev 的目标、架构思路，以及产线交付时怎么接上 `.idev/` 与文档路径 | [guide.md](guide.md) |
 | 导体 | idev 内核：产品依赖它的通用工具；不含产品会话的中间文件 | `SKILL.md` |
-| 内核 | `~/.cursor/skills/idev/` 真源。产品中间文件不进这里 | [scope.md](../conventions/scope.md) |
+| 内核 | `~/.cursor/skills/idev/` 真源（即 `IDEV_ROOT` 指向的 checkout）。产品中间文件不进这里；Go CLI 的数据在 `IDEV_DATA`（`~/.idev`），不在内核 | [scope.md](../conventions/scope.md) |
 | `.idev` | idev 在产线交付中识别出的特性，以及需要保存的状态。写在产线工程里，供后续 idev 会话参考或使用 | [scope.md](../conventions/scope.md) |
 | 标识 | idev 写入 `.idev/marker.yaml` 的 `marker: idev`。后续会话靠它认出这份持久化；`evolve: pilot` 的仓进入自进化。`extension_root` 是指向另一标记仓的相对路径 | `scripts/lib/product_marker.py` |
 | 阶段页 | `.idev/extensions.yaml` 里某一阶段要打开的产线文件。进入阶段用 `session-context.py`，点名的产品传 `--product` | `scripts/session-context.py` |
@@ -39,3 +39,6 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | S8 配方 | 一条可被 AI 识别的流水线。产品构建的在 `<repo>/.idev/workflows/<id>.yaml`；idev `workflows/` 只留编排能力 | [workflow-schema.md](workflow-schema.md) |
 | 交出口 / handoff | 产品专属、集群、脚手架类问题，交给对应产品 Skill | `SKILL.md` S7 |
 | UNPROVEN | 在 canon 自问里答不出时的标记，表示“未被证据证明”，须写进 RECORD | [canon.md](../conventions/canon.md) §5 |
+| `IDEV_ROOT` | 内核 checkout（`~/.cursor/skills/idev` 指向的这份）。Python 脚本用它整个挪走内核，agent 委派包里必填 | `scripts/lib/roots.py` |
+| `IDEV_DATA` | Go CLI 的数据根（默认 `~/.idev`）：SQLite 库与凭据在这里，与内核 checkout 分开 | `internal/adapters/local/local.go` |
+| 引擎 / `IDEV_ENGINE` | `workflow.py` 走哪条签字通道：默认 `go`（gate/lease 经 `cmd/idev`），`python` 为回退（`--by`/`--quote`）。golden 与 selfcheck 驱动段钉死 `python` | `scripts/workflow.py` |

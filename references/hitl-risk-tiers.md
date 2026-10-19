@@ -1,7 +1,7 @@
 # HITL 风险分层（对照业界，落到 idev）
 
 对照：风险档位闸门、闸门放在**不可逆动作之前**、审批须带证明物（非摘要橡皮图章）。  
-idev 已有 `deliver.risk_tier`（P0/P1/P2）与 chat-confirm；本页钉死**放哪里 / 要什么证明**。
+本页只讲**为什么**这样放。每个档位停哪里、怎么签、何时 `AUTO`，只在 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
 
 ## 原则
 
@@ -9,17 +9,10 @@ idev 已有 `deliver.risk_tier`（P0/P1/P2）与 chat-confirm；本页钉死**�
 2. 闸门放在**副作用前**：先让 Agent 起草 plan / 跑自测 / 写报告；人确认后再写 `sealed`/`accepted`/`aligned` 或跑 `promote.sh`。
 2a. **不清楚处先 grilling：** 需求分析与任何确认闸前，若边界/异议/分叉未订死，先自动唤起 grilling；不要把含糊摘要直接送人盖章。
 3. 请签必须带**证明上下文**（见 [chat-confirm-signoff.md](chat-confirm-signoff.md) §证明上下文），避免只批摘要。
-4. 进度信任：同一配方连续绿可减少 P2 停问，**不得**减少 P0 的 seal/aligned/promote。
+4. 进度信任：周审计里「`AUTO` / `[非承重]` 后被推翻」的次数低，才考虑再降停问；**不得**减少任何档位的 seal / arch / aligned / promote。
+5. 停问看信号，不看位置：AI 拿不准（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）或卡住时才问；机检能判的点不让人盖章。
 
-## 档位 ↔ 动作
-
-| 档 | 典型 | Agent 可自跑 | 必须人闸（副作用前） |
-|----|------|--------------|----------------------|
-| P0 | 鉴权/数据面/跨仓契约 | 起草、自测、报告 | seal、arch accept、plan accept、aligned、promote、ops resolved、origin 回退 |
-| P1 | 默认功能票 | 同上 + lite-change 编码 | 同 P0 减「拆解可与评审同停」；promote 仍须人提 |
-| P2 | 文档/小修/低爆破 | lite-change 全路径至 selftest | 评审（可并拆解）、plan、aligned；promote 仍须人提（H2） |
-
-停问次数细表仍以 [invoke.md](invoke.md)「门禁停问」为准；本页管**放置与证明**。
+档位的典型：P0 鉴权 / 数据面 / 跨仓契约；P1 默认功能票；P2 文档 / 小修 / 低爆破。
 
 ## 与开源 SDD 的对齐（不换栈）
 

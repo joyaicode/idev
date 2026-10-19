@@ -21,9 +21,10 @@
     "conclusion": { "type": "string", "minLength": 1 },
 
     "assumed": {
-      "description": "What was taken on faith. '无' is a valid answer and has to be written: silence is not the same as nothing.",
+      "description": "What was taken on faith. '无' is a valid answer and has to be written: silence is not the same as nothing. Anything else starts with [承重] (the conclusion falls if it is wrong, so a person decides before the step can PASS) or [非承重].",
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "^\\s*(无|[Nn]one|-|[Nn]/?[Aa]|不适用|0|\\[承重\\]|\\[非承重\\])"
     },
 
     "scope": {

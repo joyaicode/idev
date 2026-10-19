@@ -43,18 +43,27 @@ const (
 	StepUNPROVEN StepState = "UNPROVEN"
 	StepSKIPPED  StepState = "SKIPPED"
 	StepBLOCKED  StepState = "BLOCKED"
+	// StepAUTO is a human.gate passed on machine checks at a tier its recipe
+	// allows (with.auto_tiers). Nobody signed it.
+	StepAUTO StepState = "AUTO"
 )
 
 // done is the set that lets the next step activate: the step is over and did
 // not stop the run. UNPROVEN counts — "no runner for this dimension" is an
 // honest outcome, not a failure (verify/SKILL.md).
-var done = map[StepState]bool{StepPASS: true, StepSKIPPED: true, StepUNPROVEN: true}
+var done = map[StepState]bool{StepPASS: true, StepSKIPPED: true, StepUNPROVEN: true, StepAUTO: true}
 
 // stop is the set that blocks the run.
 var stop = map[StepState]bool{StepFAIL: true, StepBLOCKED: true}
 
 // terminal is done ∪ stop.
 func terminal(s StepState) bool { return done[s] || stop[s] }
+
+// recordable is what an event may set a step to. AUTO is terminal but no
+// event produces it: only the driver records a gate's machine pass, after
+// checking the tier and the evidence, so an agent's report or a conductor's
+// record carrying AUTO is refused.
+func recordable(s StepState) bool { return terminal(s) && s != StepAUTO }
 
 // IsDone reports whether a step state lets the run move on.
 func IsDone(s StepState) bool { return done[s] }
@@ -473,7 +482,7 @@ func transition(out *Run, step *Step, idx int, ev Event) ([]Effect, error) {
 		if ev.Actor != ActorConductor {
 			return nil, refuse(ev, from, "only the conductor accepts a report")
 		}
-		if !terminal(ev.Outcome) {
+		if !recordable(ev.Outcome) {
 			return nil, refuse(ev, from, "an accepted report carries a terminal status")
 		}
 		if ev.Outcome == StepPASS && step.NeedsVerify {
@@ -546,7 +555,7 @@ func transition(out *Run, step *Step, idx int, ev Event) ([]Effect, error) {
 		if step.IsGate {
 			return nil, refuse(ev, from, "a gate is decided by a person, not recorded")
 		}
-		if !terminal(ev.Outcome) {
+		if !recordable(ev.Outcome) {
 			return nil, refuse(ev, from, "a recorded step carries a terminal status")
 		}
 		if step.Kind == "shell.confirmed" && (ev.Command == "" || ev.ExitCode == nil) {
@@ -668,7 +677,7 @@ func transition(out *Run, step *Step, idx int, ev Event) ([]Effect, error) {
 		if ev.Note == "" {
 			return nil, refuse(ev, from, "changing a recorded step needs a note")
 		}
-		if !terminal(ev.Outcome) {
+		if !recordable(ev.Outcome) {
 			return nil, refuse(ev, from, "an amendment carries a terminal status")
 		}
 		if step.IsGate && ev.Outcome == StepPASS && from != StepPASS {

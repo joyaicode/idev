@@ -1,0 +1,21 @@
+# The people who may sign a human gate (design §10.2).
+#
+# Looked up by people_whitelist(): $IDEV_ROOT/config/people.yaml first, then
+# this file (the kernel root), then .idev/people.yaml in the product
+# checkout. An absent file everywhere is a valid state — blacklist-only —
+# but workflow.py refuses a human.gate PASS in it rather than trusting the
+# blacklist alone.
+#
+# Two rules, in this order:
+#   1. The blacklist always applies: listing a name here does not make an
+#      agent a person (token match, so "glm-4.6" stays out too).
+#   2. When this list is in force, a name must be on it to sign. That is
+#      the half that stops a plausible invented name from signing.
+#
+# `evolve-curator` is deliberately not listed: it is a tool, not a person.
+schema_version: 1
+people:
+  - wangwei794
+  - tester
+  - 张三
+  - Alice

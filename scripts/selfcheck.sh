@@ -1594,6 +1594,7 @@ gate_out="$(python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WF
 [[ "$gate_out" == *"needs with.will_write"* ]] \
   || { rm -rf "$WFT"; fail "workflow-check must reject a human.gate without will_write or 将代写"; }
 (
+  export IDEV_ENGINE=python
   cd "$WFT" && git init -q && mkdir -p .idev/task/demo .idev/workflows
   printf 'schema_version: 1\nmarker: idev\nid: demo\nevolve: false\n' > .idev/marker.yaml
   printf 'stage: code\n' > .idev/task/demo/deliver.yaml
@@ -1604,7 +1605,8 @@ gate_out="$(python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WF
   "$W" start demo-flow >/dev/null 2>&1 && exit 11
   "$W" start demo-flow --feature demo | grep -q '^NEXT a ' || exit 12
   "$W" record g PASS --feature demo >/dev/null 2>&1 && exit 13
-  "$W" record a PASS --feature demo --evidence r.md >/dev/null || exit 14
+  "$W" record a PASS --feature demo --evidence r.md >/dev/null 2>&1 && exit 14
+  "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null || exit 14
   "$W" record g PASS --feature demo --by tester --quote 继续 >/dev/null 2>&1 && exit 15
   "$W" record g PASS --feature demo --by assistant --quote 确认 >/dev/null 2>&1 && exit 16
   "$W" record g PASS --feature demo --by tester --quote 确认 | grep -q '^NEXT r ' || exit 17
@@ -1615,6 +1617,22 @@ gate_out="$(python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WF
   grep -q 'FAIL -> PASS' .idev/task/demo/workflow/report.md || exit 22
 ) || { code=$?; rm -rf "$WFT"; fail "workflow.py driver rule broke (case $code)"; }
 rm -rf "$WFT"
+WFU="$(mktemp -d)"
+(
+  cd "$WFU" && git init -q && mkdir -p .idev/task/demo/verify .idev/workflows
+  printf 'schema_version: 1\nmarker: idev\nid: demo\nevolve: false\n' > .idev/marker.yaml
+  printf 'stage: code\nrisk_tier: P2\n' > .idev/task/demo/deliver.yaml
+  printf '%s\n' 'schema_version: 1' 'id: demo-auto' 'summary: x' 'params:' '  - {name: feature, required: true, from: user}' \
+    'steps:' '  - {id: g, kind: human.gate, label: "将代写: x", with: {auto_tiers: [P1, P2]}}' '  - {id: r, kind: verify.run}' \
+    > .idev/workflows/demo-auto.yaml
+  W="${HOME}/.cursor/skills/idev/scripts/workflow.py"
+  "$W" start demo-auto --feature demo | grep -q 'record AUTO' || exit 31
+  printf '%s\n' '---' '0 FAIL' > .idev/task/demo/verify/plan-check.log
+  "$W" record g AUTO --feature demo --evidence verify/plan-check.log --by tester >/dev/null 2>&1 && exit 32
+  "$W" record g AUTO --feature demo --evidence verify/plan-check.log | grep -q '^NEXT r ' || exit 33
+  python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" --run .idev/task/demo/workflow/run.yaml >/dev/null || exit 34
+) || { code=$?; rm -rf "$WFU"; fail "workflow.py AUTO gate broke (case $code)"; }
+rm -rf "$WFU"
 WFA="$(mktemp -d)"
 (
   cd "$WFA" && mkdir -p ext/.idev/workflows sess/.idev p/.idev/workflows
@@ -1659,5 +1677,23 @@ grep -q "^KIND_AGENTS: dict\[str, str\] = _gen.KIND_AGENTS" "${HOME}/.cursor/ski
 grep -q "^KIND_COMMANDS = _gen.KIND_COMMANDS" "${HOME}/.cursor/skills/idev/scripts/lib/workflow_defaults.py" \
   || fail "workflow_defaults.KIND_COMMANDS no longer comes from the registry"
 echo "OK  one kind source"
+
+echo "=== lock: signoffs follow the risk tier ==="
+bash "${HOME}/.cursor/skills/idev/test/check-feature-tiers.sh" >/dev/null 2>&1 \
+  || fail "check-feature tier rules broke (bash test/check-feature-tiers.sh)"
+python3 "${HOME}/.cursor/skills/idev/scripts/test_signals.py" >/dev/null 2>&1 \
+  || fail "signal / answer rules broke (python3 scripts/test_signals.py)"
+echo "OK  tier signoffs"
+
+echo "=== lock: a gate is answered from the person's terminal ==="
+if command -v go >/dev/null 2>&1; then
+  bash "${HOME}/.cursor/skills/idev/test/gate-channel.sh" >/dev/null 2>&1 \
+    || fail "gate channel broke (bash test/gate-channel.sh)"
+  bash "${HOME}/.cursor/skills/idev/test/lease-channel.sh" >/dev/null 2>&1 \
+    || fail "lease channel broke (bash test/lease-channel.sh)"
+  echo "OK  gate and lease channels"
+else
+  echo "SKIP gate channel (no go toolchain)"
+fi
 
 echo "selfcheck PASS"

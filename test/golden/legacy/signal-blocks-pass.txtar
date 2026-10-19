@@ -1,0 +1,7 @@
+# PASS is refused while a signal has no decision
+# cmd: W record run PASS --evidence docs/x.md --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED run has signals waiting for a person's decision: [承重] 测试库开跑前是空的 — ask, then: workflow.py decide run --signal ...

@@ -5,13 +5,16 @@
 # agree on every row here.
 #
 # The `confirm` rows marked `source: design-10.3` are the table in
-# ~/Downloads/idev-refactor-design.md §10.3 verbatim; four of them pass under
-# the old prefix matcher and must not.
+# design/idev-refactor-design-v3.md §10.3 verbatim (in-repo since
+# 2026-10-19; formerly ~/Downloads/idev-refactor-design.md); four of them
+# pass under the old prefix matcher and must not.
 #
-# `human` rows assume blacklist-only mode (no people.yaml in force). The
-# runner asserts that, because a whitelist would change every `ok: true` row.
+# `human` rows assume whitelist mode: config/people.yaml lists exactly
+# wangwei794, tester, 张三 and Alice, and the runner builds the identity
+# from that file, so a name is a person only when the file says so — and
+# the blacklist still applies first (listing a model there would not help).
 schema_version: 1
-mode: blacklist-only
+mode: whitelist
 
 confirm:
   # --- design §10.3, the authoritative table -------------------------------
@@ -185,6 +188,9 @@ human:
   - { name: "IDEV-CODER", ok: false }
 
   # --- models signing under their product name ----------------------------
+  # The newer rows are the review's regression list: names that passed
+  # blacklist-only because neither the whole string nor a substring rule
+  # reached them. Token matching ("glm-4.6" -> glm) now does.
   - { name: "Claude", ok: false, source: design-10.3, regression: true }
   - { name: "claude", ok: false }
   - { name: "CLAUDE", ok: false }
@@ -197,6 +203,14 @@ human:
   - { name: "composer", ok: false }
   - { name: "sonnet", ok: false }
   - { name: "opus", ok: false }
+  - { name: "claude-opus", ok: false, regression: true }
+  - { name: "GPT-4o", ok: false, regression: true }
+  - { name: "grok bot", ok: false, regression: true }
+  - { name: "DeepSeek", ok: false, regression: true }
+  - { name: "glm-4.6", ok: false, regression: true }
+  - { name: "Qwen", ok: false, regression: true }
+  - { name: "kimi", ok: false, regression: true }
+  - { name: "ai助手", ok: false, regression: true }
 
   # --- roles are not people ----------------------------------------------
   - { name: "llm", ok: false }
@@ -225,9 +239,13 @@ human:
   - { name: "", ok: false }
   - { name: "   ", ok: false }
 
-  # --- people, under blacklist-only --------------------------------------
+  # --- people, under the whitelist ---------------------------------------
+  # The four names config/people.yaml lists, plus names it does not: a
+  # plausible handle that is not on the list must not sign, and neither
+  # may the unlisted tool agent.
   - { name: "wangwei794", ok: true }
   - { name: "tester", ok: true }
   - { name: "张三", ok: true }
   - { name: "Alice", ok: true }
-  - { name: "evolve-curator", ok: true }
+  - { name: "evolve-curator", ok: false, regression: true }
+  - { name: "someone-plausible", ok: false }

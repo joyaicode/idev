@@ -220,11 +220,15 @@ fi
 
 # hardcoded-path-check: live scripts/docs must not embed a user's absolute home path.
 # state/ (generated logs, traces, outbound-config) and verify/state are machine-local records and are skipped.
+# design/ is a verbatim copy of the external design doc (hashed at HEAD); its
+# example payloads carry /Users/alice demo paths on purpose. Rewriting them
+# would break the "byte-identical to the reviewed text" property the copy exists for.
 hp_hits="$(grep -rInE '/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+/' "$ROOT" \
-  --exclude-dir=state --exclude-dir=.git --exclude-dir=node_modules 2>/dev/null \
+  --exclude-dir=state --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=design \
+  --exclude-dir=testdata 2>/dev/null \
   | grep -v 'scripts/healthcheck.sh' || true)"
 if [[ -z "$hp_hits" ]]; then
-  echo "OK  hardcoded-path-check (no /Users/<name> or /home/<name> in live scripts/docs; state/ skipped)"
+  echo "OK  hardcoded-path-check (no /Users/<name> or /home/<name> in live scripts/docs; state/, design/, testdata/ skipped)"
 else
   echo "WARN hardcoded-path-check: residual hardcoded home paths (use \$HOME or ~):"
   printf '%s\n' "$hp_hits" | head -10

@@ -9,7 +9,7 @@ aliases:
   - lite-change
   - 对这个 diff 走轻量
 summary: >-
-  小改捷径（不改 goal/baseline）：定界论证 → 编码纪律 → selftest plan/跑测 → 停问是否提测。禁止跳签、改密封正文、自动 promote。人未说提测则停在 gate-next。产线自己的小改踩坑写在该仓 .idev/pack/，挂到 extensions.yaml 的 code 阶段，由 session-context 打开。
+  小改捷径（不改 goal/baseline）：定界论证 → 编码纪律 → selftest plan/跑测，跑完即结束。禁止跳签、改密封正文、自动 promote。人没说提测不问（H6）；人说提测再走 test-pack。产线自己的小改踩坑写在该仓 .idev/pack/，挂到 extensions.yaml 的 code 阶段，由 session-context 打开。
 risk_tier: P1
 params:
   - name: feature
@@ -42,13 +42,8 @@ steps:
     with:
       will_write: ["verify/plan.yaml accepted"]
       proof: "verify-plan 门禁结果 / case 数"
+      auto_tiers: [P1, P2]
   - id: run
     kind: verify.run
     with: { mode: selftest }
     label: 跑已勾选 cases
-  - id: gate-next
-    kind: human.gate
-    label: 默认结束；若要提测/推阶段再确认（不自动 promote）
-    with:
-      will_write: []
-      proof: "verify run PASS/FAIL 计数"

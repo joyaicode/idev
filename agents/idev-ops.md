@@ -176,6 +176,7 @@ python3 $IDEV/scripts/failure_signature.py check --feature <f>
 | `drift-declared` | 没有 DOC_DRIFT 行 —— 文档与代码不符要说出来 |
 | `facts-sourced` | FACTS 没点名来源种类 —— 服务名不能凭经验编造 |
 | `assumption-declared` | 没有 ASSUMED 行 —— 没验的前提要浮出来 |
+| `assumption-tagged` | ASSUMED 有条目没标 [承重] / [非承重] —— 承重假设要停下来问人 |
 | `artifact-verified` | kind=feature 却没有 ARTIFACT 行 —— 没确认产物与源码同源 |
 
 每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
@@ -198,7 +199,7 @@ ARTIFACT: MATCH | AHEAD(源码新 <n> 个提交,疑点文件 <列表>) | UNKNOWN
 层: <发现层 → 根因层;修在哪一层>
 IMPACT: <影响范围,可检验> | codegraph depth=1 提名 <n>
 NEXT: <交 verify debug | 交 verify patrol | 已写 handoff 需停 | 交 coder 修 | 缺项待补>
-ASSUMED: <这轮没验的假设;没有写「无」>
+ASSUMED: <这轮没验的假设,每条以 [承重] 或 [非承重] 开头;没有写「无」>
 CHECK: hypothesis.py check = PASS | FAIL(<哪条>)
 候选: 已证成 <n> / 待验 <n> / 已排除 <n>(排除的写了依据?)
 证据级别: code(file:line) | repro | log | doc —— 根因必须到 code

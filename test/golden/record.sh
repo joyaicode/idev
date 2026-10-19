@@ -23,6 +23,9 @@ set -uo pipefail
 # unbuffered order — the program's logical order — so recording and --verify
 # agree in every environment.
 export PYTHONUNBUFFERED=1
+# These record the Python driver's own behaviour, gate signoffs included; the
+# Go gate channel has its own tests (cmd/idev, test/gate-channel.sh).
+export IDEV_ENGINE=python
 
 IDEV="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${IDEV}/test/golden/legacy"
@@ -97,7 +100,7 @@ G() { python3 "${IDEV}/scripts/stage-gate.py" "$@"; }
 T() { python3 "${IDEV}/scripts/trace.py" "$@"; }
 
 # --- workflow: start, read, record ----------------------------------------
-record start-lite-change "$OUT" "start a 7-step recipe on a fresh ticket" -- \
+record start-lite-change "$OUT" "start a 6-step recipe on a fresh ticket" -- \
   W start lite-change --feature "$FEATURE"
 record next-after-start "$OUT" "NEXT/OPEN/DELEGATE for the first step" -- \
   W next --feature "$FEATURE"
@@ -118,7 +121,9 @@ record record-bad-status "$OUT" "an unknown status" -- \
   W record scope-guard MAYBE --feature "$FEATURE"
 
 W record scope-guard PASS --evidence "docs/x.md" --feature "$FEATURE" >/dev/null 2>&1
-W record code-pass PASS --evidence "docs/x.md" --feature "$FEATURE" >/dev/null 2>&1
+record code-pass-unverified "$OUT" "a verifier kind PASS with no independent verification" -- \
+  W record code-pass PASS --evidence "docs/x.md" --feature "$FEATURE"
+W record code-pass PASS --evidence "docs/x.md" --verified-by idev-reviewer --verify-evidence "docs/x.md" --feature "$FEATURE" >/dev/null 2>&1
 W record plan PASS --evidence "verify/plan.yaml" --feature "$FEATURE" >/dev/null 2>&1
 
 # --- the human gate -------------------------------------------------------
@@ -140,8 +145,60 @@ record gate-refusal-quote "$FIXED" \
   "a refusal as the confirmation. BEFORE P0: exit 0 — 确认不了 starts with 确认. AFTER: BLOCKED, reason=unparsed-tail. Review §3.1." -- \
   W record gate-plan PASS --by tester --quote "确认不了" --feature "$FEATURE"
 
+# AUTO: the plan gate lists P1/P2; the saved check output decides.
+DT="$WORK/.idev/task/${FEATURE}"
+sed 's/^risk_tier: P1$/risk_tier: P0/' "$FIXTURE/deliver.yaml" > "$DT/deliver.yaml"
+record gate-auto-p0 "$OUT" "AUTO on a P0 ticket: the gate does not list P0" -- \
+  W record gate-plan AUTO --evidence "verify/plan-check.log" --feature "$FEATURE"
+cp "$FIXTURE/deliver.yaml" "$DT/deliver.yaml"
+record gate-auto-no-evidence "$OUT" "AUTO pointing at a check output that was never saved" -- \
+  W record gate-plan AUTO --evidence "verify/plan-check.log" --feature "$FEATURE"
+printf '%s\n' "PASS  every correctness case is runnable" "---" "1 FAIL" > "$DT/verify/plan-check.log"
+record gate-auto-dirty "$OUT" "AUTO on a check output that did not end clean" -- \
+  W record gate-plan AUTO --evidence "verify/plan-check.log" --feature "$FEATURE"
+printf '%s\n' "SIGNAL plan leaves UNPROVEN for a person to accept: perf-1" "---" "0 FAIL" > "$DT/verify/plan-check.log"
+record gate-auto-signal "$OUT" "AUTO on a clean check output that still raised a signal" -- \
+  W record gate-plan AUTO --evidence "verify/plan-check.log" --feature "$FEATURE"
+
 record gate-ok "$OUT" "a person with a real confirmation" -- \
   W record gate-plan PASS --by tester --quote "确认" --feature "$FEATURE"
+
+# --- signals: a load-bearing assumption stops PASS until a person decides ---
+cat > "$WORK/rec-signal.yaml" <<YAML
+step: run
+kind: verify.run
+agent: idev-verifier
+attempt: 1
+brief:
+  ticket_home: $WORK/.idev/task/${FEATURE}
+  repo: $WORK
+  stage: test
+  risk_tier: P1
+  must_read: verify/SKILL.md
+  idev_root: ${IDEV}
+report:
+  raw: |
+    STATUS: PASS
+    FACTS: 源码 scripts/workflow.py:1
+    DOC_DRIFT: 无
+    ASSUMED: [承重] 测试库开跑前是空的
+    EVIDENCE: $WORK/.idev/task/${FEATURE}/review.md
+    CONCLUSION: golden
+YAML
+record delegation-signal "$OUT" "a delegation with a load-bearing assumption raises a signal" -- \
+  D write --feature "$FEATURE" --file "$WORK/rec-signal.yaml"
+record signal-blocks-pass "$OUT" "PASS is refused while a signal has no decision" -- \
+  W record run PASS --evidence "docs/x.md" --feature "$FEATURE"
+record decide-non-answer "$OUT" "继续 is not an answer to the question" -- \
+  W decide run --signal "[承重] 测试库开跑前是空的" --question "测试库开跑前是空的吗" \
+    --answer "是" --quote "继续" --feature "$FEATURE"
+record decide-wrong-signal "$OUT" "a decision for a signal the record never raised" -- \
+  W decide run --signal "[承重] 别的事" --question "q" --answer "a" --quote "1" --feature "$FEATURE"
+record decide-ok "$OUT" "the person answers the question" -- \
+  W decide run --signal "[承重] 测试库开跑前是空的" --question "测试库开跑前是空的吗" \
+    --options "1 是 / 2 不是,先清库" --recommend "1" --answer "是,每次 CI 新建" --quote "1" --feature "$FEATURE"
+record signal-answered-pass "$OUT" "PASS once every signal has a decision" -- \
+  W record run PASS --evidence "docs/x.md" --feature "$FEATURE"
 
 # --- delegation records ---------------------------------------------------
 cat > "$WORK/rec.yaml" <<YAML

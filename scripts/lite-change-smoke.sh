@@ -43,8 +43,8 @@ if len(steps) < 5:
     sys.exit(1)
 kinds = [s.get("kind") for s in steps]
 gates = sum(1 for k in kinds if k == "human.gate")
-if gates < 2:
-    print(f"FAIL expected >=2 human.gate, got {kinds}")
+if gates < 1:
+    print(f"FAIL expected >=1 human.gate, got {kinds}")
     sys.exit(1)
 forbidden = {"auto.seal", "auto.accepted", "skip.signoff", "multi.module.load"}
 bad = forbidden.intersection(kinds)

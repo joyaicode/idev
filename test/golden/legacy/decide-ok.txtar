@@ -1,0 +1,8 @@
+# the person answers the question
+# cmd: W decide run --signal [承重] 测试库开跑前是空的 --question 测试库开跑前是空的吗 --options 1 是 / 2 不是,先清库 --recommend 1 --answer 是,每次 CI 新建 --quote 1 --feature demo
+
+-- exit --
+0
+-- output --
+DECISION D1 $WORK/.idev/task/demo/decisions.yaml
+SIGNALS none left

@@ -4,4 +4,4 @@
 -- exit --
 1
 -- output --
-status must be one of ['BLOCKED', 'FAIL', 'PASS', 'SKIPPED', 'UNPROVEN']
+status must be one of ['AUTO', 'BLOCKED', 'FAIL', 'PASS', 'SKIPPED', 'UNPROVEN']

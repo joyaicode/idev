@@ -262,6 +262,20 @@ func TestAssumedMustBeWrittenOut(t *testing.T) {
 	mustPass(t, run(t, goodPacket(), r, goodEvidence()), delegsvc.CheckAssumption)
 }
 
+func TestAssumptionsSayWhetherTheyBearLoad(t *testing.T) {
+	r := goodReport()
+	r.Assumed = "测试库是空的"
+	msg := mustFail(t, run(t, goodPacket(), r, goodEvidence()), delegsvc.CheckAssumedTagged)
+	if !strings.Contains(msg, "测试库是空的") {
+		t.Errorf("the message should quote the untagged line: %q", msg)
+	}
+
+	for _, ok := range []string{"无", "[承重] 测试库是空的", "[非承重] 日志格式没变\n[承重] 测试库是空的"} {
+		r.Assumed = ok
+		mustPass(t, run(t, goodPacket(), r, goodEvidence()), delegsvc.CheckAssumedTagged)
+	}
+}
+
 func TestScopeMustCoverWhatChanged(t *testing.T) {
 	r := goodReport()
 	r.Changed = append(r.Changed, "src/unexpected.go")

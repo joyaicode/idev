@@ -8,7 +8,8 @@
 !.idev/pack/
 !.idev/pack/**
 
-# Go build and test residue.
+# Go build and test residue. bin/idev is built locally (workflow.py looks there).
+/bin/
 /cover.out
 /coverage.out
 

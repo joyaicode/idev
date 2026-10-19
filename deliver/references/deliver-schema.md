@@ -25,8 +25,8 @@
 
 | stage | 入口门槛 | 本阶段交付 | 人确认后才能离开 |
 |-------|----------|------------|------------------|
-| `req-review` | 人给 feature + 原始诉求 | `baseline.yaml` + 规格正文；拷问至无 `open` / 无异议 | `sealed: true` |
-| `req` | 基线已密封 | `req.yaml`（每条 slice 挂 `baseline_item_id`） | `accepted: true` |
+| `req-review` | 人给 feature + 原始诉求 | `baseline.yaml` + 规格正文；拷问至无 `open` / 无异议 | P0：`sealed: true`；P1/P2：不停，基线就绪即进 `req` |
+| `req` | P0：基线已密封；P1/P2：基线就绪、grill 已闭合 | `req.yaml`（每条 slice 挂 `baseline_item_id`） | P0：`accepted: true`；P1/P2：`sealed: true` 与 `accepted: true` 同一次确认 |
 | `arch` | `req.accepted` | `design.md` + `arch.yaml` | `accepted: true` |
 | `code` | `arch.accepted` | 代码 + Review + **verify `logic`/`selftest`** | 自测门 |
 | `test` | 自测门 | **verify `mode=test`**，对齐基线 item | 提测门 |
@@ -35,7 +35,7 @@
 
 禁止跳阶段。禁止把 `done` 当成 AI 盖章。`ops` 不是缺陷 origin。
 
-`deliver.yaml.risk_tier`：`P0` \| `P1` \| `P2`，默认 `P1`。停问次数见入口 `invoke.md`；放置与证明见 [hitl-risk-tiers.md](../../references/hitl-risk-tiers.md)。verify 被本阶段机调用时，`plan.goal` / `non_goal` **复制**密封基线，不准另写一套意图。
+`deliver.yaml.risk_tier`：`P0` \| `P1` \| `P2`，默认 `P1`。每档在哪里停、写什么、能否 `AUTO`，只看 [chat-confirm-signoff.md](../../references/chat-confirm-signoff.md)；为什么这样分档见 [hitl-risk-tiers.md](../../references/hitl-risk-tiers.md)。verify 被本阶段机调用时，`plan.goal` / `non_goal` **复制**密封基线，不准另写一套意图。
 
 ## `deliver.yaml` `semantic_gate`
 
@@ -52,8 +52,10 @@
 semantic_gate:
   req-review:
     passed: true
-    by: example-owner
+    by: wangwei794
 ```
+
+`by` 必须是 `config/people.yaml` 白名单里的人(黑名单词元命中一律拒绝),agent 填不了这个格子。
 
 脚本另锁：`req.yaml` 每条 `slice.must` 与对应 item 的 `must`（无则 `must_not`）原文一致（空白归一）。人检表仍见 [semantic-gate.md](semantic-gate.md)。
 

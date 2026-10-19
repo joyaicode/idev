@@ -14,7 +14,7 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 ## 本阶段 5 步（先做这些）
 
 1. 读 `plan.yaml`；无 plan 先起草（goal/non_goal 复制密封基线）。
-2. 请人 `accepted` 前跑 `check-feature.sh <f> verify-plan`（已 accepted 再 run 不重跑）。
+2. 请人 `accepted` 或记 `AUTO` 前跑 `check-feature.sh <f> verify-plan`（已 accepted 再 run 不重跑）。
 3. 按 mode 跑 cases；只许 PASS/FAIL/UNPROVEN；PASS 必须有证据路径。
 4. 提测维表六族：`mode: test` + `unproven.md`；人没提 promote 不问不跑。
 5. 写 `conductor-eval` 件数；试运行停问 feedback tags；`trace.sh append`。
@@ -48,7 +48,7 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 
 ## Hard rules
 
-1. **先 plan，人改 YAML 或本轮确认用语全签后才 run。** 协议 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。`继续` / 口头含糊不算。未勾选不跑，标 `UNPROVEN`。
+1. **先 plan，`accepted: true` 后才 run。** P0 要人改 YAML 或本轮确认用语全签；P1/P2 `verify-plan` 0 FAIL 且无 `SIGNAL` 时写 `accepted: true` + `auto: <检查输出>`。协议 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。`继续` / 口头含糊不算。未勾选不跑，标 `UNPROVEN`。
 2. **人必须给 `feature` slug**（分支名可当默认，须点头）。无密封基线时还要 `goal` + `non_goal`。**已有 `baseline.yaml` 且 `sealed`：** `plan.goal` / `non_goal` 复制基线原文，不准另编。`debug` 还要环境/产物 + 可观察物。
 3. **`cases[]` 只许 `PASS`/`FAIL`/`UNPROVEN`。** 没跑、无基线、无原型对照 = `UNPROVEN`。禁止「达标」「全面通过」和分数。
 4. **`human_signoff[]` 只许 `PENDING`/`ACCEPTED`/`REJECTED`。** 无本轮确认用语不得写成 `ACCEPTED`。
@@ -74,7 +74,7 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 3. 按 mode 的维度表起草 `cases[]`（能挂上已有 `*Test`/`*IT` 就挂；没有则写人确认后的 `shell`，或生成到 `generatedverify/` 且 `accepted: false` 直到人勾）。
 4. 写下 `<票目录>/verify/plan.yaml`（照 [plan.example.yaml](references/plan.example.yaml)）。`accepted: false`。
 5. 起草后或之后改了 `cases[]` / goal：跑 `check-feature.sh <feature> verify-plan`。FAIL 不准请人 `accepted`。
-6. **停，等人改 plan**（勾选 / 删 case / `accepted: true`），或回复确认用语全签（见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)）。已 `accepted` 且本轮未改用例，不要再走本步。
+6. **P0，或 P1/P2 有 `SIGNAL`：停，等人改 plan**（勾选 / 删 case / `accepted: true`），或回复确认用语全签（见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)）。P1/P2 无 `SIGNAL`：把检查输出存成 `verify/plan-check.log`，写 `accepted: true` + `auto: verify/plan-check.log`，不停。已 `accepted` 且本轮未改用例，不要再走本步。
 
 ### 2. run
 

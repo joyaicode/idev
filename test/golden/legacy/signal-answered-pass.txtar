@@ -1,0 +1,7 @@
+# PASS once every signal has a decision
+# cmd: W record run PASS --evidence docs/x.md --feature demo
+
+-- exit --
+0
+-- output --
+RUN DONE

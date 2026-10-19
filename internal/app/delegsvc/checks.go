@@ -20,6 +20,7 @@ package delegsvc
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -81,6 +82,7 @@ const (
 	CheckRevertAnchor  = "revert-anchor"
 	CheckRedFirst      = "red-first"
 	CheckAssumption    = "assumption-declared"
+	CheckAssumedTagged = "assumption-tagged"
 	CheckFactsFirst    = "facts-first"
 	CheckS0Declared    = "s0-declared"
 	// Added by the design (§6.3): the server checks these against evidence
@@ -187,6 +189,7 @@ func (c Checker) Run(_ context.Context, p Packet, r Report, ev Evidence) Outcome
 	out = append(out, c.evidencePresent(r, ev))
 	out = append(out, c.noSignoffWrite(r))
 	out = append(out, c.assumptionDeclared(p, r))
+	out = append(out, c.assumptionTagged(p, r))
 	out = append(out, c.scopeDeclared(r))
 	out = append(out, c.scopeHeld(r))
 	out = append(out, c.readBeforeChange(r))
@@ -331,6 +334,38 @@ func (c Checker) assumptionDeclared(p Packet, r Report) Result {
 			"没有 ASSUMED —— 「无」也要显式写出来。沉默和「没有假设」不是一回事")
 	}
 	return pass(CheckAssumption)
+}
+
+// The tags on an ASSUMED line, and the values that declare "nothing".
+const (
+	LoadBearing    = "[承重]"
+	NotLoadBearing = "[非承重]"
+)
+
+var noneValue = regexp.MustCompile(`(?i)^\s*(?:无|none|-|n/?a|不适用|0)\s*(?:[(（].*)?$`)
+
+// assumptionTagged: every assumption says whether the conclusion rests on
+// it, because only a load-bearing one stops the run for a person.
+func (c Checker) assumptionTagged(p Packet, r Report) Result {
+	if c.Registry != nil && !c.Registry.IsFacts(p.Agent) {
+		return pass(CheckAssumedTagged)
+	}
+	var untagged []string
+	for _, line := range strings.Split(r.Assumed, "\n") {
+		v := strings.TrimSpace(line)
+		if v == "" || noneValue.MatchString(v) ||
+			strings.HasPrefix(v, LoadBearing) || strings.HasPrefix(v, NotLoadBearing) {
+			continue
+		}
+		untagged = append(untagged, v)
+	}
+	if len(untagged) == 0 {
+		return pass(CheckAssumedTagged)
+	}
+	return fail(CheckAssumedTagged, BlameAgent, fmt.Sprintf(
+		"ASSUMED 没标 [承重] / [非承重]:%s —— 一行一条,结论依赖它就标 [承重]"+
+			"(会停下请人决定),否则标 [非承重]",
+		truncate(strings.Join(untagged, ";"), 120)))
 }
 
 // scopeDeclared: was the scope stated before the work started.

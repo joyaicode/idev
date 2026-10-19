@@ -169,6 +169,24 @@ func TestPassWithoutEvidenceIsRefused(t *testing.T) {
 	}, "a PASS with no evidence path does not count")
 }
 
+func TestNoEventSetsAUTO(t *testing.T) {
+	r := delegated(t, newRun(), "plan", "idev-verifier")
+	r = must(t, r, run.Event{
+		Kind: run.EvDelegationReturned, Actor: run.ActorAgent, StepID: "plan", Agent: "idev-verifier",
+	})
+	mustFail(t, r, run.Event{
+		Kind: run.EvDelegationAccepted, Actor: run.ActorConductor, StepID: "plan",
+		Outcome: run.StepAUTO, Evidence: "verify/plan-check.log",
+	}, "an agent's report cannot pass a step on machine checks")
+
+	c := ready(t, newRun(), "preflight")
+	c = must(t, c, run.Event{Kind: run.EvConductorStepStarted, Actor: run.ActorConductor, StepID: "preflight"})
+	mustFail(t, c, run.Event{
+		Kind: run.EvConductorStepRecorded, Actor: run.ActorConductor, StepID: "preflight",
+		Outcome: run.StepAUTO, Evidence: "docs/probe.md",
+	}, "the conductor cannot record AUTO either; only the driver's gate path does")
+}
+
 func TestWriterCannotVerifyItsOwnWork(t *testing.T) {
 	r := verifying(t, newRun(), "code-pass", "idev-coder")
 	mustFail(t, r, run.Event{

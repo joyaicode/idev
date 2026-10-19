@@ -1,7 +1,7 @@
 # 请人签字前必须打印的检查（校对后）
 
 先跑 `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>`，再贴本表。  
-脚本或本表有一条 `FAIL` 不准 `sealed` / `accepted` / `aligned` / `resolved`。  
+脚本或本表有一条 `FAIL` 不准 `sealed` / `accepted` / `aligned` / `resolved`，也不准记 `AUTO`。哪些点签、哪些点 `AUTO`：[chat-confirm-signoff.md](../../references/chat-confirm-signoff.md)。  
 脚本锁：`slice.must` 原文、`semantic_gate` 已记录、`plan.goal` 复制基线、test 维表全覆盖。票面 YAML 用 PyYAML 读，**结构绿 ≠ 口号可证伪**；口号 / non_goal 是否盖住顺手做大，仍须人看 [semantic-gate.md](semantic-gate.md)。`check-feature` 不做法伪判断。`by:` 必须是人名。无确认用语 Agent 不填；有确认用语按 [chat-confirm-signoff.md](../../references/chat-confirm-signoff.md) 代写当前停问点（含 `semantic_gate`）。  
 `req` 及之后须有非空 `deliver-eval.md`。`test` 档 `plan.mode` 必须是 `test`。
 
@@ -13,7 +13,7 @@
 
 ## 语义门（每人签前）
 
-- [ ] 已打印并过人检 [semantic-gate.md](semantic-gate.md) 对应阶段勾选（Agent 不得代勾）
+- [ ] 已打印 [semantic-gate.md](semantic-gate.md) 对应阶段，由人逐项判（Agent 不得自己判勾；人回确认用语后才代写 `semantic_gate`）
 - [ ] `req` 及之后：`check-feature` 已过 slice.must 原文锁 + 上一阶段 `semantic_gate`
 
 ## req-review
@@ -30,7 +30,7 @@
 - [ ] 每个 item 至少一条 slice；每条 slice 恰好一个 `baseline_item_id`
 - [ ] 每条 slice.must 与对应 item 原文一致（脚本）；没有基线里不存在的义务
 - [ ] 每条 slice 过 INVEST；故事 > 8 点已拆（[req-quality.md](req-quality.md) §2/§4）
-- [ ] `semantic_gate.req-review.passed` + 人名 `by`
+- [ ] P0：`semantic_gate.req-review.passed` + 人名 `by`。P1/P2：基线未密封时 `check-feature req` 照查基线就绪与 grill 闭合，本阶段末与 `req.accepted` 同签
 
 ## arch
 

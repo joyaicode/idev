@@ -139,6 +139,7 @@ mkdir -p <票目录>/workflow/logs
 | `drift-declared` | 没有 DOC_DRIFT 行 —— 文档与代码不符要说出来 |
 | `facts-sourced` | FACTS 没点名来源种类 —— 服务名不能凭经验编造 |
 | `assumption-declared` | 没有 ASSUMED 行 —— 没验的前提要浮出来 |
+| `assumption-tagged` | ASSUMED 有条目没标 [承重] / [非承重] —— 承重假设要停下来问人 |
 | `scope-declared` | 没有 SCOPE 行 —— 动手前先定范围 |
 | `scope-held` | CHANGED 超出 SCOPE —— 范围蔓延 |
 | `read-before-change` | 改了没读过的文件 —— 盲改 |
@@ -165,7 +166,7 @@ READ: <改之前读过的 file:symbol>
 CHANGED: <实际改的 file:symbol;无改动写「无」>
 REVERT: <动手前的 base commit 或 stash ref;CHANGED 非空时必填>
 RED_FIRST: <仅 review.fix:修之前那条用例红过 + 日志路径>
-ASSUMED: <这轮做了什么没验的假设;没有写「无」>
+ASSUMED: <这轮做了什么没验的假设,每条以 [承重] 或 [非承重] 开头;没有写「无」>
 HITS: §1 <n> 命中已改 / §2 已扫 / T# <列表或无>
 UNRELATED: <条数,未改>
 SELFTEST: <跑了什么> → PASS | FAIL(签名 <sig>,第 <n> 轮)

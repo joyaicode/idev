@@ -11,7 +11,8 @@
 | `schema_version` | 整数，当前 `1` |
 | `feature` | kebab-case，与 `<票目录>/` 同名 |
 | `mode` | 见模式表 |
-| `accepted` | 人改为 `true`，或本轮确认用语全签后，才许 `run` 已勾选用例。见 [chat-confirm-signoff.md](../../references/chat-confirm-signoff.md) |
+| `accepted` | 人改为 `true`，或本轮确认用语全签，或 P1/P2 机检无 `SIGNAL` 时带 `auto`，才许 `run` 已勾选用例。见 [chat-confirm-signoff.md](../../references/chat-confirm-signoff.md) |
+| `auto` | 可选；P1/P2 无人签时指向 `verify-plan` 的检查输出（须有 `0 FAIL`、无 `SIGNAL`）。与人名 `by` 二选一；P0 不许 |
 | `goal` / `non_goal` | 无密封基线则人写。有 `baseline.yaml` `sealed` 则**复制基线原文**，缺则拒写 |
 | `entry` | `kind`: `diff` \| `phenomenon` \| `patrol-pack` |
 | `impact_candidates` | Skill 提名；人 `include: true/false` |
@@ -66,7 +67,7 @@
 | `baseline_item_id` | 有密封 `baseline.yaml` 时必填；验收尺是基线 item，不是后来发挥的句子 |
 | `dimension` | 维度表 |
 | `runner` | `{ kind, module?, selector?, command? }` |
-| `accepted` | 人改 YAML 或确认用语全签。`false` 则 `run` 跳过并 `UNPROVEN` |
+| `accepted` | 人改 YAML 或确认用语全签；plan 走 `auto` 时随之全部 `true`。`false` 则 `run` 跳过并 `UNPROVEN` |
 | `status` | 只许 `PASS` \| `FAIL` \| `UNPROVEN` |
 | `evidence` | 日志相对路径（`target/verify/...`）或未跑原因 |
 

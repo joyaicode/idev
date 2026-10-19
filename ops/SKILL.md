@@ -47,7 +47,7 @@ parent: idev
 6. **不准自动做生产写操作。** 不重启、不 failover、不 kubectl patch、不建告警屏蔽。预案等人判定。
 7. **不准用排障改密封基线。** 像需求写错 → `baseline-conflict`，停。人选基线内修或 `reopen_baseline`。
 8. **未拷问确认 `defect_origin` 不准回退。** origin 只许 `req` / `arch` / `code`。
-9. **无本轮确认用语不得写 `resolved` / `defect_origin` / `reopen_baseline`。** 回退确认句须带 `origin=req|arch|code`。`by:` 必须是人名。
+9. **无本轮确认用语不得写 `defect_origin` / `reopen_baseline`；`resolved` 只在 P1/P2 账本收敛时可写 `auto:`，否则同样要确认用语。** 回退确认句须带 `origin=req|arch|code`。`by:` 必须是人名。细则 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。
 10. **请人签字前跑**  
     `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> ops`  
     （内含 `outbound-skills-check.sh --repo`。当前产品 `.idev/marker.yaml` 为 `marker: idev` 且有 `handoff.yaml` 时，缺其中的 required Skill 即 FAIL。没有标识或不写名单，就不要求任何产品的 Skill。）  
@@ -63,7 +63,7 @@ parent: idev
    `kind=patrol`：只重放 `doc_home.py --feature <feature> --key patrol` 输出的巡检包。
 4. **根因** — 能红/绿切换才写进 report。对照密封基线 item。超出基线 → `baseline-conflict`。
 5. **回退** — 人写下 `defect_origin` 后，把 `deliver.yaml.stage` 回到 origin，作废其后 accepted / aligned，按 deliver 再向后走。
-6. **关闭** — `check-feature.sh <feature> ops`。人写 `resolved: true` + `by:`。人没提提升 / 巡检包 / promote 则不问是否把本次 debug case 晋升巡检包。
+6. **关闭** — `check-feature.sh <feature> ops`。P0：人写 `resolved: true` + `by:`。P1/P2：`hypothesis.py check` 绿、无 `open`、有 `proven` 时写 `resolved: true` + `auto: hypotheses.yaml`，不停；否则停问人。人没提提升 / 巡检包 / promote 则不问是否把本次 debug case 晋升巡检包。
 
 `deliver.yaml.stage`：仅当当前已是 `done` 时才改成 `ops`；交付中途的现象就地 `debug`，不要跳阶段。关闭且无回退 → 回到 `done`。
 

@@ -88,7 +88,7 @@
 | `status` | `pending` \| `running` \| `blocked` \| `done` \| `aborted` |
 | `params` | 绑定后的参数 |
 | `policy` | 起跑时抄下的配方 `policy` |
-| `steps[]` | 抄自配方的 `id` / `kind` / `label` / `with`。没有 `status` 就是还没跑；跑过是 `PASS` \| `FAIL` \| `UNPROVEN` \| `SKIPPED` \| `BLOCKED`，另有 `at`，`evidence` / `note` 可选。`human.gate` 为 `PASS` 时必须有 `signoff: {by, quote, at}`，`by` 是人名，`quote` 以确认用语开头 |
+| `steps[]` | 抄自配方的 `id` / `kind` / `label` / `with`。没有 `status` 就是还没跑；跑过是 `PASS` \| `FAIL` \| `UNPROVEN` \| `SKIPPED` \| `BLOCKED` \| `AUTO`，另有 `at`，`evidence` / `note` 可选。`human.gate` 为 `PASS` 时必须有 `signoff: {by, quote, at}`，`by` 是人名，`quote` 以确认用语开头；为 `AUTO` 时只有 `evidence`，没有 `signoff`。独立复核过的步骤另有 `verification: {by, evidence, at}` |
 | `revisions[]` | 只追加；改已记录的步骤时写 `step` 与 `旧 -> 新: 原因` |
 | `feedback` | `status`：`pending` \| `filed`；试运行 tag 拷到 verify inbox |
 
@@ -111,12 +111,17 @@ $W resolve <id>                                  # 产品扩展根优先，其�
 $W start <id> --feature <f> [--param k=v]        # 校验配方、绑参数、写 run.yaml，打印第一步
 $W next --feature <f>                            # NEXT 步骤、OPEN 落点页、COMMAND 取值键
 $W record <step> PASS|FAIL|UNPROVEN|SKIPPED|BLOCKED --feature <f> [--evidence <路径>] [--note <原因>]
-$W record <gate-step> PASS --feature <f> --by <人名> --quote "<人的确认原话>"
+$W delegate <step> --feature <f>                 # 委派前标记执行者；写代码的步骤同时领写租约
+$W ask <gate-step> --feature <f>                 # 开问；人在自己的终端 idev gate approve <编号>
+$W record <gate-step> PASS --feature <f>         # 读回人的签名批准；IDEV_ENGINE=python 时改用 --by <人名> --quote "<原话>"
+$W record <gate-step> AUTO --feature <f> --evidence <机检结果>        # 仅当档位在 with.auto_tiers 里
+$W record <step> PASS --feature <f> --evidence <路径> --verified-by <复核 agent> --verify-evidence <复核报告>
+$W decide <step> --feature <f> --signal "<信号原样>" --question <问题> --answer <结论> --quote "<人的原话>" [--options …] [--recommend …]
 $W status --feature <f>
 $W abort --note <原因> --feature <f>
 ```
 
-它守的规则：缺必填参数或 `from: product` 的键 → BLOCKED，不猜；有票配方无 `deliver.yaml` → BLOCKED；同一张票已有进行中的 run 不另起；只能记当前步骤，想跳过就把当前步骤记 `SKIPPED`；改已记录的步骤必须写 `--note` 并进 `revisions[]`；`FAIL` / `BLOCKED` 让 run 停在 `blocked`，修好后重记同一步；`human.gate` 的 `PASS` 要人名与确认原话（`继续` / `ok` 不算），`SKIPPED` 要 `--evidence` 指向先前的签字。退出码：0 正常，1 用法或配方非法，2 BLOCKED。
+它守的规则：缺必填参数或 `from: product` 的键 → BLOCKED，不猜；有票配方无 `deliver.yaml` → BLOCKED；同一张票已有进行中的 run 不另起；只能记当前步骤，想跳过就把当前步骤记 `SKIPPED`；改已记录的步骤必须写 `--note` 并进 `revisions[]`；`FAIL` / `BLOCKED` 让 run 停在 `blocked`，修好后重记同一步；`human.gate` 的 `PASS` 要先 `ask`，再由人在自己的终端 `idev gate approve`；`record` 读回签名批准，状态非 approved、内容在批准后改过、签名验不过都会 BLOCKED，带 `--by` / `--quote` 也会 BLOCKED（`IDEV_ENGINE=python` 时才回到人名加确认原话，`继续` / `ok` 不算）。gate 的类型取 `with.gate_type`（`accepted_req|accepted_arch|accepted_plan|aligned|resolved|step_confirm`），没写时 `will_write` 提到 `plan.yaml` 的算 `accepted_plan`，其余算 `step_confirm`；摘要覆盖 `with.subject` 列出的票内文件（`accepted_plan` 默认取 `verify/plan.yaml`），没有文件时覆盖问题本身。registry 里 `lease: write` 的 kind（Go 引擎下）要先 `delegate`：它把 run 的步骤状态投影进 `~/.idev` 的 SQLite，按 `arch.yaml` 里 `include: true` 的路径领写租约，同一张票（按票目录绝对路径区分，两个 checkout 的同名票互不相干）同时只有一个写者，fencing 只升不降；持有期间 token 记在 `run.yaml` 的 `steps[].lease`，释放后只留编号、fencing、路径和 `released_at`。没有租约记 `PASS` → BLOCKED；执行者回报的 `CHANGED` 有租约外的路径 → BLOCKED；`record` 收口和 `abort` 都会释放租约，没释放的到期自动回收（默认 2 小时）。`SKIPPED` 要 `--evidence` 指向先前的签字，或指向表明本闸无可签内容的文件（如没有 `I*` 的 `review.md`）。`AUTO` 只给声明了 `with.auto_tiers` 且票的 `risk_tier` 在其中的 `human.gate`，须带 `--evidence`，不得带 `--by` / `--quote`。`KIND_VERIFIER` 登记了复核者的 kind，`PASS` 须 `--verified-by` 正是那个 agent 且有 `--verify-evidence`。该步最新委派留痕里有信号（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）而 `decisions.yaml` 没有对应答复时，`PASS` → BLOCKED；`decide` 只接受留痕里真有的信号，`--quote` 是 `继续` / `ok` 这类不选任何东西的词时拒收。决策不是签字：它记人对一个问题的回答，不授权写签字字段。退出码：0 正常，1 用法或配方非法，2 BLOCKED。
 
 ## 覆盖
 
@@ -163,6 +168,7 @@ $W abort --note <原因> --feature <f>
 | `label` | 须含或能生成 `将代写: <字段>` |
 | `with.will_write` | 可选；字符串数组，优先用于拼 `将代写`。`[]` 表示 `将代写: 无`（只停问、不写字段） |
 | `with.proof` | 可选；短证明上下文（门禁结果 / PASS 计数） |
+| `with.auto_tiers` | 可选；`risk_tier` 取值的非空子集。票在这些档位时，机检全过即可记 `AUTO`，不停问。不写 = 每档都要人签 |
 
 `with.will_write` 与 `label` 里的 `将代写` 至少有一个，都没有 → `workflow-check` 失败；`will_write` 不是字符串列表或含空串也失败。`workflow.py next` 在停问步骤直接打印由它拼出的 `将代写:` 行。
 

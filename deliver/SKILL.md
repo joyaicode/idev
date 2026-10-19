@@ -10,7 +10,7 @@ parent: idev
 先拷问密封**原始需求基线**；后面只许对齐，不许改写。红绿只调用 verify 模块。  
 投产后的现象走 ops 模块（先分类，再 debug 或 handoff）。  
 每阶段按 [experts.md](references/experts.md) 拒过，不是扮演专家说话。  
-`sealed` / `accepted` / `aligned`：人手改 YAML，或本轮确认用语由 Agent 按 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md) 代写当前停问点。`继续` 不算。
+停哪里、怎么签、何时 `AUTO`：只认 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。
 
 ## 本阶段 5 步（先做这些）
 
@@ -38,7 +38,7 @@ parent: idev
 ## Hard rules
 
 1. **不准跳阶段。** 无 `deliver.yaml` 从 `req-review` 建。
-2. **未密封不准拆解。** 未决问句只写 `<票目录>/grill.md`。`<票目录>` 只认 `python3 ~/.cursor/skills/idev/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key task`。`baseline.yaml` 仍有 `status: open` 或未清空 `objections` 时，关闭的 `grill.md` 不算数 → **自动唤起** `~/.cursor/skills/grilling/SKILL.md` 继续拷问到清空；不准口头「差不多了」进 `req`。
+2. **grill 未闭合不准拆解。** P0 还要先密封；P1/P2 基线就绪即可起草拆解，到 req 末与密封同签。未决问句只写 `<票目录>/grill.md`。`<票目录>` 只认 `python3 ~/.cursor/skills/idev/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key task`。`baseline.yaml` 仍有 `status: open` 或未清空 `objections` 时，关闭的 `grill.md` 不算数 → **自动唤起** `~/.cursor/skills/grilling/SKILL.md` 继续拷问到清空；不准口头「差不多了」进 `req`。
 2a. **确认前先 grill。** 请签 `sealed` 之前，`grill.md` 必须在：`frontier` 与 `shared_understanding` 各自单独成行，正文有 `❓` 与 `➡️`。frontier 不是 `empty`，或人未确认共享理解 → 不准请签、不准代写。缺这份文件也不准把基线标成 `sealed: true`。
 3. **密封后不准改 baseline 正文。** 下游只引用 `baseline_item_id`。要改原文：人写 `reopen_baseline`，回到 `req-review`。
 4. **回退 origin 只能是 `req` / `arch` / `code`**（译法、方案、实现）。禁止用提测反馈直接改 goal。
@@ -47,7 +47,7 @@ parent: idev
 7. **无本轮确认用语不得写 `sealed` / `accepted` / `aligned` / `reopen_baseline`。** 有确认用语则按 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md) 只代写当前停问点。`继续` 不算。解封须带「解除密封」或 `reopen`。
 8. **试运行改本模块**：提案 + 拷问后只改真源 `~/.cursor/skills/idev/deliver/`。不要写回仓库。台账 [入口 state/ledger.yaml](../state/ledger.yaml)。
 9. **尺是密封基线。** specs 只复述；和 baseline 打架就改 specs。verify 的 goal/non_goal 必须复制基线原文。
-10. **停问按 `risk_tier`（默认 P1）。** 见入口 `invoke.md`。被本模块调用的 verify 不再为导体进化另停一次。
+10. **停问按 `risk_tier`（默认 P1）与信号。** 见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。被本模块调用的 verify 不再为导体进化另停一次。
 11. **请人签字前必须跑结构检查。**  
     `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage> [--product <点名的产品>]`  
     再打印 [gates.md](references/gates.md)。脚本 FAIL 不准请签。  
@@ -72,13 +72,13 @@ parent: idev
 1. 对照 CONTEXT / ADR / 现有契约起草规格与 `baseline.yaml`（[baseline.example.yaml](references/baseline.example.yaml)）。落盘前打开 [docs/SKILL.md](../docs/SKILL.md)。未决问题写该票的 `grill.md`（`convention: grilling`）。
 2. 正确性、合理性、边界、细节、非目标：全部写成 `grill.md` 里的问句。文件放哪认 [docs/SKILL.md](../docs/SKILL.md)。`review_questions` 保持空列表。冲突不得默许。
 3. **自动唤起 grilling（硬）：** 本阶段一进入「定边界 / 清异议」就打开并执行 `~/.cursor/skills/grilling/SKILL.md`（整轮 frontier，不是随口追问）。问到 frontier 空、人确认共享理解；推迟项写进 `non_goal`。`objections` 保持空。缺 grilling 先跑 `scripts/link-companion-skills.sh`。**禁止**用「自己拷问」或跳过 grilling 直接请签 `sealed`。
-4. grilling frontier 空且人确认共享理解后，再跑 `check-feature.sh <feature> req-review`。人写 `sealed: true` 和 `by:` 后才能 `req`。
+4. grilling frontier 空且人确认共享理解后，再跑 `check-feature.sh <feature> req-review`。P0：人写 `sealed: true` 和 `by:` 后才能 `req`。P1/P2：不停，直接起草拆解。
 
 ### req（拆解）
 
 1. 只把密封 item 译成 slices，不增不减。
 2. 译不清进 `open_questions`（只问理解）。想加义务 → `baseline-conflict`，停。
-3. `check-feature.sh <feature> req`。人 `accepted` + `by` 后才能 `arch`。
+3. `check-feature.sh <feature> req`。P0：人 `accepted` + `by` 后才能 `arch`。P1/P2：一次签 `sealed` + `req.accepted`（同一个 `by`）后才能 `arch`。
 
 ### arch
 
@@ -94,7 +94,7 @@ parent: idev
 1. 只改 `include: true` 的文件。写 `review.md`（[review.example.md](references/review.example.md)）。多做删掉；少做补；像基线写错 → `baseline-conflict`，**停**。
 2. **写前匹配、写中纠正。** 打开 [coding.md](../conventions/coding.md) §0；扫表时再开 [coding-tables.md](../conventions/coding-tables.md)。用本轮变化扫 §1，命中第一行就运用，禁止行当场拒绝。每新增函数扫 §2，命中当轮改掉。
 3. **Review 再扫一遍。** `review.md` 必须写 §1 命中 / 零命中和 §2 已扫；命中只记账未改 = 拒过；若命中 canon 的 `T#`（加层 / 拆分 / 缓存 / 重写类念头），一并写入 `review.md`。按 [coding-tables.md](../conventions/coding-tables.md) §3.8 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo>`，做五轴 + 栈指南；blocking 译成 `P#`/`C#` 当轮改。然后清废弃、对齐注释/文档、跑扫描（Java：Problems / `qodana.starter`；前端：`lint-fix`）。
-4. 起草 verify plan（goal 抄基线）→ 人确认 → `selftest`/`logic`。`check-feature.sh <feature> code`。自测门过后人没说「提测」不要停问是否进入 `mode=test`。
+4. 起草 verify plan（goal 抄基线）→ P0 人确认；P1/P2 `verify-plan` 无 `SIGNAL` 记 `AUTO`，有则停问 → `selftest`/`logic`。`check-feature.sh <feature> code`。自测门过后人没说「提测」不要停问是否进入 `mode=test`。
 5. 实现/译法问题回退 `code`/`req`/`arch`，重跑向后。
 
 ### test

@@ -44,9 +44,13 @@ POLICY: dict[str, Any] = {
 }
 
 RUN_STATUS = {"pending", "running", "blocked", "done", "aborted"}
-STEP_STATUS = {"PASS", "FAIL", "UNPROVEN", "SKIPPED", "BLOCKED"}
-STEP_DONE = {"PASS", "SKIPPED", "UNPROVEN"}
+STEP_STATUS = {"PASS", "FAIL", "UNPROVEN", "SKIPPED", "BLOCKED", "AUTO"}
+STEP_DONE = {"PASS", "SKIPPED", "UNPROVEN", "AUTO"}
 STEP_STOP = {"FAIL", "BLOCKED"}
+
+# A decision answer that answers nothing. 继续 moves on without choosing, so
+# the conductor asks again rather than recording it as the person's choice.
+NON_ANSWERS = frozenset({"继续", "continue", "ok", "okay", "好", "好的", "嗯", "收到", "go", "next"})
 
 CONFIRM_WORDS = ("确认", "全签", "同意", "lgtm")
 AGENT_NAMES = {"agent", "ai", "cursor", "assistant"}
@@ -101,6 +105,10 @@ AGENT_WORDS = frozenset(AGENT_NAMES) | frozenset(
         "composer",
         "sonnet",
         "opus",
+        "deepseek",
+        "glm",
+        "qwen",
+        "kimi",
         "llm",
         "bot",
         "model",
@@ -111,6 +119,18 @@ AGENT_WORDS = frozenset(AGENT_NAMES) | frozenset(
         "human",
     }
 )
+
+# A name is matched token by token as well as whole, so "glm-4.6" and
+# "Grok Bot" cannot slip past the whole-string set. Any [a-z0-9]+ run hits.
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
+
+
+def _names_an_agent(low: str) -> bool:
+    """True when the lowercased name names an agent or a model, in whole or
+    in any one of its word tokens."""
+    if low in AGENT_WORDS:
+        return True
+    return any(tok in AGENT_WORDS for tok in _TOKEN_RE.findall(low))
 
 
 def check_recipe(data: Any, path: Path, errors: list[str]) -> None:
@@ -182,6 +202,38 @@ def _check_gate(step: dict, where: str, errors: list[str]) -> None:
             errors.append(f"{where} human.gate with.will_write must be a list of non-empty strings ([] = 将代写: 无)")
     elif "将代写" not in str(step.get("label") or ""):
         errors.append(f"{where} human.gate needs with.will_write or 将代写 in label")
+    if "auto_tiers" in payload:
+        tiers = payload["auto_tiers"]
+        if not isinstance(tiers, list) or not tiers or not set(tiers) <= RISK_TIERS:
+            errors.append(f"{where} human.gate with.auto_tiers must be a non-empty list of {sorted(RISK_TIERS)}")
+    if "gate_type" in payload and payload["gate_type"] not in GATE_TYPES:
+        errors.append(f"{where} human.gate with.gate_type must be one of {sorted(GATE_TYPES)}")
+    subject = payload.get("subject")
+    if subject is not None and not (
+        (isinstance(subject, str) and subject.strip())
+        or (isinstance(subject, list) and subject and all(isinstance(s, str) and s.strip() for s in subject))
+    ):
+        errors.append(f"{where} human.gate with.subject must be a ticket-relative path or a list of them")
+
+
+# internal/domain/gate.Type, less the three that need what a recipe cannot
+# supply: sealed and reopen_baseline a baseline revision, defect_origin the
+# origin being asked about.
+GATE_TYPES = frozenset({
+    "accepted_req", "accepted_arch", "accepted_plan", "aligned", "resolved", "step_confirm",
+})
+
+
+def auto_tiers(step: dict) -> set:
+    """The risk tiers at which this gate may pass on machine checks alone."""
+    tiers = (step.get("with") or {}).get("auto_tiers")
+    return set(tiers) if isinstance(tiers, list) else set()
+
+
+def is_answer(quote: str) -> bool:
+    """True when a decision quote chooses something; 继续 / ok do not."""
+    text = normalize_quote(quote)
+    return bool(text) and text not in NON_ANSWERS
 
 
 def will_write_line(step: dict) -> str:
@@ -281,6 +333,13 @@ def check_run(data: Any, path: Path, errors: list[str]) -> None:
             sign = step.get("signoff") if isinstance(step.get("signoff"), dict) else {}
             if not is_confirm(str(sign.get("quote") or "")) or not is_human(str(sign.get("by") or "")):
                 errors.append(f"{path}: steps[{i}] human.gate PASS needs signoff.by (a person) and a confirm quote")
+        if ss == "AUTO":
+            if kind != "human.gate":
+                errors.append(f"{path}: steps[{i}] AUTO is only for a human.gate that declares auto_tiers")
+            elif not str(step.get("evidence") or "").strip():
+                errors.append(f"{path}: steps[{i}] AUTO needs evidence of the machine checks")
+            elif step.get("signoff"):
+                errors.append(f"{path}: steps[{i}] AUTO must not carry a signoff; nobody signed")
 
 
 class Confirm(NamedTuple):
@@ -482,7 +541,7 @@ def is_human(by: str) -> bool:
     if not name:
         return False
     low = unicodedata.normalize("NFKC", name).strip().lower()
-    if low in AGENT_WORDS:
+    if _names_an_agent(low):
         return False
     if re.match(r"^idev[-_]", low):
         return False

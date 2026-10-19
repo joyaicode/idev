@@ -31,8 +31,8 @@
       "enum": ["P0", "P1", "P2"]
     },
     "stepStatus": {
-      "description": "The terminal step values. UNPROVEN is an honest outcome, not a failure: it means no runner exists for that dimension.",
-      "enum": ["PASS", "FAIL", "UNPROVEN", "SKIPPED", "BLOCKED"]
+      "description": "The terminal step values. UNPROVEN is an honest outcome, not a failure: it means no runner exists for that dimension. AUTO is a gate passed on machine checks at a tier the recipe lists in auto_tiers; it carries evidence and no signoff.",
+      "enum": ["PASS", "FAIL", "UNPROVEN", "SKIPPED", "BLOCKED", "AUTO"]
     },
     "runStatus": {
       "enum": ["pending", "running", "awaiting_human", "blocked", "done", "aborted"]

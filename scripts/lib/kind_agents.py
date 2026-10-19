@@ -49,11 +49,16 @@ READONLY_BREAKS: dict[str, str] = _gen.READONLY_BREAKS
 #   ops      = the ops module, plus S4 reasoning (both run evidence.md)
 #
 # human.gate is CONDUCTOR by necessity, not by choice: workflow_spec.is_human()
-# rejects {agent, ai, cursor, assistant} as a signoff name, so a subagent
-# cannot sign. preflight.inputs is a probe, shell.confirmed is a single
-# pre-approved command, and ui.clean_pass_loop is the outer loop — all
-# cheaper for the conductor to run than to brief an agent for.
+# rejects agent, model and role names (AGENT_WORDS, whole or by token) as a
+# signoff name, so a subagent cannot sign under its own name.
+# preflight.inputs is a probe, shell.confirmed is a single pre-approved
+# command, and ui.clean_pass_loop is the outer loop — all cheaper for the
+# conductor to run than to brief an agent for.
 KIND_AGENTS: dict[str, str] = _gen.KIND_AGENTS
+# kind -> the agent that must confirm a PASS (registry verify: independent).
+KIND_VERIFIER: dict[str, str] = _gen.KIND_VERIFIER
+# kind -> none | write | verify (registry lease).
+KIND_LEASE: dict[str, str] = _gen.KIND_LEASE
 
 
 # Root resolution moved to roots.py once it became clear this file was the

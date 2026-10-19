@@ -4,4 +4,4 @@
 -- exit --
 2
 -- output --
-BLOCKED a gate is skipped only with --evidence of the earlier signoff
+BLOCKED a gate is skipped only with --evidence: the earlier signoff, or the file that shows nothing is left to sign

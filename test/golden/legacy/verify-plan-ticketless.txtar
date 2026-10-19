@@ -12,6 +12,7 @@ product-checks PASS
 PASS  product checks
 PASS  verify-plan without baseline (recipe needs_ticket false)
 PASS  plan.goal matches baseline.goal
+PASS  every correctness case is runnable
 PASS  every baseline item has a plan case
 PASS  no PASS without run evidence
 PASS  no agent-filled signoff by

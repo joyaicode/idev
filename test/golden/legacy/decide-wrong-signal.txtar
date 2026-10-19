@@ -1,0 +1,7 @@
+# a decision for a signal the record never raised
+# cmd: W decide run --signal [承重] 别的事 --question q --answer a --quote 1 --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED --signal must be one of the signals of run: [承重] 测试库开跑前是空的

@@ -61,15 +61,7 @@ grilling 不是可选追问，而是**订死边界与不清楚处**的默认动�
 
 ## 门禁停问（`risk_tier`，默认 P1）
 
-`risk_tier` 写在 `<票目录>/deliver.yaml`（人定）：
-
-| 档 | 人必须停的点 |
-|----|----------------|
-| P0 | 评审拷问、拆解签字、架构拷问、verify plan、提测 `aligned`、ops 分类、环境/产物、origin 回退、`resolved` |
-| P1 | 评审拷问、架构拷问、verify plan、`aligned`（拆解可与评审同一停）、ops 分类、环境/产物、origin 回退、`resolved` |
-| P2 | 评审拷问（拆解同停）、verify plan、`aligned`、ops 环境/产物、`resolved`（origin 与回退同一停） |
-
-闸门**放在副作用前**（写 seal/aligned、跑 promote、生产写之前）。放置与证明物细则：[hitl-risk-tiers.md](hitl-risk-tiers.md)。
+每个档位停哪里（A 类签字）、什么信号才停（B 类决策）、何时 `AUTO`：只在 [chat-confirm-signoff.md](chat-confirm-signoff.md)「档位 ↔ 停问点」。为什么这样放：[hitl-risk-tiers.md](hitl-risk-tiers.md)。
 
 ## 非门禁不停（H1–H6；旧称 C1–C6，已改名以免与编码气味 C1–C15 撞号）
 
@@ -107,9 +99,9 @@ bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>
 ```
 
 `stage`：`req-review` \| `req` \| `arch` \| `code` \| `test` \| `verify-plan` \| `ops`。非 0 退出不准签字（含对话确认代写）。  
-`verify-plan` **只在起草或调整用例、请人 `accepted` 时**跑。已 accepted 的 plan 再 `run` 不重跑、不请签。
+`verify-plan` **只在起草或调整用例、请人 `accepted`（或 P1/P2 记 `AUTO`）时**跑。已 accepted 的 plan 再 `run` 不重跑、不请签。
 
-人在停问点回复确认用语时按 [chat-confirm-signoff.md](chat-confirm-signoff.md) 代写当前停问点并立刻下一步。`继续` 不算。无当前停问点不要请人确认。
+签字与决策怎么记：[chat-confirm-signoff.md](chat-confirm-signoff.md)。
 
 ## 快捷工作流（S8）
 

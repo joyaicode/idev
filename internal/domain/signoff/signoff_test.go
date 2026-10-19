@@ -3,6 +3,7 @@ package signoff_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"go.yaml.in/yaml/v3"
@@ -14,6 +15,46 @@ import (
 // of expectations: if they ever disagree on a row, the signoff gate has
 // stopped being one rule (design §20.2).
 const casesPath = "../../../test/signoff/cases.yaml"
+
+// The whitelist the shared cases assume: config/people.yaml in the kernel
+// root, the second lookup point people_whitelist() reads. Building the
+// identity from the real file keeps the Go rows and the Python rows
+// describing the same configuration rather than two hand-maintained lists.
+const peoplePath = "../../../config/people.yaml"
+
+// identityFromPeople reads config/people.yaml the way _read_people does:
+// the `people` (or `humans`) list, lowercased.
+func identityFromPeople(t *testing.T) signoff.Identity {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Clean(peoplePath))
+	if err != nil {
+		t.Fatalf("read people.yaml: %v", err)
+	}
+	var doc struct {
+		People []string `yaml:"people"`
+		Humans []string `yaml:"humans"`
+	}
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("parse people.yaml: %v", err)
+	}
+	names := doc.People
+	if len(names) == 0 {
+		names = doc.Humans
+	}
+	if len(names) == 0 {
+		t.Fatal("config/people.yaml lists nobody; the shared cases assume a whitelist")
+	}
+	whitelist := make(map[string]bool, len(names))
+	for _, n := range names {
+		whitelist[strings.ToLower(strings.TrimSpace(n))] = true
+	}
+	return signoff.Identity{
+		Whitelist: whitelist,
+		Agents: []string{
+			"idev-deliver", "idev-coder", "idev-reviewer", "idev-verifier", "idev-ops",
+		},
+	}
+}
 
 type confirmCase struct {
 	Quote    string `yaml:"quote"`
@@ -85,12 +126,10 @@ func TestSharedRejectCases(t *testing.T) {
 
 func TestSharedHumanCases(t *testing.T) {
 	c := load(t)
-	if c.Mode != "blacklist-only" {
-		t.Fatalf("cases.yaml mode = %q; the human rows assume blacklist-only", c.Mode)
+	if c.Mode != "whitelist" {
+		t.Fatalf("cases.yaml mode = %q; the human rows assume a whitelist", c.Mode)
 	}
-	id := signoff.BlacklistOnly(
-		"idev-deliver", "idev-coder", "idev-reviewer", "idev-verifier", "idev-ops",
-	)
+	id := identityFromPeople(t)
 	for _, tc := range c.Human {
 		t.Run(tc.Name, func(t *testing.T) {
 			if got := id.IsHuman(tc.Name); got != tc.OK {

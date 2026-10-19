@@ -56,6 +56,7 @@ func goCheckNames() []string {
 		delegsvc.CheckRevertAnchor,
 		delegsvc.CheckRedFirst,
 		delegsvc.CheckAssumption,
+		delegsvc.CheckAssumedTagged,
 		delegsvc.CheckFactsFirst,
 		delegsvc.CheckS0Declared,
 		delegsvc.CheckLeasePaths,
