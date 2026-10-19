@@ -1,0 +1,64 @@
+schema_version: 2
+at: "2026-10-19T20:20:00+08:00"
+feature: ""
+intent: "在 joypaas 项目加一个新功能，走端到端交付流程"
+invoke:
+  trigger: "我想在 joypaas 项目里加一个新功能，帮我走一遍端到端交付流程"
+  matched: "新需求 / 无 deliver.yaml / 另开票 → S1"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+route:
+  module: deliver
+  convention_class: java
+  stage: req-review
+  risk_tier: ""
+  why: "用户要做新功能端到端交付，属新票场景；具体功能内容未给出，须先建票进 req-review 再 grilling。"
+rejected:
+  - module: verify
+    why: "尚无基线与 plan"
+  - module: ops
+    why: "无线上现象"
+thinking:
+  summary: "认票：用户没给具体功能内容，不能直接起草 baseline；先定位仓（marker: idev, evolve: pilot，分支 fix_initer_doc），确认有 4 张活跃票但都是别的事，用户要新功能 → 新票 S1。已按 S1 冷启动读完 agent-brief/glossary/决策树/conventions/deliver/docs/grilling。"
+  signals:
+    - "joypaas 仓 .idev/marker.yaml marker: idev"
+    - "用户原话：加一个新功能 + 端到端交付流程"
+  excluded:
+    - "S8：没有命中的别名，也没有既有小改票"
+  uncertainty: "功能内容、risk_tier 未知，等用户给出"
+  steps:
+    - n: 1
+      do: "定位 joypaas 仓"
+      so: "得到 repo 根与 .idev 状态"
+    - n: 2
+      do: "按 SKILL 决策树认场景"
+      so: "新需求 → S1 deliver req-review"
+    - n: 3
+      do: "S1 冷启动：读 agent-brief、glossary、决策树、conventions、deliver、docs、grilling"
+      so: "具备 req-review 建票前置知识"
+opened:
+  - "~/.claude/skills/idev/references/agent-brief.md"
+  - "~/.claude/skills/idev/references/glossary.md"
+  - "~/.claude/skills/idev/SKILL.md"
+  - "~/.claude/skills/idev/conventions/SKILL.md"
+  - "~/.claude/skills/idev/deliver/SKILL.md"
+  - "~/.claude/skills/idev/docs/SKILL.md"
+  - "~/.cursor/skills/grilling/SKILL.md"
+  - "joypaas/.idev/pack/README.md"
+calls:
+  - kind: script
+    name: session-context.py
+    args: "--repo joypaas --scenario S1 --stage req-review"
+    result: "OPEN .idev/pack/README.md; PRODUCT joypaas"
+  - kind: script
+    name: trace.sh
+    args: "append"
+    result: "this trace"
+stop: "等用户提供新功能具体需求描述"
+next: "用户给出需求 → doc_home 建票 → req-ground 落地分析 → grilling → check-feature → 请签 sealed"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""
