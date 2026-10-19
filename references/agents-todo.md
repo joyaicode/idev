@@ -127,7 +127,6 @@ Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未�
 | E1.1 | go 引擎强制 A 类字段带 `approval_id` | 待议 | 人已定 deliver 阶段先不强制；gate 通道 record 已写 `signoff.approval_id` | `check-feature` 对 `sealed` / `arch.accepted` / `aligned` / `resolved` / `reopen` 缺 `approval_id` 即 FAIL；python 引擎维持现状并打印引擎名 |
 | E1.2 | 生命周期签字补专用 gate 类型 | 待议 | 通道已接：`workflow.py ask` 走 `idev gate request`，类型由 `gate_type` 或 will_write 推导（只产 `accepted_plan` / `step_confirm`）；`sealed` / `defect_origin` / `reopen_baseline` 在 Go 侧（`signoff/confirm.go` 关键字闸）。剩余部分与 2026-10-19 提案切片 3「保留推导」冲突，要先增补提案 | 密封、架构、提测、P0 的 plan 与 resolved、回退、promote 各有一次 `idev gate request`，摘要绑定提案 3.1 的文件 |
 | E1.3 | python 回退改成显式破窗文件 | 待议 | 2026-10-19 提案已确认 env-var 回退（`IDEV_ENGINE=python`），做这项要先推翻它 | PATH 上有 `idev` 时，只设 `IDEV_ENGINE=python` 被拒；破窗文件写明原因和到期日 |
-| E1.4 | 降级批准按周计数 | 可做 | — | audit 里 `assurance_downgraded` 可按周汇总（`cmd/idev` 审计链已记该字段，差一个查询命令） |
 
 ### E2 单写者
 

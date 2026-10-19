@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/idev/internal/adapters/local"
 	"github.com/idev/internal/adapters/store/sqlite"
@@ -241,6 +244,74 @@ func TestTheSealAtP1BindsBaselineAndReqAndIsMarkedDowngraded(t *testing.T) {
 	}
 	if s := f.state(r.GateID); s.Approval == nil || !s.Approval.Downgraded {
 		t.Fatalf("a high requirement answered at low must say so: %+v", s.Approval)
+	}
+}
+
+func TestAuditDowngradesCountsADowngradeInItsOwnWeek(t *testing.T) {
+	f := newFixture(t, "alice")
+	// A low ask answered at low is the ordinary case and must not count.
+	p := f.askPlan()
+	if code, _, errs := f.do(true, p.Short+"\n", "gate", "approve", p.GateID, "--quote", "确认"); code != exitOK {
+		t.Fatal(errs)
+	}
+	// A high ask (the P1 seal) answered at low is one downgrade.
+	r := f.ask("--type", "sealed", "--risk", "P1", "--revision", "1", "--root", f.ticket,
+		"--subject", "baseline.yaml", "--subject", "req.yaml",
+		"--will-write", "baseline sealed", "--proof", "grill frontier empty")
+	if code, _, errs := f.do(true, r.Short+"\n", "gate", "approve", r.GateID, "--quote", "确认"); code != exitOK {
+		t.Fatal(errs)
+	}
+	code, out, errs := f.do(false, "", "audit", "downgrades")
+	if code != exitOK {
+		t.Fatalf("audit downgrades exit %d: %s", code, errs)
+	}
+	var d downgradesOut
+	must(t, json.Unmarshal([]byte(out), &d))
+	y, w := time.Now().UTC().ISOWeek()
+	want := downgradesOut{Total: 1, Weeks: []downgradeWeek{{Week: fmt.Sprintf("%04d-W%02d", y, w), Count: 1}}}
+	if !reflect.DeepEqual(d, want) {
+		t.Fatalf("downgrades = %+v, want %+v", d, want)
+	}
+}
+
+func TestAuditDowngradesGroupsEventsByISOWeek(t *testing.T) {
+	f := newFixture(t, "alice")
+	// The CLI writes events at "now"; weeks other than this one can only
+	// exist in the chain, so seed them directly.
+	ctx := context.Background()
+	st, err := sqlite.Open(ctx, filepath.Join(f.data, "idev.db"))
+	must(t, err)
+	actor := audit.Actor{Handle: "alice", Kind: "human"}
+	seed := []audit.Event{
+		{At: time.Date(2025, 12, 25, 9, 0, 0, 0, time.UTC), Action: audit.ActionAssuranceDowngraded, Actor: actor},
+		{At: time.Date(2026, 1, 2, 9, 0, 0, 0, time.UTC), Action: audit.ActionGateApproved, Actor: actor},
+		{At: time.Date(2026, 1, 2, 10, 0, 0, 0, time.UTC), Action: audit.ActionAssuranceDowngraded, Actor: actor},
+		{At: time.Date(2026, 1, 3, 9, 0, 0, 0, time.UTC), Action: audit.ActionAssuranceDowngraded, Actor: actor},
+		{At: time.Date(2026, 1, 8, 9, 0, 0, 0, time.UTC), Action: audit.ActionAssuranceDowngraded, Actor: actor},
+	}
+	must(t, st.InTx(ctx, func(tx ports.Tx) error {
+		for _, ev := range seed {
+			if _, err := tx.Audit().Append(ctx, ev); err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
+	must(t, st.Close()) // the CLI opens the same file; hand it over unlocked
+
+	code, out, errs := f.do(false, "", "audit", "downgrades")
+	if code != exitOK {
+		t.Fatalf("audit downgrades exit %d: %s", code, errs)
+	}
+	var d downgradesOut
+	must(t, json.Unmarshal([]byte(out), &d))
+	want := downgradesOut{Total: 4, Weeks: []downgradeWeek{
+		{Week: "2025-W52", Count: 1},
+		{Week: "2026-W01", Count: 2},
+		{Week: "2026-W02", Count: 1},
+	}}
+	if !reflect.DeepEqual(d, want) {
+		t.Fatalf("downgrades = %+v, want %+v", d, want)
 	}
 }
 

@@ -117,6 +117,7 @@ python3 scripts/gen-kinds.py --check # kind 表的五份生成物是否最新
   仍是它写。`IDEV_ENGINE=python` 是回退开关（golden 与 selfcheck 驱动段钉死用它）。
 - **Go CLI `cmd/idev` 拥有 gate、lease、审计**：A 类签字走终端短码
   （`idev gate request/approve`），写租约走 `idev lease acquire/release`，
+  降级批准（`assurance.downgraded`）按周计数走 `idev audit downgrades`，
   数据落在 `~/.idev`（`IDEV_DATA`）。默认引擎是 go——`workflow.py` 的
   `record <gate> PASS` 与 `delegate` 会调 CLI（找 `bin/idev`，其次 PATH，或
   `IDEV_BIN` 直指）；没有二进制时 A 类签字报错并给出两个出路

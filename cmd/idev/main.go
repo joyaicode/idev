@@ -8,6 +8,10 @@
 //	idev gate approve <id> [--quote Q]     # a person, in a terminal
 //	idev gate reject  <id> [--quote Q]     # a person, in a terminal
 //	idev gate status  <id>                 # JSON, for workflow.py
+//	idev lease acquire --run R --step S ... # JSON, for workflow.py
+//	idev lease release <id> --token T
+//	idev lease check   <id> [--path P ...] # JSON
+//	idev audit downgrades                  # JSON, high asks answered at low, per ISO week
 //	idev token init --handle H             # once, in a terminal
 //
 // Assurance is low (design §10.4): the data directory is readable by any

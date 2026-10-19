@@ -102,7 +102,7 @@ S8 的 `human.gate` 不再由 agent 把人名和原话敲进 `--by` / `--quote`�
 
 第一次使用前，人要在自己的终端运行一次 `idev token init --handle <名字>`。二进制的构建命令是 `go build -o bin/idev ./cmd/idev`（在内核目录里执行）。`IDEV_ENGINE=python` 会回退到旧的 `--by` / `--quote` 路径，只在没有 Go 工具链时使用。
 
-这条通道的强度是 `low`（威胁 T4）：同一用户的进程能读到 `~/.idev`，也能用 `script` 伪造终端。它挡住的是代理顺手代签和幻觉签名，挡不住存心伪造；要挡住存心伪造得靠 passkey（`high`，尚未接入）。档位要求 `high` 的停问点（P0 / P1 的 `sealed`、`aligned`）目前以 `low` 完成，批准记录和审计链会标 `assurance_downgraded`。
+这条通道的强度是 `low`（威胁 T4）：同一用户的进程能读到 `~/.idev`，也能用 `script` 伪造终端。它挡住的是代理顺手代签和幻觉签名，挡不住存心伪造；要挡住存心伪造得靠 passkey（`high`，尚未接入）。档位要求 `high` 的停问点（P0 / P1 的 `sealed`、`aligned`）目前以 `low` 完成，批准记录和审计链会标 `assurance_downgraded`；`idev audit downgrades` 按周统计这些事件。
 
 deliver 各阶段的签字（上表）仍由导体在聊天里确认后代写进 YAML；`idev gate request` 也能问这些点（例如 `--type sealed --revision N --subject baseline.yaml --subject req.yaml`），但 `check-feature` 目前还不要求 `approval_id`。
 

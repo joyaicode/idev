@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/idev/internal/adapters/store/sqlite"
 	"github.com/idev/internal/app/gatesvc"
 	"github.com/idev/internal/app/leasesvc"
+	"github.com/idev/internal/domain/audit"
 	"github.com/idev/internal/domain/gate"
 	"github.com/idev/internal/domain/lease"
 	"github.com/idev/internal/domain/run"
@@ -48,7 +50,7 @@ type app struct {
 
 func (a app) run(args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(a.stderr, "usage: idev gate request|approve|reject|status ... | idev lease acquire|release|check ... | idev token init --handle H")
+		fmt.Fprintln(a.stderr, "usage: idev gate request|approve|reject|status ... | idev lease acquire|release|check ... | idev audit downgrades | idev token init --handle H")
 		return exitUsage
 	}
 	ctx := context.Background()
@@ -70,6 +72,8 @@ func (a app) run(args []string) int {
 		err = a.leaseRelease(ctx, args[2:])
 	case "lease check":
 		err = a.leaseCheck(ctx, args[2:])
+	case "audit downgrades":
+		err = a.auditDowngrades(ctx, args[2:])
 	default:
 		fmt.Fprintf(a.stderr, "idev: unknown command %q\n", strings.Join(args[:2], " "))
 		return exitUsage
@@ -679,6 +683,71 @@ func (a app) leaseCheck(ctx context.Context, args []string) error {
 		LeaseID: l.ID, Agent: l.Agent, Fencing: l.Fencing, WritePaths: nonNil(l.WritePaths),
 		ExpiresAt: l.ExpiresAt.Format(time.RFC3339), Outside: l.Outside(paths),
 	})
+}
+
+// --- audit -------------------------------------------------------------------
+
+type downgradeWeek struct {
+	Week  string `json:"week"`
+	Count int    `json:"count"`
+}
+
+type downgradesOut struct {
+	Total int             `json:"total"`
+	Weeks []downgradeWeek `json:"weeks"`
+}
+
+// auditDowngrades answers one question: how often a high ask was answered at
+// low. gatesvc.Decide appends one assurance.downgraded event per downgraded
+// approval, so the weekly count is a walk down the chain — a read, and the
+// chain is a public record (no gate, no TTY).
+func (a app) auditDowngrades(ctx context.Context, args []string) error {
+	if len(args) > 0 {
+		return usageError{"audit downgrades takes no arguments"}
+	}
+	e, err := a.open(ctx)
+	if err != nil {
+		return err
+	}
+	defer e.store.Close()
+	perWeek := map[string]int{}
+	const page = 100
+	var from int64 = 1
+	for {
+		var events []audit.Event
+		if err := e.store.InTx(ctx, func(tx ports.Tx) error {
+			var err error
+			events, err = tx.Audit().Range(ctx, from, page)
+			return err
+		}); err != nil {
+			return err
+		}
+		if len(events) == 0 {
+			break
+		}
+		for _, ev := range events {
+			if ev.Action != audit.ActionAssuranceDowngraded {
+				continue
+			}
+			y, w := ev.At.UTC().ISOWeek()
+			perWeek[fmt.Sprintf("%04d-W%02d", y, w)]++
+		}
+		from = events[len(events)-1].Seq + 1
+		if len(events) < page {
+			break
+		}
+	}
+	weeks := make([]string, 0, len(perWeek))
+	for wk := range perWeek {
+		weeks = append(weeks, wk)
+	}
+	sort.Strings(weeks) // "YYYY-Www" sorts as dates
+	out := downgradesOut{Weeks: make([]downgradeWeek, 0, len(weeks))}
+	for _, wk := range weeks {
+		out.Total += perWeek[wk]
+		out.Weeks = append(out.Weeks, downgradeWeek{Week: wk, Count: perWeek[wk]})
+	}
+	return json.NewEncoder(a.stdout).Encode(out)
 }
 
 // --- token -------------------------------------------------------------------
