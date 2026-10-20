@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/idev/internal/adapters/kindreg"
 	"github.com/idev/internal/adapters/local"
 	"github.com/idev/internal/adapters/store/sqlite"
 	"github.com/idev/internal/app/gatesvc"
@@ -146,7 +147,9 @@ func (a app) open(ctx context.Context) (env, error) {
 			// the audit chain records each one as assurance_downgraded.
 			Policy: gate.Policy{AllowLowForHigh: true},
 		},
-		leases: leasesvc.Service{Store: store, Clock: local.Clock{}, IDs: local.IDs{}},
+		// Kinds 决定每个 step 领什么用途的租约、谁有权验证；不接的话 verify 租约会
+	// 发给先到者（delegated 态只绑定 agent）。见 review A1。
+	leases: leasesvc.Service{Store: store, Clock: local.Clock{}, IDs: local.IDs{}, Kinds: kindreg.MustLoad()},
 	}, nil
 }
 
@@ -573,12 +576,17 @@ func (a app) leaseAcquire(ctx context.Context, args []string) error {
 	step := fs.String("step", "", "step id")
 	risk := fs.String("risk", "P1", "the ticket's risk tier")
 	ttl := fs.Duration("ttl", 2*time.Hour, "how long the lease runs")
+	purpose := fs.String("purpose", "write", "what the step will do with it: write or verify")
+	ticketDir := fs.String("ticket-dir", "", "repo-relative directory a verify lease is fenced to (I-2)")
 	fs.Var(&paths, "write-path", "repo-relative glob the holder may write (repeatable)")
 	if err := fs.Parse(args); err != nil {
 		return usageError{err.Error()}
 	}
 	if *runPath == "" || *step == "" {
 		return usageError{"lease acquire needs --run and --step"}
+	}
+	if *ticketDir != "" && *purpose != string(lease.PurposeVerify) {
+		return usageError{"lease acquire: --ticket-dir fences a verify lease (--purpose verify)"}
 	}
 	raw, err := os.ReadFile(*runPath)
 	if err != nil {
@@ -589,7 +597,7 @@ func (a app) leaseAcquire(ctx context.Context, args []string) error {
 		return fmt.Errorf("%s: %w", *runPath, err)
 	}
 	if rf.RunID == "" || rf.Feature == "" || rf.Feature == "-" {
-		return fmt.Errorf("%s has no run_id or no feature; a write lease is keyed by the feature", *runPath)
+		return fmt.Errorf("%s has no run_id or no feature; a lease is keyed by the feature", *runPath)
 	}
 	if *featureID != "" {
 		rf.Feature = *featureID
@@ -619,11 +627,18 @@ func (a app) leaseAcquire(ctx context.Context, args []string) error {
 		return err
 	}
 	e.leases.TTL = *ttl
-	held, err := e.leases.Acquire(ctx, leasesvc.AcquireParams{
-		Purpose: lease.PurposeWrite, Feature: rf.Feature, RunID: rf.RunID, StepID: *step,
+	acq := leasesvc.AcquireParams{
+		Purpose: lease.Purpose(*purpose), Feature: rf.Feature, RunID: rf.RunID, StepID: *step,
 		Agent: agent, WritePaths: paths,
 		Actor: ports.Principal{Handle: "workflow.py", Kind: "service"},
-	})
+	}
+	if *ticketDir != "" {
+		// I-2: the ticket directory fences a verify lease; grant the whole
+		// tree so the verifier may append evidence inside it.
+		acq.TicketDir = *ticketDir
+		acq.WritePaths = append(append([]string{}, paths...), *ticketDir+"/**")
+	}
+	held, err := e.leases.Acquire(ctx, acq)
 	if err != nil {
 		return err
 	}

@@ -90,8 +90,32 @@ c = next(s for s in yaml.safe_load(open(sys.argv[1]))["steps"] if s["id"] == "c"
 assert c["lease"]["id"] and "token" not in c["lease"] and c["lease"]["released_at"], c
 PY
 
+# The verifier step r writes only ticket artifacts: it needs a verify lease
+# fenced to the ticket directory, not a write lease over product code.
+vreport() {
+  printf '%s\n' 'step: r' 'attempt: 1' 'kind: verify.run' 'agent: idev-verifier' 'report:' \
+    "  raw: \"STATUS: PASS\\nCHANGED: $1\\n\"" > .idev/task/demo/workflow/delegations/r-1.yaml
+}
+
+vreport "src/app.py"
+out="$("$W" record r PASS --feature demo --evidence v.md 2>&1)" \
+  && bad "verifier PASS with no lease" || { [[ "$out" == *"never given a verify lease"* ]] && ok "verifier PASS without a lease refused" || bad "verifier no lease: $out"; }
+
+out="$("$W" delegate r --feature demo 2>&1)"
+VID="$(printf '%s\n' "$out" | sed -n 's/^LEASE \([0-9A-Z]\{26\}\) fencing=2 .*/\1/p')"
+{ [ -n "$VID" ] && printf '%s\n' "$out" | grep -qF 'paths .idev/task/demo/**'; } \
+  && ok "delegate took verify lease $VID fenced to the ticket" || bad "verify delegate: $out"
+
+vreport "src/app.py, src/other.py"
+out="$("$W" record r PASS --feature demo --evidence v.md 2>&1)" \
+  && bad "verifier PASS with changes outside the ticket" || { [[ "$out" == *"outside its lease"*"src/app.py"* ]] && ok "verifier change outside the ticket refused" || bad "verify outside: $out"; }
+
+vreport ".idev/task/demo/report/v.md"
+out="$("$W" record r PASS --feature demo --evidence v.md 2>&1)"
+[[ "$out" == *"LEASE $VID released"* && "$out" == *"RUN DONE"* ]] && ok "verifier PASS inside the ticket releases it" || bad "verify record: $out"
+
 out="$("$IDEV_BIN" lease acquire --run "$T/rival.yaml" --step c --feature-id "$(cd .idev/task/demo && pwd -P)" --write-path src/app.py 2>&1)"
-[[ "$out" == *'"fencing":2'* ]] && ok "the released slot goes to the next writer with a higher fencing token" || bad "after release: $out"
+[[ "$out" == *'"fencing":3'* ]] && ok "the released slot goes to the next writer with a higher fencing token" || bad "after release: $out"
 
 (cd "$Q" && "$W" abort --note test --feature demo 2>&1 | grep -q "released") \
   && ok "abort releases the lease it held" || bad "abort kept its lease"

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/idev/internal/adapters/kindreg"
 	"github.com/idev/internal/adapters/memstore"
 	"github.com/idev/internal/app/leasesvc"
 	"github.com/idev/internal/domain/audit"
@@ -568,4 +569,171 @@ func TestTheLeaseAfterASweepFencesAboveTheOneItReplaced(t *testing.T) {
 	if events[2].Detail["fencing"] != uint64(2) {
 		t.Errorf("fencing detail = %v, want 2", events[2].Detail["fencing"])
 	}
+}
+
+// --- kind-aware binding (review A1) --------------------------------------
+//
+// A registry-wired service binds leases the registry's way: the kind
+// decides what lease a step takes, the run decides who holds the
+// delegation — together they decide who may verify. These tests run
+// against the real registry the CLI wires, so they pin the mapping
+// production answers with.
+
+// realKinds is the registry the CLI wires: MustLoad reads the embedded
+// kinds.yaml, so these tests never drift from what runs in production.
+var realKinds = kindreg.MustLoad()
+
+// kindSvc wires a service to a registry and seeds one run whose single
+// step (s-1) the test shapes.
+func kindSvc(t *testing.T, kinds ports.KindRegistry, kind string, state run.StepState, writer string) (leasesvc.Service, *memstore.Store) {
+	t.Helper()
+	st := memstore.New()
+	st.SeedRun(run.Run{
+		ID: "r-1", WorkflowID: "lite-change", Feature: "demo",
+		Steps: []run.Step{{ID: "s-1", Kind: kind, State: state, Writer: writer}},
+	}, "f-1")
+	return leasesvc.Service{Store: st, Clock: fixedClock{t: at}, IDs: &seqIDs{}, Kinds: kinds}, st
+}
+
+// verifyFor asks the seeded step's verify lease, writeFor its write lease;
+// the agent is the caller's to choose, so refusals can name it.
+func verifyFor(agent string) leasesvc.AcquireParams {
+	return leasesvc.AcquireParams{
+		Purpose:    lease.PurposeVerify,
+		Feature:    "f-1",
+		RunID:      "r-1",
+		StepID:     "s-1",
+		Agent:      agent,
+		TicketDir:  "tickets/F-1",
+		WritePaths: []string{"tickets/F-1/**"},
+		Actor:      conductor(),
+	}
+}
+
+func writeFor(agent string) leasesvc.AcquireParams {
+	return leasesvc.AcquireParams{
+		Purpose:    lease.PurposeWrite,
+		Feature:    "f-1",
+		RunID:      "r-1",
+		StepID:     "s-1",
+		Agent:      agent,
+		WritePaths: []string{"**"},
+		Actor:      conductor(),
+	}
+}
+
+// wantRefusal pins that Acquire refused, and why: the error must name the
+// rule that did it, not just any failure.
+func wantRefusal(t *testing.T, err error, why string) {
+	t.Helper()
+	if err == nil || !strings.Contains(err.Error(), why) {
+		t.Fatalf("Acquire err = %v, want a refusal naming %q", err, why)
+	}
+}
+
+// The A1 fix in one picture. A kind whose work is verification (E3) holds
+// its verify lease from the delegation on. The state-only check cannot
+// see that — to it every verify lease waits for an accepted report — so
+// without the registry the verifier's own delegation was refused.
+func TestAVerifyLeaseKindLeasesFromItsOwnDelegation(t *testing.T) {
+	s0, _ := kindSvc(t, nil, "review.report", run.StepDelegated, "idev-reviewer")
+	_, err := s0.Acquire(context.Background(), verifyFor("idev-reviewer"))
+	wantRefusal(t, err, "not verifying")
+
+	// Wired to the registry, the same acquire succeeds...
+	s, st := kindSvc(t, realKinds, "review.report", run.StepDelegated, "idev-reviewer")
+	if h := acquire(t, s, verifyFor("idev-reviewer")); h.Lease.Purpose != lease.PurposeVerify {
+		t.Errorf("purpose = %s, want verify", h.Lease.Purpose)
+	}
+	if _, ok := activeLease(t, st, "r-1", "s-1"); !ok {
+		t.Error("the reviewer's lease is not the step's active lease")
+	}
+
+	// The run decides who: a name that does not hold the delegation
+	// cannot borrow the step's verify lease.
+	s2, _ := kindSvc(t, realKinds, "review.report", run.StepDelegated, "idev-reviewer")
+	_, err = s2.Acquire(context.Background(), verifyFor("idev-coder"))
+	wantRefusal(t, err, "holds the delegation for s-1, not idev-coder")
+
+	// The kind decides what: a writer's delegation hands over no verify
+	// lease, not even to its own writer.
+	s3, _ := kindSvc(t, realKinds, "deliver.code_pass", run.StepDelegated, "idev-coder")
+	_, err = s3.Acquire(context.Background(), verifyFor("idev-coder"))
+	wantRefusal(t, err, `takes a "write" lease; its delegation hands over no verify lease`)
+}
+
+// Write leases stay with write-lease kinds: the coder's delegation to
+// code — not the reviewer's to report, and not an unregistered kind's to
+// anything at all.
+func TestWriteLeasesStayWithWriteLeaseKinds(t *testing.T) {
+	s, _ := kindSvc(t, realKinds, "deliver.code_pass", run.StepDelegated, "idev-coder")
+	if h := acquire(t, s, writeFor("idev-coder")); h.Lease.Purpose != lease.PurposeWrite {
+		t.Errorf("purpose = %s, want write", h.Lease.Purpose)
+	}
+
+	s2, _ := kindSvc(t, realKinds, "review.report", run.StepDelegated, "idev-reviewer")
+	_, err := s2.Acquire(context.Background(), writeFor("idev-reviewer"))
+	wantRefusal(t, err, `takes a "verify" lease, not a write one`)
+
+	s3, _ := kindSvc(t, realKinds, "made.up_kind", run.StepDelegated, "idev-coder")
+	_, err = s3.Acquire(context.Background(), writeFor("idev-coder"))
+	wantRefusal(t, err, `takes a "none" lease, not a write one`)
+}
+
+// An independently verified kind (E5) hands its verify lease to the
+// verifier the registry names once the writer's report is accepted — and
+// to nobody else, not even the verifier next door.
+func TestIndependentVerificationGoesToTheRegistrysVerifier(t *testing.T) {
+	s, st := kindSvc(t, realKinds, "deliver.code_pass", run.StepVerifying, "idev-coder")
+	if h := acquire(t, s, verifyFor("idev-reviewer")); h.Lease.Purpose != lease.PurposeVerify {
+		t.Errorf("purpose = %s, want verify", h.Lease.Purpose)
+	}
+	if _, ok := activeLease(t, st, "r-1", "s-1"); !ok {
+		t.Error("the reviewer's lease is not the step's active lease")
+	}
+
+	for _, agent := range []string{"idev-coder", "idev-verifier", "idev-ops"} {
+		sx, _ := kindSvc(t, realKinds, "deliver.code_pass", run.StepVerifying, "idev-coder")
+		_, err := sx.Acquire(context.Background(), verifyFor(agent))
+		wantRefusal(t, err, fmt.Sprintf("idev-reviewer verifies s-1 (deliver.code_pass), not %s", agent))
+	}
+}
+
+// A verifying step of a kind that needs no independent verification is no
+// one's to lease: the state alone is not a license.
+func TestVerifyingWithoutIndependentVerificationLeasesToNoOne(t *testing.T) {
+	s, _ := kindSvc(t, realKinds, "review.report", run.StepVerifying, "idev-reviewer")
+	_, err := s.Acquire(context.Background(), verifyFor("idev-reviewer"))
+	wantRefusal(t, err, "needs no independent verification")
+}
+
+// A verify lease has two windows and only two: the delegation and the
+// accepted report. Past both, the step has no verify lease left to give.
+func TestAVerifyLeaseHasTwoWindowsAndOnlyTwo(t *testing.T) {
+	for _, state := range []run.StepState{run.StepPASS, run.StepConductorActive} {
+		s, _ := kindSvc(t, realKinds, "deliver.code_pass", state, "idev-coder")
+		_, err := s.Acquire(context.Background(), verifyFor("idev-reviewer"))
+		wantRefusal(t, err, "follows a delegation or an accepted report")
+	}
+}
+
+// selfVerifyKinds is a registry misconfigured the way the defense is for:
+// it names the kind's own agent as its verifier. The service trusts the
+// registry's mapping, but not that far — the writer never verifies its
+// own work.
+type selfVerifyKinds struct{}
+
+func (selfVerifyKinds) AgentFor(string) string                             { return "idev-coder" }
+func (selfVerifyKinds) IsFacts(string) bool                                { return false }
+func (selfVerifyKinds) IsBoost(string) bool                                { return false }
+func (selfVerifyKinds) S0Agent() string                                    { return "idev-coder" }
+func (selfVerifyKinds) Forbidden(string) bool                              { return false }
+func (selfVerifyKinds) NeedsIndependentVerification(string) (string, bool) { return "idev-coder", true }
+func (selfVerifyKinds) LeaseFor(string) string                             { return "write" }
+func (selfVerifyKinds) IsGate(string) bool                                 { return false }
+
+func TestTheWriterNeverVerifiesItsOwnWork(t *testing.T) {
+	s, _ := kindSvc(t, selfVerifyKinds{}, "deliver.code_pass", run.StepVerifying, "idev-coder")
+	_, err := s.Acquire(context.Background(), verifyFor("idev-coder"))
+	wantRefusal(t, err, "does not verify its own work")
 }

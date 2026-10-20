@@ -381,13 +381,26 @@ def release_all(pairs: list[tuple[str, str]]) -> None:
             print(f"WARN lease {lease_id} not released ({exc}); it expires on its own")
 
 
-def needs_write_lease(run: dict, step: dict) -> bool:
-    """A write-lease kind on a ticket run, under the Go engine."""
-    return (
-        go_engine()
-        and kind_agents.KIND_LEASE.get(step["kind"]) == "write"
-        and str(run.get("feature") or "-") != "-"
-    )
+def lease_purpose(run: dict, step: dict) -> str | None:
+    """The lease this step needs on a ticket run under the Go engine:
+    "write" fences the arch.yaml includes, "verify" fences the ticket directory."""
+    purpose = kind_agents.KIND_LEASE.get(step["kind"])
+    if go_engine() and purpose in ("write", "verify") and str(run.get("feature") or "-") != "-":
+        return purpose
+    return None
+
+
+def ticket_dir_repo_relative(run_path: Path, repo: Path | None) -> str:
+    """The ticket directory as the repository sees it: what a verify lease is fenced to."""
+    ticket = ticket_of(run_path).resolve()
+    roots = [repo.resolve()] if repo is not None else []
+    roots += [p for p in ticket.parents if (p / ".git").is_dir()]
+    for root in roots:
+        try:
+            return ticket.relative_to(root).as_posix()
+        except ValueError:
+            continue
+    raise Blocked(f"{ticket} is not inside a git repository; a verify lease needs one")
 
 
 def arch_includes(run_path: Path) -> list[str]:
@@ -470,8 +483,11 @@ def next_line(run: dict) -> list[str]:
             )
         else:
             lines.append("GATE then record PASS with --by <person> --quote \"<their confirm words>\"")
-    if needs_write_lease(run, step):
+    purpose = lease_purpose(run, step)
+    if purpose == "write":
         lines.append(f"LEASE workflow.py delegate {step['id']} before the agent starts; it writes only arch.yaml includes")
+    elif purpose == "verify":
+        lines.append(f"LEASE workflow.py delegate {step['id']} before the verifier starts; it writes only inside the ticket")
     verifier = kind_agents.KIND_VERIFIER.get(kind)
     if verifier:
         lines.append(f"VERIFY {verifier} confirms before PASS: --verified-by {verifier} --verify-evidence <report>")
@@ -664,8 +680,14 @@ def cmd_record(args: argparse.Namespace) -> int:
                 )
             step["verification"] = {"by": args.verified_by, "evidence": args.verify_evidence, "at": now()}
         held = step.get("lease") or {}
-        if status == "PASS" and needs_write_lease(run, step):
+        purpose = lease_purpose(run, step) if status == "PASS" else None
+        if purpose:
             if not held.get("id"):
+                if purpose == "verify":
+                    raise Blocked(
+                        f"{step['id']} writes ticket artifacts and was never given a verify lease: "
+                        f"workflow.py delegate {step['id']} before the verifier starts"
+                    )
                 raise Blocked(
                     f"{step['id']} writes product code and was never given a write lease: "
                     f"workflow.py delegate {step['id']} before the agent starts"
@@ -674,6 +696,12 @@ def cmd_record(args: argparse.Namespace) -> int:
             if changed:
                 outside = idev("lease", "check", held["id"], *[a for p in changed for a in ("--path", p)]).get("outside") or []
                 if outside:
+                    if purpose == "verify":
+                        raise Blocked(
+                            f"{step['id']} changed files outside its lease (the ticket directory): "
+                            + ", ".join(outside)
+                            + " — revert them; a verify lease covers only the ticket directory"
+                        )
                     raise Blocked(
                         f"{step['id']} changed files outside its lease (arch.yaml include): "
                         + ", ".join(outside)
@@ -749,7 +777,7 @@ def cmd_delegate(args: argparse.Namespace) -> int:
             raise Blocked(f"{args.step} already holds lease {held['id']}; record the step to release it")
         step["delegated"] = {"agent": agent, "at": now()}
         marked.update(
-            agent=agent, lease=needs_write_lease(run, step), tier=risk_tier_of(run, path),
+            agent=agent, lease=lease_purpose(run, step), tier=risk_tier_of(run, path),
             feature_id=feature_id(run, path),
         )
         return run
@@ -759,17 +787,27 @@ def cmd_delegate(args: argparse.Namespace) -> int:
     if not marked["lease"]:
         print("LEASE none (this kind does not write product code)")
         return 0
-    paths = arch_includes(path)
-    if not paths:
-        raise Blocked(
-            "a write lease needs the paths a person included in arch.yaml "
-            "(impact_candidates[].include: true); none found"
-        )
-    out = idev(
+    purpose = marked["lease"]
+    ticket = None
+    if purpose == "verify":
+        ticket = ticket_dir_repo_relative(path, session_repo(args.repo))
+        paths = [f"{ticket}/**"]
+    else:
+        paths = arch_includes(path)
+        if not paths:
+            raise Blocked(
+                "a write lease needs the paths a person included in arch.yaml "
+                "(impact_candidates[].include: true); none found"
+            )
+    acquire = [
         "lease", "acquire", "--run", str(path), "--step", args.step, "--risk", marked["tier"],
         "--feature-id", marked["feature_id"],
-        *[a for p in paths for a in ("--write-path", p)],
-    )
+    ]
+    if purpose == "verify":
+        acquire += ["--purpose", "verify", "--ticket-dir", ticket]
+    else:
+        acquire += [a for p in paths for a in ("--write-path", p)]
+    out = idev(*acquire)
 
     def hold(run: dict) -> dict:
         step = next(s for s in run["steps"] if s["id"] == args.step)

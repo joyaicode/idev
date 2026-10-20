@@ -8,7 +8,7 @@
 //	idev gate approve <id> [--quote Q]     # a person, in a terminal
 //	idev gate reject  <id> [--quote Q]     # a person, in a terminal
 //	idev gate status  <id>                 # JSON, for workflow.py
-//	idev lease acquire --run R --step S ... # JSON, for workflow.py
+//	idev lease acquire --run R --step S [--purpose write|verify] [--ticket-dir D] ... # JSON, for workflow.py
 //	idev lease release <id> --token T
 //	idev lease check   <id> [--path P ...] # JSON
 //	idev audit downgrades                  # JSON, high asks answered at low, per ISO week

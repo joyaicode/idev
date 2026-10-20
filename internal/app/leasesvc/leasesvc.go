@@ -41,6 +41,11 @@ type Service struct {
 	Store ports.Store
 	Clock ports.Clock
 	IDs   ports.IDGen
+	// Kinds, when set, makes the step check kind-aware: the kind decides
+	// which purpose a step leases for and who may verify it, not the run
+	// state alone. Nil keeps the state-only check for callers that have
+	// not wired a registry — the shape this service was born with.
+	Kinds ports.KindRegistry
 	// TTL is how long a fresh lease runs; RenewFor is how far a renewal
 	// pushes the deadline. Zero means the defaults above. A renewal window
 	// shorter than the TTL is what makes a dead holder lose the lease
@@ -80,10 +85,13 @@ type Held struct {
 // refuses. A retry after a timeout either hits the I-1 conflict (the first
 // attempt won) or issues a fresh lease, and both are safe.
 //
-// The lease is bound to the step the run says it is for: a write lease only
-// when the step is delegated to this agent, a verify lease only while the
-// step is verifying. Without this, "release, then acquire" would hand the
-// feature to whoever asked first (review D2).
+// The lease is bound to the step it is for: a write lease follows the
+// delegation the run holds, a verify lease either the delegation of a
+// kind whose work is verification (E3) or the verifying state an
+// independently verified kind lands in (E5) — and in the kind-aware
+// half, the registry decides which. Without this, "release, then
+// acquire" would hand the feature to whoever asked first (review D2),
+// and whoever asked first would hold the verification (review A1).
 func (s Service) Acquire(ctx context.Context, p AcquireParams) (Held, error) {
 	if p.Purpose != lease.PurposeWrite && p.Purpose != lease.PurposeVerify {
 		return Held{}, fmt.Errorf("leasesvc: a %s step needs no lease", p.Purpose)
@@ -114,7 +122,7 @@ func (s Service) Acquire(ctx context.Context, p AcquireParams) (Held, error) {
 
 	var held Held
 	err = s.Store.InTx(ctx, func(tx ports.Tx) error {
-		if err := checkStepForPurpose(ctx, tx, p); err != nil {
+		if err := s.checkStepForPurpose(ctx, tx, p); err != nil {
 			return err
 		}
 		// Fencing before Issue: if the store refuses the lease (I-1), the
@@ -160,11 +168,17 @@ func (s Service) Acquire(ctx context.Context, p AcquireParams) (Held, error) {
 	return held, err
 }
 
-// checkStepForPurpose binds a lease to the state the run says the step is
-// in: a write lease goes to the agent the step was delegated to, a verify
-// lease only while the step is verifying. Anything else is an attempt to
-// hold a step the caller has no claim on.
-func checkStepForPurpose(ctx context.Context, tx ports.Tx, p AcquireParams) error {
+// checkStepForPurpose binds a lease to the step the run holds: a write
+// lease to the agent the step was delegated to, a verify lease to whoever
+// the step's verification belongs to. Anything else is an attempt to hold
+// a step the caller has no claim on.
+//
+// With a registry wired (Service.Kinds) the binding is kind-aware — the
+// fix for review A1: the kind decides which purpose a step leases for and
+// who verifies it, so a verify lease can no longer be held by whoever
+// asked first. Without one, the state-only check below is the shape this
+// service was born with.
+func (s Service) checkStepForPurpose(ctx context.Context, tx ports.Tx, p AcquireParams) error {
 	r, _, err := tx.Runs().Get(ctx, p.RunID)
 	if err != nil {
 		return err
@@ -174,28 +188,107 @@ func checkStepForPurpose(ctx context.Context, tx ports.Tx, p AcquireParams) erro
 			continue
 		}
 		st := r.Steps[i]
-		switch p.Purpose {
-		case lease.PurposeWrite:
-			if st.State != run.StepDelegated {
+		if s.Kinds != nil {
+			return checkStepWithKinds(s.Kinds, st, p)
+		}
+		return checkStepByState(st, p)
+	}
+	return fmt.Errorf("leasesvc: run %s has no step %s", p.RunID, p.StepID)
+}
+
+// checkStepByState is the state-only binding, for callers without a
+// registry: a write lease when the run says the step is delegated to this
+// agent, a verify lease while the run says it is verifying. It cannot tell
+// E3 from E5 — that distinction needs the registry — so it trusts the
+// run's state alone.
+func checkStepByState(st run.Step, p AcquireParams) error {
+	switch p.Purpose {
+	case lease.PurposeWrite:
+		if st.State != run.StepDelegated {
+			return fmt.Errorf(
+				"leasesvc: %s is %s, not delegated; a write lease follows a delegation",
+				p.StepID, st.State)
+		}
+		if st.Writer != p.Agent {
+			return fmt.Errorf(
+				"leasesvc: %s holds the delegation for %s, not %s",
+				st.Writer, p.StepID, p.Agent)
+		}
+	case lease.PurposeVerify:
+		if st.State != run.StepVerifying {
+			return fmt.Errorf(
+				"leasesvc: %s is %s, not verifying; a verify lease follows an accepted report",
+				p.StepID, st.State)
+		}
+	}
+	return nil
+}
+
+// checkStepWithKinds is the registry-backed binding. The principle: the
+// kind decides what lease a step takes, the run decides who holds the
+// delegation — together they decide who may verify.
+//
+// A verify lease has two shapes. The plain one (E3): a kind whose work
+// itself is verification (lease: verify) holds its lease from the
+// delegation on, fenced into the ticket directory. The independent one
+// (E5): a writer kind (verify: independent) whose accepted report moved
+// the step to verifying hands it to the verifier the registry names — and
+// to nobody else, least of all the writer itself.
+func checkStepWithKinds(kinds ports.KindRegistry, st run.Step, p AcquireParams) error {
+	switch p.Purpose {
+	case lease.PurposeWrite:
+		if st.State != run.StepDelegated {
+			return fmt.Errorf(
+				"leasesvc: %s is %s, not delegated; a write lease follows a delegation",
+				p.StepID, st.State)
+		}
+		if st.Writer != p.Agent {
+			return fmt.Errorf(
+				"leasesvc: %s holds the delegation for %s, not %s",
+				st.Writer, p.StepID, p.Agent)
+		}
+		if purpose := kinds.LeaseFor(st.Kind); purpose != "write" {
+			return fmt.Errorf(
+				"leasesvc: kind %s takes a %q lease, not a write one",
+				st.Kind, purpose)
+		}
+	case lease.PurposeVerify:
+		switch st.State {
+		case run.StepDelegated: // E3: the verifier's own delegation
+			if purpose := kinds.LeaseFor(st.Kind); purpose != "verify" {
 				return fmt.Errorf(
-					"leasesvc: %s is %s, not delegated; a write lease follows a delegation",
-					p.StepID, st.State)
+					"leasesvc: kind %s takes a %q lease; its delegation hands over no verify lease",
+					st.Kind, purpose)
 			}
 			if st.Writer != p.Agent {
 				return fmt.Errorf(
 					"leasesvc: %s holds the delegation for %s, not %s",
 					st.Writer, p.StepID, p.Agent)
 			}
-		case lease.PurposeVerify:
-			if st.State != run.StepVerifying {
+		case run.StepVerifying: // E5: independent verification
+			verifier, ok := kinds.NeedsIndependentVerification(st.Kind)
+			if !ok {
 				return fmt.Errorf(
-					"leasesvc: %s is %s, not verifying; a verify lease follows an accepted report",
-					p.StepID, st.State)
+					"leasesvc: kind %s needs no independent verification, so %s is %s for no one",
+					st.Kind, p.StepID, st.State)
 			}
+			if p.Agent != verifier {
+				return fmt.Errorf(
+					"leasesvc: %s verifies %s (%s), not %s",
+					verifier, p.StepID, st.Kind, p.Agent)
+			}
+			if p.Agent == st.Writer {
+				return fmt.Errorf(
+					"leasesvc: %s reported %s; the writer does not verify its own work",
+					st.Writer, p.StepID)
+			}
+		default:
+			return fmt.Errorf(
+				"leasesvc: %s is %s; a verify lease follows a delegation or an accepted report",
+				p.StepID, st.State)
 		}
-		return nil
 	}
-	return fmt.Errorf("leasesvc: run %s has no step %s", p.RunID, p.StepID)
+	return nil
 }
 
 // Renew pushes a live lease's deadline out. It is a keepalive: no audit
