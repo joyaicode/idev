@@ -22,15 +22,16 @@ echo "repo: $REPO"
 has_java=0 has_vue=0 has_go=0 has_ts=0
 [ -f "$REPO/pom.xml" ] || [ -f "$REPO/build.gradle" ] || [ -f "$REPO/build.gradle.kts" ] && has_java=1
 # monorepo modules
-find "$REPO" -maxdepth 3 \( -name pom.xml -o -name build.gradle -o -name build.gradle.kts \) 2>/dev/null | head -1 | grep -q . && has_java=1
-find "$REPO" -maxdepth 6 \( -name 'package.json' \) 2>/dev/null | head -5 | while read -r pj; do
+# node_modules 属依赖产物：里面的构建/包文件不作栈证据；prune 同时避免 find|head 触发 SIGPIPE(141)。
+find "$REPO" -maxdepth 3 \( -name node_modules -prune \) -o \( -name pom.xml -o -name build.gradle -o -name build.gradle.kts \) -print 2>/dev/null | head -1 | grep -q . && has_java=1
+find "$REPO" -maxdepth 6 \( -name node_modules -prune \) -o \( -name 'package.json' \) -print 2>/dev/null | while read -r pj; do
   if grep -qE '"vue"|"@vue/' "$pj" 2>/dev/null; then echo VUE; fi
   if grep -qE '"typescript"' "$pj" 2>/dev/null; then echo TS; fi
 done | sort -u > /tmp/idev-coding-scan-stacks.$$
 grep -q VUE /tmp/idev-coding-scan-stacks.$$ 2>/dev/null && has_vue=1
 grep -q TS /tmp/idev-coding-scan-stacks.$$ 2>/dev/null && has_ts=1
 rm -f /tmp/idev-coding-scan-stacks.$$
-find "$REPO" -maxdepth 3 \( -name go.mod \) 2>/dev/null | head -1 | grep -q . && has_go=1
+find "$REPO" -maxdepth 3 \( -name node_modules -prune \) -o \( -name go.mod \) -print 2>/dev/null | head -1 | grep -q . && has_go=1
 
 # Java language level hint
 java_level="unknown"
@@ -43,7 +44,7 @@ if [ "$has_java" = 1 ]; then
     java_level="17"
   elif [ -f "$REPO/qodana.yaml" ] && grep -q 'projectJDK:.*"17"' "$REPO/qodana.yaml" 2>/dev/null; then
     # tooling only — compiler 优先；Boot 2.6/2.7 且未写 compiler 时按 8
-    if grep -Rqs 'spring-boot-starter-parent' "$REPO/pom.xml" 2>/dev/null | head -1 | grep -q .; then
+    if grep -qs 'spring-boot-starter-parent' "$REPO/pom.xml" 2>/dev/null; then
       if grep -qsE '2\.7\.|2\.6\.' "$REPO/pom.xml"; then java_level="8"; fi
     fi
   fi
@@ -102,7 +103,9 @@ if [ "$has_java" = 1 ]; then
   echo "  plinth: 124-java-secure-coding, 123-java-design-patterns (optional depth)"
   echo "  tools:  IDE Problems / qodana.starter"
   [ -f "$REPO/qodana.yaml" ] && echo "  found qodana.yaml"
-  if find "$REPO" -maxdepth 3 -name pom.xml 2>/dev/null | xargs grep -l 'checkstyle\|spotbugs\|pmd\|spotless' 2>/dev/null | head -3 | grep -q .; then
+  # 收进变量再判空：grep -l|head 管道在多匹配时会因 pipefail 的 SIGPIPE(141) 令 if 恒假。
+  pom_tools="$(find "$REPO" -maxdepth 3 -name pom.xml -exec grep -l 'checkstyle\|spotbugs\|pmd\|spotless' {} + 2>/dev/null | head -1 || true)"
+  if [ -n "$pom_tools" ]; then
     echo "  found checkstyle/pmd/spotbugs/spotless in a pom — run those too"
   fi
 fi

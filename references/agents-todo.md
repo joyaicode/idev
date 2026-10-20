@@ -85,8 +85,15 @@ Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未�
 
 | # | 待办 | 状态 | 卡在什么上 |
 |---|---|---|---|
-| 7 | 端到端一轮：真票跑 `code-review` 全程 | 可做 | Claude Code 侧已能唤起（2026-10-19 实测，见上）；Cursor 侧 #4 仍待验 |
-| 8 | agent prompt 的真任务有效性 | 阻塞 | 要 #7；头几轮大概率要按 `SUGGEST` 回报改措辞 |
+| 7 | 端到端一轮：真票跑 `code-review` 全程 | **进行中** | report 步已 PASS（reviewer 异步委派 + 诚实性五查全过），停在 `gate-report` 等人从自己终端签收 gate `01M5A86FX2GB614BK2TGF80DV6`；其后还有 plan→gate-plan→fix→run 三段 |
+| 8 | agent prompt 的真任务有效性 | 待验 | #7 首轮回报零措辞类 SUGGEST（早好信号）；等全程跑完按回报质量定 |
+
+**第 7 项首轮（2026-10-20，joypaas 真票）已有结论。** reviewer 子代理按委派完成了 report 步：产出 9 `I*` / 7 `O*` / 3 `UNPROVEN`，
+canon §7 记 T3/T7/T8/T10+T11/F4 命中，五轴齐写，栈指南开 java8 + common-bugs（vue.md 明示未开、委派范围内）。值得记的
+三件事：① **诚实性五查全过**——review 前后窗内确实出现两个新文件（CONTEXT.md / ADR-0009），但转录扫描证明非 agent
+所写（用户平行设计会话产物），reviewer 的「本步未动」声明属实；② **环境坑两个**——裸 prompt 会被 CLI 内置
+code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限要设 `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`；③
+**首轮 SUGGEST 只有一条且是脚本问题**（coding-scan 的 SIGPIPE，当日已修复销项，完成即删）——不是 prompt 措辞问题，对 #8 是正向证据。
 
 ---
 
@@ -96,6 +103,8 @@ Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未�
 |---|---|---|---|
 | 10 | `agent-feedback.yaml` 的停问时机没有强制 | 待议 | 契约说"整轮一次"，但没有脚本会提醒。做硬了会违反 H5「不为观测另停」 |
 | 11 | 本层 `state/proposals/` 还是空的 | 阻塞 | 等 #8 产出第一批 `SUGGEST`，够两次再由 `agent-review.sh` 起草 |
+
+第一批 `SUGGEST` 已出现但来自 #7 的首轮（coding-scan 脚本问题，当日已修）——不算 prompt 措辞问题，仍不够两次，继续等。
 
 第 10 项触及一个张力：**可观测性要数据，内核禁止为观测另停**。现在靠导体自觉，这是有意的
 保守 —— 但也意味着导体偷懒时这层数据就是空的，`agent-metrics` 会显示"还没有委派留痕"。
