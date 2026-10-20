@@ -3,9 +3,15 @@
     {
       "name": "Default",
       "files": [
-        "scripts/coding-scan.sh",
+        "state/proposals/20261020-lifecycle-gate-types.md",
         ".vscode/changelists.json",
         "references/agents-todo.md",
+        "internal/app/leasesvc/leasesvc.go",
+        "internal/app/leasesvc/leasesvc_test.go",
+        "cmd/idev/app.go",
+        "cmd/idev/main.go",
+        "test/lease-channel.sh",
+        "scripts/workflow.py",
         "references/changelog.md"
       ]
     }
