@@ -106,13 +106,13 @@ python3 scripts/gen-kinds.py --check # kind 表的五份生成物是否最新
 |---|---|---|
 | `test/golden/record.sh --verify`（50 个 txtar，含 `fixed/` 4 个） | 钉死 `IDEV_ENGINE=python` | Python 驱动自己的行为（含签字文法），字节级快照 |
 | `scripts/selfcheck.sh` 驱动段 | 钉死 `IDEV_ENGINE=python` | run 状态机、AUTO、独立验证等语义锁 |
-| `test/gate-channel.sh`（14 例）/ `test/lease-channel.sh`（13 例） | 默认 go（自建 `bin/idev` + `IDEV_BIN`/`IDEV_DATA`） | gate/lease 通道：短码、TTY、白名单、租约 fencing |
+| `test/gate-channel.sh`（14 例）/ `test/lease-channel.sh`（17 例） | 默认 go（自建 `bin/idev` + `IDEV_BIN`/`IDEV_DATA`） | gate/lease 通道：短码、TTY、白名单、写租约与 verify 租约围栏 |
 | `go test ./...` | Go 进程内 | runsvc / gatesvc / leasesvc / sqlite store、e2e 七步 |
 
 ## Go 核心（迁移中）
 
 设计全文在 [design/idev-refactor-design-v3.md](design/idev-refactor-design-v3.md)
-（SHA-256 `7672a259…9824fea0`）。两套引擎各管各的账：
+（SHA-256 `7db523d4…974fcbde`）。两套引擎各管各的账：
 
 - **Python `scripts/workflow.py` 拥有 `run.yaml`**：配方驱动、委派留痕、票 YAML
   仍是它写。`IDEV_ENGINE=python` 是回退开关（golden 与 selfcheck 驱动段钉死用它）。
@@ -126,7 +126,7 @@ python3 scripts/gen-kinds.py --check # kind 表的五份生成物是否最新
 
 ```bash
 go build -o bin/idev ./cmd/idev   # workflow.py 默认找 bin/idev
-go test -race ./...               # 纯逻辑层，domain 覆盖率门槛 90%
+go test -race ./...               # domain 零 IO；app 与 sqlite 同测，domain 覆盖率门槛 90%
 golangci-lint run ./...           # depguard 守住 domain 零 IO
 python3 scripts/gen-kinds.py      # 改 registry/kinds.yaml 后重新生成五份副本
 ```
@@ -153,7 +153,7 @@ $W record <step> PASS --evidence …
 $W status
 ```
 
-要票配方加 `--feature <票名>`。停问步（`human.gate`）记 PASS 必须带人的 `--by` 与确认用语 `--quote`（确认 / 全签 / 同意 / LGTM）。
+要票配方加 `--feature <票名>`。停问步（`human.gate`）先 `ask`，人在自己的终端 `idev gate approve`，再 `record PASS`（不带 `--by` / `--quote`）。`IDEV_ENGINE=python` 才回到人名加确认原话。
 
 ## 推到 GitHub（以后）
 

@@ -146,19 +146,21 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 阶段 1 不接 passkey。`AllowLowForHigh` 保持开着，降级继续进审计。有意不做、不必列入下面表格的：第二个顶层 Skill、分数门禁、并行 fan-out、把导体做成 subagent、B 类另开 decision gate、现在改用 sqlc。
 
+2026-10-20 验收：`test/lease-channel.sh` 17 OK / 0 FAIL（含 verify 租约围栏，以及 `IDEV_ENGINE=python` 不领租约仍可 `record PASS`）。设计文件 SHA-256 验收时点为 `7672a259…9824fea0`（同日文首补 N1 术语注记后为 `7db523d4…974fcbde`，与 README 一致）。`check_recipe` 拒绝 `gate_type: sealed`；`deliver-next` 的自然语言 `will_write` 能过配方检查，推导结果是 `step_confirm`、无 subject。
+
 ### E1 签字通道
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
 | E1.1 | go 引擎强制 A 类字段带 `approval_id` | 待议 | 人已定 deliver 阶段先不强制；gate 通道 record 已写 `signoff.approval_id` | `check-feature` 对 `sealed` / `arch.accepted` / `aligned` / `resolved` / `reopen` 缺 `approval_id` 即 FAIL；python 引擎维持现状并打印引擎名 |
 | E1.2 | 生命周期签字补专用 gate 类型 | 待议 | 通道已接：`workflow.py ask` 走 `idev gate request`，类型由 `gate_type` 或 will_write 推导（只产 `accepted_plan` / `step_confirm`）；`sealed` / `defect_origin` / `reopen_baseline` 在 Go 侧（`signoff/confirm.go` 关键字闸）。与切片 3「保留推导 / 保留 step_confirm 收动作类」的冲突已写成增补提案草稿：`state/proposals/20261020-lifecycle-gate-types.md`（status: draft，含 7 问拷问记录待人定夺） | 密封、架构、提测、P0 的 plan 与 resolved、回退、promote 各有一次 `idev gate request`，摘要绑定提案 3.1 的文件 |
-| E1.3 | python 回退改成显式破窗文件 | 待议 | 2026-10-19 提案已确认 env-var 回退（`IDEV_ENGINE=python`），做这项要先推翻它 | PATH 上有 `idev` 时，只设 `IDEV_ENGINE=python` 被拒；破窗文件写明原因和到期日 |
+| E1.3 | python 回退改成显式破窗文件 | 待议 | 2026-10-19 提案已确认 env-var 回退（`IDEV_ENGINE=python`），做这项要先推翻它。同一开关也跳过租约：`lease-channel` 把「python 引擎不领租约仍 record PASS」锁成成功 | PATH 上有 `idev` 时，只设 `IDEV_ENGINE=python` 被拒；破窗文件写明原因和到期日。破窗期间写租约与 verify 租约仍强制 |
 
 ### E2 单写者
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E2.1 | `record` 进入 `runsvc.Apply`，`run.yaml` 改为导出 | 阻塞 | E1.3 | 一次 PASS 在同一事务里改 run、写审计；事务失败不留下半笔租约。python 引擎仍写 YAML |
+| E2.1 | `record` 进入 `runsvc.Apply`，`run.yaml` 改为导出 | 阻塞 | 要人确认 run 真源从 YAML 迁到 SQLite。与 E1.3 无关：python 回退可以继续写 YAML | 一次 PASS 在同一事务里改 run、写审计；事务失败不留下半笔租约。python 引擎仍写 YAML |
 | E2.2 | 接上 `RunRepo` 的 Create/Save，去掉 `external` 投影 | 阻塞 | E2.1 | sqlite `runRepo` 不再返回 `errNotWired`；版本冲突得到 `ConflictStaleVersion` |
 | E2.3 | 租约、状态、审计包进同一个事务 | 阻塞 | E2.2 | storetest 有一条中途失败用例：lease 与 run 同时不留 |
 | E2.4 | fencing 从领租约走到回报 | 阻塞 | E2.3 | 旧 fencing 的迟到回报被拒，且零审计残留 |
@@ -168,7 +170,7 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E3.1 | 对齐 verify 租约的发放时机 | 阻塞 | E2.5；驱动侧围栏已接（2026-10-20）：`workflow.py` 对 `lease: verify` kind 以 `--purpose verify --ticket-dir` 取租约，record 拒绝无租约与越票目录的 PASS（lease-channel 17 断言锁定），剩 Go 原生发放时机的对齐 | `kinds.yaml` 与 `leasesvc` 对「何时发 verify」是同一句，注释与代码一起改 |
+| E3.1 | 独立验证租约能从投影上领到 | 阻塞 | E2.5。`lease: verify` 在委派时领租约已由 2026-10-20 的 lease-channel 17/17 证明（CLI 接了 `kindreg`，`checkStepWithKinds` 允许 delegated 态）。`run.yaml` 投影只写出 `delegated` 或 YAML 状态名，写不出 `verifying`，所以写者 kind 的第二段验证租约从 CLI 领不到 | 投影能表达 `verifying`；`verify: independent` 的验证者领到 verify 租约，写者领不到 |
 | E3.2 | `verify: independent` 的 PASS 要验证者租约 | 阻塞 | E3.1 | `verifier == writer` 或没有 verify 租约时 `record PASS` 为 BLOCKED；单独的 `--verified-by` 不够 |
 | E3.3 | `DelegationRepo` 由服务端分配 attempt | 阻塞 | E2.2 | 重复 `(run, step, attempt)` 得到 `ConflictAttemptExists`；客户端文件名不再是主键 |
 | E3.4 | 回报先过 `delegation-return` schema | 阻塞 | E3.3 | 正则只把 `STATUS` / `ASSUMED` 收成对象；schema 失败即 FAIL |

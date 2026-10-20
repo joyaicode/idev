@@ -7,6 +7,7 @@
 > 输入：`/workspace/idev-review/idev-architecture-review.md`（下称“评审”）。本稿写作时又以只读方式复核了用户本机 `~/go/src/github.com/idev`（HEAD `bc7e9c3`，2026-10-15 17:37 +08:00）：`scripts/lib/workflow_spec.py`、`scripts/lib/kind_agents.py`、`scripts/workflow.py`（`cmd_start`/`cmd_record`）、`scripts/delegation.py`（`write`）、`workflows/lite-change.yaml`、`SKILL.md` 决策树、`references/agents.md` 委派包格式、`references/chat-confirm-signoff.md`、`deliver/references/deliver-schema.md`、`agents/idev-coder.md` 与 `agents/idev-verifier.md` 的回报格式。没有改动该仓库。
 > 本机工具链：`go version` 输出 go1.25.4 darwin/arm64，`python3 --version` 输出 3.9.6。
 > 依赖版本核对（2026-10-15）：Go 版本来自 go.dev/doc/devel/release；Go 模块版本来自 `proxy.golang.org/<module>/@latest`；GitHub Actions 与工具版本来自 GitHub Releases API；MCP Go SDK 的 API 名称来自 v1.8.0 源码（`mcp/transport.go`、`mcp/streamable.go`、`auth/auth.go`）；Cursor 与 Claude Code 的配置格式来自 cursor.com/docs 与 code.claude.com/docs。所有出现的版本号都核对过。凡是没有核实的地方，正文都标了“待验”。
+> 术语注记（2026-10-20）：本文是 idevd 落地后的目标态，`IDEV_ROOT`（默认 `~/.idev`，见 §0 配置行）在本文里指唯一配置根。迁移完成前，以仓内 [references/glossary.md](../references/glossary.md) 的两个词为准：`IDEV_ROOT` = 内核 checkout（`~/.cursor/skills/idev`），`IDEV_DATA` = Go CLI 数据根（默认 `~/.idev`）。
 
 ---
 
