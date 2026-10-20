@@ -3,8 +3,9 @@
     {
       "name": "Default",
       "files": [
-        "references/agents-todo.md",
+        "scripts/coding-scan.sh",
         ".vscode/changelists.json",
+        "references/agents-todo.md",
         "references/changelog.md"
       ]
     }
