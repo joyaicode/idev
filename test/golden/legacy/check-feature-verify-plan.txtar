@@ -11,6 +11,7 @@ OK  current product has no idev marker
 product-checks PASS
 PASS  product checks
 PASS  baseline sealed
+PASS  plan cases match case_intents
 PASS  plan.goal matches baseline.goal
 PASS  every correctness case is runnable
 PASS  every baseline item has a plan case

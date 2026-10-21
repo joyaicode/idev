@@ -50,6 +50,28 @@ def dump(data: dict) -> str:
     return yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
 
 
+def load_locked(path, read):
+    """Call read(data) while the lock is held. Does not write.
+
+    The critical section stays a read. A subprocess or anything else that
+    waits belongs after this returns, and the write is a later save_locked.
+    """
+    import fcntl
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    with open(lock_path, "a+") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            data = mapping(path)
+            if data is None:
+                data = {}
+            return read(data)
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
 def save_locked(path, mutate):
     """Read, mutate and write a ledger without losing a concurrent write.
 

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -338,11 +339,31 @@ func TestTheCredentialIsIssuedOnlyAtATerminalToAPerson(t *testing.T) {
 
 func TestOnePendingQuestionPerStep(t *testing.T) {
 	f := newFixture(t, "alice")
-	f.askPlan()
+	first := f.askPlan()
 	code, _, errs := f.do(false, "", "gate", "request", "--feature", "demo", "--run-id", "R1", "--step", "plan_ok",
 		"--type", "accepted_plan", "--risk", "P1", "--root", f.ticket, "--subject", "verify/plan.yaml",
 		"--will-write", "verify/plan.yaml accepted", "--proof", "x")
-	if code != exitRefused || !strings.Contains(errs, "gate_pending") {
+	if code != exitRefused || !strings.Contains(errs, "gate_pending") || !strings.Contains(errs, first.GateID+" already pending") {
 		t.Fatalf("second pending gate on a step: exit %d %q", code, errs)
+	}
+}
+
+func TestAFileGateWithNoBindingIsNotCheckedAsAQuestion(t *testing.T) {
+	f := newFixture(t, "")
+	r := f.askPlan()
+	if before := f.state(r.GateID); !before.DigestMatch {
+		t.Fatalf("fresh file gate does not match its files: %+v", before)
+	}
+	ctx := context.Background()
+	st, err := sqlite.Open(ctx, filepath.Join(f.data, "idev.db"))
+	must(t, err)
+	defer st.Close()
+	must(t, st.Tx(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `DELETE FROM gate_subjects WHERE gate_id = ?`, r.GateID)
+		return err
+	}))
+	after := f.state(r.GateID)
+	if after.DigestMatch || !strings.Contains(after.DigestNow, "subject binding missing") {
+		t.Fatalf("a missing file binding was treated as some other digest: %+v", after)
 	}
 }

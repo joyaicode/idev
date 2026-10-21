@@ -20,6 +20,14 @@ PASS  semantic_gate.req recorded
 PASS  arch.baseline_revision matches
 PASS  every baseline item has a case_intent
 PASS  impact hops <= 1
+PASS  arch approach set
+PASS  design.md quotes baseline.goal
+PASS  design.md names every baseline item
+PASS  design.md 用例 names every case_intent
+PASS  arch grill frontier empty
+PASS  arch grill shared understanding confirmed
+PASS  arch grill round has a question
+PASS  plan cases match case_intents
 PASS  deliver-eval.md exists
 PASS  no agent-filled signoff by
 PASS  no staged generatedverify

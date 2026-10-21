@@ -6,7 +6,7 @@ req_revision: 1
 accepted: false
 by: ""
 approach: "Interceptor returns proceed() when approval.enabled is false; no ticket gateway call."
-non_approach: "Do not remove the annotation; do not change Replay."
+non_approach: "Do not remove the annotation; do not change Replay. rollback is setting approval.enabled back to true; no migration."
 impact_candidates:
   - path: service-starter/src/main/java/com/example/approval/ApprovalMethodInterceptor.java
     hop: 0

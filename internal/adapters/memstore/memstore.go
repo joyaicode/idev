@@ -514,10 +514,20 @@ func (g gateRepo) Open(_ context.Context, gt gate.Gate, featureID string) error 
 		if row.g.Status == gate.StatusPending && row.g.RunID == gt.RunID &&
 			row.g.StepID == gt.StepID && gt.RunID != "" && gt.StepID != "" {
 			return conflict(ports.ConflictGatePending,
-				fmt.Sprintf("%s already has a pending gate", gt.StepID))
+				fmt.Sprintf("%s already pending for %s", row.g.ID, gt.StepID))
 		}
 	}
 	g.s.gates[gt.ID] = &gateRow{g: gt, featureID: featureID}
+	return nil
+}
+
+func (g gateRepo) BindSubject(_ context.Context, gateID, root string, paths []string) error {
+	if _, ok := g.s.gates[gateID]; !ok {
+		return conflict(ports.ConflictNotFound, "gate "+gateID)
+	}
+	if root == "" || len(paths) == 0 {
+		return fmt.Errorf("memstore: a subject binding needs a root and at least one path")
+	}
 	return nil
 }
 

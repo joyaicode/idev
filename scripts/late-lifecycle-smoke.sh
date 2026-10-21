@@ -25,15 +25,23 @@ b = b.replace("sealed: false", "sealed: true")
 (dst / "baseline.yaml").write_text(b)
 shutil.copy(base / "req.example.yaml", dst / "req.yaml")
 shutil.copy(base / "arch.example.yaml", dst / "arch.yaml")
+shutil.copy(base / "design.example.md", dst / "design.md")
 shutil.copy(base / "review.example.md", dst / "review.md")
 shutil.copy(base / "deliver-eval.example.md", dst / "deliver-eval.md")
 (dst / "grill.md").write_text(
     "convention: grilling\n"
     "frontier: empty\n"
     "shared_understanding: true\n"
+    "arch_frontier: empty\n"
+    "arch_shared_understanding: true\n"
     "\n"
     "❓ **Q1** - **scope**: settled for late-lifecycle smoke\n"
     "➡️ keep the sealed baseline\n"
+    "\n"
+    "## arch\n"
+    "\n"
+    "❓ **Q1** - **rollback**: how does the design back out\n"
+    "➡️ the approval.enabled switch\n"
 )
 (Path("$SCRATCH") / "docs" / "spec" / "${FEATURE}.md").write_text(
     "restates the sealed baseline for late-lifecycle smoke\n"

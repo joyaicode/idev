@@ -83,6 +83,53 @@ def _create_exclusive(args: tuple) -> bool:
         return False
 
 
+def _workflow():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("idev_workflow", str(SCRIPTS / "workflow.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _claim_run(args: tuple) -> str:
+    """One concurrent start. The winner's run_id, or '' when refused."""
+    path, run_id = args
+    mod = _workflow()
+    _ready()
+    try:
+        mod.claim_run(Path(path), {
+            "schema_version": 1,
+            "run_id": run_id,
+            "status": "running",
+            "steps": [{"id": "a", "kind": "preflight.inputs"}],
+        })
+        return run_id
+    except mod.Blocked:
+        return ""
+    except Exception as exc:
+        return f"ERR {exc}"
+
+
+def _decide_once(args: tuple) -> str:
+    """One concurrent answer of the same signal. The decision id, or ''."""
+    run_path, signal = args
+    mod = _workflow()
+    _ready()
+    try:
+        entry = mod.append_decision(Path(run_path), "s", {
+            "signal": signal,
+            "question": "q",
+            "answer": "a",
+            "quote": "1",
+        })
+        return str(entry.get("id") or "")
+    except mod.Blocked:
+        return ""
+    except Exception as exc:
+        return f"ERR {exc}"
+
+
 def _pool(fn, items):
     ctx = mp.get_context("spawn")
     barrier = ctx.Barrier(len(items))
@@ -174,6 +221,95 @@ class DelegationRecords(unittest.TestCase):
             self.assertIsNotNone(data, "the record did not parse")
             self.assertEqual(data.get("step"), "code-pass")
             self.assertRegex(str(data.get("agent")), r"^w\d$", "the record is spliced")
+
+
+            self.assertRegex(str(data.get("agent")), r"^w\d$", "the record is spliced")
+
+
+class OneLiveRun(unittest.TestCase):
+    """workflow.claim_run — two starts must not both publish a run."""
+
+    def test_ten_starts_leave_one_live_run(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run.yaml"
+            results = _pool(_claim_run, [(str(path), f"R{i:02d}") for i in range(WORKERS)])
+            errors = [r for r in results if r.startswith("ERR ")]
+            self.assertEqual(errors, [], errors)
+            winners = [r for r in results if r]
+            self.assertEqual(len(winners), 1, f"{len(winners)} starts published a run: {winners}")
+            final = safeyaml.mapping(path) or {}
+            self.assertEqual(final.get("run_id"), winners[0])
+            self.assertEqual(final.get("status"), "running")
+            self.assertEqual(
+                sum(1 for r in results if not r),
+                WORKERS - 1,
+                "the losers must be refused, not silently dropped",
+            )
+
+    def test_a_running_run_without_steps_is_still_live(self) -> None:
+        # An empty steps list is not "no run". Replacing it starts a second
+        # run over one that is still marked in progress.
+        mod = _workflow()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run.yaml"
+            path.write_text("status: running\nrun_id: OLD\n", encoding="utf-8")
+            with self.assertRaises(mod.Blocked):
+                mod.claim_run(path, {
+                    "status": "running", "run_id": "NEW",
+                    "steps": [{"id": "a", "kind": "preflight.inputs"}],
+                })
+            self.assertEqual((safeyaml.mapping(path) or {}).get("run_id"), "OLD")
+
+    def test_an_unreadable_run_is_not_replaced(self) -> None:
+        mod = _workflow()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run.yaml"
+            path.write_text("status: [\n", encoding="utf-8")
+            with self.assertRaises(mod.Blocked):
+                mod.claim_run(path, {"status": "running", "run_id": "NEW", "steps": []})
+            self.assertEqual(path.read_text(encoding="utf-8"), "status: [\n")
+
+
+class OneDecision(unittest.TestCase):
+    """workflow.append_decision — one signal, one answer."""
+
+    def test_ten_answers_leave_one_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wf = root / "workflow"
+            folder = wf / "delegations"
+            folder.mkdir(parents=True)
+            run = wf / "run.yaml"
+            run.write_text("run_id: R\nstatus: running\nsteps: []\n", encoding="utf-8")
+            (folder / "s-1.yaml").write_text(
+                "step: s\nattempt: 1\nsignals:\n  - the question\n", encoding="utf-8"
+            )
+            results = _pool(_decide_once, [(str(run), "the question")] * WORKERS)
+            errors = [r for r in results if r.startswith("ERR ")]
+            self.assertEqual(errors, [], errors)
+            winners = [r for r in results if r]
+            self.assertEqual(winners, ["D1"], winners)
+            ledger = safeyaml.mapping(root / "decisions.yaml") or {}
+            self.assertEqual(len(ledger.get("decisions") or []), 1)
+
+    def test_a_broken_entry_is_not_appended_past(self) -> None:
+        mod = _workflow()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            wf = root / "workflow"
+            (wf / "delegations").mkdir(parents=True)
+            run = wf / "run.yaml"
+            run.write_text("run_id: R\nstatus: running\nsteps: []\n", encoding="utf-8")
+            (wf / "delegations" / "s-1.yaml").write_text(
+                "step: s\nattempt: 1\nsignals:\n  - the question\n", encoding="utf-8"
+            )
+            ledger = root / "decisions.yaml"
+            ledger.write_text("schema_version: 1\ndecisions:\n  - not-a-mapping\n", encoding="utf-8")
+            with self.assertRaises(mod.Blocked):
+                mod.append_decision(run, "s", {
+                    "signal": "the question", "question": "q", "answer": "a", "quote": "1",
+                })
+            self.assertIn("not-a-mapping", ledger.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

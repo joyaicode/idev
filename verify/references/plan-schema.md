@@ -63,6 +63,7 @@
 | 字段 | 约束 |
 |------|------|
 | `id` | 稳定 slug，修正时不要复用旧 id 装新断言 |
+| 与 `case_intent` | 有 `arch.yaml` 时，每条 case 的 `slice_id` + `baseline_item_id` + `dimension` 必须对上一条 `case_intent`，每条 intent 也必须有 case。方案评审时一起写，编码阶段只补 `runner` |
 | `slice_id` | 端到端交付时必填，对齐 `req.yaml` 的 slices；无 `deliver.yaml` 可空 |
 | `baseline_item_id` | 有密封 `baseline.yaml` 时必填；验收尺是基线 item，不是后来发挥的句子 |
 | `dimension` | 维度表 |

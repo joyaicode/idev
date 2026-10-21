@@ -632,6 +632,14 @@ FAIL_HINTS: list[tuple[re.Pattern[str], str]] = [
         "HINT: open ~/.cursor/skills/grilling/SKILL.md; close frontier: empty + shared_understanding: true before seal",
     ),
     (
+        re.compile(r"design\.md|arch review grill|arch grill"),
+        "HINT: at arch write design.md (目标/方案/契约/影响面/回退/用例) and grill that design: grill.md ## arch with arch_frontier: empty and arch_shared_understanding: true",
+    ),
+    (
+        re.compile(r"case_intent|plan case"),
+        "HINT: draft verify/plan.yaml with the architecture; each case_intent and each plan case share slice_id, baseline_item_id and dimension",
+    ),
+    (
         re.compile(r"PASS without run evidence"),
         "HINT: keep UNPROVEN until a real run leaves a log path in evidence",
     ),
@@ -688,6 +696,134 @@ def check_human_spec(
         ok("human spec %s" % spec.relative_to(repo).as_posix())
         return
     fail("sealed baseline missing %s" % spec.relative_to(repo).as_posix(), errors)
+
+
+_DESIGN_SECTIONS = ("目标", "方案", "契约", "影响面", "回退", "用例")
+_ARCH_GRILL_LINE = re.compile(
+    r"(?m)^(arch_frontier|arch_shared_understanding):\s*(\S+)\s*$"
+)
+_ARCH_HEADING = re.compile(r"(?m)^##[ \t]+arch[ \t]*$")
+
+
+def _norm_ws(text: str) -> str:
+    return " ".join(text.split())
+
+
+def _design_section(text: str, name: str) -> str | None:
+    match = re.search(
+        rf"(?m)^##[ \t]+{re.escape(name)}[^\n]*\n(.*?)(?=^##[ \t]|\Z)",
+        text,
+        re.S,
+    )
+    return match.group(1) if match else None
+
+
+def _mentions_id(text: str, item_id: str) -> bool:
+    return re.search(r"(?<![\w-])" + re.escape(item_id) + r"(?![\w-])", text) is not None
+
+
+def check_design(root: Path, baseline: dict, arch: dict, errors: list[str]) -> None:
+    """The architecture review reads design.md. A one-line approach is not that document."""
+    path = root / "design.md"
+    if not path.is_file():
+        fail("missing design.md; the architecture review needs the design write-up", errors)
+        return
+    text = path.read_text(encoding="utf-8")
+    missing = [name for name in _DESIGN_SECTIONS if _design_section(text, name) is None]
+    if missing:
+        fail("design.md missing sections: %s" % ",".join(missing), errors)
+        return
+    empty = [
+        name for name in _DESIGN_SECTIONS
+        if not (_design_section(text, name) or "").strip()
+    ]
+    if empty:
+        fail("design.md empty sections: %s" % ",".join(empty), errors)
+        return
+    goal = scalar(baseline, "goal")
+    if goal and _norm_ws(goal) not in _norm_ws(_design_section(text, "目标") or ""):
+        fail("design.md 目标 does not quote baseline.goal", errors)
+    else:
+        ok("design.md quotes baseline.goal")
+    for item_id in section_ids(baseline, "items"):
+        if not _mentions_id(text, item_id):
+            fail("design.md does not mention baseline item %s" % item_id, errors)
+            return
+    ok("design.md names every baseline item")
+    intents = entries(arch, "case_intents") if arch else []
+    cases_section = _design_section(text, "用例") or ""
+    unnamed = [row["id"] for row in intents if row["id"] and not _mentions_id(cases_section, row["id"])]
+    if unnamed:
+        fail("design.md 用例 omits case_intent: %s" % ",".join(unnamed), errors)
+    else:
+        ok("design.md 用例 names every case_intent")
+
+
+def check_arch_grill(root: Path, errors: list[str]) -> None:
+    """The design review has its own grilling round. The seal round does not count."""
+    path = root / "grill.md"
+    if not path.is_file():
+        fail("arch review missing grill.md", errors)
+        return
+    text = path.read_text(encoding="utf-8")
+    found: dict[str, list[str]] = {}
+    for key, val in _ARCH_GRILL_LINE.findall(text):
+        found.setdefault(key, []).append(val)
+    if found.get("arch_frontier") != ["empty"]:
+        fail("arch review grill is not closed; arch_frontier must be empty", errors)
+    else:
+        ok("arch grill frontier empty")
+    if found.get("arch_shared_understanding") != ["true"]:
+        fail("arch review shared understanding is not confirmed", errors)
+    else:
+        ok("arch grill shared understanding confirmed")
+    heading = _ARCH_HEADING.search(text)
+    if not heading:
+        fail("grill.md missing an ## arch round", errors)
+        return
+    tail = text[heading.end():]
+    if not _GRILL_Q.search(tail) or not _GRILL_A.search(tail):
+        fail("arch grill round has no question", errors)
+    else:
+        ok("arch grill round has a question")
+
+
+def _triple(row: dict[str, str]) -> tuple[str, str, str]:
+    return (row.get("slice_id", ""), row.get("baseline_item_id", ""), row.get("dimension", ""))
+
+
+def check_plan_tracks_arch(arch: dict, plan: dict, errors: list[str], require_plan: bool) -> None:
+    """Cases and case_intents stay the same set. Written apart, they drift."""
+    if not arch:
+        return
+    intents = [row for row in entries(arch, "case_intents") if row.get("id")]
+    if not plan:
+        if require_plan:
+            fail("missing verify/plan.yaml; draft cases with the architecture", errors)
+        return
+    cases = [row for row in entries(plan, "cases") if row.get("id")]
+    intent_keys: dict[tuple[str, str, str], list[str]] = {}
+    for row in intents:
+        intent_keys.setdefault(_triple(row), []).append(row["id"])
+    case_keys: dict[tuple[str, str, str], list[str]] = {}
+    for row in cases:
+        case_keys.setdefault(_triple(row), []).append(row["id"])
+    missing = []
+    for key, ids in intent_keys.items():
+        have = case_keys.get(key, [])
+        if len(have) < len(ids):
+            missing.extend(ids[len(have):])
+    extra = []
+    for key, ids in case_keys.items():
+        have = intent_keys.get(key, [])
+        if len(ids) > len(have):
+            extra.extend(ids[len(have):])
+    if missing:
+        fail("case_intent has no plan case: %s" % ",".join(missing), errors)
+    elif extra:
+        fail("plan case has no case_intent: %s" % ",".join(extra), errors)
+    else:
+        ok("plan cases match case_intents")
 
 
 def check_grill(root: Path, baseline: dict, errors: list[str], sealing: bool = False) -> None:
@@ -907,6 +1043,17 @@ def main() -> int:
                     fail("arch impact hop > 1: %s" % ",".join(bad), errors)
                 else:
                     ok("impact hops <= 1")
+                if not scalar(arch, "approach") or not scalar(arch, "non_approach"):
+                    fail("arch.approach and arch.non_approach must both be set", errors)
+                else:
+                    ok("arch approach set")
+
+        if args.stage in ("arch", "code", "test"):
+            check_design(root, baseline, arch, errors)
+            check_arch_grill(root, errors)
+            check_plan_tracks_arch(arch, plan, errors, require_plan=True)
+        elif args.stage == "verify-plan" and arch:
+            check_plan_tracks_arch(arch, plan, errors, require_plan=False)
 
         if args.stage in ("code", "test", "verify-plan"):
             if not plan:

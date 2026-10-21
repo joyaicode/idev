@@ -28,6 +28,7 @@ b = b.replace("sealed: false", "sealed: true")
 (dst / "baseline.yaml").write_text(b)
 shutil.copy(base / "req.example.yaml", dst / "req.yaml")
 shutil.copy(base / "arch.example.yaml", dst / "arch.yaml")
+shutil.copy(base / "design.example.md", dst / "design.md")
 shutil.copy(base / "deliver.example.yaml", dst / "deliver.yaml")
 shutil.copy(base / "review.example.md", dst / "review.md")
 shutil.copy(base / "deliver-eval.example.md", dst / "deliver-eval.md")
@@ -35,9 +36,16 @@ shutil.copy(base / "deliver-eval.example.md", dst / "deliver-eval.md")
     "convention: grilling\n"
     "frontier: empty\n"
     "shared_understanding: true\n"
+    "arch_frontier: empty\n"
+    "arch_shared_understanding: true\n"
     "\n"
     "❓ **Q1** - **scope**: settled in the example baseline\n"
     "➡️ keep the sealed baseline\n"
+    "\n"
+    "## arch\n"
+    "\n"
+    "❓ **Q1** - **rollback**: how does the design back out\n"
+    "➡️ the approval.enabled switch\n"
 )
 spec = Path("${FIX}") / "docs" / "spec"
 spec.mkdir(parents=True)
@@ -58,6 +66,17 @@ for s in req-review req arch verify-plan code ops; do
   echo "--- $s ---"
   run "$s" || fail "expected PASS on $s"
 done
+
+echo "=== negative: arch without the design write-up ==="
+python3 - <<PY
+from pathlib import Path
+Path("${DST}/design.md").rename(Path("${DST}/design.md.bak"))
+PY
+if run arch; then fail "expected FAIL when design.md is missing"; fi
+python3 - <<PY
+from pathlib import Path
+Path("${DST}/design.md.bak").rename(Path("${DST}/design.md"))
+PY
 
 echo "=== negative: test stage with mode=selftest ==="
 if run test; then fail "expected FAIL on test stage when plan.mode is selftest"; fi
@@ -1606,7 +1625,17 @@ gate_out="$(python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WF
   "$W" start demo-flow --feature demo | grep -q '^NEXT a ' || exit 12
   "$W" record g PASS --feature demo >/dev/null 2>&1 && exit 13
   "$W" record a PASS --feature demo --evidence r.md >/dev/null 2>&1 && exit 14
-  "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null || exit 14
+  "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null 2>&1 && exit 141
+  : > r.md
+  "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null 2>&1 && exit 142
+  printf 'reviewed\n' > r.md
+  mkdir -p .idev/task/demo/workflow/delegations
+  printf '%s\n' 'step: a' 'attempt: 1' 'kind: deliver.code_pass' 'agent: idev-coder' 'report:' \
+    '  raw: "STATUS: PASS\nEVIDENCE: r.md\n"' > .idev/task/demo/workflow/delegations/a-1.yaml
+  "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null 2>&1 && exit 143
+  printf '%s\n' 'step: review' 'attempt: 1' 'kind: review.report' 'agent: idev-reviewer' 'report:' \
+    '  raw: "STATUS: PASS\nEVIDENCE: r.md\n"' > .idev/task/demo/workflow/delegations/review-1.yaml
+  "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null || exit 144
   "$W" record g PASS --feature demo --by tester --quote 继续 >/dev/null 2>&1 && exit 15
   "$W" record g PASS --feature demo --by assistant --quote 确认 >/dev/null 2>&1 && exit 16
   "$W" record g PASS --feature demo --by tester --quote 确认 | grep -q '^NEXT r ' || exit 17
@@ -1683,7 +1712,9 @@ bash "${HOME}/.cursor/skills/idev/test/check-feature-tiers.sh" >/dev/null 2>&1 \
   || fail "check-feature tier rules broke (bash test/check-feature-tiers.sh)"
 python3 "${HOME}/.cursor/skills/idev/scripts/test_signals.py" >/dev/null 2>&1 \
   || fail "signal / answer rules broke (python3 scripts/test_signals.py)"
-echo "OK  tier signoffs"
+python3 "${HOME}/.cursor/skills/idev/scripts/test_concurrency.py" >/dev/null 2>&1 \
+  || fail "concurrent start or decide lost the single-writer rule (python3 scripts/test_concurrency.py)"
+echo "OK  tier signoffs and single writer"
 
 echo "=== lock: a gate is answered from the person's terminal ==="
 if command -v go >/dev/null 2>&1; then

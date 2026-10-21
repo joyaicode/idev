@@ -242,6 +242,61 @@ def ticket_of(run_path: Path) -> Path:
     return run_path.parent.parent if run_path.name == "run.yaml" else run_path.parent
 
 
+def cites(blob: str, evidence: str) -> bool:
+    """True when evidence is its own token, not a suffix of a longer path."""
+    if not evidence:
+        return False
+    for token in blob.split():
+        if token == evidence or token.removeprefix("EVIDENCE:") == evidence:
+            return True
+    return False
+
+
+def report_text(data: dict) -> str:
+    report = data.get("report") or {}
+    if not isinstance(report, dict):
+        return ""
+    return f"{report.get('raw') or ''}\n{report.get('evidence') or ''}"
+
+
+def independent_refusal(run_path: Path, step: dict, verifier: str, evidence: str) -> str:
+    """Why this PASS is not an independent review, or "" when it is.
+
+    The flags alone are a claim. The report file has to be on disk, and a
+    delegation recorded by the verifier — not by the writer of this step —
+    has to cite that same path.
+    """
+    target = Path(evidence)
+    if not target.is_absolute():
+        ticket = ticket_of(run_path)
+        target = next((p for p in (ticket / evidence, Path.cwd() / evidence) if p.is_file()), ticket / evidence)
+    if not target.is_file():
+        return f"verify-evidence not found: {evidence} (the verifier writes that file first)"
+    if not target.read_text(encoding="utf-8", errors="replace").strip():
+        return f"verify-evidence is empty: {evidence}"
+    writer = str((step.get("delegated") or {}).get("agent") or "")
+    if not writer:
+        rec = latest_delegation(run_path, str(step.get("id") or ""))
+        writer = str((rec or {}).get("agent") or "")
+    if writer == verifier:
+        return (
+            f"{verifier} is the writer of {step['id']}; "
+            "independent verification has to come from the other agent"
+        )
+    folder = run_path.parent / "delegations"
+    if folder.is_dir():
+        for path in sorted(folder.glob("*.yaml")):
+            data = safeyaml.mapping(path) or {}
+            if str(data.get("agent") or "") != verifier:
+                continue
+            if cites(report_text(data), evidence):
+                return ""
+    return (
+        f"no report from {verifier} cites {evidence}; "
+        "that agent records its own delegation, then this PASS points --verify-evidence at that report"
+    )
+
+
 def auto_refusal(run_path: Path, evidence: str) -> str:
     """Why a saved check output cannot stand in for a person, or "" if it can.
 
@@ -283,6 +338,18 @@ def idev(*argv: str) -> dict:
     if proc.returncode != 0:
         raise Blocked((proc.stderr or proc.stdout).strip().removeprefix("idev: "))
     return json.loads(proc.stdout) if proc.stdout.strip() else {}
+
+
+def pending_gate_id(message: str) -> str:
+    """The id of the question a second request collided with, or ""."""
+    mark = " already pending"
+    i = message.find(mark)
+    if i < 26:
+        return ""
+    cand = message[i - 26:i]
+    if len(cand) == 26 and cand.isalnum() and cand == cand.upper():
+        return cand
+    return ""
 
 
 def gate_question(run: dict, run_path: Path, step: dict) -> list[str]:
@@ -359,26 +426,57 @@ def feature_id(run: dict, run_path: Path) -> str:
     return str(run.get("feature") or "-")
 
 
-def release_held(run: dict) -> list[tuple[str, str]]:
-    """Take every live lease token out of the run, for releasing after the write."""
+def live_tokens(run: dict) -> list[tuple[str, str]]:
+    """Lease id and bearer token still stored on any step.
+
+    The token stays in run.yaml until release succeeds. Dropping it first
+    locks the feature until the TTL: the lease is still held, and nobody
+    can present the token again.
+    """
     out = []
     for step in run.get("steps") or []:
         held = step.get("lease") or {}
-        if held.get("token"):
-            out.append((held["id"], held.pop("token")))
-            held["released_at"] = now()
+        if held.get("id") and held.get("token"):
+            out.append((str(held["id"]), str(held["token"])))
     return out
 
 
-def release_all(pairs: list[tuple[str, str]]) -> None:
+def drop_released(run: dict, released: set[str]) -> None:
+    for step in run.get("steps") or []:
+        held = step.get("lease") or {}
+        if held.get("id") in released and held.get("token"):
+            held.pop("token", None)
+            held["released_at"] = now()
+
+
+def release_kept(path: Path, pairs: list[tuple[str, str]]) -> list[str]:
+    """Release each lease. A failure leaves that token in run.yaml.
+
+    Returns the lease ids that are still held.
+    """
+    released: set[str] = set()
+    failed: list[str] = []
     for lease_id, token in pairs:
         try:
             idev("lease", "release", lease_id, "--token", token)
-            print(f"LEASE {lease_id} released")
         except Blocked as exc:
-            # The record stands; an unreleased lease runs out on its own and
-            # the next acquire sweeps it.
-            print(f"WARN lease {lease_id} not released ({exc}); it expires on its own")
+            print(
+                f"WARN lease {lease_id} not released ({exc}); "
+                "the token stays in run.yaml so the next delegate can retry"
+            )
+            failed.append(lease_id)
+            continue
+        print(f"LEASE {lease_id} released")
+        released.add(lease_id)
+    if released:
+        def mutate(run: dict) -> dict:
+            if not run or "steps" not in run:
+                raise Blocked(f"{path} is empty or unreadable; not dropping lease tokens")
+            drop_released(run, released)
+            return run
+
+        safeyaml.save_locked(path, mutate)
+    return failed
 
 
 def lease_purpose(run: dict, step: dict) -> str | None:
@@ -550,11 +648,6 @@ def cmd_start(args: argparse.Namespace) -> int:
         if code:
             raise Blocked("; ".join(lines))
     run_path = run_path_for(recipe, feature, repo)
-    if run_path.is_file():
-        old = load_yaml(run_path) or {}
-        if old.get("status") in ("running", "blocked"):
-            raise Blocked(f"run already live at {run_path}; continue it or abort it")
-        run_path.rename(run_path.with_name(f"run-{dt.datetime.now():%Y%m%d-%H%M%S}.yaml"))
     run = {
         "schema_version": 1,
         # Written, never read. idevd keys runs on this from P2 on; writing it
@@ -575,7 +668,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         "revisions": [],
         "feedback": {"status": "pending"},
     }
-    dump_yaml(run_path, run)
+    claim_run(run_path, run)
     write_report(run_path, run)
     print(f"RUN {run_path}")
     print("\n".join(next_line(run)))
@@ -603,12 +696,60 @@ def cmd_record(args: argparse.Namespace) -> int:
     if status not in STEP_STATUS:
         raise SystemExit(f"status must be one of {sorted(STEP_STATUS)}")
 
-    # Read, decide and write under one lock. Before this, two `record` calls
-    # that overlapped each read the run, each applied its own step, and the
-    # second write erased the first — both of them printing the next step as
-    # if nothing had happened. check_run runs inside the lock too, so what is
-    # validated is what gets written.
+    # The yaml lock only covers the read-modify-write. idev is a subprocess
+    # and must not run while that lock is held, or every other writer of this
+    # run waits on the database. The facts those calls return are applied
+    # under the lock only if the step is still the one they were read from.
     done: dict = {}
+    pre: dict = {}
+
+    def peek(run: dict) -> None:
+        if not run or "steps" not in run or run.get("status") not in ("running", "blocked"):
+            return
+        step = next((s for s in run["steps"] if s["id"] == args.step), None)
+        if step is None:
+            return
+        held = step.get("lease") or {}
+        purpose = lease_purpose(run, step) if status == "PASS" else None
+        pre.update(
+            seen=True,
+            kind=step["kind"],
+            gate_id=str((step.get("gate") or {}).get("id") or ""),
+            lease_id=str(held.get("id") or ""),
+            purpose=purpose,
+            changed=changed_paths(path, step["id"]) if purpose else [],
+            verifier=kind_agents.KIND_VERIFIER.get(step["kind"]),
+        )
+
+    safeyaml.load_locked(path, peek)
+    verifier_pre = pre.get("verifier")
+    flags_missing = bool(
+        verifier_pre and status == "PASS"
+        and (args.verified_by != verifier_pre or not args.verify_evidence)
+    )
+    signed = None
+    if (pre.get("seen") and not flags_missing and pre.get("kind") == "human.gate"
+            and status == "PASS" and go_engine() and not (args.by or args.quote)
+            and pre.get("gate_id")):
+        signed = signed_answer({"id": args.step, "gate": {"id": pre["gate_id"]}})
+    if (pre.get("seen") and not flags_missing and pre.get("purpose")
+            and pre.get("lease_id") and pre.get("changed")):
+        outside = idev(
+            "lease", "check", pre["lease_id"],
+            *[a for p in pre["changed"] for a in ("--path", p)],
+        ).get("outside") or []
+        if outside:
+            if pre["purpose"] == "verify":
+                raise Blocked(
+                    f"{args.step} changed files outside its lease (the ticket directory): "
+                    + ", ".join(outside)
+                    + " — revert them; a verify lease covers only the ticket directory"
+                )
+            raise Blocked(
+                f"{args.step} changed files outside its lease (arch.yaml include): "
+                + ", ".join(outside)
+                + " — revert them, or include them in arch.yaml and delegate again"
+            )
 
     def mutate(run: dict) -> dict:
         if not run or "steps" not in run:
@@ -632,7 +773,12 @@ def cmd_record(args: argparse.Namespace) -> int:
                         "the signature comes from the person's own terminal (idev gate approve), "
                         "not from --by / --quote; drop them"
                     )
-                step["signoff"] = signed_answer(step)
+                gid = str((step.get("gate") or {}).get("id") or "")
+                if not gid:
+                    raise Blocked(f"{step['id']} has not been asked: workflow.py ask {step['id']}")
+                if signed is None or gid != str(pre.get("gate_id") or ""):
+                    raise Blocked(f"{step['id']} changed while it was being recorded; record again")
+                step["signoff"] = signed
             elif status == "PASS":
                 if not people_whitelist():
                     # Blacklist-only stops agents, not a plausible invented
@@ -678,7 +824,6 @@ def cmd_record(args: argparse.Namespace) -> int:
                     f"{step['kind']} needs independent verification: "
                     f"--verified-by {verifier} --verify-evidence <its report>"
                 )
-            step["verification"] = {"by": args.verified_by, "evidence": args.verify_evidence, "at": now()}
         held = step.get("lease") or {}
         purpose = lease_purpose(run, step) if status == "PASS" else None
         if purpose:
@@ -693,23 +838,17 @@ def cmd_record(args: argparse.Namespace) -> int:
                     f"workflow.py delegate {step['id']} before the agent starts"
                 )
             changed = changed_paths(path, step["id"])
-            if changed:
-                outside = idev("lease", "check", held["id"], *[a for p in changed for a in ("--path", p)]).get("outside") or []
-                if outside:
-                    if purpose == "verify":
-                        raise Blocked(
-                            f"{step['id']} changed files outside its lease (the ticket directory): "
-                            + ", ".join(outside)
-                            + " — revert them; a verify lease covers only the ticket directory"
-                        )
-                    raise Blocked(
-                        f"{step['id']} changed files outside its lease (arch.yaml include): "
-                        + ", ".join(outside)
-                        + " — revert them, or include them in arch.yaml and delegate again"
-                    )
+            if changed != list(pre.get("changed") or []) or str(held.get("id") or "") != str(pre.get("lease_id") or ""):
+                raise Blocked(f"{step['id']} changed while it was being recorded; record again")
+        if verifier and status == "PASS":
+            refusal = independent_refusal(path, step, verifier, args.verify_evidence)
+            if refusal:
+                raise Blocked(refusal)
+            step["verification"] = {"by": args.verified_by, "evidence": args.verify_evidence, "at": now()}
         if held.get("token"):
-            done["release"] = [(held["id"], held.pop("token"))]
-            held["released_at"] = now()
+            # Released after the record is durable. Popping here would throw
+            # the token away before release is known to have succeeded.
+            done["release"] = [(held["id"], held["token"])]
         if status == "PASS":
             open_signals = unanswered(path, step["id"])
             if open_signals:
@@ -739,14 +878,16 @@ def cmd_record(args: argparse.Namespace) -> int:
         check_run(run, path, errors)
         if errors:
             raise Blocked("; ".join(errors))
-        write_report(path, run)
         done["run"] = run
         done["step"] = step
         return run
 
     safeyaml.save_locked(path, mutate)
     run, step = done["run"], done["step"]
-    release_all(done.get("release") or [])
+    # The report is a view of the run. Write it only after run.yaml is the
+    # new bytes, so a failed save cannot leave the report ahead of the run.
+    write_report(path, run)
+    release_kept(path, done.get("release") or [])
     if status in STEP_STOP:
         ask = (run.get("policy") or {}).get("on_fail") == "ask"
         print(f"BLOCKED {step['id']} {status}; " + ("ask the person how to go on" if ask else "stop; fix and record again"))
@@ -757,6 +898,35 @@ def cmd_record(args: argparse.Namespace) -> int:
 def cmd_delegate(args: argparse.Namespace) -> int:
     """Hand the current step to its agent, with a write lease when it writes code."""
     path = find_run(args)
+    # A recorded step can still hold a token when the release that followed
+    # the record failed. Free those before taking another lease on this feature.
+    prior = load_yaml(path) or {}
+    stale = [
+        pair for step in (prior.get("steps") or [])
+        if "status" in step
+        for pair in live_tokens({"steps": [step]})
+    ]
+    if stale:
+        failed = release_kept(path, stale)
+        if failed:
+            raise Blocked(
+                "a recorded step still holds "
+                + ", ".join(failed)
+                + "; its token is in run.yaml, release it before delegating again"
+            )
+    sidecar = path.with_name(f"lease-{args.step}.token")
+    if sidecar.is_file():
+        lines = sidecar.read_text(encoding="utf-8").splitlines()
+        if len(lines) >= 2:
+            try:
+                idev("lease", "release", lines[0], "--token", lines[1])
+                print(f"LEASE {lines[0]} released")
+            except Blocked as exc:
+                raise Blocked(
+                    f"lease {lines[0]} was acquired but never saved ({sidecar}); "
+                    f"release failed ({exc}). The token is still in that file."
+                ) from exc
+        sidecar.unlink(missing_ok=True)
     marked: dict = {}
 
     def mark(run: dict) -> dict:
@@ -814,10 +984,70 @@ def cmd_delegate(args: argparse.Namespace) -> int:
         step["lease"] = {"id": out["lease_id"], "token": out["token"], "fencing": out["fencing"], "paths": paths}
         return run
 
-    safeyaml.save_locked(path, hold)
+    try:
+        safeyaml.save_locked(path, hold)
+    except BaseException as exc:
+        # The token exists only in this process until hold writes it. Release
+        # while we still have it; if that also fails, keep it beside the run.
+        try:
+            idev("lease", "release", out["lease_id"], "--token", out["token"])
+        except Blocked as rel:
+            sidecar.write_text(out["lease_id"] + "\n" + out["token"] + "\n", encoding="utf-8")
+            os.chmod(sidecar, 0o600)
+            raise Blocked(
+                f"lease {out['lease_id']} was acquired but not saved, and releasing it failed ({rel}); "
+                f"the token is in {sidecar}"
+            ) from exc
+        raise Blocked(
+            f"lease {out['lease_id']} was acquired but not saved ({exc}); it was released, delegate again"
+        ) from exc
     print(f"LEASE {out['lease_id']} fencing={out['fencing']} for {out['agent']} until {out['expires_at']}")
     print("LEASE paths " + ", ".join(paths))
     return 0
+
+
+def gate_view(state: dict) -> dict:
+    """The fields ask stores, from either a request or a status response."""
+    return {
+        "gate_id": state["gate_id"],
+        "type": state.get("type") or "",
+        "risk": state.get("risk") or "",
+        "required_assurance": state.get("required_assurance") or "",
+        "subject": state.get("subject") or [],
+    }
+
+
+def print_asked(step_id: str, asked: dict, recovered: bool) -> None:
+    print(f"GATE {asked['gate_id']} asked ({asked['type']}, {asked['risk']}, needs {asked['required_assurance']})")
+    if recovered:
+        print("GATE already open; recorded the existing id")
+    print(f"GATE the person runs in their own terminal: idev gate approve {asked['gate_id']}")
+    print(f"GATE then: workflow.py record {step_id} PASS")
+
+
+def remember_gate(path: Path, step_id: str, asked: dict) -> None:
+    """Write the gate id under the run lock. The question itself is already open."""
+
+    def hold(run: dict) -> dict:
+        if not run or "steps" not in run:
+            raise Blocked(f"{path} is empty or unreadable; not overwriting it")
+        step = next((s for s in run["steps"] if s["id"] == step_id), None)
+        if step is None or step.get("kind") != "human.gate" or step is not current_step(run):
+            raise Blocked(
+                f"gate {asked['gate_id']} was asked but {step_id} is no longer the current step; "
+                f"idev gate reject {asked['gate_id']}"
+            )
+        existing = str((step.get("gate") or {}).get("id") or "")
+        if existing and existing != asked["gate_id"]:
+            raise Blocked(f"gate {existing} is still waiting: idev gate approve {existing}")
+        step["gate"] = {
+            "id": asked["gate_id"],
+            "type": asked.get("type") or "",
+            "subject": asked.get("subject") or [],
+        }
+        return run
+
+    safeyaml.save_locked(path, hold)
 
 
 def cmd_ask(args: argparse.Namespace) -> int:
@@ -825,9 +1055,10 @@ def cmd_ask(args: argparse.Namespace) -> int:
     if not go_engine():
         raise Blocked("IDEV_ENGINE=python has no gate channel; record PASS with --by / --quote")
     path = find_run(args)
-    asked: dict = {}
+    sidecar = path.with_name(f"gate-{args.step}.id")
+    prepared: dict = {}
 
-    def mutate(run: dict) -> dict:
+    def prepare(run: dict) -> None:
         if not run or "steps" not in run:
             raise Blocked(f"{path} is empty or unreadable; not overwriting it")
         if run["status"] not in ("running", "blocked"):
@@ -839,19 +1070,155 @@ def cmd_ask(args: argparse.Namespace) -> int:
             raise Blocked(f"{args.step} is {step['kind']}, not a human.gate; only a gate asks a person")
         if step is not current_step(run):
             raise Blocked(f"{args.step} is not the current step")
-        prior = str((step.get("gate") or {}).get("id") or "")
-        if prior and idev("gate", "status", prior).get("status") == "pending":
+        prepared["prior"] = str((step.get("gate") or {}).get("id") or "")
+        prepared["question"] = gate_question(run, path, step)
+
+    # Validate under the lock, then talk to idev after releasing it.
+    safeyaml.load_locked(path, prepare)
+    prior = str(prepared.get("prior") or "")
+    if prior:
+        state = idev("gate", "status", prior)
+        got = state.get("status")
+        if got == "pending":
             raise Blocked(f"gate {prior} is still waiting: idev gate approve {prior}")
-        out = idev(*gate_question(run, path, step))
-        step["gate"] = {"id": out["gate_id"], "type": out["type"], "subject": out.get("subject") or []}
-        asked.update(out)
-        return run
+        if got == "approved" and state.get("digest_match"):
+            raise Blocked(f"gate {prior} is already approved; workflow.py record {args.step} PASS")
+
+    asked = None
+    recovered = False
+    side_id = ""
+    if sidecar.is_file():
+        lines = [ln.strip() for ln in sidecar.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        side_id = lines[0] if lines else ""
+    if side_id:
+        try:
+            state = idev("gate", "status", side_id)
+        except Blocked:
+            state = {}
+        if state.get("status") == "pending":
+            asked = gate_view(state)
+            recovered = True
+        else:
+            sidecar.unlink(missing_ok=True)
+    if asked is None:
+        try:
+            asked = idev(*prepared["question"])
+        except Blocked as exc:
+            gid = pending_gate_id(str(exc))
+            if not gid:
+                raise
+            state = idev("gate", "status", gid)
+            if state.get("status") != "pending":
+                raise
+            asked = gate_view(state)
+            recovered = True
+    try:
+        remember_gate(path, args.step, asked)
+    except Blocked:
+        raise
+    except BaseException as exc:
+        sidecar.write_text(asked["gate_id"] + "\n", encoding="utf-8")
+        os.chmod(sidecar, 0o600)
+        raise Blocked(
+            f"gate {asked['gate_id']} was asked but not saved ({exc}); "
+            f"the id is in {sidecar}. ask again to record it"
+        ) from exc
+    sidecar.unlink(missing_ok=True)
+    print_asked(args.step, asked, recovered)
+    return 0
+
+
+def claim_run(path: Path, new_run: dict) -> None:
+    """Install new_run as the live run, under the ledger lock.
+
+    Two starts that both looked and both wrote used to leave one run and
+    report success twice. The check and the write are the same critical
+    section: a running or blocked run is refused, a finished one is moved
+    aside, and only then is the new run published.
+    """
+
+    def mutate(_existing: dict) -> dict:
+        # The reader handed in here turns a broken file into {}.
+        # A live run that did not parse is not the same as no run: replacing
+        # it would publish a second start over one that is still in progress.
+        if path.is_file():
+            try:
+                loaded = load_yaml(path)
+            except Exception as exc:
+                raise Blocked(f"{path} is unreadable ({exc}); not replacing it") from exc
+            if loaded is None:
+                loaded = {}
+            elif not isinstance(loaded, dict):
+                raise Blocked(f"{path} is not a mapping; not replacing it")
+            if loaded.get("status") in ("running", "blocked"):
+                raise Blocked(f"run already live at {path}; continue it or abort it")
+            stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+            dest = path.with_name(f"run-{stamp}.yaml")
+            n = 0
+            while dest.exists():
+                n += 1
+                dest = path.with_name(f"run-{stamp}-{n}.yaml")
+            path.rename(dest)
+        return new_run
 
     safeyaml.save_locked(path, mutate)
-    print(f"GATE {asked['gate_id']} asked ({asked['type']}, {asked['risk']}, needs {asked['required_assurance']})")
-    print(f"GATE the person runs in their own terminal: idev gate approve {asked['gate_id']}")
-    print(f"GATE then: workflow.py record {args.step} PASS")
-    return 0
+
+
+def append_decision(run_path: Path, step: str, fields: dict) -> dict:
+    """Record one answer. The same signal on the same attempt is refused.
+
+    The membership check and the append share the ledger lock, so two
+    decides cannot both observe 'not answered yet' and both write.
+    """
+    entry: dict = {}
+
+    def mutate(data: dict) -> dict:
+        data = data or {}
+        data.setdefault("schema_version", 1)
+        items = data.setdefault("decisions", [])
+        if not isinstance(items, list) or any(not isinstance(d, dict) for d in items):
+            raise Blocked("decisions.yaml decisions must be a list of mappings; fix it before deciding")
+        record = latest_delegation(run_path, step)
+        signal = fields["signal"]
+        if record is not None and signal not in [str(s) for s in (record.get("signals") or [])]:
+            raise Blocked(
+                f"--signal must be one of the signals of {step}: "
+                + ("; ".join(str(s) for s in (record.get("signals") or [])) or "none recorded")
+            )
+        attempt = safeyaml.as_int((record or {}).get("attempt"), 1)
+        prior = next(
+            (
+                d for d in items
+                if str(d.get("step")) == step
+                and safeyaml.as_int(d.get("attempt"), 1) == attempt
+                and str(d.get("signal")) == signal
+            ),
+            None,
+        )
+        if prior:
+            raise Blocked(
+                f"signal already decided ({prior.get('id')}) for this attempt; "
+                "a second answer would contradict the first"
+            )
+        run = load_yaml(run_path) or {}
+        entry.update({
+            "id": f"D{len(items) + 1}",
+            "run_id": str(run.get("run_id") or ""),
+            "step": step,
+            "attempt": attempt,
+            "signal": signal,
+            "question": fields["question"],
+            "options": fields.get("options") or "",
+            "ai_recommendation": fields.get("recommend") or "",
+            "answer": fields["answer"],
+            "quote": fields["quote"],
+            "at": now(),
+        })
+        items.append(entry)
+        return data
+
+    safeyaml.save_locked(decisions_path(run_path), mutate)
+    return entry
 
 
 def cmd_decide(args: argparse.Namespace) -> int:
@@ -866,38 +1233,15 @@ def cmd_decide(args: argparse.Namespace) -> int:
             raise Blocked(f"a decision needs --{name}")
     if not is_answer(args.quote):
         raise Blocked("--quote must be the person's answer to the question; 继续 / ok choose nothing, ask again")
-    record = latest_delegation(path, args.step)
-    if record is not None and args.signal.strip() not in [str(s) for s in record.get("signals") or []]:
-        raise Blocked(
-            f"--signal must be one of the signals of {args.step}: "
-            + ("; ".join(str(s) for s in record.get("signals") or []) or "none recorded")
-        )
-    attempt = safeyaml.as_int((record or {}).get("attempt"), 1)
-    ledger = decisions_path(path)
-    entry: dict = {}
-
-    def mutate(data: dict) -> dict:
-        data = data or {}
-        data.setdefault("schema_version", 1)
-        items = data.setdefault("decisions", [])
-        entry.update({
-            "id": f"D{len(items) + 1}",
-            "run_id": run.get("run_id", ""),
-            "step": args.step,
-            "attempt": attempt,
-            "signal": args.signal.strip(),
-            "question": args.question.strip(),
-            "options": args.options.strip(),
-            "ai_recommendation": args.recommend.strip(),
-            "answer": args.answer.strip(),
-            "quote": args.quote.strip(),
-            "at": now(),
-        })
-        items.append(entry)
-        return data
-
-    safeyaml.save_locked(ledger, mutate)
-    print(f"DECISION {entry['id']} {ledger}")
+    entry = append_decision(path, args.step, {
+        "signal": args.signal.strip(),
+        "question": args.question.strip(),
+        "answer": args.answer.strip(),
+        "quote": args.quote.strip(),
+        "options": args.options.strip(),
+        "recommend": args.recommend.strip(),
+    })
+    print(f"DECISION {entry['id']} {decisions_path(path)}")
     left = unanswered(path, args.step)
     print("SIGNALS none left" if not left else "SIGNALS still open: " + "; ".join(left))
     return 0
@@ -906,19 +1250,21 @@ def cmd_decide(args: argparse.Namespace) -> int:
 def cmd_abort(args: argparse.Namespace) -> int:
     path = find_run(args)
     held: list = []
+    saved: dict = {}
 
     def mutate(run: dict) -> dict:
         if not run or "steps" not in run:
             raise Blocked(f"{path} is empty or unreadable; not overwriting it")
         run["status"] = "aborted"
         run.setdefault("revisions", []).append({"at": now(), "note": f"aborted: {args.note}"})
-        held.extend(release_held(run))
-        write_report(path, run)
+        held.extend(live_tokens(run))
+        saved["run"] = run
         return run
 
     safeyaml.save_locked(path, mutate)
+    write_report(path, saved["run"])
     print(f"RUN ABORTED {path}")
-    release_all(held)
+    release_kept(path, held)
     return 0
 
 

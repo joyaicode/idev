@@ -1,5 +1,15 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-21：`start` 不再把「没有 steps」或读坏的 `run.yaml` 当成没有进行中的 run 去覆盖。`record` / `abort` 在 `run.yaml` 写成功之后才更新 `report.md`，避免报告跑在 run 前面。`decisions.yaml` 里有一条不是 mapping 的记录时，`decide` 拒绝再追加。
+
+- 2026-10-21：两个 `start` 不再各自写一份 run 再互相覆盖；检查和写入在同一把锁里，已有进行中的 run 就拒绝。同一个 signal 在同一次 attempt 上只接受一个 `decide`，第二次会和第一次矛盾，直接拒绝。
+
+- 2026-10-21：`ask` / `record` 不再占着 `run.yaml` 的锁去跑 `idev`。问已经写入 SQLite、编号没落进 run 时，再次 `ask` 写回已有的 pending 编号（冲突信息里带这个编号；落盘失败则留在 `gate-<step>.id`），不开第二问，也不会把人卡在没有编号的 pending 上。已批准且内容未变时不再另开一问。
+
+- 2026-10-21：大规模并发下两处会失真的检查。`idev` 每次打开数据文件都跑 goose.Up，即使 schema 已是当前版本也会占写锁，一群 gate/lease 查询会排在一次空迁移后面；已记录版本不低于内嵌迁移时改为只读版本号，落后的库仍会补迁移。`deliver.code_pass` 这类独立复核原来只核对 `--verified-by` 和 `--verify-evidence` 两个字符串，报告可以不存在；现在报告必须是非空文件，且 `delegations/` 里要有复核者自己的留痕用整词引用该路径，执行者的留痕不算。空文件和缺失文件分开拒绝。
+
+- 2026-10-21：需求签收后的方案评审要交齐三份，并经 grilling。`check-feature` 在 `arch` / `code` / `test` 要求 `design.md` 六节（目标照抄基线 goal，点名每条 item 与 case_intent）、`grill.md` 的 `## arch` 轮闭合（`arch_frontier: empty`，`arch_shared_understanding: true`），以及 `verify/plan.yaml` 与 `case_intents` 按 slice / item / dimension 一一对应。`verify-plan` 也查这组对应。编码阶段补 runner，不另起用例。
+
 - 2026-10-20：销 N1（设计 v3 的 `IDEV_ROOT` 与术语表冲突）。设计文首（版本块末）补术语注记：本文是 idevd 落地后的目标态，`IDEV_ROOT`（默认 `~/.idev`）指唯一配置根；迁移完成前以 [glossary.md](glossary.md) 的两个词为准——`IDEV_ROOT` = 内核 checkout（`~/.cursor/skills/idev`）、`IDEV_DATA` = Go CLI 数据根（默认 `~/.idev`）。设计文件 SHA-256 `7672a259…9824fea0` → `7db523d4…974fcbde`，README「Go 核心」段同步；agents-todo 验收段保留验收时点值并注明当前值；N1 行按「做完即删」移除（其完成判据即文首注记）。同笔并入当日 README / agents-todo 验收状态对齐：lease-channel 17 例与 verify 租约围栏描述、`go test -race` 注释（domain 零 IO；app 与 sqlite 同测）、停问步说明改「先 `ask`，人在自己的终端 `idev gate approve`，再 `record PASS`（不带 `--by`/`--quote`）；`IDEV_ENGINE=python` 才回到人名加确认原话」。
 
 - 2026-10-20：修 go 引擎下 verify 租约从不生效的安全缺口。`kinds.yaml` 声明 `lease: verify` 的 kind（verify.run 等，执行者只许写票内验证产物）在 `workflow.py` 只对 `lease: write` 走租约围栏，verify 类从不取租约、record 也不校验——Go CLI 的 `--purpose verify --ticket-dir` 早已支持（ticketDir 必须搭配 --purpose verify，且自动把 `ticketDir/**` 并入 WritePaths），缺的只是 Python 驱动接线。TDD 先红后绿：`needs_write_lease` 重构为 `lease_purpose()`（write/verify/None），新增 `ticket_dir_repo_relative()`（票目录不在 git 仓内直接 Blocked）；`delegate` 的 verify 分支以 `--purpose verify --ticket-dir` 取租约（打印 `LEASE … fencing=N … paths <ticket>/**`）；`record` 对 verify 类 PASS 无租约拒绝、改动越出票目录拒绝并要求 revert；write 类两套文案与行为原样保留。lease-channel 断言 13→17（无租约拒绝 / 围栏限票目录 / 越界拒绝 / 票内释放后 RUN DONE，rival fencing 断言 2→3），红态 12 OK 5 FAIL 形态与预测一致；回归 gate-channel 14 OK 0 FAIL、golden 50 same 0 different、selfcheck PASS。

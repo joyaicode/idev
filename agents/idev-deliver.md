@@ -80,9 +80,10 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
      (零依赖预览,浏览器直接打开)
    - **`req`** — 只把密封 item 译成 slices,**不增不减**。译不清进 `open_questions`(只问理解);
      想加义务 → `baseline-conflict`,**停**
-   - **`arch`** — 方案只实现基线;`case_intents` 挂 `baseline_item_id`。方案"更好"但超基线 → 拒过。
+   - **`arch`** — 需求签收后交评审包,再请人签。`design.md` 六节(目标/方案/契约/影响面/回退/用例),目标节照抄基线 goal;每条 item、每条 `case_intent` 点名。`arch.yaml` 的 `approach` 与 `non_approach` 都要有,`case_intents` 挂 `baseline_item_id`。同一轮让 verifier 起草 `verify/plan.yaml`,每条 intent 一条 case,slice/item/dimension 一致,先 `UNPROVEN`。方案"更好"但超基线 → 拒过。
+     回报 `BLOCKED(logic)`,让导体对**这份方案**唤起 grilling(`grill.md` 的 `## arch` 轮)。arch 轮未闭合不要请签。需求轮的 `frontier` 保持 empty。
      按 `$IDEV/conventions/canon.md` §1 协议扫 §2 信号与 §4 念头,§5 必答 A1–A8;
-     答不出标 `UNPROVEN` 并写补证据动作。引入新领域概念时先过 `conventions/domain-modeling.md` 建通用语言
+     答不出标 `UNPROVEN` 并写进方案节。引入新领域概念时先过 `conventions/domain-modeling.md` 建通用语言
    - **`test`** — 用例证明基线 item。疑问只拷问理解,**答案不得写成新 must**
 3. 请签前**必须**跑结构检查,FAIL 不准请签:
    ```bash
@@ -105,6 +106,7 @@ shared_understanding: true
 正文用 grilling 的问句行(`❓ **Q1** - **主题**:`)和推荐答案行(`➡️`)。
 `frontier` 只许 `empty` 或 `open`,各只出现一次。
 基线 `sealed: true` 时这份文件必须在,且两者都是 `empty` / `true`。
+方案评审另起一轮,不把需求轮改回 open:`arch_frontier` 与 `arch_shared_understanding` 各自单独成行,问句写在一行 `## arch` 之后。请人签方案前这轮必须是 `empty` / `true`。
 
 不要 `trace.sh append` —— trace 由导体统一写。
 

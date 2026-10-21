@@ -123,7 +123,16 @@ record record-bad-status "$OUT" "an unknown status" -- \
 W record scope-guard PASS --evidence "docs/x.md" --feature "$FEATURE" >/dev/null 2>&1
 record code-pass-unverified "$OUT" "a verifier kind PASS with no independent verification" -- \
   W record code-pass PASS --evidence "docs/x.md" --feature "$FEATURE"
-W record code-pass PASS --evidence "docs/x.md" --verified-by idev-reviewer --verify-evidence "docs/x.md" --feature "$FEATURE" >/dev/null 2>&1
+mkdir -p "$WORK/.idev/task/${FEATURE}/docs" "$WORK/.idev/task/${FEATURE}/workflow/delegations"
+printf 'reviewed\n' > "$WORK/.idev/task/${FEATURE}/docs/x.md"
+printf '%s\n' 'step: review' 'attempt: 1' 'kind: review.report' 'agent: idev-reviewer' 'report:' \
+  '  raw: "STATUS: PASS\nEVIDENCE: docs/x.md\n"' \
+  > "$WORK/.idev/task/${FEATURE}/workflow/delegations/review-1.yaml"
+W record code-pass PASS --evidence "docs/x.md" --verified-by idev-reviewer --verify-evidence "docs/x.md" --feature "$FEATURE" >/dev/null 2>&1 \
+  || { echo "code-pass PASS with a reviewer report failed"; exit 1; }
+# The report only has to exist at record time. Leaving it would show up in
+# the later timeline, which is a different scenario.
+rm -f "$WORK/.idev/task/${FEATURE}/workflow/delegations/review-1.yaml"
 W record plan PASS --evidence "verify/plan.yaml" --feature "$FEATURE" >/dev/null 2>&1
 
 # --- the human gate -------------------------------------------------------
@@ -197,6 +206,9 @@ record decide-wrong-signal "$OUT" "a decision for a signal the record never rais
 record decide-ok "$OUT" "the person answers the question" -- \
   W decide run --signal "[承重] 测试库开跑前是空的" --question "测试库开跑前是空的吗" \
     --options "1 是 / 2 不是,先清库" --recommend "1" --answer "是,每次 CI 新建" --quote "1" --feature "$FEATURE"
+second="$(W decide run --signal "[承重] 测试库开跑前是空的" --question "测试库开跑前是空的吗" \
+  --answer "不是" --quote "2" --feature "$FEATURE" 2>&1)" && { echo "second decision accepted: $second"; exit 1; }
+printf '%s\n' "$second" | grep -q 'already decided (D1)' || { echo "second decision: $second"; exit 1; }
 record signal-answered-pass "$OUT" "PASS once every signal has a decision" -- \
   W record run PASS --evidence "docs/x.md" --feature "$FEATURE"
 
@@ -328,13 +340,21 @@ for src, dst in (
     ("deliver-eval.example.md", "deliver-eval.md"),
 ):
     shutil.copy(base / src, ex / dst)
+shutil.copy(base / "design.example.md", ex / "design.md")
 (ex / "grill.md").write_text(
     "convention: grilling\n"
     "frontier: empty\n"
     "shared_understanding: true\n"
+    "arch_frontier: empty\n"
+    "arch_shared_understanding: true\n"
     "\n"
     "❓ **Q1** - **scope**: settled in the example baseline\n"
     "➡️ keep the sealed baseline\n"
+    "\n"
+    "## arch\n"
+    "\n"
+    "❓ **Q1** - **rollback**: how does the design back out\n"
+    "➡️ the approval.enabled switch\n"
 )
 shutil.copy(ver / "plan.example.yaml", ex / "verify" / "plan.yaml")
 shutil.copy(ver / "unproven.example.md", ex / "unproven.md")

@@ -13,7 +13,7 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 
 ## 本阶段 5 步（先做这些）
 
-1. 读 `plan.yaml`；无 plan 先起草（goal/non_goal 复制密封基线）。
+1. 读 `plan.yaml`；无 plan 先起草（goal/non_goal 复制密封基线）。票在 `arch` 时就起草，每条 `case_intent` 一条 case（`slice_id` / `baseline_item_id` / `dimension` 一致），不要等到编码之后另起一套。
 2. 请人 `accepted` 或记 `AUTO` 前跑 `check-feature.sh <f> verify-plan`（已 accepted 再 run 不重跑）。
 3. 按 mode 跑 cases；只许 PASS/FAIL/UNPROVEN；PASS 必须有证据路径。
 4. 提测维表六族：`mode: test` + `unproven.md`；人没提 promote 不问不跑。

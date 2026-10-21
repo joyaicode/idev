@@ -25,7 +25,7 @@
 |------|------|--------|
 | `req-review` | `baseline.yaml` + 人读规格（`doc_home.py --key spec`，只复述） | `sealed: true` |
 | `req` | `req.yaml`（挂 `baseline_item_id`） | `accepted` |
-| `arch` | `design.md` + `arch.yaml` | `accepted` |
+| `arch` | `design.md` + `arch.yaml` + 对齐的 `verify/plan.yaml` 骨架；`grill.md` 的 arch 轮 | `accepted` |
 | `code` | 代码 + verify selftest；§1/§2/§3 + §3.8 增强扫描（coding-scan/五轴/栈指南）；`check-feature code` | 自测门 |
 | `test` | verify `mode=test` | 提测门 + `aligned` |
 | `done` | 基线仍密封 | 人写 `aligned` 或提测停问点确认用语 |

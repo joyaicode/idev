@@ -117,9 +117,42 @@ func (g gateRepo) Open(ctx context.Context, gt gate.Gate, featureID string) erro
 		nullable(gt.Proof), string(gt.RequiredAssurance), string(keywords),
 		string(gt.Status), now, stamp(gt.ExpiresAt))
 	if err != nil {
+		// The id of the question already open lets a retry write that id
+		// back into the run instead of getting stuck with no handle on it.
+		if Classify(err) == ConflictGatePending {
+			if id := g.pendingID(ctx, gt.RunID, gt.StepID); id != "" {
+				return conflictFrom(err, id+" already pending for "+gt.StepID)
+			}
+		}
 		return conflictFrom(err, gt.StepID+" already has a pending gate")
 	}
 	return nil
+}
+
+func (g gateRepo) pendingID(ctx context.Context, runID, stepID string) string {
+	if runID == "" || stepID == "" {
+		return ""
+	}
+	var id string
+	err := g.tx.QueryRowContext(ctx, `SELECT id FROM gates
+		WHERE run_id = ? AND step_id = ? AND status = 'pending'`, runID, stepID).Scan(&id)
+	if err != nil {
+		return ""
+	}
+	return id
+}
+
+// BindSubject records the files a gate's digest covers, on the same
+// transaction as Open.
+func (g gateRepo) BindSubject(ctx context.Context, gateID, root string, paths []string) error {
+	b, err := json.Marshal(nonNil(paths))
+	if err != nil {
+		return err
+	}
+	_, err = g.tx.ExecContext(ctx,
+		`INSERT INTO gate_subjects (gate_id, root, paths_json) VALUES (?, ?, ?)`,
+		gateID, root, string(b))
+	return err
 }
 
 func (g gateRepo) Get(ctx context.Context, id string) (gate.Gate, error) {

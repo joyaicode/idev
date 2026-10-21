@@ -148,6 +148,10 @@ type GateRepo interface {
 	Open(ctx context.Context, g gate.Gate, featureID string) error
 	Get(ctx context.Context, gateID string) (gate.Gate, error)
 	Save(ctx context.Context, g gate.Gate) error
+	// BindSubject records the files the gate's digest covers. It belongs
+	// in the same transaction as Open: a digest of files with no record
+	// of which files cannot be checked later (I-4).
+	BindSubject(ctx context.Context, gateID, root string, paths []string) error
 	// RecordApproval fails with ConflictApprovalExists on a second
 	// approval for the same gate (threat T6, replay).
 	RecordApproval(ctx context.Context, a Approval) error

@@ -13,7 +13,7 @@
 | 机读架构 + 用例意图 | `<票目录>/arch.yaml` | 本契约 |
 | 阶段指针 / 回退 | `<票目录>/deliver.yaml` | 本契约 |
 | 可执行验收 | `<票目录>/verify/plan.yaml` | idev verify 模块 |
-| 未决问句 | `<票目录>/grill.md` | grilling 的问句；`sealed: true` 时 frontier 必须已空 |
+| 未决问句 | `<票目录>/grill.md` | grilling 的问句；`sealed: true` 时 frontier 必须已空。方案评审另有 `## arch` 轮 |
 | Review | `<票目录>/review.md` | code 阶段对照基线。不是 `reviews/`，也不是 `.idev/reviews/` |
 | 阶段计数 | `<票目录>/deliver-eval.md` | 每阶段结束；只计件数 |
 | 排障单 | `<票目录>/ops.yaml` | ops 模块；红绿仍在 verify |
@@ -27,7 +27,7 @@
 |-------|----------|------------|------------------|
 | `req-review` | 人给 feature + 原始诉求 | `baseline.yaml` + 规格正文；拷问至无 `open` / 无异议 | P0：`sealed: true`；P1/P2：不停，基线就绪即进 `req` |
 | `req` | P0：基线已密封；P1/P2：基线就绪、grill 已闭合 | `req.yaml`（每条 slice 挂 `baseline_item_id`） | P0：`accepted: true`；P1/P2：`sealed: true` 与 `accepted: true` 同一次确认 |
-| `arch` | `req.accepted` | `design.md` + `arch.yaml` | `accepted: true` |
+| `arch` | `req.accepted` | `design.md` + `arch.yaml` + 与之对齐的 `verify/plan.yaml` 骨架；`grill.md` 的 `## arch` 轮已闭合 | `accepted: true` |
 | `code` | `arch.accepted` | 代码 + Review + **verify `logic`/`selftest`** | 自测门 |
 | `test` | 自测门 | **verify `mode=test`**，对齐基线 item | 提测门 |
 | `done` | 提测门 + 人 `aligned: true` | 基线未 reopen 则不再改原文 | 人签 |
@@ -115,7 +115,20 @@ semantic_gate:
 | `case_intents[]` | `id` + `slice_id` + `baseline_item_id` + `dimension` + `hint` |
 | `accepted` | 人改 true，或确认用语代写 |
 
-每个 include 的影响面、每条基线 item 至少一条 `case_intents`。
+每个 include 的影响面、每条基线 item 至少一条 `case_intents`。`approach` 与 `non_approach` 都要有正文。
+
+## `design.md`
+
+给人评审的方案，不是 `approach` 的重复一句。六节都要有正文：`目标`、`方案`、`契约`、`影响面`、`回退`、`用例`。
+
+- `目标` 照抄基线 `goal`，不改写。
+- 每条基线 item 的 id 在文中出现。
+- `用例` 点名每条 `case_intent` 的 id。
+- 与 `arch.yaml`、`verify/plan.yaml` 同一轮写。每条 `case_intent` 在 plan 里有一条 case，且 `slice_id`、`baseline_item_id`、`dimension` 相同；plan 里多出来的 case 也要有对应的 `case_intent`。编码阶段补 runner，不另起一套用例。
+
+## 方案评审的拷问
+
+`grill.md` 在需求轮之外加一轮，字段各自单独成行：`arch_frontier: empty`、`arch_shared_understanding: true`。问句放在一行 `## arch` 之后，格式仍是 grilling 的 `❓` / `➡️`。这一轮问方案（做法、契约、回退、哪条用例证明哪条 item）。需求轮的 `frontier` 保持 `empty`。轮子没闭合，不准请人 `arch.accepted`。
 
 ## 自测门 / 提测门
 

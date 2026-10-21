@@ -82,19 +82,22 @@ parent: idev
 
 ### arch
 
-1. 方案只实现基线；`case_intents` 挂 `baseline_item_id`。
-2. 方案若「更好」但超出基线 → 拒过，不改基线。
-3. 出现方案分叉 / trade-off / 未决边界 → **自动唤起 grilling** 订死后再请签。
-4. **架构范式自查**：按 [canon.md](../conventions/canon.md) §1 协议扫 §2 信号与 §4 念头，§5 必答 A1–A8，§7 模板记账；答不出的项标 `UNPROVEN` 并写补证据动作，方案分叉 / 权衡未决 → 自动唤起 grilling。不是新增强门禁，记在 arch 说明里，签字时人核对。
-4a. **领域建模透镜（涉及新概念时）**：本轮引入新领域概念 / 跨模块术语时，先过 [conventions/domain-modeling.md](../conventions/domain-modeling.md) 建通用语言；术语不一致先对齐再出方案，术语表随票走。无新概念可跳过。
-5. `check-feature.sh <feature> arch`。grilling 结束后，人 `accepted` + `by` 才能 `code`。
+需求签收后、请人评方案之前，一次交齐三份，供人评审。不要只留 `arch.yaml` 里的一行 `approach`。
+
+1. **方案叙述** `<票目录>/design.md`（照 [design.example.md](references/design.example.md)）。六节都要有正文：目标、方案、契约、影响面、回退、用例。目标节照抄基线 `goal`。每条基线 item、每条 `case_intent` 都在文中点名。细到人能按节评审，不写实现代码。
+2. **机读方案** `arch.yaml`。`approach` / `non_approach` 都要有。`case_intents` 挂 `baseline_item_id`。方案若「更好」但超出基线 → 拒过，不改基线。
+3. **用例骨架与方案同一轮**。起草 `verify/plan.yaml`：每条 `case_intent` 一条 case，`slice_id` / `baseline_item_id` / `dimension` 一致；`goal` 复制基线。此时 `UNPROVEN`，不假装跑过。编码阶段只补 runner 和证据，不另起一套用例。
+4. **方案评审必须 grilling。** 打开并执行 `~/.cursor/skills/grilling/SKILL.md`，问的是这份方案（做法、契约、回退、哪条用例证明哪条 item），不是把密封时的需求问句再问一遍。问句写在 `grill.md` 的 `## arch` 轮。`arch_frontier: empty` 且 `arch_shared_understanding: true` 之前不准请签。需求轮的 `frontier` 保持 `empty`，不要为了评方案把它改回 `open`。
+5. **架构范式自查**：按 [canon.md](../conventions/canon.md) §1 协议扫 §2 信号与 §4 念头，§5 必答 A1–A8，§7 模板记账；答不出的项标 `UNPROVEN` 并写进 `design.md` 的方案节。方案分叉仍在 arch 轮里问完。
+5a. **领域建模透镜（涉及新概念时）**：本轮引入新领域概念 / 跨模块术语时，先过 [conventions/domain-modeling.md](../conventions/domain-modeling.md) 建通用语言；术语不一致先对齐再出方案，术语表随票走。无新概念可跳过。
+6. `check-feature.sh <feature> arch`。上面三份对齐且 arch 轮闭合后，人 `accepted` + `by` 才能 `code`。
 
 ### code
 
 1. 只改 `include: true` 的文件。写 `review.md`（[review.example.md](references/review.example.md)）。多做删掉；少做补；像基线写错 → `baseline-conflict`，**停**。
 2. **写前匹配、写中纠正。** 打开 [coding.md](../conventions/coding.md) §0；扫表时再开 [coding-tables.md](../conventions/coding-tables.md)。用本轮变化扫 §1，命中第一行就运用，禁止行当场拒绝。每新增函数扫 §2，命中当轮改掉。
 3. **Review 再扫一遍。** `review.md` 必须写 §1 命中 / 零命中和 §2 已扫；命中只记账未改 = 拒过；若命中 canon 的 `T#`（加层 / 拆分 / 缓存 / 重写类念头），一并写入 `review.md`。按 [coding-tables.md](../conventions/coding-tables.md) §3.8 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo>`，做五轴 + 栈指南；blocking 译成 `P#`/`C#` 当轮改。然后清废弃、对齐注释/文档、跑扫描（Java：Problems / `qodana.starter`；前端：`lint-fix`）。
-4. 起草 verify plan（goal 抄基线）→ P0 人确认；P1/P2 `verify-plan` 无 `SIGNAL` 记 `AUTO`，有则停问 → `selftest`/`logic`。`check-feature.sh <feature> code`。自测门过后人没说「提测」不要停问是否进入 `mode=test`。
+4. 用例清单在 arch 已经和 `case_intents` 对齐。这里补 runner、跑 selftest/logic，不另写一套 case。要加一条 case，先补 `case_intent` 和 `design.md` 的用例节。P0 人确认 plan；P1/P2 `verify-plan` 无 `SIGNAL` 记 `AUTO`，有则停问。`check-feature.sh <feature> code`。自测门过后人没说「提测」不要停问是否进入 `mode=test`。
 5. 实现/译法问题回退 `code`/`req`/`arch`，重跑向后。
 
 ### test

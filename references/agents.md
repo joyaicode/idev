@@ -130,8 +130,10 @@
    `继续` / `ok` 不是答案,再问一次。没有信号就不停
 6. `workflow.py record <step> <STATUS> --evidence <路径>`。`human.gate` 另须
    `--by <人名> --quote "<确认原话>"`;
-   `KIND_VERIFIER` 里的 kind(`next` 打印 `VERIFY …`)PASS 前先派那个 agent 复核,
-   另加 `--verified-by <它> --verify-evidence <它的报告>`
+   `KIND_VERIFIER` 里的 kind(`next` 打印 `VERIFY …`)PASS 前先派那个 agent 复核。
+   它把自己的留痕写进 `delegations/`，报告里用整词写上证据路径；再
+   `record PASS --verified-by <它> --verify-evidence <那条路径>`。
+   执行者自己的留痕不算。报告不存在、是空文件、或没有它的留痕引用这条路径，都会 BLOCKED。
 
 两个时间戳是**可选**的 —— 可观测性不该挡住一次正常委派。但缺了就没有耗时视图,
 「哪个 agent 慢、哪一步是瓶颈」就答不出来,所以默认记上。

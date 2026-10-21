@@ -60,16 +60,69 @@ func TestMigrationsApplyAndReportAVersion(t *testing.T) {
 
 func TestOpeningTwiceIsIdempotent(t *testing.T) {
 	// Starting idevd twice against the same file must not re-run migrations
-	// or fail.
+	// or fail. The second open also has to report the version: skipping the
+	// migration write must not skip the dialect goose needs to read it.
 	path := filepath.Join(t.TempDir(), "idev.db")
+	var first int64
 	for i := 0; i < 2; i++ {
 		s, err := sqlite.Open(context.Background(), path)
 		if err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}
+		v, err := s.Version(context.Background())
+		if err != nil {
+			t.Fatalf("version %d: %v", i, err)
+		}
+		if i == 0 {
+			first = v
+		} else if v != first {
+			t.Fatalf("reopen version = %d, first open = %d", v, first)
+		}
 		if err := s.Close(); err != nil {
 			t.Fatal(err)
 		}
+	}
+}
+
+func TestAStaleSchemaIsStillMigrated(t *testing.T) {
+	// Skipping Up is only safe when the recorded version already matches.
+	// An older version has to apply what it missed.
+	path := filepath.Join(t.TempDir(), "idev.db")
+	s, err := sqlite.Open(context.Background(), path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if _, err := s.DB().Exec(`DROP TABLE gate_subjects`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().Exec(`DELETE FROM goose_db_version WHERE version_id >= 2`); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	s, err = sqlite.Open(context.Background(), path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := s.Close(); err != nil {
+			t.Errorf("close: %v", err)
+		}
+	})
+	var n int
+	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name = 'gate_subjects'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatal("gate_subjects was not recreated from the pending migration")
+	}
+	v, err := s.Version(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v < 2 {
+		t.Fatalf("version = %d, want at least 2", v)
 	}
 }
 

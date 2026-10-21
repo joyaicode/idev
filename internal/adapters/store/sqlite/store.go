@@ -27,7 +27,9 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/pressly/goose/v3"
@@ -89,10 +91,57 @@ func (s *Store) migrate(ctx context.Context) error {
 	if err := goose.SetDialect("sqlite3"); err != nil {
 		return fmt.Errorf("sqlite: dialect: %w", err)
 	}
+	// Every CLI call opens this file. goose.Up takes the write lock even
+	// when nothing is pending, so a crowd of status and lease checks would
+	// queue behind a migration that has nothing to do. A recorded version
+	// that already matches the embedded set is enough; a missing table or
+	// an older version still runs Up.
+	latest, err := embeddedLatest()
+	if err != nil {
+		return err
+	}
+	if current, ok := s.appliedVersion(ctx); ok && current >= latest {
+		return nil
+	}
 	if err := goose.UpContext(ctx, s.db, "migrations"); err != nil {
 		return fmt.Errorf("sqlite: migrate: %w", err)
 	}
 	return nil
+}
+
+func embeddedLatest() (int64, error) {
+	entries, err := fs.ReadDir(migrations, "migrations")
+	if err != nil {
+		return 0, fmt.Errorf("sqlite: migrations: %w", err)
+	}
+	var latest int64
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".sql") {
+			continue
+		}
+		head, _, _ := strings.Cut(name, "_")
+		v, err := strconv.ParseInt(head, 10, 64)
+		if err != nil || v <= 0 {
+			return 0, fmt.Errorf("sqlite: migration %s has no version", name)
+		}
+		if v > latest {
+			latest = v
+		}
+	}
+	if latest == 0 {
+		return 0, fmt.Errorf("sqlite: no migrations embedded")
+	}
+	return latest, nil
+}
+
+func (s *Store) appliedVersion(ctx context.Context) (int64, bool) {
+	var v sql.NullInt64
+	err := s.db.QueryRowContext(ctx, `SELECT MAX(version_id) FROM goose_db_version`).Scan(&v)
+	if err != nil || !v.Valid {
+		return 0, false
+	}
+	return v.Int64, true
 }
 
 // DB exposes the handle for the repositories in this package. Not exported

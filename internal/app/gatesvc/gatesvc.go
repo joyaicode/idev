@@ -97,6 +97,11 @@ type AskParams struct {
 	Proof     string
 	TTL       time.Duration
 	Actor     ports.Principal
+	// SubjectRoot and SubjectPaths are the files Subject.Digest covers.
+	// Written in the same transaction as the gate. Empty means the gate
+	// binds to the question itself.
+	SubjectRoot  string
+	SubjectPaths []string
 }
 
 // Ask opens a gate: one pending question, written with the event that says
@@ -119,6 +124,14 @@ func (s Service) Ask(ctx context.Context, p AskParams) (gate.Gate, error) {
 	err = s.Store.InTx(ctx, func(tx ports.Tx) error {
 		if err := tx.Gates().Open(ctx, g, p.Feature); err != nil {
 			return fmt.Errorf("gatesvc: opening gate %s: %w", g.ID, err)
+		}
+		if len(p.SubjectPaths) > 0 {
+			if p.SubjectRoot == "" {
+				return fmt.Errorf("gatesvc: a file subject needs the directory the paths are relative to")
+			}
+			if err := tx.Gates().BindSubject(ctx, g.ID, p.SubjectRoot, p.SubjectPaths); err != nil {
+				return fmt.Errorf("gatesvc: binding subject of %s: %w", g.ID, err)
+			}
 		}
 		detail := map[string]any{
 			"gate_type":          string(g.Type),

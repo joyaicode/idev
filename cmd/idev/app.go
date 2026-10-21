@@ -148,8 +148,8 @@ func (a app) open(ctx context.Context) (env, error) {
 			Policy: gate.Policy{AllowLowForHigh: true},
 		},
 		// Kinds 决定每个 step 领什么用途的租约、谁有权验证；不接的话 verify 租约会
-	// 发给先到者（delegated 态只绑定 agent）。见 review A1。
-	leases: leasesvc.Service{Store: store, Clock: local.Clock{}, IDs: local.IDs{}, Kinds: kindreg.MustLoad()},
+		// 发给先到者（delegated 态只绑定 agent）。见 review A1。
+		leases: leasesvc.Service{Store: store, Clock: local.Clock{}, IDs: local.IDs{}, Kinds: kindreg.MustLoad()},
 	}, nil
 }
 
@@ -240,15 +240,11 @@ func (a app) request(ctx context.Context, args []string) error {
 		Type: t, RunID: *runID, StepID: *step, Feature: *feature,
 		Risk: gate.RiskTier(*risk), Subject: subj, Origin: *origin,
 		WillWrite: willWrite, Proof: *proof, TTL: *ttl,
+		SubjectRoot: absRoot, SubjectPaths: subject,
 		Actor: ports.Principal{Handle: "workflow.py", Kind: "service"},
 	})
 	if err != nil {
 		return err
-	}
-	if len(subject) > 0 {
-		if err := e.store.PutGateSubject(ctx, g.ID, absRoot, subject); err != nil {
-			return err
-		}
 	}
 	return json.NewEncoder(a.stdout).Encode(requestOut{
 		GateID: g.ID, Short: short(g.ID), Type: string(g.Type), Risk: string(g.Risk),
@@ -309,6 +305,16 @@ func currentDigest(ctx context.Context, e env, g gate.Gate) (string, error) {
 	root, paths, err := e.store.GateSubject(ctx, g.ID)
 	if err != nil {
 		return "", err
+	}
+	// A file gate with no binding row is not a question-only gate. Treating
+	// the missing row as "binds to the question" would compare a different
+	// digest and report a content change, which hides that the binding write
+	// was lost.
+	if g.Subject.Kind == gate.SubjectArtifactSet || g.Subject.Kind == gate.SubjectBaseline {
+		if len(paths) == 0 {
+			return "", fmt.Errorf("subject binding missing for %s (%s)", g.ID, g.Subject.Kind)
+		}
+		return filesDigest(root, paths)
 	}
 	if len(paths) == 0 {
 		return questionDigest(g.Feature, g.RunID, g.StepID, string(g.Type), g.WillWrite, g.Proof), nil
@@ -448,18 +454,19 @@ func (a app) show(g gate.Gate, digest string) {
 // --- status ------------------------------------------------------------------
 
 type statusOut struct {
-	GateID        string       `json:"gate_id"`
-	Status        string       `json:"status"`
-	Type          string       `json:"type"`
-	Risk          string       `json:"risk"`
-	Feature       string       `json:"feature"`
-	RunID         string       `json:"run_id,omitempty"`
-	StepID        string       `json:"step_id,omitempty"`
-	SubjectDigest string       `json:"subject_digest"`
-	DigestNow     string       `json:"digest_now"`
-	DigestMatch   bool         `json:"digest_match"`
-	ExpiresAt     string       `json:"expires_at"`
-	Approval      *approvalOut `json:"approval,omitempty"`
+	GateID            string       `json:"gate_id"`
+	Status            string       `json:"status"`
+	Type              string       `json:"type"`
+	Risk              string       `json:"risk"`
+	Feature           string       `json:"feature"`
+	RunID             string       `json:"run_id,omitempty"`
+	StepID            string       `json:"step_id,omitempty"`
+	SubjectDigest     string       `json:"subject_digest"`
+	DigestNow         string       `json:"digest_now"`
+	DigestMatch       bool         `json:"digest_match"`
+	RequiredAssurance string       `json:"required_assurance,omitempty"`
+	ExpiresAt         string       `json:"expires_at"`
+	Approval          *approvalOut `json:"approval,omitempty"`
 }
 
 type approvalOut struct {
@@ -502,7 +509,8 @@ func (a app) status(ctx context.Context, args []string) error {
 		GateID: g.ID, Status: string(g.Status), Type: string(g.Type), Risk: string(g.Risk),
 		Feature: g.Feature, RunID: g.RunID, StepID: g.StepID,
 		SubjectDigest: g.Subject.Digest, DigestNow: digest, DigestMatch: digest == g.Subject.Digest,
-		ExpiresAt: g.ExpiresAt.Format(time.RFC3339),
+		RequiredAssurance: string(g.RequiredAssurance),
+		ExpiresAt:         g.ExpiresAt.Format(time.RFC3339),
 	}
 	if g.Status == gate.StatusApproved || g.Status == gate.StatusRejected {
 		ap, err := e.store.ApprovalForGate(ctx, id)
