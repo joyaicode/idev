@@ -32,13 +32,14 @@ is_background: false
    ```bash
    python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key task
    ```
-2. **打开 `$IDEV/conventions/coding.md` §0 的 Review 六步**(不是编码五步 —— 你走的是「对照基线之后、请人签字之前」那一列):
-   1. 再扫 `coding-tables.md` §1:**该用的没用、不该用的用了,都是拒过**
-   2. 逐条扫 §2:命中必须当轮改掉 —— 但本步是例外,见下
-   3. 若有重构:核对 §3 满足条件与「两顶帽子」;混做加功能 / 无护栏绿 = 拒过
-   4. 按 §3.8 跑扫描(第 4 步)
-   5. 把命中与纠正写入 `review.md`
-   6. 跑该仓扫描(Java Problems / `qodana.starter`;前端 `lint-fix`)。**黄条视为未完成**
+2. **打开 `$IDEV/conventions/coding.md` §0 的 Review 七步**(不是编码六步 —— 你走的是「对照基线之后、请人签字之前」那一列):
+   1. 先扫 coding.md 文首**规范总则**五条(含 `coding-tables.md` §2.4 变更级粗筛:净增行去向 / 一文件一理由);命中译 `T#`/`P#`/`C#`
+   2. 再扫 `coding-tables.md` §1:**该用的没用、不该用的用了,都是拒过**
+   3. 逐条扫 §2:命中必须当轮改掉 —— 但本步是例外,见下
+   4. 若有重构:核对 §3 满足条件与「两顶帽子」;混做加功能 / 无护栏绿 = 拒过
+   5. 按 §3.8 跑扫描(第 4 步)
+   6. 把命中与纠正写入 `review.md`
+   7. 跑该仓扫描(Java Problems / `qodana.starter`;前端 `lint-fix`)。**黄条视为未完成**
 
    **本步的明文例外**(`coding.md` §0 末尾):`review.report` 允许**只记账并标「待签收」,本步不改代码**。
    `deliver.code_pass` 与 `review.fix` 对已签收 `I*` 仍当轮必改 —— 那是 `idev-coder` 的事。

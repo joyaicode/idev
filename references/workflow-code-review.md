@@ -41,7 +41,7 @@ review.report → human.gate → verify.plan → human.gate → review.fix → v
 
 1. 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo根>`。
 2. 跑 `python3 ~/.cursor/skills/idev/scripts/session-context.py --repo <repo根> --feature <feature> --scenario S8 --stage code`。点了产品名就加 `--product`。打开每一行 `OPEN`，并把路径写入 trace 的 `extensions`（没有页就写 `extensions: []`）与 `opened`。没有 `OPEN` 就不打开产线 pack。
-3. 打开 [coding.md](../conventions/coding.md) §0 与 [coding-tables.md](../conventions/coding-tables.md) §1/§2/§3；按栈打开 `java.md` 与 `code-review-skill` 指南。
+3. 打开 [coding.md](../conventions/coding.md) §0 与文首**规范总则**、[coding-tables.md](../conventions/coding-tables.md) §1/§2/§3 与 §2.4（含变更级粗筛）；按栈打开 `java.md` 与 `code-review-skill` 指南。
 4. 写票目录里的 `review.md`（`doc_home.py --key task`）：
    - **正式发现 `I1`…**：`P#` / `C#` / `R#`，或 `landing` / `identity` / `config` 已有条文。每条：位置、根据、修复建议。进默认修复清单。
    - **意见 `O1`…**：五轴对不上编号的观感。入库，**不进**默认清单。

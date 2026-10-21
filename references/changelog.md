@@ -1,5 +1,7 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-21：代码审查对规范显式成文。`coding.md` 文首新增**规范总则**五条（控制膨胀 / 高内聚低耦合 / 条件链先上模式 / 语法糖优先 / 复杂度有界），编码侧补「写完回扫本轮 diff」一步、Review 侧在最前补「先扫总则」一步（六步变七步，`idev-reviewer.md` 展开同步）。`coding-tables.md` §2.4 量化阈值补两行**变更级**粗筛（净增行数说得出换来什么 → T1/C3/C6；单文件变更理由 = 1 → C12/C1），与函数级五行同表同判定；§1 P5「运用」列补按栈语法糖一句（Java 多例 SPI / 经典 switch；Go 表驱动；Vue/TS 对象查表 + computed）。克制：命中一律落既有 `P#`/`C#`/`T#`，不新增报告字段与机检——`check-feature.py` / `test_review_coding.py` / golden / agent-smoke 零改动，`review.example.md` 编码规范节字段不变（仅说明行点出总则同扫）。
+
 - 2026-10-21：`start` 不再把「没有 steps」或读坏的 `run.yaml` 当成没有进行中的 run 去覆盖。`record` / `abort` 在 `run.yaml` 写成功之后才更新 `report.md`，避免报告跑在 run 前面。`decisions.yaml` 里有一条不是 mapping 的记录时，`decide` 拒绝再追加。
 
 - 2026-10-21：两个 `start` 不再各自写一份 run 再互相覆盖；检查和写入在同一把锁里，已有进行中的 run 就拒绝。同一个 signal 在同一次 attempt 上只接受一个 `decide`，第二次会和第一次矛盾，直接拒绝。
