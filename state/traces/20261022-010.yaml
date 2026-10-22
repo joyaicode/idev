@@ -1,0 +1,57 @@
+schema_version: 2
+at: "2026-10-22T14:12:00+08:00"
+feature: "-"
+intent: "推送确认留痕，并验证五个执行者"
+invoke:
+  trigger: "推送，并验证agent正常工作"
+  matched: "agents-check + agent-smoke"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+route:
+  scenario: S4
+  module: conventions
+  convention_class: evidence
+  stage: ""
+  risk_tier: ""
+  why: "人要求推送并验证执行者。不用 claude -p / agent -p。"
+rejected:
+  - module: deliver
+    why: "没有产品票"
+  - module: verify
+    why: "没有 plan"
+  - module: ops
+    why: "不是投产故障"
+thinking:
+  summary: "4085765 已推到 origin/v2。agents-check、kind_agents、link-agents、syntax-check 通过。agent-smoke 481 条断言、0 失败、退出码 0，用时约 19 秒。五份定义的 name 与文件名一致，两处链接指向本仓。没有用 claude -p 或 agent -p 探活。"
+  signals: []
+  excluded:
+    - "不把 Cursor 自动唤起算已证实"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "提交并推送 20261022-008"
+      so: "origin/v2 到 4085765"
+    - n: 2
+      do: "agents-check、安装核对、syntax-check、agent-smoke"
+      so: "481 pass，0 fail"
+opened:
+  - "agents/"
+  - "scripts/agent-smoke.sh"
+  - "scripts/agents-check.py"
+calls:
+  - kind: script
+    name: scripts/agents-check.py
+    args: ""
+    result: "PASS 5 agents, 29 kinds"
+  - kind: script
+    name: scripts/agent-smoke.sh
+    args: ""
+    result: "pass 481 fail 0 exit 0"
+stop: ""
+next: ""
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""
