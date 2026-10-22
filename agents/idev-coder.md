@@ -163,7 +163,7 @@ IMPACT: codegraph depth=1,候选 <n> 个(<列表或路径>)| 查不到:<原因>
 
 SCOPE: <动手前就定好:本轮打算改哪些 file:symbol>
 READ: <改之前读过的 file:symbol>
-CHANGED: <实际改的 file:symbol;无改动写「无」>
+CHANGED: <实际改的 file:symbol;无改动写「无」;**锚点用 file:方法名,行号只作辅助**——review 与 fix 之间同一文件常被平行改动,行号会漂,方法名不会>
 REVERT: <动手前的 base commit 或 stash ref;CHANGED 非空时必填>
 RED_FIRST: <仅 review.fix:修之前那条用例红过 + 日志路径>
 ASSUMED: <这轮做了什么没验的假设,每条以 [承重] 或 [非承重] 开头;没有写「无」>

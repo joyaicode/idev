@@ -42,6 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import kind_agents  # noqa: E402
 import safeyaml  # noqa: E402
 import textwidth as tw  # noqa: E402
+import yaml_representers  # noqa: E402
 
 sys.path.insert(0, str(kind_agents.kernel_root() / "scripts" / "lib"))
 try:
@@ -637,9 +638,20 @@ def cmd_write(args: argparse.Namespace) -> int:
     # first: the failure that caused the retry disappeared, taking the reason
     # for the retry with it. Create exclusively and make the caller say which
     # attempt this is.
+    # report.raw is the agent's report, whose machine checks (FACTS / DOC_DRIFT
+    # / SCOPE / RED_FIRST / ASSUMED …) are all line-anchored. yaml.safe_dump
+    # folds a multi-line single-quoted scalar into one line, which blinds
+    # every one of those regexes — the checks then fail and blame the agent
+    # for fields it did write. Represent raw as a literal block so the
+    # newlines survive the round trip (proposal 20261022-delegation-raw-folding).
+    report = record.get("report")
+    if isinstance(report, dict) and isinstance(report.get("raw"), str):
+        record["report"] = dict(
+            report, raw=yaml_representers.LiteralString(report["raw"])
+        )
     try:
         with open(path, "x", encoding="utf-8") as fh:
-            fh.write(safeyaml.dump(record))
+            fh.write(yaml_representers.dump(record))
     except FileExistsError:
         print(f"BLOCKED {path} already records {record['step']} attempt {attempt}", file=sys.stderr)
         print(f"HINT    set attempt: {attempt + 1} in the record (with brief.prior_failure) to log a retry", file=sys.stderr)

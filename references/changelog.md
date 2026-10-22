@@ -1,5 +1,7 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-22：code-review 真票全程闭环（joypaas，run 01M5F7EKCQ1EK4M5ANY5CRQF70 done：report→gate-report（chat 通道人签）→plan（5 selftest case，verify-plan 门禁 0 FAIL）→gate-plan（P1 AUTO）→fix（两轮委派+reviewer 独立复核，894/0/0/3）→run（5/5 PASS））沉淀三件，两件当轮落地、一件立稿待审：① **delegation 留痕 YAML 折叠吞换行（已修）**——`delegation.py write` 落盘 `report.raw` 经 `yaml.safe_dump` 单引号折叠把多行回报压成一行，行锚定机检（FACTS/DOC_DRIFT/SCOPE/RED_FIRST/ASSUMED/S0）全部失明并误标 agent 责任；新增 `scripts/lib/yaml_representers.py`（LiteralString + 块标量 representer），落盘改走 `yaml_representers.dump`，换行保真；端到端验收：合成多行 raw 落痕 RC=0 零 FAIL，golden 50 same、selfcheck/syntax/refs/agents-check 全绿。② **方法名锚点惯例（已落）**——I1/I3 行号在 review 与 fix 之间漂移（101→122、1893→1669），两轮委派靠「方法名+第 N 个该构造」才定位成功；`idev-coder.md` 的 CHANGED 字段、`idev-reviewer.md` 硬规则 6、`workflow-code-review.md` 的 I* 位置字段统一改为 file:方法名 锚点为主、行号辅助。③ **selector 断言对应（已落）**——I1 的 plan selector 指向配置绑定侧测试（38 例但不断言 validateMapped），真正断言在 BudgetRecognizerTest；`idev-verifier.md` plan 骨架节补「selector 必须指向含该 case assert 语句的测试类」。提案稿 `state/proposals/20261022-delegation-raw-folding.md`（status: draft）记录全过程证据链。
+
 - 2026-10-22：存活探测不再指向全量 `healthcheck` / `agent-smoke`。这两份和四条套件一样，`block_until_ms` 大于 30000 记 `suite_block`。存活是一行不调用工具的回复。
 
 - 2026-10-22：selfcheck、golden record、gate-channel、lease-channel 的 `block_until_ms` 大于 30000 时，`turn-budget.py` 记 `suite_block` 并失败。先说一句再把这四条套件等到结束，不再放过。`block_until_ms` 为 0 的后台启动通过。其它长命令仍只要先开口。

@@ -68,7 +68,7 @@ is_background: false
 3. **编号只认一处**:`P`/`C`/`R` 认 `conventions/coding.md`;`T`/`A`/`F` 认 `conventions/canon.md`。禁止自造第二套表号或严重度。
 4. **不打分。** 禁止总分、评级、"整体良好"这类结论。只列命中与证据。
 5. **不写签字字段**:`sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed` 一律不碰。你没有签字权。
-6. **证据优先。** 每条 `I*` 必须给出文件路径 + 行号。说不出位置的不要写进报告。
+6. **证据优先。** 每条 `I*` 必须给出 **file:方法名 锚点**（行号可附带,但定位以方法名为准 —— review 与 fix 之间同一文件可能被平行改动,行号会漂移）。说不出位置的不要写进报告。
 7. 边界不清时不要用含糊摘要糊过去,在回报里写成待拷问项交回导体。
 
 

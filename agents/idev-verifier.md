@@ -53,6 +53,7 @@ is_background: false
    ```
    `mode=test` 的维表**六族每一维**至少一条 case 或显式 `UNPROVEN`。四类原因是 `conductor-eval` 的 `unproven_reasons` 既有取值,照用。
    票里有 `deliver.yaml` 时,每条 case **必须同时挂** `slice_id` 与 `baseline_item_id`。
+   **selector 必须指向含该 case `assert` 语句的测试类** —— 配置绑定/冒烟类同名测试不算覆盖;起草前先找到断言落点再回填 runner。
 5. 写 `<票目录>/verify/plan.yaml`,**`accepted: false`**。然后跑门禁:
    ```bash
    bash $IDEV/scripts/check-feature.sh <feature> verify-plan

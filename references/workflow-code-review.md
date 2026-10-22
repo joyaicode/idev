@@ -43,7 +43,7 @@ review.report → human.gate → verify.plan → human.gate → review.fix → v
 2. 跑 `python3 ~/.cursor/skills/idev/scripts/session-context.py --repo <repo根> --feature <feature> --scenario S8 --stage code`。点了产品名就加 `--product`。打开每一行 `OPEN`，并把路径写入 trace 的 `extensions`（没有页就写 `extensions: []`）与 `opened`。没有 `OPEN` 就不打开产线 pack。
 3. 打开 [coding.md](../conventions/coding.md) §0 与文首**规范总则**、[coding-tables.md](../conventions/coding-tables.md) §1/§2/§3 与 §2.4（含变更级粗筛）；按栈打开 `java.md` 与 `code-review-skill` 指南。
 4. 写票目录里的 `review.md`（`doc_home.py --key task`）：
-   - **正式发现 `I1`…**：`P#` / `C#` / `R#`，或 `landing` / `identity` / `config` 已有条文。每条：位置、根据、修复建议。进默认修复清单。
+   - **正式发现 `I1`…**：`P#` / `C#` / `R#`，或 `landing` / `identity` / `config` 已有条文。每条：位置（**file:方法名 锚点为主，行号只作辅助**——review 与 fix 之间同一文件可能被平行改动，行号会漂移）、根据、修复建议。进默认修复清单。
    - **意见 `O1`…**：五轴对不上编号的观感。入库，**不进**默认清单。
    - **UNPROVEN**：未打开的范围内文件（可按目录汇总，不必列每一个）。
 5. 不另起 `F#`。本步不改业务代码。命中标「待签收」（C14 例外，见 coding.md）。

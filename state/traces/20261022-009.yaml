@@ -1,0 +1,67 @@
+schema_version: 2
+at: "2026-10-22T13:50:00+08:00"
+feature: "code-review"
+intent: "code-review 配方 run 01M5F7EKCQ1EK4M5ANY5CRQF70 全程走完（report→gate-report→plan→gate-plan→fix→run）"
+invoke:
+  trigger: "继续（gate 01M5A86FX2GB614BK2TGF80DV6 起接续推进）"
+  matched: "S8 code-review 配方续跑，gate-report 起人签后进 plan/fix/run"
+  alias: "代码审查"
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+route:
+  module: conventions
+  convention_class: coding
+  stage: code
+  risk_tier: P1
+  scenario: S8
+  why: "整仓规范审查后的修复闭环：已签收 I1–I3 的 fix 与 selftest 验证。"
+rejected:
+  - module: deliver
+    why: "code-review 配方 needs_ticket: false，不走 deliver 阶段机"
+thinking:
+  summary: "gate-report 经 chat 通道人签（确认，by wangwei794）；plan 为 I1–I3 起草 5 条 selftest case，verify-plan 门禁 0 FAIL；gate-plan P1 auto_tiers AUTO；fix 两轮委派（attempt 1 人工中断后保留已改代码重派，收窄为 I3 主代码半+模块测试）；reviewer 独立复核逐条 PASS 后 record；run 步 5/5 case 全绿。"
+  signals:
+    - "record 首次被 chat_signoff 拒（quote 超出确认用语）→ 纯「确认」合法"
+    - "fix 委派留痕 YAML 单引号折叠吞换行 → 行锚定机检 6 项 FAIL → 修复为真实换行后 4 record 全 PASS"
+    - "record fix 需 --verified-by idev-reviewer + reviewer 自留痕引用 evidence token"
+  excluded: []
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "起草 plan.yaml（5 case）+ verify-plan 门禁"
+      so: "0 FAIL，gate-plan AUTO"
+    - n: 2
+      do: "委派 fix（两轮），reviewer 独立复核"
+      so: "I1–I3 落码，894 例全绿，围栏守住"
+    - n: 3
+      do: "委派 run，5 条 case 逐条执行"
+      so: "5/5 PASS，RUN DONE"
+opened:
+  - "conventions/coding.md（含当日新增文首规范总则）"
+  - "conventions/coding-tables.md §2.4"
+  - "agents/idev-coder.md / idev-reviewer.md / idev-verifier.md"
+extensions: []
+calls:
+  - kind: agent
+    name: idev-coder
+    args: "review.fix attempt1（中断）/ attempt2（I3+测试）"
+    result: "PASS，894/0/0/3，fix-attempt2.log"
+  - kind: agent
+    name: idev-reviewer
+    args: "fix 独立复核（KIND_VERIFIER）"
+    result: "PASS，I1/I2/I3 逐条核验，fix-verify-1.yaml"
+  - kind: agent
+    name: idev-verifier
+    args: "verify.run selftest 5 case"
+    result: "PASS 5/0/0，run-*.log ×5"
+decisions:
+  - kind: gate
+    chose: "chat 通道签收（确认 by wangwei794）"
+    why: "对话确认用语 + people.yaml 白名单通过；gate 通道 pending 作废"
+stop: ""
+next: "流程内无遗留；三条反馈候选待人定夺（YAML 折叠吞换行、方法名锚点定位、复核引用 token 规则）；SpringdocBoundaryTest 为 UNRELATED 脏文件不并入本轮。"
+check_feature: "PASS"
+signoff:
+  status: "gate-report PASS（chat: wangwei794/确认）"
+  marks: ["gate-report"]
+  by: "wangwei794"
+  evidence: "docs/task/code-review/workflow/run.yaml gate-report.signoff"
