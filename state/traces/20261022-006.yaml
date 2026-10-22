@@ -1,0 +1,57 @@
+schema_version: 2
+at: "2026-10-22T13:50:00+08:00"
+feature: "-"
+intent: "全量健康检查不再当作存活探测"
+invoke:
+  trigger: "继续"
+  matched: "定案第 3 条的替代路径本身会占住回合"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+route:
+  scenario: S4
+  module: conventions
+  convention_class: evidence
+  stage: ""
+  risk_tier: ""
+  why: "继续补已定案的存活路径。继续不是签字。"
+rejected:
+  - module: deliver
+    why: "不建产品票"
+  - module: verify
+    why: "没有 plan"
+  - module: ops
+    why: "不是投产故障"
+thinking:
+  summary: "Skill 把存活指到 healthcheck 和 agent-smoke，这两份是全量检查。现在它们 block 大于 30000 记 suite_block。存活改成一行不调用工具的回复。后台 0 与 30000 通过。conductor_revision 6。"
+  signals:
+    - "人的原话：继续"
+    - "doctor.jsonl 退出码 1，suite_block=120000"
+  excluded:
+    - "结构检索仍不进脚本"
+    - "E1–E6 不在这句继续里"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "把 healthcheck 与 agent-smoke 并入 suite_block"
+      so: "先开口再等 120 秒失败"
+    - n: 2
+      do: "改 SKILL 第 3 条和 playbook"
+      so: "存活是一行回复"
+opened:
+  - "SKILL.md"
+  - "scripts/turn-budget.py"
+  - "scripts/healthcheck.sh"
+  - "references/agents-playbook.md"
+calls:
+  - kind: script
+    name: scripts/turn-budget.py
+    args: "doctor.jsonl doctor-bg.jsonl"
+    result: "doctor fail 1; doctor-bg pass 0"
+stop: ""
+next: ""
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

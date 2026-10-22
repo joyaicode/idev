@@ -1,0 +1,2 @@
+{"role": "user", "message": {"content": [{"type": "text", "text": "<user_query>\nbg\n</user_query>"}]}}
+{"role": "assistant", "message": {"content": [{"type": "text", "text": "开始跑自检，放后台，结束再报。"}, {"type": "tool_use", "name": "Shell", "input": {"command": "bash test/golden/record.sh --verify", "block_until_ms": 0}}]}}

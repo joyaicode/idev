@@ -1,0 +1,2 @@
+{"role": "user", "message": {"content": [{"type": "text", "text": "<user_query>\nsuite\n</user_query>"}]}}
+{"role": "assistant", "message": {"content": [{"type": "text", "text": "开始跑自检，预算 180 秒，等它结束再报。"}, {"type": "tool_use", "name": "Shell", "input": {"command": "bash scripts/selfcheck.sh", "block_until_ms": 180000}}]}}

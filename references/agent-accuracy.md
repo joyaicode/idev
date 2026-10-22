@@ -136,6 +136,8 @@ codegraph 的 MCP 说明里原话就是:`codegraph_context` 是 PRIMARY,一次�
 **这不违反「不并行」。** 内核 `canon.md:181` 反对的是**多开 agent**(合并成本高于省下的时间),
 不是反对一次读多个文件。工具调用并发没有合并成本。
 
+批量仍不是门禁。`scripts/turn-budget.py` 判的是无正文回合、未先开口的长命令、`claude -p` / `agent -p`，以及把 selfcheck、golden、gate-channel、lease-channel、healthcheck、agent-smoke 的等待设到 30 秒以上。默认连续超过 8 个无正文回合即失败。
+
 ---
 
 ## 这几条分别落在哪

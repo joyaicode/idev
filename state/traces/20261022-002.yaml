@@ -1,0 +1,57 @@
+schema_version: 2
+at: "2026-10-22T12:45:00+08:00"
+feature: "-"
+intent: "确认回合预算计划，写成内核提案"
+invoke:
+  trigger: "确认"
+  matched: "上一轮 next 是人点头后写提案；原话是确认用语"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+route:
+  scenario: S4
+  module: conventions
+  convention_class: evidence
+  stage: ""
+  risk_tier: ""
+  why: "认的是已写明的四刀计划。没有票，不改 Skill。"
+rejected:
+  - module: deliver
+    why: "不落产品票，不改基线"
+  - module: verify
+    why: "没有 plan"
+  - module: ops
+    why: "不是投产故障"
+thinking:
+  summary: "确认用语认的是 20261022-001 里的计划。按 evolve 先写提案、后改真源。提案 status=confirmed，四刀与不改什么已写死。SKILL.md 与 turn-budget.py 本轮不改。"
+  signals:
+    - "人的原话：确认"
+    - "people.yaml 与 git user.name 均为 wangwei794"
+  excluded:
+    - "S8 self-evolve-review：原话不是自进化复盘"
+    - "land：提案写明改真源另一次进行"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "对照 chat-confirm 与 evolve 的落地顺序"
+      so: "这句确认记下提案，不改 Skill"
+    - n: 2
+      do: "把四刀、证据、验收写入 state/proposals/20261022-agent-turn-budget.md"
+      so: "status confirmed"
+opened:
+  - "references/chat-confirm-signoff.md"
+  - "references/self-evolution.md"
+  - "verify/references/evolve.md"
+  - "state/proposals/20261022-agent-turn-budget.md"
+calls:
+  - kind: repo
+    name: state/proposals/20261022-agent-turn-budget.md
+    args: ""
+    result: "written status=confirmed"
+stop: ""
+next: "land 时改 SKILL.md 与 turn-budget.py"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

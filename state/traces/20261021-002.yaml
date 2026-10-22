@@ -1,0 +1,46 @@
+schema_version: 2
+at: "2026-10-21T20:25:00+08:00"
+feature: ""
+intent: "确认刚才的签字规则"
+invoke:
+  trigger: "确认"
+  matched: "对 20261021-chat-confirm 五条定案的确认用语"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+route:
+  scenario: S4
+  module: conventions
+  convention_class: ""
+  stage: ""
+  risk_tier: ""
+  why: "上一轮已改完规则并说明将代写的范围，本轮只有确认用语。"
+rejected:
+  - module: deliver
+    why: "没有产品票"
+  - module: verify
+    why: "没有 plan 要跑"
+thinking:
+  summary: "wangwei794 回复确认，签收聊天确认即签字、P1/P2 两次固定签字、架构关干净则自动通过。记入提案，不另开终端。"
+  signals: []
+  excluded:
+    - "不把这一句写成密封或提测"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "把 quote 确认写入提案"
+      so: "state/proposals/20261021-chat-confirm.md 有签字行"
+opened:
+  - "state/proposals/20261021-chat-confirm.md"
+calls:
+  - kind: repo
+    name: git config user.name
+    args: ""
+    result: "wangwei794"
+stop: ""
+next: ""
+check_feature: skipped
+signoff:
+  status: recorded
+  marks: []
+  by: wangwei794
+  evidence: "state/proposals/20261021-chat-confirm.md"

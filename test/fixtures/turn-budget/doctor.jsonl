@@ -1,0 +1,2 @@
+{"role": "user", "message": {"content": [{"type": "text", "text": "<user_query>\ndoctor\n</user_query>"}]}}
+{"role": "assistant", "message": {"content": [{"type": "text", "text": "开始跑健康检查，预算 120 秒。"}, {"type": "tool_use", "name": "Shell", "input": {"command": "bash scripts/healthcheck.sh", "block_until_ms": 120000}}]}}

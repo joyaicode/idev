@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# The gate channel end to end: workflow.py asks, a person answers from a
-# terminal with `idev gate approve`, and record PASS reads the signed answer
-# back. Each case is red first (the refusal) and then green.
+# The gate channel: a chat reply of 确认 is the signoff. The terminal
+# `idev gate approve` path still works and is not required. Each case is
+# red first (the refusal) and then green.
 #
 #   bash test/gate-channel.sh
 set -uo pipefail
@@ -47,13 +47,16 @@ printf '%s\n' 'schema_version: 1' 'id: demo-gate' 'summary: x' 'params:' '  - {n
 RUN=.idev/task/demo/workflow/run.yaml
 
 out="$("$W" start demo-gate --feature demo 2>&1)"
-[[ "$out" == *"workflow.py ask g"* ]] && ok "next names ask, not --by / --quote" || bad "next line: $out"
+[[ "$out" == *'--quote "<their words>"'* ]] && ok "next names the chat reply as the signoff" || bad "next line: $out"
 
-out="$("$W" record g PASS --feature demo --by tester --quote 确认 2>&1)" \
-  && bad "a typed --by / --quote passed the gate" || { [[ "$out" == *"own terminal"* ]] && ok "typed signature refused" || bad "typed signature: $out"; }
+out="$("$W" record g PASS --feature demo --by tester --quote 继续 2>&1)" \
+  && bad "继续 signed the gate" || { [[ "$out" == *"confirm words"* ]] && ok "继续 is not a signoff" || bad "继续: $out"; }
+
+out="$("$W" record g PASS --feature demo --by idev-coder --quote 确认 2>&1)" \
+  && bad "an agent signed the gate" || { [[ "$out" == *"person's name"* ]] && ok "agent name refused" || bad "agent: $out"; }
 
 out="$("$W" record g PASS --feature demo 2>&1)" \
-  && bad "PASS before asking" || { [[ "$out" == *"has not been asked"* ]] && ok "PASS before ask refused" || bad "unasked: $out"; }
+  && bad "PASS with no reply" || { [[ "$out" == *"confirm words"* ]] && ok "PASS with no reply refused" || bad "unquoted: $out"; }
 
 out="$(IDEV_BIN="$T/nope" "$W" ask g --feature demo 2>&1)" \
   && bad "asked with no binary" || { [[ "$out" == *"IDEV_ENGINE=python"* ]] && ok "missing binary names the fallback" || bad "no binary: $out"; }
@@ -127,6 +130,18 @@ assert g["gate"]["id"] == sys.argv[2], g
 assert s["by"] == "tester" and s["quote"] == "确认" and s["approval_id"] and s["assurance"] == "low", s
 PY
 python3 "${IDEV}/scripts/workflow-check.py" --run "$RUN" >/dev/null && ok "workflow-check accepts the run" || bad "workflow-check --run"
+
+"$W" abort --feature demo --note "terminal path proven" >/dev/null || bad "abort after terminal path"
+out="$("$W" start demo-gate --feature demo 2>&1)" || bad "restart: $out"
+out="$("$W" record g PASS --feature demo --by tester --quote 确认 2>&1)"
+[[ "$out" == *"NEXT r "* ]] && ok "chat 确认 signs the gate" || bad "chat record: $out"
+python3 - "$RUN" <<'PY' && ok "chat signoff keeps the person's words" || bad "chat signoff in run.yaml"
+import sys, yaml
+run = yaml.safe_load(open(sys.argv[1]))
+s = next(step for step in run["steps"] if step["id"] == "g")["signoff"]
+assert s["by"] == "tester" and s["quote"] == "确认" and s["assurance"] == "chat", s
+assert "approval_id" not in s, s
+PY
 
 out="$(IDEV_ENGINE=python "$W" ask g --feature demo 2>&1)" \
   && bad "python engine asked" || ok "IDEV_ENGINE=python has no ask"

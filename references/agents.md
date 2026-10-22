@@ -7,6 +7,8 @@
 
 本页是**契约是什么**；**怎么用**见 [agents-playbook.md](agents-playbook.md)。
 
+执行者被直接点名时同样守回合预算。正文在 [SKILL.md](../SKILL.md)「回合预算」。
+
 ## skill 与 agent:职责分离,共同合作
 
 本层**同时**用两种机制,各做各不能互相替代的事:

@@ -1,6 +1,6 @@
 # 提案增补：生命周期签字补专用 gate 类型（E1.2）
 
-- status: draft（2026-10-20 起草，待人拷问与确认；未 land）
+- status: rejected（2026-10-21 人定：减少签字次数，聊天回复确认即认可；不把生命周期闸改成终端批准）
 - scope: deliver 生命周期闸（密封 / arch / 提测 / P0 plan / P0 resolved / 回退 / promote）从「导体聊天确认后代写 YAML」改为显式 `idev gate request`，类型与摘要绑定对齐 2026-10-19 提案 3.1 的 A 类闸表
 - 不改：B 类决策走 `decisions.yaml` 的既有回路；`step_confirm` 在动作类闸上的既定用途（切片 3）；agent 不签字；`IDEV_ENGINE=python` 回退开关
 - 前置：本提案是 [agents-todo.md](../../references/agents-todo.md) E1.2 的增补，推翻/细化 20261019 提案切片 3 的两处偏差记录，需人确认后才可实施

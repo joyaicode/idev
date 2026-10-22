@@ -1,0 +1,47 @@
+schema_version: 2
+at: "2026-10-21T20:26:00+08:00"
+feature: ""
+intent: "架构方案仍要人签"
+invoke:
+  trigger: "架构方案还需要我签"
+  matched: "订正 20261021-chat-confirm 第 3 条"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+route:
+  scenario: S4
+  module: conventions
+  convention_class: ""
+  stage: ""
+  risk_tier: ""
+  why: "人收回 P1/P2 架构关的自动通过，签字通道仍是聊天确认。"
+rejected:
+  - module: deliver
+    why: "没有产品票"
+  - module: verify
+    why: "没有 plan 要跑"
+thinking:
+  summary: "semantic_gate.arch 恢复为每个档位都要人名 by。机检输出不能代替这次确认。聊天回复确认仍是落笔方式。"
+  signals: []
+  excluded:
+    - "不把测试计划和排障结案的自动通过一并取消"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "删掉架构关的 auto 放行"
+      so: "check-feature-tiers 里 arch auto 被拒"
+opened:
+  - "references/chat-confirm-signoff.md"
+  - "scripts/check-feature.py"
+calls:
+  - kind: script
+    name: test/check-feature-tiers.sh
+    args: ""
+    result: "PASS"
+stop: ""
+next: ""
+check_feature: skipped
+signoff:
+  status: recorded
+  marks: []
+  by: wangwei794
+  evidence: "state/proposals/20261021-chat-confirm.md"

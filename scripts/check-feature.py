@@ -1047,6 +1047,8 @@ def main() -> int:
                     fail("arch.approach and arch.non_approach must both be set", errors)
                 else:
                     ok("arch approach set")
+                if args.stage == "arch" and nonempty_list(arch, "open_questions"):
+                    print("SIGNAL arch open_questions still open")
 
         if args.stage in ("arch", "code", "test"):
             check_design(root, baseline, arch, errors)

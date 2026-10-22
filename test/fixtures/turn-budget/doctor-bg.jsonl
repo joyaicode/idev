@@ -1,0 +1,2 @@
+{"role": "user", "message": {"content": [{"type": "text", "text": "<user_query>\ndoctor-bg\n</user_query>"}]}}
+{"role": "assistant", "message": {"content": [{"type": "text", "text": "开始跑 agent-smoke，放后台，结束再报。"}, {"type": "tool_use", "name": "Shell", "input": {"command": "bash scripts/agent-smoke.sh", "block_until_ms": 0}}]}}

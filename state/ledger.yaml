@@ -1,7 +1,7 @@
 schema_version: 1
 feature: idev-conductor
 phase: trial
-conductor_revision: 2
+conductor_revision: 6
 acceptance: chat-confirm
 confirmed_by: wangwei794
 confirmed_at: "2026-10-01T00:15:00+08:00"

@@ -69,6 +69,9 @@ edit "$D" 'd["risk_tier"] = "P1"'
 expect "P1 arch still needs the seal" arch 1 "baseline.sealed is not true"
 
 edit "$EX/baseline.yaml" 'd["sealed"] = True'
+edit "$EX/arch.yaml" 'd["open_questions"] = ["which cache"]'
+expect "arch open question is a signal" arch 1 "SIGNAL arch open_questions still open"
+edit "$EX/arch.yaml" 'd["open_questions"] = []'
 expect "verify-plan with runners on every case: no signal" verify-plan 0 "every correctness case is runnable"
 edit "$EX/verify/plan.yaml" 'd["cases"][1].pop("runner")'
 expect "verify-plan with a case that can never run" verify-plan 0 "SIGNAL plan leaves UNPROVEN.*compat-enabled-unchanged"
@@ -83,6 +86,11 @@ expect "plan.auto at P1 with the check output" test 1 "plan passed on machine ch
 edit "$D" 'd["risk_tier"] = "P0"'
 expect "plan.auto at P0" test 1 "plan.auto at P0: this tier needs a person"
 edit "$D" 'd["risk_tier"] = "P1"'
+
+edit "$D" 'd["semantic_gate"]["arch"] = {"passed": True, "auto": "verify/arch-check.log"}'
+printf '0 FAIL\n' > "$EX/verify/arch-check.log"
+expect "arch auto does not replace a person" test 1 "semantic_gate.arch requires human by"
+edit "$D" 'd["semantic_gate"]["arch"] = {"passed": True, "by": "wangwei794"}'
 
 O="$EX/ops.yaml"
 edit "$O" 'd["resolved"] = True; d["auto"] = "hypotheses.yaml"; d["by"] = ""'

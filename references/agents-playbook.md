@@ -112,6 +112,7 @@ python3 scripts/delegation.py replay --feature <f> --step <step>
 | 替 agent 写 `FACTS` / `EVIDENCE` | 那是它的交代。你代写就等于没有交代 |
 | 回报 `PASS` 但没证据路径仍 `record` | `evidence-present` 会抓，而且下次复盘时你查不到任何东西 |
 | 为了让检查过而放宽检查 | 见 [failure-modes.md](failure-modes.md)——这一层的 bug 几乎全是「检查在该报警时沉默」 |
+| 聊天里用 `claude -p` / `agent -p` 做存活探测，或连续 8 个回合只有工具没有正文 | 回合堵住，人看不见。预算在 [SKILL.md](../SKILL.md)「回合预算」。存活是一行回复；`healthcheck` 与 `agent-smoke` 放后台 |
 
 ---
 

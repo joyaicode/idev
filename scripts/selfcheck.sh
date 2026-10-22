@@ -1716,7 +1716,7 @@ python3 "${HOME}/.cursor/skills/idev/scripts/test_concurrency.py" >/dev/null 2>&
   || fail "concurrent start or decide lost the single-writer rule (python3 scripts/test_concurrency.py)"
 echo "OK  tier signoffs and single writer"
 
-echo "=== lock: a gate is answered from the person's terminal ==="
+echo "=== lock: a gate is answered by the person's 确认 ==="
 if command -v go >/dev/null 2>&1; then
   bash "${HOME}/.cursor/skills/idev/test/gate-channel.sh" >/dev/null 2>&1 \
     || fail "gate channel broke (bash test/gate-channel.sh)"
@@ -1726,5 +1726,28 @@ if command -v go >/dev/null 2>&1; then
 else
   echo "SKIP gate channel (no go toolchain)"
 fi
+
+echo "=== lock: a turn speaks before it stalls ==="
+TB="${ROOT}/turn-budget.py"
+FIX="${ROOT}/../test/fixtures/turn-budget"
+must_fail() {
+  local file="$1" needle="$2"
+  local out
+  if out="$(python3 "$TB" "${FIX}/${file}" 2>&1)"; then
+    fail "${file} must fail"
+  fi
+  printf '%s\n' "$out" | grep -q "$needle" || fail "${file} must print ${needle}"
+}
+must_fail red.jsonl 'silent_before=9'
+must_fail streak.jsonl 'streak=9'
+must_fail ping.jsonl 'ping segment=1'
+must_fail longblock.jsonl 'long_block=120000'
+must_fail suite.jsonl 'suite_block=180000'
+must_fail doctor.jsonl 'suite_block=120000'
+python3 "$TB" "${FIX}/green.jsonl" >/dev/null || fail "green turn budget must pass"
+python3 "$TB" "${FIX}/spoken-block.jsonl" >/dev/null || fail "a long command that already spoke must pass"
+python3 "$TB" "${FIX}/suite-bg.jsonl" >/dev/null || fail "a suite started in the background must pass"
+python3 "$TB" "${FIX}/doctor-bg.jsonl" >/dev/null || fail "a doctor started in the background must pass"
+echo "OK  turn budget"
 
 echo "selfcheck PASS"

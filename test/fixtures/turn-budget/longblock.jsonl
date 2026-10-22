@@ -1,0 +1,2 @@
+{"role": "user", "message": {"content": [{"type": "text", "text": "<user_query>\nlong\n</user_query>"}]}}
+{"role": "assistant", "message": {"content": [{"type": "tool_use", "name": "Shell", "input": {"command": "bash scripts/selfcheck.sh", "block_until_ms": 120000}}]}}

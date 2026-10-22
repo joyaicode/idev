@@ -152,8 +152,8 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E1.1 | go 引擎强制 A 类字段带 `approval_id` | 待议 | 人已定 deliver 阶段先不强制；gate 通道 record 已写 `signoff.approval_id` | `check-feature` 对 `sealed` / `arch.accepted` / `aligned` / `resolved` / `reopen` 缺 `approval_id` 即 FAIL；python 引擎维持现状并打印引擎名 |
-| E1.2 | 生命周期签字补专用 gate 类型 | 待议 | 通道已接：`workflow.py ask` 走 `idev gate request`，类型由 `gate_type` 或 will_write 推导（只产 `accepted_plan` / `step_confirm`）；`sealed` / `defect_origin` / `reopen_baseline` 在 Go 侧（`signoff/confirm.go` 关键字闸）。与切片 3「保留推导 / 保留 step_confirm 收动作类」的冲突已写成增补提案草稿：`state/proposals/20261020-lifecycle-gate-types.md`（status: draft，含 7 问拷问记录待人定夺） | 密封、架构、提测、P0 的 plan 与 resolved、回退、promote 各有一次 `idev gate request`，摘要绑定提案 3.1 的文件 |
+| E1.1 | go 引擎强制 A 类字段带 `approval_id` | 搁置 | 2026-10-21 人定：聊天回复确认即签字，不强制 `approval_id`。终端批准仍可写这个字段，聊天签字不写 | 人改口要求终端签名成为必经之后再议 |
+| E1.2 | 生命周期签字补专用 gate 类型 | 已否决 | 2026-10-21 人定：减少签字次数，回复确认即认可。提案 `state/proposals/20261020-lifecycle-gate-types.md` 改为 rejected，不再把生命周期闸改成终端 `idev gate request` | 不实施 |
 | E1.3 | python 回退改成显式破窗文件 | 待议 | 2026-10-19 提案已确认 env-var 回退（`IDEV_ENGINE=python`），做这项要先推翻它。同一开关也跳过租约：`lease-channel` 把「python 引擎不领租约仍 record PASS」锁成成功 | PATH 上有 `idev` 时，只设 `IDEV_ENGINE=python` 被拒；破窗文件写明原因和到期日。破窗期间写租约与 verify 租约仍强制 |
 
 ### E2 单写者

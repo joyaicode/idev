@@ -1,5 +1,15 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-22：存活探测不再指向全量 `healthcheck` / `agent-smoke`。这两份和四条套件一样，`block_until_ms` 大于 30000 记 `suite_block`。存活是一行不调用工具的回复。
+
+- 2026-10-22：selfcheck、golden record、gate-channel、lease-channel 的 `block_until_ms` 大于 30000 时，`turn-budget.py` 记 `suite_block` 并失败。先说一句再把这四条套件等到结束，不再放过。`block_until_ms` 为 0 的后台启动通过。其它长命令仍只要先开口。
+
+- 2026-10-22：回合预算的机检补上已经写进 Skill、但脚本没判的三条。先开口再连续 9 个无正文回合会失败；`block_until_ms` 大于 30000 且这一条和上一条都没有正文会失败；命令里的 `claude -p` / `agent -p` 会失败。先说一句再跑长命令仍然通过。结构问题用 `codegraph_context` 仍是做法，不进脚本。
+
+- 2026-10-22：回合预算落地（提案 `state/proposals/20261022-agent-turn-budget.md`）。聊天里长命令先说一句再放后台，连续 8 个无正文工具回合先报现状，存活探测不再用 `claude -p` / `agent -p`。`scripts/turn-budget.py` 只数第一句正文之前的无正文回合，红夹具 9 失败、绿夹具一行 `ALIVE` 通过，`selfcheck` 跑这两份夹具。不并行多开执行者，不改迁移跳过和租约时长。
+
+- 2026-10-21：签字改成聊天确认。人回复 `确认` / `同意` / `全签` / `LGTM` 即认可当前停问点，导体 `record PASS --by --quote` 落笔；终端 `idev gate approve` 仍可用，不再是必经。密封、架构、提测在每个档位仍各要一次确认。同日先把 P1/P2 架构关改成机检通过即过，人补了一句「架构方案还需要我签」，该条撤回。E1.2（把生命周期闸改成终端批准）否决。
+
 - 2026-10-21：代码审查对规范显式成文。`coding.md` 文首新增**规范总则**五条（控制膨胀 / 高内聚低耦合 / 条件链先上模式 / 语法糖优先 / 复杂度有界），编码侧补「写完回扫本轮 diff」一步、Review 侧在最前补「先扫总则」一步（六步变七步，`idev-reviewer.md` 展开同步）。`coding-tables.md` §2.4 量化阈值补两行**变更级**粗筛（净增行数说得出换来什么 → T1/C3/C6；单文件变更理由 = 1 → C12/C1），与函数级五行同表同判定；§1 P5「运用」列补按栈语法糖一句（Java 多例 SPI / 经典 switch；Go 表驱动；Vue/TS 对象查表 + computed）。克制：命中一律落既有 `P#`/`C#`/`T#`，不新增报告字段与机检——`check-feature.py` / `test_review_coding.py` / golden / agent-smoke 零改动，`review.example.md` 编码规范节字段不变（仅说明行点出总则同扫）。
 
 - 2026-10-21：`start` 不再把「没有 steps」或读坏的 `run.yaml` 当成没有进行中的 run 去覆盖。`record` / `abort` 在 `run.yaml` 写成功之后才更新 `report.md`，避免报告跑在 run 前面。`decisions.yaml` 里有一条不是 mapping 的记录时，`decide` 拒绝再追加。

@@ -85,26 +85,19 @@ workflow.py decide <step> --feature <f> --signal "<SIGNAL 原样>" \
 
 `is_human()` 按词表拒绝 agent / 模型 / 角色名；存在 `config/people.yaml` 时名字还必须在白名单里。S8 的 `human.gate` 要求白名单必须存在。禁止把 `by` 写成 agent / AI。
 
-### 签字怎么落笔：人自己的终端
+### 签字怎么落笔：聊天里回确认
 
-S8 的 `human.gate` 不再由 agent 把人名和原话敲进 `--by` / `--quote`。流程如下：
+人在对话里回确认用语，就是认可当前停问点。导体把这一句原话记下来，不要求人另开终端。
 
-1. agent 跑 `workflow.py ask <gate>`。它调用 `idev gate request`，把这一步问的内容（类型、档位、`将代写`、证明，以及对 `with.subject` 或 `verify/plan.yaml` 等文件算出的摘要）记进 `~/.idev/idev.db`，并打印 gate 编号。
-2. agent 在聊天里贴出 `将代写:` 行和证明，然后请人在**自己的终端**运行 `idev gate approve <编号>`（驳回则用 `idev gate reject <编号>`）。
-3. 人的终端会显示问题全文，要求输入编号末 4 位，再输入原话。CLI 依次检查：
-   - stdin 和 stdout 都是 TTY；
-   - `~/.idev/secrets/human.yaml` 的权限是 0600；
-   - 人名在 `people.yaml` 里；
-   - 原话过确认文法；
-   - 文件摘要和提问时一致。
-   全部通过后，写入一条 Ed25519 签名的批准记录，并追加到审计链。
-4. agent 跑 `workflow.py record <gate> PASS`，不带 `--by` / `--quote`。它会读回批准记录，只有状态是 approved、内容没变、签名可验时才写 `signoff`（`by`、`quote`、`approval_id`、`assurance`）。
+```bash
+workflow.py record <gate> PASS --by <人名> --quote "<人的原话>"
+```
 
-第一次使用前，人要在自己的终端运行一次 `idev token init --handle <名字>`。二进制的构建命令是 `go build -o bin/idev ./cmd/idev`（在内核目录里执行）。`IDEV_ENGINE=python` 会回退到旧的 `--by` / `--quote` 路径，只在没有 Go 工具链时使用。
+`by` 按上一节取。`quote` 必须是本轮原话，整句过确认文法。`继续` / `ok` / `好` 拒收。导体不得编造原话。
 
-这条通道的强度是 `low`（威胁 T4）：同一用户的进程能读到 `~/.idev`，也能用 `script` 伪造终端。它挡住的是代理顺手代签和幻觉签名，挡不住存心伪造；要挡住存心伪造得靠 passkey（`high`，尚未接入）。档位要求 `high` 的停问点（P0 / P1 的 `sealed`、`aligned`）目前以 `low` 完成，批准记录和审计链会标 `assurance_downgraded`；`idev audit downgrades` 按周统计这些事件。
+deliver 各阶段的字段（上表）同样只在这句确认之后代写进 YAML。一次确认只写当前停问点。
 
-deliver 各阶段的签字（上表）仍由导体在聊天里确认后代写进 YAML；`idev gate request` 也能问这些点（例如 `--type sealed --revision N --subject baseline.yaml --subject req.yaml`），但 `check-feature` 目前还不要求 `approval_id`。
+`workflow.py ask` 加 `idev gate approve` 仍可走，用来留下终端签名。它不是必经步骤。人已经回了确认用语，就直接 `record --by --quote`，不要再请人去终端。agent 不得自己跑 `idev gate approve` / `idev gate reject` / `idev token init`。
 
 ### 只签当前停问点（不跨阶段）
 
@@ -174,7 +167,8 @@ deliver 各阶段的签字（上表）仍由导体在聊天里确认后代写进
 ## 不准
 
 - agent 运行 `idev gate approve` / `idev gate reject` / `idev token init`，包括借 `script` 等手段伪造终端，或读取、改写 `~/.idev/secrets/`
-- Go 通道可用时，用 `IDEV_ENGINE=python` 绕回 `--by` / `--quote`
+- 人已经回了确认用语，仍请人去终端再签一次
+- 编造确认原话再写入 `--quote`
 - 请签时不贴证明上下文（门禁/跑证/UNPROVEN）
 - 请签时不写 `将代写: …` 一行
 - 用确认改 baseline `goal` / `items` / `non_goal`

@@ -1,0 +1,2 @@
+{"role": "user", "message": {"content": [{"type": "text", "text": "<user_query>\nLiveness ping only. Reply with one line.\n</user_query>"}]}}
+{"role": "assistant", "message": {"content": [{"type": "text", "text": "ALIVE idev-coder"}]}}

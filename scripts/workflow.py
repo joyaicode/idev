@@ -17,10 +17,10 @@ the module the step lands on.
   workflow.py status  [--feature F | --run PATH]
   workflow.py abort   --note TEXT [--feature F | --run PATH]
 
-A human.gate is asked with `ask` and answered by the person in their own
-terminal (`idev gate approve <id>`); `record <gate> PASS` then reads the
-signed answer back. IDEV_ENGINE=python is the fallback: the old path where
-PASS carries --by / --quote typed into the chat.
+A human.gate is signed by the person's chat reply. `record <gate> PASS
+--by <name> --quote "确认"` is the signoff (确认 / 全签 / 同意 / LGTM).
+`ask` plus `idev gate approve` in their terminal still works, and is not
+required.
 
 Exit codes: 0 ok, 1 usage or invalid recipe, 2 BLOCKED (missing inputs or a
 rule refused the write).
@@ -397,7 +397,10 @@ def signed_answer(step: dict) -> dict:
     state = idev("gate", "status", gid)
     status = state.get("status")
     if status == "pending":
-        raise Blocked(f"waiting for the person: they answer in their own terminal with `idev gate approve {gid}`")
+        raise Blocked(
+            "waiting for the person: record PASS --by <name> --quote \"<their 确认>\", "
+            f"or they answer in their own terminal with `idev gate approve {gid}`"
+        )
     if status == "expired":
         raise Blocked(f"gate {gid} expired unanswered; ask again: workflow.py ask {step['id']}")
     if status != "approved":
@@ -574,13 +577,10 @@ def next_line(run: dict) -> list[str]:
                 "and record AUTO --evidence <that file>; a SIGNAL or another tier means stop and ask"
             )
         lines.append(f"GATE stop here; post this line and the proof: {will_write_line(step)}")
-        if go_engine():
-            lines.append(
-                f"GATE workflow.py ask {step['id']}; the person answers in their own terminal "
-                f"(idev gate approve <id>); then record PASS"
-            )
-        else:
-            lines.append("GATE then record PASS with --by <person> --quote \"<their confirm words>\"")
+        lines.append(
+            "GATE the person's reply of 确认 / 同意 / 全签 / LGTM is the signoff; "
+            "record PASS --by <name> --quote \"<their words>\""
+        )
     purpose = lease_purpose(run, step)
     if purpose == "write":
         lines.append(f"LEASE workflow.py delegate {step['id']} before the agent starts; it writes only arch.yaml includes")
@@ -690,6 +690,24 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def chat_signoff(by: str, quote: str) -> dict:
+    """The signoff a person's chat reply is. Their words, recorded as they said them."""
+    if not people_whitelist():
+        raise Blocked(
+            "human.gate PASS needs a people.yaml whitelist; "
+            "blacklist-only is not enough"
+        )
+    if not is_human(by or ""):
+        raise Blocked("human.gate PASS needs --by with a person's name, not an agent")
+    parsed = parse_confirm(quote or "")
+    if not parsed.ok:
+        raise Blocked(
+            f"human.gate PASS needs --quote with the person's confirm words "
+            f"(确认 / 全签 / 同意 / LGTM); {WHY[parsed.reason]}"
+        )
+    return {"by": by.strip(), "quote": quote.strip(), "at": now(), "assurance": "chat"}
+
+
 def cmd_record(args: argparse.Namespace) -> int:
     path = find_run(args)
     status = args.status.upper()
@@ -767,35 +785,18 @@ def cmd_record(args: argparse.Namespace) -> int:
             if not args.note:
                 raise Blocked(f"{step['id']} is already {step['status']}; changing it needs --note")
         if step["kind"] == "human.gate":
-            if status == "PASS" and go_engine():
-                if args.by or args.quote:
-                    raise Blocked(
-                        "the signature comes from the person's own terminal (idev gate approve), "
-                        "not from --by / --quote; drop them"
-                    )
+            if status == "PASS" and (args.by or args.quote or not go_engine()):
+                step["signoff"] = chat_signoff(args.by or "", args.quote or "")
+            elif status == "PASS" and go_engine():
                 gid = str((step.get("gate") or {}).get("id") or "")
                 if not gid:
-                    raise Blocked(f"{step['id']} has not been asked: workflow.py ask {step['id']}")
+                    raise Blocked(
+                        f"{step['id']} needs the person's confirm words: "
+                        "record PASS --by <name> --quote \"确认\""
+                    )
                 if signed is None or gid != str(pre.get("gate_id") or ""):
                     raise Blocked(f"{step['id']} changed while it was being recorded; record again")
                 step["signoff"] = signed
-            elif status == "PASS":
-                if not people_whitelist():
-                    # Blacklist-only stops agents, not a plausible invented
-                    # name; a gate PASS is not signed on that basis (R2).
-                    raise Blocked(
-                        "human.gate PASS needs a people.yaml whitelist; "
-                        "blacklist-only is not enough"
-                    )
-                if not is_human(args.by or ""):
-                    raise Blocked("human.gate PASS needs --by with a person's name, not an agent")
-                parsed = parse_confirm(args.quote or "")
-                if not parsed.ok:
-                    raise Blocked(
-                        f"human.gate PASS needs --quote with the person's confirm words "
-                        f"(确认 / 全签 / 同意 / LGTM); {WHY[parsed.reason]}"
-                    )
-                step["signoff"] = {"by": args.by.strip(), "quote": args.quote.strip(), "at": now()}
             elif status == "SKIPPED" and not args.evidence:
                 raise Blocked(
                     "a gate is skipped only with --evidence: the earlier signoff, "
@@ -1021,8 +1022,11 @@ def print_asked(step_id: str, asked: dict, recovered: bool) -> None:
     print(f"GATE {asked['gate_id']} asked ({asked['type']}, {asked['risk']}, needs {asked['required_assurance']})")
     if recovered:
         print("GATE already open; recorded the existing id")
-    print(f"GATE the person runs in their own terminal: idev gate approve {asked['gate_id']}")
-    print(f"GATE then: workflow.py record {step_id} PASS")
+    print(
+        f"GATE the person's reply of 确认 is enough: "
+        f"workflow.py record {step_id} PASS --by <name> --quote \"<their words>\""
+    )
+    print(f"GATE optional terminal: idev gate approve {asked['gate_id']}")
 
 
 def remember_gate(path: Path, step_id: str, asked: dict) -> None:

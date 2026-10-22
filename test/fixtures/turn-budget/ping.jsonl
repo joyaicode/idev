@@ -1,0 +1,2 @@
+{"role": "user", "message": {"content": [{"type": "text", "text": "<user_query>\nping\n</user_query>"}]}}
+{"role": "assistant", "message": {"content": [{"type": "text", "text": "checking"}, {"type": "tool_use", "name": "Shell", "input": {"command": "claude -p --agent idev-coder --output-format json"}}]}}

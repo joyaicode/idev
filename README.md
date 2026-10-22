@@ -44,7 +44,7 @@
 | `scripts/stage-gate.py` | 七视角把关：experts.md 拒过清单里可机检的那一半（`--list`） |
 | `scripts/delegation.py` | 委派留痕：write / check / replay / timeline / eval |
 | `scripts/agent-metrics.py` · `agent-review.sh` | 跨票指标 · 定期复盘（只起草不 land） |
-| `scripts/failure_signature.py` · `hypothesis.py` | 提效：失败签名归一化 · 假设台账 |
+| `scripts/failure_signature.py` · `hypothesis.py` · `turn-budget.py` | 提效：失败签名归一化 · 假设台账 · 首句前的无正文回合 |
 | `references/agents.md` · `agents-playbook.md` | 委派契约（是什么）· 唤起与配合最佳实践（怎么用） |
 | `references/boost.md` | 提效：**本地事实优先**（文档会过时）· §0 交代 · 签名归一化 · 假设台账 |
 | `references/code-agent.md` · `scripts/repl.py` | 用代码表达推理：计算的源码与输出落成证据 |
@@ -153,7 +153,7 @@ $W record <step> PASS --evidence …
 $W status
 ```
 
-要票配方加 `--feature <票名>`。停问步（`human.gate`）先 `ask`，人在自己的终端 `idev gate approve`，再 `record PASS`（不带 `--by` / `--quote`）。`IDEV_ENGINE=python` 才回到人名加确认原话。
+要票配方加 `--feature <票名>`。停问步（`human.gate`）等人在聊天里回确认用语，再 `record PASS --by <人名> --quote "确认"`。终端 `idev gate approve` 可用，不是必经。
 
 ## 推到 GitHub（以后）
 

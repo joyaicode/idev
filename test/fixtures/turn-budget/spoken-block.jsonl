@@ -1,0 +1,2 @@
+{"role": "user", "message": {"content": [{"type": "text", "text": "<user_query>\nspoken\n</user_query>"}]}}
+{"role": "assistant", "message": {"content": [{"type": "text", "text": "开始跑自检，预算 180 秒，等它结束再报。"}, {"type": "tool_use", "name": "Shell", "input": {"command": "go test ./internal/domain/lease/", "block_until_ms": 180000}}]}}

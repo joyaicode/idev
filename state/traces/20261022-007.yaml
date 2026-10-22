@@ -1,0 +1,50 @@
+schema_version: 2
+at: "2026-10-22T14:03:17+08:00"
+feature: "-"
+intent: "重新链接五个执行者并推送到远程"
+invoke:
+  trigger: "重新构建各agent并提交代码到远程"
+  matched: "link-agents.sh"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+route:
+  scenario: S4
+  module: conventions
+  convention_class: evidence
+  stage: ""
+  risk_tier: ""
+  why: "人明确要求构建五个执行者并提交推送。不建产品票。"
+rejected:
+  - module: deliver
+    why: "内核变更，没有产品票"
+  - module: verify
+    why: "没有 plan"
+  - module: ops
+    why: "不是投产故障"
+thinking:
+  summary: "agents-check 通过，五个执行者在 ~/.claude/agents 与 ~/.cursor/agents 都指向本仓 agents/。随后提交并推送 v2。lessons.yaml.lock 是空锁文件，不入库。"
+  signals:
+    - "人的原话：重新构建各agent并提交代码到远程"
+  excluded:
+    - "不切换分支"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "agents-check 与 link-agents"
+      so: "五份定义装到两处"
+opened:
+  - "agents/"
+  - "scripts/link-agents.sh"
+calls:
+  - kind: script
+    name: scripts/link-agents.sh
+    args: ""
+    result: "PASS 10 links"
+stop: ""
+next: ""
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""
