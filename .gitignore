@@ -8,6 +8,10 @@
 !.idev/pack/
 !.idev/pack/**
 
+# flock residue from safeyaml's load_locked/save_locked: the lock file
+# outlives the process that held it, and it is always empty.
+state/*.lock
+
 # Go build and test residue. bin/idev is built locally (workflow.py looks there).
 /bin/
 /cover.out
