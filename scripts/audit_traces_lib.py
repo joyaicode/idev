@@ -70,6 +70,10 @@ def main() -> int:
         "extensions_not_opened": 0,
         "extensions_missing": 0,
         "grill_not_opened": 0,
+        "obs_skill": 0,
+        "obs_delegate": 0,
+        "obs_model": 0,
+        "obs_hop": 0,
     }
     weak_files: list[str] = []
     unbound_files: list[str] = []
@@ -157,6 +161,20 @@ def main() -> int:
         elif re.search(r"\b(sealed|accepted|aligned)\b", text, re.I) and neg_seal.search(text):
             stats["seal_fp_negation"] += 1
 
+        # Coverage only. Missing detail is not a finding and never enters HARD_COUNT.
+        if re.search(r"(?m)^[ \t]+how:\s*(explicit|alias|implicit|continuation)\s*$", text) or re.search(
+            r"(?m)^[ \t]+skills:\s*$", text
+        ):
+            stats["obs_skill"] += 1
+        if re.search(r"(?m)^[ \t]*(?:-[ \t]+)?kind:\s*delegate\s*$", text):
+            stats["obs_delegate"] += 1
+        if re.search(r"(?m)^[ \t]*(?:-[ \t]+)?kind:\s*model\s*$", text) or re.search(
+            r"(?m)^[ \t]+model:\s*\S", text
+        ):
+            stats["obs_model"] += 1
+        if re.search(r"(?m)^[ \t]+from:\s*\S", text) and re.search(r"(?m)^[ \t]+to:\s*\S", text):
+            stats["obs_hop"] += 1
+
         # Soft: S1 must open grilling; missing is MUST_ZERO, not HARD.
         if scenario == "S1" and not re.search(
             r"grilling/SKILL\.md|skills/grilling", opened_block
@@ -239,6 +257,26 @@ def main() -> int:
         print("- 未绑票样本（最多 10）: " + ", ".join(unbound_files[:10]))
     if grill_files:
         print("- S1 未开 grilling 样本（最多 10）: " + ", ".join(grill_files[:10]))
+    print()
+    print("## 观察覆盖（不计清零、不进 HARD_COUNT）")
+    print("| 项 | 数量 | 占比 | 含义 |")
+    print("|----|------|------|------|")
+    print(
+        f"| 写了技能入口 | {stats['obs_skill']} | {pct(stats['obs_skill'])}% | "
+        "`invoke.how` 或 `invoke.skills` |"
+    )
+    print(
+        f"| 写了委派决定 | {stats['obs_delegate']} | {pct(stats['obs_delegate'])}% | "
+        "`decisions.kind: delegate` |"
+    )
+    print(
+        f"| 写了模型 | {stats['obs_model']} | {pct(stats['obs_model'])}% | "
+        "`kind: model` 或 `model:` |"
+    )
+    print(
+        f"| 写了组件跳 | {stats['obs_hop']} | {pct(stats['obs_hop'])}% | "
+        "`calls.from` 与 `calls.to` |"
+    )
     print()
     print("## 硬报警样本（最多 15）")
     if not flagged:

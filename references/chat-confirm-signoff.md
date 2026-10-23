@@ -13,19 +13,21 @@
 
 `risk_tier` 写在 `<票目录>/deliver.yaml`（人定，缺省 P1）。
 
-| 停问点 | P0 | P1 / P2 |
-|--------|----|---------|
-| 评审 → `baseline.sealed` | A，req-review 末单签 | A，**与拆解同签**：req 末一次写 `sealed` + `req.accepted` |
-| 拆解 → `req.accepted` | A，req 末单签 | 并入上一行 |
-| `arch.accepted` | A | A |
-| verify plan → `plan.accepted` | A | 无 `SIGNAL` → `AUTO`；有 → 停问，人确认后签 |
-| 提测 → `deliver.aligned` | A | A |
-| ops 分类 | B：`kind` 拿不准时执行者回 `BLOCKED(logic)` | 同左 |
-| 环境 / 产物 | B：`ARTIFACT: UNKNOWN` | 同左 |
-| ops `resolved` | A | 账本收敛（有证成根因、无 open）→ `AUTO`；否则停问，人确认后签 |
-| origin 回退 / 解封基线 | A，带关键字 | A，带关键字 |
-| `promote` / 生产写 / `git push` | A | A |
-| lessons 候选 → 权威 | A | A |
+交付主路径每个人档位只停四次。问答不是签字。
+
+| 停问点 | 所有档位 |
+|--------|----------|
+| 需求通过 → `baseline.sealed` + `req.accepted` | A。不明确的问题一轮问完，答完可以再开一轮。回答问题不是确认。frontier 空之后一次确认，同时写密封和拆解 |
+| 架构通过 → `arch.accepted` | A。先交完整方案，人整体 Review。只有真有未决分叉才拷问。不先问满一轮再给方案 |
+| 实现审核 → `semantic_gate.code` | A。架构通过后连续做用例、编码、自测，中间不再请签。自测完成后停这一次 |
+| 提测结果 → `deliver.aligned` | A。实现审核通过后才进入提测。确认的是测试结果 |
+| verify plan → `plan.accepted` | 不单独请签。无 `SIGNAL` → `AUTO`（含 P0）。有 `SIGNAL` 并进实现审核那一次，不提前停 |
+| ops 分类 | B，所有档位：`kind` 拿不准时执行者回 `BLOCKED(logic)` |
+| 环境 / 产物 | B，所有档位：`ARTIFACT: UNKNOWN` |
+| ops `resolved` | P0 是 A。P1/P2 账本收敛（有证成根因、无 open）→ `AUTO`；否则停问，人确认后签 |
+| origin 回退 / 解封基线 | A，所有档位，带关键字 |
+| `promote` / 生产写 / `git push` | A，所有档位 |
+| lessons 候选 → 权威 | A，所有档位 |
 
 闸门放在副作用之前：先起草、自测、写报告，人签后才写签字字段、跑 `promote.sh`、写生产。
 不可逆动作在任何档位都不降级。降档的依据是周审计里「`AUTO` / `[非承重]` 后被推翻」的次数，不是感觉。
@@ -45,6 +47,8 @@
 | `check-feature` / `stage-gate` 修一次后仍 FAIL | 脚本退出码 |
 
 前三行由 `delegation.py write` 算出，写进委派留痕的 `signals` 并打印 `SIGNAL …`。该步有未答信号时 `workflow.py record <step> PASS` 拒收。
+
+用例计划上的 `SIGNAL` 不单独停。留到实现审核，和这次审核一起答。架构通过之后、自测完成之前，不为计划再请一次签。
 
 人答了就记：
 
@@ -103,15 +107,13 @@ deliver 各阶段的字段（上表）同样只在这句确认之后代写进 YA
 
 | 停在 | 代写 | 签完立刻 |
 |------|------|----------|
-| req-review（P0） | `baseline.sealed=true` + `by` + `semantic_gate.req-review` | 进入 `req` |
-| req（P0） | `req.accepted=true` + `by` + `semantic_gate.req` | 进入 `arch` |
-| req（P1 / P2） | `baseline.sealed=true` + `req.accepted=true` + `by` + `semantic_gate.req-review` + `semantic_gate.req` | 进入 `arch` |
-| arch | `arch.accepted=true` + `by` + `semantic_gate.arch`（不改已拟 `include`） | 进入 `code` |
-| verify plan（P0，或 P1/P2 有 `SIGNAL`） | `plan.accepted=true`；全部 `cases[].accepted=true`；`human_signoff` → `ACCEPTED` + `by` | `run`（无 runner 的维仍 `UNPROVEN`） |
-| test 提测 | `deliver.aligned=true` + `by` | `done`（人没提提升 / 巡检包 / promote 则不问 promote） |
+| 需求通过（每个档位） | `baseline.sealed=true` + `req.accepted=true` + `by` + `semantic_gate.req-review` + `semantic_gate.req`；`grill.md` 的 `shared_understanding: true` | 进入 `arch`。不另请一次「共享理解」 |
+| 架构通过 | `arch.accepted=true` + `by` + `semantic_gate.arch`（不改已拟 `include`） | 进入 `code`，接着做用例、编码、自测，中间不再请签 |
+| 实现审核 | `semantic_gate.code` + `by`；`deliver.stage=test`。若 plan 有 `SIGNAL` 且尚未 `AUTO`，同一次写 `plan.accepted=true` 与 `cases[].accepted=true` | 进入提测。不另问「要不要提测」 |
+| 提测结果 | `deliver.aligned=true` + `by` | `done`（人没提提升 / 巡检包 / promote 则不问 promote） |
 | ops `resolved`（P0，或 P1/P2 账本未收敛） | `resolved=true` + `by` | 关单 |
 
-一次确认不把后面的 `aligned` / `done` 一并签掉。P1/P2 在 req-review 末不停：`check-feature req` 在基线未密封时照样查基线就绪、grill 已闭合、人读规格在，并打印 `baseline seals with req at P1`。`arch` 及之后仍要求 `sealed: true`。
+一次确认不把后面的停问点一并签掉。需求确认在 `req` 末，不在 `req-review` 末再停一次：`check-feature req` 在基线未密封时照样查基线就绪、frontier 已空、人读规格在，并打印 `baseline seals with req at <档位>`。`shared_understanding` 由这次确认写入，请签前可以仍是 `false`。`arch` 及之后仍要求 `sealed: true`。架构请签不要求事先写过 `## arch` 问句。
 
 ### 破坏性必须带关键字
 
@@ -140,9 +142,9 @@ deliver 各阶段的字段（上表）同样只在这句确认之后代写进 YA
 
 | 停问点 | 至少要有 |
 |--------|----------|
-| req-review / req / arch | `check-feature <stage>` 结果；未决拷问 id |
-| verify plan | case 数；correctness 是否可执行；`SIGNAL` 行 |
-| test 提测 / aligned | `check-feature test`；PASS/FAIL/UNPROVEN 计数；人是否接受残留 UNPROVEN；仍 `PENDING` 的 `human_signoff` |
+| 需求通过 / 架构通过 | `check-feature <stage>` 结果；未决问句 id（没有就写无） |
+| 实现审核 | `check-feature code`；selftest 的 PASS/FAIL/UNPROVEN；并进来的 plan `SIGNAL`（没有就写无） |
+| 提测结果 / aligned | `check-feature test`；PASS/FAIL/UNPROVEN 计数；人是否接受残留 UNPROVEN；仍 `PENDING` 的 `human_signoff` |
 | promote（人已提及时） | plan.mode；accepted；PASS 数；目标 `doc_home.py --key patrol` |
 
 禁止：只贴 Agent 摘要、不贴门禁/跑证就请人「确认」。
@@ -154,10 +156,10 @@ deliver 各阶段的字段（上表）同样只在这句确认之后代写进 YA
 | 点 | 写法 | 谁查 |
 |----|------|------|
 | S8 `human.gate` | 配方 `with.auto_tiers` 含本票档位；把检查输出存成文件，`workflow.py record <gate> AUTO --evidence <文件>`，不带 `--by` / `--quote` | `workflow.py`：文件要有 `0 FAIL` 行，不能有 `SIGNAL` 行 |
-| `plan.yaml` | `accepted: true` + `auto: <检查输出>`，`cases[].accepted: true`；`human_signoff` 保持 `PENDING`，提测时给人看 | `check-feature test`：档位在 P1/P2、文件存在、没有人名 `by` |
+| `plan.yaml` | `accepted: true` + `auto: <检查输出>`，`cases[].accepted: true`；`human_signoff` 保持 `PENDING`，实现审核时给人看。有 `SIGNAL` 不记 `AUTO`，并进实现审核 | `check-feature test`：文件存在、没有人名 `by`。每个档位都可以 |
 | `ops.yaml` | `resolved: true` + `auto: <路径>`，不写 `by` | `check-feature ops`：档位在 P1/P2、`hypothesis.py check` 绿、无 `open`、至少一条 `proven` |
 
-`semantic_gate.*` 没有 `AUTO` 写法：它记的 req-review / req / arch 在每个档位都是 A 类。
+`semantic_gate.*` 没有 `AUTO` 写法：需求通过、架构通过、实现审核在每个档位都是 A 类。
 
 ## 诚实性
 
@@ -178,4 +180,6 @@ deliver 各阶段的字段（上表）同样只在这句确认之后代写进 YA
 - 已 accepted 的 plan 再 `run` 时重跑 `verify-plan` 或再请人签一次
 - 无当前停问点还请人「确认」
 - 人没提提升 / 巡检包 / promote 仍问 `promote.sh`
-- 自测门过后人没说「提测」仍问是否进入 `mode=test`
+- 自测还没跑完就请人做实现审核
+- 实现审核通过后另问「要不要提测」
+- 用例计划单独请签（无 `SIGNAL` 记 `AUTO`，有则并进实现审核）

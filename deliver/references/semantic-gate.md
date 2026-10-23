@@ -3,7 +3,7 @@
 `check-feature` 锁两件可机检的事，**不判断口号是否可证伪**。结构绿 ≠ 语义锁死。其余仍须人扫句子：
 
 1. `req` 及之后：每条 `slice.must` 与对应 item 的 `must`（无则 `must_not`）原文一致（空白归一）。换词 = FAIL。
-2. `req` / `arch` / `code` / `test`：`deliver.yaml` 里**上一阶段**的 `semantic_gate.<stage>.passed: true` + 人名 `by`。与 `sealed` / `accepted` / `aligned` 同一次确认写入；Agent 不得代填。
+2. `req` / `arch` / `code` / `test`：`deliver.yaml` 里**上一阶段**的 `semantic_gate.<stage>.passed: true` + 人名 `by`。`test` 的上一阶段含 `code`（实现审核）。与当次确认一起写入；Agent 不得代填。
 
 **本表必须人扫脚本锁不住的句子**；Agent 请签前打印。人未确认不准 `sealed` / `accepted` / `aligned`。
 
@@ -27,15 +27,16 @@
 - [ ] 每个 intent 挂对 `baseline_item_id`；没有「更好但更大」的范围
 - [ ] `include: true` 路径足以覆盖 item；未 include 的不假装已设计
 
-## code → 自测门 / 请提测前
+## code → 实现审核（自测之后，提测之前）
 
-- [ ] 实现与 review「少做/多做」对照基线；多做已删或 UNRELATED
+- [ ] 用例、实现与 review「少做/多做」对照基线；多做已删或 UNRELATED
 - [ ] 未用代码「修正」需求；像基线错 → `baseline-conflict` 停
 - [ ] 编码规范命中已改（P#/C#/R# + §3.8），不是只记账
+- [ ] 自测跑证在；这次确认进入提测，不另问要不要提测
 
 ## test → aligned
 
 - [ ] 每条 item 有可执行 case 或显式 `UNPROVEN`+理由（见 [unproven-gate.md](../../verify/references/unproven-gate.md)）
 - [ ] 无把 non_goal / 未覆盖面写成 PASS
 
-人签时口头或回复确认：「语义门已过」或勾完本表。Agent 不得代勾。
+上表在当次停问的确认里一起过。不要为语义门再请一次签。Agent 不得代勾。

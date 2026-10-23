@@ -215,17 +215,18 @@ OPS_STATUSES = (
     "resolved",
 )
 
-# Tiers where a person signs the sealed baseline and req in one go, and
-# where plan / resolved pass on machine checks when no signal is raised.
-# P0 keeps every one of them a separate signoff.
-SEAL_WITH_REQ = ("P1", "P2")
+# Every tier seals the baseline and accepts req in one signoff.
+# A test plan passes on machine checks at every tier when no signal is raised.
+# ops resolved stays a person at P0 and machine-only at P1/P2.
+SEAL_WITH_REQ = ("P0", "P1", "P2")
 AUTO_TIERS = ("P1", "P2")
+PLAN_AUTO_TIERS = ("P0", "P1", "P2")
 
 SEMANTIC_PRIOR = {
     "req": ("req-review",),
     "arch": ("req-review", "req"),
     "code": ("req-review", "req", "arch"),
-    "test": ("req-review", "req", "arch"),
+    "test": ("req-review", "req", "arch", "code"),
 }
 
 TEST_SURFACE_ALIASES = {
@@ -465,14 +466,15 @@ def plan_signals(plan: dict, baseline_items: list[str], has_baseline: bool) -> l
 
 
 def check_auto_record(
-    label: str, data: dict, tier: str, root: Path, errors: list[str]
+    label: str, data: dict, tier: str, root: Path, errors: list[str],
+    tiers: tuple[str, ...] = AUTO_TIERS,
 ) -> None:
-    """`auto: <path>` stands in for a person only at AUTO_TIERS, with readable evidence."""
+    """`auto: <path>` stands in for a person only at `tiers`, with readable evidence."""
     auto = scalar(data, "auto")
     if not auto:
         return
     evidence = Path(auto) if Path(auto).is_absolute() else root / auto
-    if tier not in AUTO_TIERS:
+    if tier not in tiers:
         fail("%s.auto at %s: this tier needs a person's signoff" % (label, tier), errors)
     elif signoff_bys(data):
         fail("%s has both auto and by; pick one" % label, errors)
@@ -633,7 +635,7 @@ FAIL_HINTS: list[tuple[re.Pattern[str], str]] = [
     ),
     (
         re.compile(r"design\.md|arch review grill|arch grill"),
-        "HINT: at arch write design.md (目标/方案/契约/影响面/回退/用例) and grill that design: grill.md ## arch with arch_frontier: empty and arch_shared_understanding: true",
+        "HINT: at arch write design.md (目标/方案/契约/影响面/回退/用例). Open grill.md ## arch only for a real open question; arch_frontier must be empty before the review. Test cases are written after the architecture is accepted.",
     ),
     (
         re.compile(r"case_intent|plan case"),
@@ -760,31 +762,32 @@ def check_design(root: Path, baseline: dict, arch: dict, errors: list[str]) -> N
 
 
 def check_arch_grill(root: Path, errors: list[str]) -> None:
-    """The design review has its own grilling round. The seal round does not count."""
+    """A design question round is optional. An open one blocks the review.
+
+    A closed round may still record a question and a shared-understanding line.
+    Those lines are notes, not a second signature, and a review with nothing
+    left to ask does not need them.
+    """
     path = root / "grill.md"
     if not path.is_file():
-        fail("arch review missing grill.md", errors)
+        ok("architecture review has no open questions")
         return
     text = path.read_text(encoding="utf-8")
+    heading = _ARCH_HEADING.search(text)
+    if not heading:
+        ok("architecture review has no open questions")
+        return
     found: dict[str, list[str]] = {}
     for key, val in _ARCH_GRILL_LINE.findall(text):
         found.setdefault(key, []).append(val)
     if found.get("arch_frontier") != ["empty"]:
         fail("arch review grill is not closed; arch_frontier must be empty", errors)
-    else:
-        ok("arch grill frontier empty")
-    if found.get("arch_shared_understanding") != ["true"]:
-        fail("arch review shared understanding is not confirmed", errors)
-    else:
-        ok("arch grill shared understanding confirmed")
-    heading = _ARCH_HEADING.search(text)
-    if not heading:
-        fail("grill.md missing an ## arch round", errors)
         return
+    ok("arch grill frontier empty")
+    if found.get("arch_shared_understanding") == ["true"]:
+        ok("arch grill shared understanding confirmed")
     tail = text[heading.end():]
-    if not _GRILL_Q.search(tail) or not _GRILL_A.search(tail):
-        fail("arch grill round has no question", errors)
-    else:
+    if _GRILL_Q.search(tail) and _GRILL_A.search(tail):
         ok("arch grill round has a question")
 
 
@@ -799,7 +802,9 @@ def check_plan_tracks_arch(arch: dict, plan: dict, errors: list[str], require_pl
     intents = [row for row in entries(arch, "case_intents") if row.get("id")]
     if not plan:
         if require_plan:
-            fail("missing verify/plan.yaml; draft cases with the architecture", errors)
+            fail("missing verify/plan.yaml; draft cases after the architecture review", errors)
+        else:
+            ok("verify/plan.yaml is written after the architecture review")
         return
     cases = [row for row in entries(plan, "cases") if row.get("id")]
     intent_keys: dict[tuple[str, str, str], list[str]] = {}
@@ -856,10 +861,18 @@ def check_grill(root: Path, baseline: dict, errors: list[str], sealing: bool = F
         fail("grill.md missing a grilling question line", errors)
         return
     ok("grill.md uses grilling question lines")
-    if not sealed:
+    actually_sealed = scalar(baseline, "sealed") == "true"
+    pending_seal = sealing and not actually_sealed
+    if not actually_sealed and not pending_seal:
         ok("grill.md present")
         return
-    if frontier[0] != "empty" or shared[0] != "true":
+    if frontier[0] != "empty":
+        fail("grill.md frontier is not closed", errors)
+        return
+    if pending_seal and shared[0] != "true":
+        ok("grill frontier empty; shared understanding is written with the requirements confirm")
+        return
+    if shared[0] != "true":
         fail("sealed baseline but grill.md frontier is not closed", errors)
     else:
         ok("grill.md closed with sealed baseline")
@@ -969,8 +982,8 @@ def main() -> int:
     ops = load_ticket(root / "ops.yaml", errors)
 
     tier = scalar(deliver, "risk_tier") or "P1"
-    # P1/P2 seal the baseline and accept req in one signoff at the end of
-    # req, so req is checked against a baseline that is ready but not sealed.
+    # Every tier seals the baseline and accepts req in one signoff at the
+    # end of req, so req is checked against a baseline that is ready but not sealed.
     sealing = args.stage == "req" and tier in SEAL_WITH_REQ and scalar(baseline, "sealed") != "true"
 
     if args.stage == "req-review" or sealing:
@@ -1053,7 +1066,7 @@ def main() -> int:
         if args.stage in ("arch", "code", "test"):
             check_design(root, baseline, arch, errors)
             check_arch_grill(root, errors)
-            check_plan_tracks_arch(arch, plan, errors, require_plan=True)
+            check_plan_tracks_arch(arch, plan, errors, require_plan=args.stage != "arch")
         elif args.stage == "verify-plan" and arch:
             check_plan_tracks_arch(arch, plan, errors, require_plan=False)
 
@@ -1088,7 +1101,7 @@ def main() -> int:
                     for signal in plan_signals(plan, items, bool(baseline) and not skips_baseline(root)):
                         print("SIGNAL %s" % signal)
                 if args.stage == "test":
-                    check_auto_record("plan", plan, tier, root, errors)
+                    check_auto_record("plan", plan, tier, root, errors, tiers=PLAN_AUTO_TIERS)
                 case_refs = [c["baseline_item_id"] for c in cases if c["baseline_item_id"]]
                 missing = [i for i in items if i not in case_refs]
                 if missing:

@@ -25,13 +25,13 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | `risk_tier` | 人在 `deliver.yaml` 定的风险档：P0 鉴权/数据面/跨仓契约；P1 默认功能票；P2 文档/小修/低爆破。决定停问次数。注意：此处 P0–P2 与 coding 的模式 P1–P17 **无关** | [hitl-risk-tiers.md](hitl-risk-tiers.md) |
 | 产线文档技能 | 交付时归类和落盘文档的同伴技能。目录认 setup-agents-docs，问句认 grilling | [docs/SKILL.md](../docs/SKILL.md) |
 | grilling | 把边界、异议、分叉逐条问到没有为止的拷问；工具是 `~/.cursor/skills/grilling/` | [invoke.md](invoke.md) |
-| frontier | grilling 里“尚未回答的问题集合”；**frontier 为空且人确认共享理解**才算拷问完成 | [invoke.md](invoke.md) |
+| frontier | grilling 里“尚未回答的问题集合”。一轮把当前能问的都问完。frontier 为空后，需求通过那一次确认才写共享理解 | [invoke.md](invoke.md) |
 | plan / accepted | verify 的测试计划；人确认后为 `accepted` | [verify/SKILL.md](../verify/SKILL.md) |
 | selftest / test | plan 的两种 mode：selftest=开发自测（证明实现不漂基线）；test=提测。自测过后人没说「提测」不进 test | [operator-cheatsheet.md](operator-cheatsheet.md) §3 |
 | aligned | 人签的“与基线对齐”；**不会**由跑绿自动产生 | 同上 |
 | promote | 把快照 plan 提升为巡检包，人触发，另一刀，不随 aligned 自动发生 | 同上 |
 | trial / ga | verify 的成熟度阶段；H3 只在 trial 且入口直达 verify 时才问 feedback tag | [invoke.md](invoke.md) |
-| trace / v2 | 每轮把 scenario/trigger/route/stop/next 写入的运行记录；`scripts/trace.sh append` | [trace.md](trace.md) |
+| trace / v2 | 每轮把 scenario/trigger/route/stop/next 写入的运行记录。技能调起、委派、模型与组件跳是可选细节；`scripts/trace.sh append` | [trace.md](trace.md) |
 | S1–S8 | 场景码，见 `SKILL.md` 决策树 | `SKILL.md` |
 | H1–H6 | 非门禁不停规则（旧称 C1–C6） | [invoke.md](invoke.md) |
 | P/C/R | 编码模式/气味/重构条件（P1–P17、C1–C15、R1–R6） | [coding-tables.md](../conventions/coding-tables.md) |

@@ -434,7 +434,75 @@ PY8
 OUT8="$("${TRACE[@]}" render "${SHORT8}")" || fail "expected S8 render to succeed"
 echo "${OUT8}" | grep -q '| trigger |' || fail "S8 render missing trigger"
 if echo "${OUT8}" | grep -q '| thinking |'; then fail "S8 render should omit thinking"; fi
+if echo "${OUT8}" | grep -q '| hops |'; then fail "S8 render should omit hops"; fi
 rm -f "${SHORT8}"
+
+echo "=== positive: observation fields on the path ==="
+OBS_PATH="$("${TRACE[@]}" path "${HOME}/.cursor/skills/idev/references/trace.example.yaml")" \
+  || fail "expected path of the example to succeed"
+echo "${OBS_PATH}" | grep -q 'skills:' || fail "path missing skills"
+echo "${OBS_PATH}" | grep -q 'explicit: idev' || fail "path missing skill how"
+echo "${OBS_PATH}" | grep -q 'delegate→none' || fail "path missing delegate choice"
+echo "${OBS_PATH}" | grep -q 'model→inherit' || fail "path missing model choice"
+echo "${OBS_PATH}" | grep -q 'user→skill:idev' || fail "path missing skill hop"
+echo "${OBS_PATH}" | grep -q 'model=inherit' || fail "path missing model on the hop"
+echo "${OBS_PATH}" | grep -q '4s' || fail "path missing duration"
+
+echo "=== positive: old trace without observation fields still passes ==="
+PLAIN="${SCRATCH}/idev-trace-plain.yaml"
+cat > "${PLAIN}" <<'EOF'
+schema_version: 2
+at: "2026-10-23T00:00:00+08:00"
+feature: example-change
+intent: "keep old traces valid"
+invoke:
+  trigger: "继续"
+  matched: "S2"
+thinking:
+  summary: "仍在当前阶段"
+route:
+  module: deliver
+  scenario: S2
+  why: "stage pointer"
+check_feature: skipped
+EOF
+"${TRACE[@]}" check "${PLAIN}" || fail "expected PASS on a v2 trace without observation fields"
+rm -f "${PLAIN}"
+
+echo "=== negative: observation fields must be well formed ==="
+python3 - <<PYOBS
+from pathlib import Path
+src = Path("${HOME}/.cursor/skills/idev/references/trace.example.yaml").read_text()
+bad = Path("${SCRATCH}")
+bad.joinpath("idev-trace-how.yaml").write_text(src.replace("how: explicit", "how: guessed", 1))
+bad.joinpath("idev-trace-edge.yaml").write_text(src.replace("    to: skill:idev\n", "", 1))
+bad.joinpath("idev-trace-duration.yaml").write_text(src.replace("duration_s: 4", "duration_s: soon", 1))
+bad.joinpath("idev-trace-delegate.yaml").write_text(
+    src.replace("    chose: none\n", "    chose: idev-nobody\n", 1)
+)
+skill = src.replace(
+    "    - name: idev\n      path: \"~/.cursor/skills/idev/SKILL.md\"\n      why: \"用户要求补完剩余测试\"\n",
+    "    - idev\n",
+    1,
+)
+bad.joinpath("idev-trace-skill.yaml").write_text(skill)
+PYOBS
+if "${TRACE[@]}" check "${SCRATCH}/idev-trace-how.yaml"; then fail "expected FAIL on invoke.how"; fi
+if "${TRACE[@]}" check "${SCRATCH}/idev-trace-edge.yaml"; then fail "expected FAIL on one-sided hop"; fi
+if "${TRACE[@]}" check "${SCRATCH}/idev-trace-duration.yaml"; then fail "expected FAIL on duration_s"; fi
+if "${TRACE[@]}" check "${SCRATCH}/idev-trace-delegate.yaml"; then fail "expected FAIL on unknown delegate"; fi
+if "${TRACE[@]}" check "${SCRATCH}/idev-trace-skill.yaml"; then fail "expected FAIL on skill item without name"; fi
+
+echo "=== positive: observation coverage is not a hard alarm ==="
+OBS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/idev-trace-obs.XXXXXX")"
+cp "${HOME}/.cursor/skills/idev/references/trace.example.yaml" "${OBS_DIR}/20261023-001.yaml"
+python3 "${ROOT}/audit_traces_lib.py" "${OBS_DIR}" 5 >${SCRATCH}/idev-trace-obs.out
+grep -q '观察覆盖' ${SCRATCH}/idev-trace-obs.out || fail "audit missing observation coverage"
+grep -q '写了组件跳 | 1 |' ${SCRATCH}/idev-trace-obs.out || fail "audit did not count the hop"
+grep -q '写了委派决定 | 1 |' ${SCRATCH}/idev-trace-obs.out || fail "audit did not count delegate"
+HC_OBS="$(sed -n 's/^HARD_COUNT=//p' ${SCRATCH}/idev-trace-obs.out)"
+[ "${HC_OBS:-x}" = "0" ] || { cat ${SCRATCH}/idev-trace-obs.out; fail "observation fields raised HARD_COUNT"; }
+rm -rf "${OBS_DIR}"
 
 echo "=== write-config persists pilot and extra keys ==="
 WCFG="${SCRATCH}/idev-outbound-cfg.json"

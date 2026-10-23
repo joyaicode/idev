@@ -4,4 +4,10 @@
 -- exit --
 0
 -- output --
-RUN DONE
+NEXT gate-review  kind=human.gate  status=pending
+OPEN references/chat-confirm-signoff.md
+DELEGATE none; the conductor does this step
+LABEL 实现审核（自测已跑完；确认后才提测，这里不签测试结果）
+WITH {'will_write': ['deliver.semantic_gate.code', 'deliver.stage=test'], 'proof': 'check-feature code；selftest PASS/FAIL/UNPROVEN'}
+GATE stop here; post this line and the proof: 将代写: deliver.semantic_gate.code、deliver.stage=test
+GATE the person's reply of 确认 / 同意 / 全签 / LGTM is the signoff; record PASS --by <name> --quote "<their words>"

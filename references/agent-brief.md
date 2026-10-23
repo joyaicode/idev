@@ -33,7 +33,7 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
    **前两道 PASS 不等于这一关过了** —— 两个工具都会在 PASS 时把这句话打出来。
    这一格该用哪个工具，看 `SKILL.md` 的「分阶段的能力」索引表，不要凭印象找。
 6. **有不清楚处先 grilling**（`~/.cursor/skills/grilling/SKILL.md`），不要拿含糊摘要请人签。
-7. **收尾**：`scripts/trace.sh append` 写 trace（产品仓进 `.idev/traces/`，导体自身会话才进内核）；请签时回显一行 `将代写: <字段>`。
+7. **收尾**：`scripts/trace.sh append` 写 trace（产品仓进 `.idev/traces/`，导体自身会话才进内核）。技能调起、委派决定、模型与一行思考、组件从哪跳到哪，按 [trace.md](trace.md) 的可选字段写上；缺了不挡本轮，不准编造。请签时回显一行 `将代写: <字段>`。
 
 ## 什么时候必须停下来问人（STOP）
 

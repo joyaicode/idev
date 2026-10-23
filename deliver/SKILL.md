@@ -38,8 +38,8 @@ parent: idev
 ## Hard rules
 
 1. **不准跳阶段。** 无 `deliver.yaml` 从 `req-review` 建。
-2. **grill 未闭合不准拆解。** P0 还要先密封；P1/P2 基线就绪即可起草拆解，到 req 末与密封同签。未决问句只写 `<票目录>/grill.md`。`<票目录>` 只认 `python3 ~/.cursor/skills/idev/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key task`。`baseline.yaml` 仍有 `status: open` 或未清空 `objections` 时，关闭的 `grill.md` 不算数 → **自动唤起** `~/.cursor/skills/grilling/SKILL.md` 继续拷问到清空；不准口头「差不多了」进 `req`。
-2a. **确认前先 grill。** 请签 `sealed` 之前，`grill.md` 必须在：`frontier` 与 `shared_understanding` 各自单独成行，正文有 `❓` 与 `➡️`。frontier 不是 `empty`，或人未确认共享理解 → 不准请签、不准代写。缺这份文件也不准把基线标成 `sealed: true`。
+2. **grill 未闭合不准请签需求通过。** 每个档位都在 req 末一次签 `sealed` + `req.accepted`。基线就绪后可以起草拆解，不必先密封。未决问句只写 `<票目录>/grill.md`。`<票目录>` 只认 `python3 ~/.cursor/skills/idev/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key task`。`baseline.yaml` 仍有 `status: open` 或未清空 `objections` 时，关闭的 `grill.md` 不算数 → **自动唤起** `~/.cursor/skills/grilling/SKILL.md`，把本轮能问的一次问完；不准口头「差不多了」请签。
+2a. **确认前 frontier 必须已空。** 请签需求通过之前，`grill.md` 必须在：`frontier` 与 `shared_understanding` 各自单独成行，正文有 `❓` 与 `➡️`。frontier 不是 `empty` → 不准请签、不准代写。`shared_understanding` 由这次确认写成 `true`，请签前可以仍是 `false`。不要先请一次「共享理解」再请一次密封。缺这份文件也不准把基线标成 `sealed: true`。
 3. **密封后不准改 baseline 正文。** 下游只引用 `baseline_item_id`。要改原文：人写 `reopen_baseline`，回到 `req-review`。
 4. **回退 origin 只能是 `req` / `arch` / `code`**（译法、方案、实现）。禁止用提测反馈直接改 goal。
 5. **编码必须衔 verify**；case 必须同时挂 `slice_id` 与 `baseline_item_id`。
@@ -57,7 +57,7 @@ parent: idev
 14. **编码只改 `arch.yaml` 里 `include: true` 的路径。** 其它脏文件写入 `review.md` 的 UNRELATED，不准顺手改。Review 落票目录里的 `review.md`（同一条 `doc_home.py --key task`）。
 15. **每阶段结束写票目录里的 `deliver-eval.md`**（件数，照 [deliver-eval.example.md](references/deliver-eval.example.md)）。路径仍由 `doc_home.py --key task` 决定。
 16. **人写 `aligned` 之后进入 `done`。** 不自动 `promote`；人没提提升 / 巡检包 / promote 则不问。
-17. **无当前停问点不请签。** 自测门过后人没说「提测」不问是否进入 `mode=test`。
+17. **无当前停问点不请签。** 自测完成后只停实现审核；通过后进入提测，不另问要不要提测。用例计划不单独请签。
 
 ## 阶段怎么走
 
@@ -71,39 +71,38 @@ parent: idev
 
 1. 对照 CONTEXT / ADR / 现有契约起草规格与 `baseline.yaml`（[baseline.example.yaml](references/baseline.example.yaml)）。落盘前打开 [docs/SKILL.md](../docs/SKILL.md)。未决问题写该票的 `grill.md`（`convention: grilling`）。
 2. 正确性、合理性、边界、细节、非目标：全部写成 `grill.md` 里的问句。文件放哪认 [docs/SKILL.md](../docs/SKILL.md)。`review_questions` 保持空列表。冲突不得默许。
-3. **自动唤起 grilling（硬）：** 本阶段一进入「定边界 / 清异议」就打开并执行 `~/.cursor/skills/grilling/SKILL.md`（整轮 frontier，不是随口追问）。问到 frontier 空、人确认共享理解；推迟项写进 `non_goal`。`objections` 保持空。缺 grilling 先跑 `scripts/link-companion-skills.sh`。**禁止**用「自己拷问」或跳过 grilling 直接请签 `sealed`。
-4. grilling frontier 空且人确认共享理解后，再跑 `check-feature.sh <feature> req-review`。P0：人写 `sealed: true` 和 `by:` 后才能 `req`。P1/P2：不停，直接起草拆解。
+3. **自动唤起 grilling（硬）：** 本阶段一进入「定边界 / 清异议」就打开并执行 `~/.cursor/skills/grilling/SKILL.md`。把本轮 frontier 上的问题一次问完，每题带推荐答案；人的回答打开新问题就再来一轮。回答不是确认用语。推迟项写进 `non_goal`。`objections` 保持空。缺 grilling 先跑 `scripts/link-companion-skills.sh`。**禁止**用「自己拷问」或跳过 grilling 直接请签。
+4. frontier 空之后不停在本阶段。直接起草拆解。需求通过的那一次确认在 `req` 末。
 
 ### req（拆解）
 
 1. 只把密封 item 译成 slices，不增不减。
 2. 译不清进 `open_questions`（只问理解）。想加义务 → `baseline-conflict`，停。
-3. `check-feature.sh <feature> req`。P0：人 `accepted` + `by` 后才能 `arch`。P1/P2：一次签 `sealed` + `req.accepted`（同一个 `by`）后才能 `arch`。
+3. `check-feature.sh <feature> req`。每个档位一次签 `sealed` + `req.accepted`（同一个 `by`），并写入 `shared_understanding: true`。签完才能 `arch`。译法上还有问题就再开一轮提问，不要拆成第二次签字。
 
 ### arch
 
-需求签收后、请人评方案之前，一次交齐三份，供人评审。不要只留 `arch.yaml` 里的一行 `approach`。
+需求签收后、请人评方案之前，先交方案，供人整体 Review。不要只留 `arch.yaml` 里的一行 `approach`。用例文件这阶段不写。
 
 1. **方案叙述** `<票目录>/design.md`（照 [design.example.md](references/design.example.md)）。六节都要有正文：目标、方案、契约、影响面、回退、用例。目标节照抄基线 `goal`。每条基线 item、每条 `case_intent` 都在文中点名。细到人能按节评审，不写实现代码。
 2. **机读方案** `arch.yaml`。`approach` / `non_approach` 都要有。`case_intents` 挂 `baseline_item_id`。方案若「更好」但超出基线 → 拒过，不改基线。
-3. **用例骨架与方案同一轮**。起草 `verify/plan.yaml`：每条 `case_intent` 一条 case，`slice_id` / `baseline_item_id` / `dimension` 一致；`goal` 复制基线。此时 `UNPROVEN`，不假装跑过。编码阶段只补 runner 和证据，不另起一套用例。
-4. **方案评审必须 grilling。** 打开并执行 `~/.cursor/skills/grilling/SKILL.md`，问的是这份方案（做法、契约、回退、哪条用例证明哪条 item），不是把密封时的需求问句再问一遍。问句写在 `grill.md` 的 `## arch` 轮。`arch_frontier: empty` 且 `arch_shared_understanding: true` 之前不准请签。需求轮的 `frontier` 保持 `empty`，不要为了评方案把它改回 `open`。
-5. **架构范式自查**：按 [canon.md](../conventions/canon.md) §1 协议扫 §2 信号与 §4 念头，§5 必答 A1–A8，§7 模板记账；答不出的项标 `UNPROVEN` 并写进 `design.md` 的方案节。方案分叉仍在 arch 轮里问完。
-5a. **领域建模透镜（涉及新概念时）**：本轮引入新领域概念 / 跨模块术语时，先过 [conventions/domain-modeling.md](../conventions/domain-modeling.md) 建通用语言；术语不一致先对齐再出方案，术语表随票走。无新概念可跳过。
-6. `check-feature.sh <feature> arch`。上面三份对齐且 arch 轮闭合后，人 `accepted` + `by` 才能 `code`。
+3. **先给整包，再等 Review。** 不要在交出方案之前先开一轮必答拷问，也不要为了过门造一个问句。人 Review 时若有未决分叉，再打开 grilling，问句写在 `grill.md` 的 `## arch` 轮，`arch_frontier` 回到 `empty` 才能请签。没有分叉就不要写这一轮。需求轮的 `frontier` 保持 `empty`。
+4. **架构范式自查**：按 [canon.md](../conventions/canon.md) §1 协议扫 §2 信号与 §4 念头，§5 必答 A1–A8，§7 模板记账；答不出的项标 `UNPROVEN` 并写进 `design.md` 的方案节。真有分叉就在 arch 轮里问完。
+4a. **领域建模透镜（涉及新概念时）**：本轮引入新领域概念 / 跨模块术语时，先过 [conventions/domain-modeling.md](../conventions/domain-modeling.md) 建通用语言；术语不一致先对齐再出方案，术语表随票走。无新概念可跳过。
+5. `check-feature.sh <feature> arch`。方案对齐、没有未决分叉后，人 `accepted` + `by` 才能 `code`。这次确认不包含用例计划。
 
 ### code
 
 1. 只改 `include: true` 的文件。写 `review.md`（[review.example.md](references/review.example.md)）。多做删掉；少做补；像基线写错 → `baseline-conflict`，**停**。
 2. **写前匹配、写中纠正。** 打开 [coding.md](../conventions/coding.md) §0；扫表时再开 [coding-tables.md](../conventions/coding-tables.md)。用本轮变化扫 §1，命中第一行就运用，禁止行当场拒绝。每新增函数扫 §2，命中当轮改掉。
 3. **Review 再扫一遍。** `review.md` 必须写 §1 命中 / 零命中和 §2 已扫；命中只记账未改 = 拒过；若命中 canon 的 `T#`（加层 / 拆分 / 缓存 / 重写类念头），一并写入 `review.md`。按 [coding-tables.md](../conventions/coding-tables.md) §3.8 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo>`，做五轴 + 栈指南；blocking 译成 `P#`/`C#` 当轮改。然后清废弃、对齐注释/文档、跑扫描（Java：Problems / `qodana.starter`；前端：`lint-fix`）。
-4. 用例清单在 arch 已经和 `case_intents` 对齐。这里补 runner、跑 selftest/logic，不另写一套 case。要加一条 case，先补 `case_intent` 和 `design.md` 的用例节。P0 人确认 plan；P1/P2 `verify-plan` 无 `SIGNAL` 记 `AUTO`，有则停问。`check-feature.sh <feature> code`。自测门过后人没说「提测」不要停问是否进入 `mode=test`。
+4. **架构通过后连续做完三件事，中间不再请签：** 按 `case_intents` 起草 `verify/plan.yaml`（每条意图一条 case，`goal` 复制基线），编码，跑 selftest/logic。要加一条 case，先补 `case_intent` 和 `design.md` 的用例节。计划无 `SIGNAL` 记 `AUTO`（每个档位）；有 `SIGNAL` 先记下，不要为此停下来。`check-feature.sh <feature> code` 通过且自测有跑证之后，停一次实现审核。确认写入 `semantic_gate.code` 并把 `stage` 改为 `test`。不另问要不要提测。
 5. 实现/译法问题回退 `code`/`req`/`arch`，重跑向后。
 
 ### test
 
 1. 用例证明基线 item。疑问拷问理解，答案不得写成新 must。
-2. `mode=test`。`check-feature.sh <feature> test`。人写 `aligned` + `by`，或提测停问点确认用语代写，才 `done`。人没提提升 / 巡检包 / promote 则不问巡检包。
+2. `mode=test`。`check-feature.sh <feature> test`。跑完后一次确认测试结果：`aligned` + `by`，才 `done`。人没提提升 / 巡检包 / promote 则不问巡检包。
 
 ### done
 

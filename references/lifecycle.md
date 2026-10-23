@@ -10,12 +10,11 @@ req-review → req → arch → code → test → done ⇄ ops
 
 | 阶段 | 模块 | 人签 | 证据 |
 |------|------|------|------|
-| `req-review` | deliver | `sealed` | 拷问至无异议 |
-| `req` | deliver | `accepted` | 切片覆盖 item |
-| `arch` | deliver | `accepted` | case_intent 覆盖 item |
-| `code` | deliver | 自测门 | verify `logic` / `selftest` |
-| `test` | deliver | `aligned` | verify `test` |
-| `done` | — | 人写 `aligned` 或提测停问点确认 | 基线仍密封 |
+| `req-review` + `req` | deliver | 一次：`sealed` + `accepted` | 不明确的问题一轮问完；切片覆盖 item |
+| `arch` | deliver | 一次：方案整体 Review | `design.md` + `case_intent` |
+| `code` | deliver | 自测完成后一次：实现审核 | 用例 + 编码 + verify `selftest` |
+| `test` | deliver | 一次：`aligned` | verify `test` 的结果 |
+| `done` | — | 上一行的提测结果确认 | 基线仍密封 |
 | `ops` | ops | `resolved` / origin | verify `debug` / `patrol` 或 handoff |
 
 ## 交出口（不准抄进模块）

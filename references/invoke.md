@@ -48,12 +48,12 @@ S8：只打开**当前 step** 对应模块一页 + `references/workflow-schema.m
 
 grilling 不是可选追问，而是**订死边界与不清楚处**的默认动作。Agent 在下列触发出现的**同一轮**必须打开 `~/.cursor/skills/grilling/SKILL.md` 并跑 frontier：
 
-1. S1 / `req-review` 需求分析（正确性、合理性、边界、非目标）
+1. S1 / `req-review` 需求分析（正确性、合理性、边界、非目标）。本轮能问的一次问完，编号并给出推荐答案；回答打开新问题就再来一轮。不要一问一签。
 2. 任意阶段：`open_questions`、`objections`、baseline-conflict、目标/范围含糊
-3. `arch` 方案分叉；请签前仍有未答分叉
+3. `arch` 已经交出方案之后，仍有未决分叉。没有分叉就不要为了过门造一轮问句
 4. 人原话表达不确定、要定界、要拷问细节
 
-**未完成 grilling（frontier 未空或人未确认共享理解）之前：** 不要进入「门禁停问」请签；不要代写 `sealed` / `accepted` / `aligned` / `resolved`。
+**frontier 未空之前：** 不要请签需求通过，不要代写 `sealed` / `accepted`。共享理解由需求通过那一次确认写入，不单独再请一次。
 
 ## 自动打开产线文档技能
 
@@ -72,7 +72,7 @@ grilling 不是可选追问，而是**订死边界与不清楚处**的默认动�
 | H3 | 导体 feedback tag：仅入口**直接**落到 verify 且 trial；deliver / ops 调用 verify 不问 |
 | H4 | 已 accepted 的 plan 再 `run`：不重跑 `verify-plan`、不请再签 |
 | H5 | 写 trace 不为观测再停 |
-| H6 | 自测门过后：人没说「提测」不问是否进入 `mode=test` |
+| H6 | 自测跑完后停在实现审核，不另问「要不要提测」。审核确认后才把 `plan.mode` 改成 `test` |
 
 停问请签时必须回显一行 `将代写: <字段>`（见 [chat-confirm-signoff.md](chat-confirm-signoff.md)）。
 
@@ -126,7 +126,7 @@ bash ~/.cursor/skills/idev/scripts/trace.sh append < trace.yaml
 bash ~/.cursor/skills/idev/scripts/trace.sh last
 ```
 
-新痕迹必须 `schema_version: 2`（含 `invoke` / `thinking`）。**必写** `route.scenario`（缺省当 S1）。契约：[trace.md](trace.md)。
+新痕迹必须 `schema_version: 2`（含 `invoke` / `thinking`）。**必写** `route.scenario`（缺省当 S1）。技能调起、委派、模型与组件跳是可选观察字段，缺了不挡本轮。契约：[trace.md](trace.md)。
 
 改检查脚本后：
 

@@ -7,6 +7,11 @@ invoke:
   matched: "编码到提测 / deliver.yaml.stage=code"
   alias: ""
   skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: explicit
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "用户要求补完剩余测试"
 route:
   module: deliver
   convention_class: java
@@ -42,21 +47,48 @@ opened:
   - "deliver/SKILL.md"
   - "docs/task/example-change/deliver.yaml"
 calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "原话要求补完测试"
+    result: "loaded"
+  - kind: model
+    name: inherit
+    model: inherit
+    from: conductor
+    to: skill:idev
+    why: "路由前对照决策树"
+    thinking: "stage=code，要补测试；排除无现象的 ops"
+    duration_s: 4
+    result: "module=deliver"
   - kind: module
     name: deliver/SKILL.md
+    from: conductor
+    to: module:deliver
     args: "stage=code"
     result: "continue implement"
   - kind: repo
     name: docs/task/example-change/deliver.yaml
+    from: conductor
+    to: repo:deliver.yaml
     result: "stage=code risk_tier=P1"
   - kind: script
     name: check-feature.sh
+    from: conductor
+    to: script:check-feature.sh
     args: "example-change code"
     result: "skipped-until-before-signoff"
 decisions:
   - kind: route
     chose: deliver
     why: "stage pointer is code"
+  - kind: delegate
+    chose: none
+    why: "本步没有 DELEGATE，导体自己路由"
+  - kind: model
+    chose: inherit
+    why: "导体自己思考，不覆盖模型"
   - kind: open
     chose: conventions/java.md
     why: "editing starter Java"

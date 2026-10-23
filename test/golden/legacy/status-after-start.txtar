@@ -11,3 +11,4 @@ RUN $WORK/.idev/task/demo/workflow/run.yaml  lite-change  running
   pending   plan  verify.plan
   pending   gate-plan  human.gate
   pending   run  verify.run
+  pending   gate-review  human.gate

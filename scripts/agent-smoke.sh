@@ -975,6 +975,11 @@ if grep -q '"agent"' "${S}/trace.py"; then
 else
   bad "trace.py does not accept kind: agent"
 fi
+if grep -q '"model"' "${S}/trace.py"; then
+  ok "trace.py accepts calls[].kind: model"
+else
+  bad "trace.py does not accept kind: model"
+fi
 if [ -e "${S}/workflow-agent.py" ]; then
   bad "the wrapper workflow-agent.py is obsolete after the merge; remove it"
 else

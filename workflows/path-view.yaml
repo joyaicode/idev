@@ -5,7 +5,7 @@ aliases:
   - 路径视图
   - path view
   - 观测路径
-summary: 展示最近 traces 的实际运行路径（trigger→场景→调用→opened），便于减负与 shortcut；不改票、不签字、不停问。人可据此开 evolve 提案或 shortcut；本配方不改 Skill。
+summary: 展示最近 traces 的实际运行路径（trigger→场景→技能→委派/模型→组件跳→opened），便于减负与 shortcut；不改票、不签字、不停问。人可据此开 evolve 提案或 shortcut；本配方不改 Skill。
 risk_tier: P2
 params: []
 policy:
@@ -26,4 +26,4 @@ steps:
     kind: shell.confirmed
     with:
       cmd: bash ~/.cursor/skills/idev/scripts/path-view.sh stats 50
-    label: 路径骨架/首调用频次（无分数）
+    label: 路径骨架、首调用、委派与组件跳频次（无分数）

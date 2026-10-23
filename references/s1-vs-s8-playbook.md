@@ -21,10 +21,10 @@
 **禁开：** verify / ops / lifecycle 长文。
 
 1. 打开 [docs/SKILL.md](../docs/SKILL.md) 后落票。票里放 `grill.md`、`baseline.yaml`、`deliver.yaml`（`stage: req-review`）。
-2. **自动唤起 grilling**：把正确性/合理性/边界/非目标全部写成 `grill.md` 的问句；拷问到 frontier 空、人确认共享理解。`review_questions` 与 `objections` 保持空。冲突不得默许。未 grill 完不准请签。
-3. `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> req-review` — FAIL 不准请签。
-4. **停问密封。** 人给确认用语 + `by:` 人名后写 `sealed`；`继续` 不算。
-5. 人密封后才进 `req`（拆解）。后续 S2 若再出现含糊/分叉，再次自动 grilling 后再请签。
+2. **自动唤起 grilling**：把正确性/合理性/边界/非目标写成 `grill.md`，本轮问题一次问完，允许多轮。回答不是确认。`review_questions` 与 `objections` 保持空。冲突不得默许。frontier 未空不准请签。
+3. frontier 空后起草拆解，不在 `req-review` 末另停一次。
+4. **需求通过只签一次。** `check-feature.sh <feature> req` 通过后，确认用语同时写 `sealed` 和 `req.accepted`。`继续` 不算。
+5. 然后出架构整包等人 Review。后续阶段的停问只认 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
 
 **写 trace：** `route.scenario: S1`，真实 `opened[]` / `calls[]`。
 

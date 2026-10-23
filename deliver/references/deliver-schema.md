@@ -13,7 +13,7 @@
 | 机读架构 + 用例意图 | `<票目录>/arch.yaml` | 本契约 |
 | 阶段指针 / 回退 | `<票目录>/deliver.yaml` | 本契约 |
 | 可执行验收 | `<票目录>/verify/plan.yaml` | idev verify 模块 |
-| 未决问句 | `<票目录>/grill.md` | grilling 的问句；`sealed: true` 时 frontier 必须已空。方案评审另有 `## arch` 轮 |
+| 未决问句 | `<票目录>/grill.md` | grilling 的问句；`sealed: true` 时 frontier 必须已空。方案有未决分叉时才另写 `## arch` 轮 |
 | Review | `<票目录>/review.md` | code 阶段对照基线。不是 `reviews/`，也不是 `.idev/reviews/` |
 | 阶段计数 | `<票目录>/deliver-eval.md` | 每阶段结束；只计件数 |
 | 排障单 | `<票目录>/ops.yaml` | ops 模块；红绿仍在 verify |
@@ -25,11 +25,11 @@
 
 | stage | 入口门槛 | 本阶段交付 | 人确认后才能离开 |
 |-------|----------|------------|------------------|
-| `req-review` | 人给 feature + 原始诉求 | `baseline.yaml` + 规格正文；拷问至无 `open` / 无异议 | P0：`sealed: true`；P1/P2：不停，基线就绪即进 `req` |
-| `req` | P0：基线已密封；P1/P2：基线就绪、grill 已闭合 | `req.yaml`（每条 slice 挂 `baseline_item_id`） | P0：`accepted: true`；P1/P2：`sealed: true` 与 `accepted: true` 同一次确认 |
-| `arch` | `req.accepted` | `design.md` + `arch.yaml` + 与之对齐的 `verify/plan.yaml` 骨架；`grill.md` 的 `## arch` 轮已闭合 | `accepted: true` |
-| `code` | `arch.accepted` | 代码 + Review + **verify `logic`/`selftest`** | 自测门 |
-| `test` | 自测门 | **verify `mode=test`**，对齐基线 item | 提测门 |
+| `req-review` | 人给 feature + 原始诉求 | `baseline.yaml` + 规格正文；不明确的问题一轮问完 | 不停。frontier 空后进 `req` 起草拆解 |
+| `req` | 基线就绪、frontier 已空 | `req.yaml`（每条 slice 挂 `baseline_item_id`） | 每个档位一次：`sealed: true` 与 `accepted: true` |
+| `arch` | `req.accepted` | `design.md` + `arch.yaml`。有未决分叉才写 `grill.md` 的 `## arch` 轮 | `accepted: true`。本阶段不交 `verify/plan.yaml` |
+| `code` | `arch.accepted` | 用例 + 代码 + Review + **verify `logic`/`selftest`**。中间不再请签 | 自测完成后的实现审核（`semantic_gate.code`） |
+| `test` | 实现审核已过 | **verify `mode=test`**，对齐基线 item | 测试结果确认 |
 | `done` | 提测门 + 人 `aligned: true` | 基线未 reopen 则不再改原文 | 人签 |
 | `ops` | 已是 `done`，或交付中途就地 debug（不改 stage） | `ops.yaml` 分类；verify `debug`/`patrol` 或 handoff | 人写 `resolved` 或确认 `defect_origin` |
 
@@ -46,7 +46,7 @@
 | `req-review` | 人 `sealed` | `req` / `arch` / `code` / `test` |
 | `req` | 人 `accepted` 拆解 | `arch` / `code` / `test` |
 | `arch` | 人 `accepted` 方案 | `code` / `test` |
-| `code` | 进 `test` 时可选同记 | 不挡 `check-feature test`（自测门仍走 verify） |
+| `code` | 实现审核 | `test` |
 
 ```yaml
 semantic_gate:
@@ -124,19 +124,19 @@ semantic_gate:
 - `目标` 照抄基线 `goal`，不改写。
 - 每条基线 item 的 id 在文中出现。
 - `用例` 点名每条 `case_intent` 的 id。
-- 与 `arch.yaml`、`verify/plan.yaml` 同一轮写。每条 `case_intent` 在 plan 里有一条 case，且 `slice_id`、`baseline_item_id`、`dimension` 相同；plan 里多出来的 case 也要有对应的 `case_intent`。编码阶段补 runner，不另起一套用例。
+- 可执行用例在架构通过之后写。每条 `case_intent` 在 plan 里有一条 case，且 `slice_id`、`baseline_item_id`、`dimension` 相同；plan 里多出来的 case 也要有对应的 `case_intent`。编码阶段补 runner，不另起一套用例。
 
 ## 方案评审的拷问
 
-`grill.md` 在需求轮之外加一轮，字段各自单独成行：`arch_frontier: empty`、`arch_shared_understanding: true`。问句放在一行 `## arch` 之后，格式仍是 grilling 的 `❓` / `➡️`。这一轮问方案（做法、契约、回退、哪条用例证明哪条 item）。需求轮的 `frontier` 保持 `empty`。轮子没闭合，不准请人 `arch.accepted`。
+先交出 `design.md` 和 `arch.yaml`，等人整体 Review。没有未决分叉就不要开 `## arch`。有分叉时，问句放在一行 `## arch` 之后，格式仍是 grilling 的 `❓` / `➡️`，`arch_frontier` 各自单独成行。问的是方案（做法、契约、回退、哪条意图证明哪条 item），不是把需求问句再问一遍。需求轮的 `frontier` 保持 `empty`。`arch_frontier` 不是 `empty` 时不准请人 `arch.accepted`。`arch_shared_understanding` 不是另一次签字。
 
 ## 自测门 / 提测门
 
 尺是**密封基线**，不是 slices 自己长出来的句子。
 
-**自测门**：verify selftest/logic 已 run；无 FAIL；能跑的必覆盖维不是假 UNPROVEN；每条基线 item 至少一 case；无确认用语不写人签。
+**实现审核**：用例、编码、verify selftest/logic 已做完；无 FAIL；能跑的必覆盖维不是假 UNPROVEN；每条基线 item 至少一 case。人确认后写 `semantic_gate.code`，stage 改为 `test`。无确认用语不写人签。这之前不单独签用例计划。
 
-**提测门**：自测门仍在；`mode=test`；每条基线 item 至少一 test case；UNPROVEN 仅缺基线场景或基线里已写明的 non_goal；无未关闭 origin；无 `baseline-conflict`。
+**提测结果**：实现审核已过；`mode=test`；每条基线 item 至少一 test case；UNPROVEN 仅缺基线场景或基线里已写明的 non_goal；无未关闭 origin；无 `baseline-conflict`。确认的是跑出来的结果。
 
 `aligned: true` 人手改 YAML，或提测停问点确认用语代写。
 

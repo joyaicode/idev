@@ -18,6 +18,7 @@ PASS  slice must matches baseline item
 PASS  semantic_gate.req-review recorded
 PASS  semantic_gate.req recorded
 PASS  semantic_gate.arch recorded
+PASS  semantic_gate.code recorded
 PASS  arch.baseline_revision matches
 PASS  every baseline item has a case_intent
 PASS  impact hops <= 1

@@ -100,7 +100,7 @@ G() { python3 "${IDEV}/scripts/stage-gate.py" "$@"; }
 T() { python3 "${IDEV}/scripts/trace.py" "$@"; }
 
 # --- workflow: start, read, record ----------------------------------------
-record start-lite-change "$OUT" "start a 6-step recipe on a fresh ticket" -- \
+record start-lite-change "$OUT" "start a 7-step recipe on a fresh ticket" -- \
   W start lite-change --feature "$FEATURE"
 record next-after-start "$OUT" "NEXT/OPEN/DELEGATE for the first step" -- \
   W next --feature "$FEATURE"
@@ -154,10 +154,12 @@ record gate-refusal-quote "$FIXED" \
   "a refusal as the confirmation. BEFORE P0: exit 0 — 确认不了 starts with 确认. AFTER: BLOCKED, reason=unparsed-tail. Review §3.1." -- \
   W record gate-plan PASS --by tester --quote "确认不了" --feature "$FEATURE"
 
-# AUTO: the plan gate lists P1/P2; the saved check output decides.
+# AUTO: the plan gate lists every tier; the saved check output decides.
+# P0 used to be refused before the file was read. It now fails the same way
+# as any other tier when that file was never saved, and the gate stays pending.
 DT="$WORK/.idev/task/${FEATURE}"
 sed 's/^risk_tier: P1$/risk_tier: P0/' "$FIXTURE/deliver.yaml" > "$DT/deliver.yaml"
-record gate-auto-p0 "$OUT" "AUTO on a P0 ticket: the gate does not list P0" -- \
+record gate-auto-p0 "$OUT" "AUTO on a P0 plan gate with no saved check output" -- \
   W record gate-plan AUTO --evidence "verify/plan-check.log" --feature "$FEATURE"
 cp "$FIXTURE/deliver.yaml" "$DT/deliver.yaml"
 record gate-auto-no-evidence "$OUT" "AUTO pointing at a check output that was never saved" -- \

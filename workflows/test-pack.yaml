@@ -1,7 +1,7 @@
 schema_version: 1
 id: test-pack
 aliases: ["提测包", "正式测", "按提测维度跑"]
-summary: 确认票在 test 阶段后，按 test 维起草 plan、签字并跑。
+summary: 实现审核已把 stage 推进到 test 之后，按 test 维跑计划。计划无信号则自动过。跑完停一次，确认测试结果。
 risk_tier: P1
 params:
   - name: feature
@@ -28,7 +28,7 @@ steps:
     with:
       will_write: ["verify/plan.yaml accepted"]
       proof: "verify-plan 门禁结果 / case 数"
-      auto_tiers: [P1, P2]
+      auto_tiers: [P0, P1, P2]
   - id: run
     kind: verify.run
     with: { mode: test }
@@ -37,3 +37,9 @@ steps:
     kind: docs.changelog
     with: { template: verify-report }
     label: 汇总 report 要点
+  - id: gate-result
+    kind: human.gate
+    label: 测试结果确认
+    with:
+      will_write: ["deliver.aligned", "deliver.stage=done"]
+      proof: "PASS/FAIL/UNPROVEN 计数；残留 UNPROVEN"

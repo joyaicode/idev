@@ -5,7 +5,7 @@
 0
 -- output --
 # timeline  demo
-# run lite-change  status=done
+# run lite-change  status=running
 
 步骤              kind                  执行者          状态                 耗时  证据
 ---------------------------------------------------------------------------------------
@@ -15,6 +15,7 @@ code-pass         review.report         idev-reviewer   PASS                    
 plan              verify.plan           —               PASS                    -  -
 gate-plan         human.gate            导体(签字)      PASS                    -  -
 run               verify.run            idev-verifier   PASS                    -  $WORK/.idev/task/demo/review.md
+gate-review       human.gate            导体(签字)      pending                 -  -
 sign-claim *      review.report         idev-reviewer   PASS!                   -  $WORK/.idev/task/demo/review.md
                                                         ↳ check_fail: no-signoff-write
 

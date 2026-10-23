@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# check-feature by risk tier: P1/P2 seal the baseline together with req,
-# and plan / resolved may pass on machine checks; P0 keeps every signoff.
+# check-feature by risk tier: every tier seals the baseline together with req.
+# A test plan may pass on machine checks at every tier. ops resolved stays
+# a person at P0.
 #
 #   bash test/check-feature-tiers.sh
 set -uo pipefail
@@ -59,12 +60,14 @@ edit "$D" 'd["semantic_gate"] = {"req-review": {"passed": False}}'
 expect "P1 req on an unsealed, ready baseline" req 0 "baseline seals with req at P1"
 printf 'convention: grilling\nfrontier: open\nshared_understanding: false\n\n❓ **Q1** - **scope**: x\n➡️ keep\n' > "$EX/grill.md"
 expect "P1 req with grill frontier open" req 1 "frontier is not closed"
+printf 'convention: grilling\nfrontier: empty\nshared_understanding: false\n\n❓ **Q1** - **scope**: x\n➡️ keep\n' > "$EX/grill.md"
+expect "P1 req writes shared understanding with the confirm" req 0 "shared understanding is written with the requirements confirm"
 printf 'convention: grilling\nfrontier: empty\nshared_understanding: true\n\n❓ **Q1** - **scope**: x\n➡️ keep\n' > "$EX/grill.md"
 edit "$EX/baseline.yaml" 'd["objections"] = ["scope unclear"]'
 expect "P1 req with an objection on the baseline" req 1 "objections not empty"
 edit "$EX/baseline.yaml" 'd["objections"] = []'
 edit "$D" 'd["risk_tier"] = "P0"'
-expect "P0 req on an unsealed baseline" req 1 "baseline.sealed is not true"
+expect "P0 req on an unsealed, ready baseline" req 0 "baseline seals with req at P0"
 edit "$D" 'd["risk_tier"] = "P1"'
 expect "P1 arch still needs the seal" arch 1 "baseline.sealed is not true"
 
@@ -84,7 +87,7 @@ expect "plan.auto with no saved check output" test 1 "plan.auto evidence not fou
 printf '0 FAIL\n' > "$EX/verify/plan-check.log"
 expect "plan.auto at P1 with the check output" test 1 "plan passed on machine checks"
 edit "$D" 'd["risk_tier"] = "P0"'
-expect "plan.auto at P0" test 1 "plan.auto at P0: this tier needs a person"
+expect "plan.auto at P0 with the check output" test 1 "plan passed on machine checks"
 edit "$D" 'd["risk_tier"] = "P1"'
 
 edit "$D" 'd["semantic_gate"]["arch"] = {"passed": True, "auto": "verify/arch-check.log"}'

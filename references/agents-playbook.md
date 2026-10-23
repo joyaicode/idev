@@ -93,7 +93,7 @@ python3 scripts/delegation.py replay --feature <f> --step <step>
 | 场景 | 典型链路 |
 |---|---|
 | 代码审查 | `/idev` 说「审查当前仓」→ S8 `code-review` → reviewer 出报告 → **人签收 `I*`** → coder 只改已签收项 → verifier 跑用例 |
-| 小改 | `/idev` 说「走轻量」→ S8 `lite-change` → coder 改 + 自测 → **人签 plan** → verifier 跑 → 停在提测问 |
+| 小改 | `/idev` 说「走轻量」→ S8 `lite-change` → coder 改 + 自测 → 计划无信号自动过 → 停在实现审核 |
 | 线上现象 | `/idev` 说现象 → S6 → ops 分类（`kind`）→ 交 verifier 跑 `debug` → ops 定根因 → 回退或修 |
 | 查一个说不清的问题 | `/idev` → S4 → ops 走 `evidence.md` 闭环 + 假设台账，**先拿事实再推理** |
 | 契约 / 经验回填 | `/idev` 说「回填」→ S5 → deliver 按 setup-agents-docs 的目录落盘 |

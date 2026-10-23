@@ -1,0 +1,86 @@
+schema_version: 2
+at: "2026-10-23T22:14:30+08:00"
+feature: idev-conductor
+intent: "验收四层观察"
+invoke:
+  trigger: "验收"
+  matched: "上一轮 trace 观察字段的红绿对照，不是新产品票"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: explicit
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "人要求验收上一轮观察字段"
+route:
+  scenario: S4
+  module: conventions
+  convention_class: evidence
+  stage: ""
+  risk_tier: ""
+  why: "验收要用例红绿，不把上次说明当证据。"
+rejected:
+  - module: deliver
+    why: "没有要推进的产品阶段"
+  - module: verify
+    why: "没有 plan"
+  - module: ops
+    why: "不是投产现象"
+thinking:
+  summary: "51 条对照用例全绿：四层在路径上可见，剥掉字段就变成 (none)，写坏被拒，短表不展开，审计计数且 HARD_COUNT 仍为 0。selfcheck 退出码 0。20261023-001 没有模型跳，路径上确实看不到 model=。"
+  signals:
+    - "对照脚本 PASS 51 FAIL 0"
+    - "selfcheck PASS exit 0，观察段的五条负例按预期拒绝"
+  excluded:
+    - "不把 duration_s: 0 收成机检；文档只说不要用 0 充数"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "样例剥掉 how/skills/delegate/model/from/to"
+      so: "路径三行变成 (none)，放回后又出现"
+    - n: 2
+      do: "另造跨 deliver 与 verify 的 calls"
+      so: "HARD_COUNT 仍大于 0，观察字段没有把硬报警盖掉"
+    - n: 3
+      do: "跑 scripts/selfcheck.sh"
+      so: "selfcheck PASS，退出码 0"
+opened:
+  - "conventions/evidence.md"
+  - "references/trace.md"
+  - "scripts/trace.py"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "原话是验收"
+    result: "loaded"
+  - kind: script
+    name: scripts/trace.py
+    from: conductor
+    to: script:trace.py
+    args: "51 acceptance cases"
+    result: "PASS 51 FAIL 0"
+  - kind: script
+    name: scripts/selfcheck.sh
+    from: conductor
+    to: script:selfcheck.sh
+    result: "selfcheck PASS exit 0"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "证据闭环在 conventions/evidence.md"
+  - kind: delegate
+    chose: none
+    why: "验收由导体自己跑用例"
+  - kind: model
+    chose: inherit
+    why: "本轮没有覆盖模型"
+stop: ""
+next: ""
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

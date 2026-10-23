@@ -105,15 +105,15 @@ shared_understanding: true
 
 正文用 grilling 的问句行(`❓ **Q1** - **主题**:`)和推荐答案行(`➡️`)。
 `frontier` 只许 `empty` 或 `open`,各只出现一次。
-基线 `sealed: true` 时这份文件必须在,且两者都是 `empty` / `true`。
-方案评审另起一轮,不把需求轮改回 open:`arch_frontier` 与 `arch_shared_understanding` 各自单独成行,问句写在一行 `## arch` 之后。请人签方案前这轮必须是 `empty` / `true`。
+基线 `sealed: true` 时这份文件必须在,且 frontier 是 `empty`、shared_understanding 是 `true`（后者由需求通过那一次确认写入）。
+方案先整包交出。只有真有未决分叉才另起一轮,不把需求轮改回 open:`arch_frontier` 单独成行,问句写在一行 `## arch` 之后。这轮还开着就不许请人签方案。没有分叉不要造问句。
 
 不要 `trace.sh append` —— trace 由导体统一写。
 
 ## 硬规则
 
 1. **不准跳阶段。** 无 `deliver.yaml` 就从 `req-review` 建,不要从中间插入。
-2. **未密封不准拆解。** `baseline.yaml` 仍有 `status: open` 或未清空 `objections` 时不准进 `req` —— 回报 `BLOCKED(logic)`,让导体唤起 grilling 问到 frontier 空。**禁止**口头"差不多了"。
+2. **frontier 未空不准把需求当通过。** `baseline.yaml` 仍有 `status: open` 或未清空 `objections` 时不准请导体签需求 —— 回报 `BLOCKED(logic)`,让导体把本轮问题一次问完。基线就绪后可以起草拆解,密封和拆解同一次确认。**禁止**口头"差不多了"。
 3. **密封后不准改 baseline 正文。** 下游只引用 `baseline_item_id`。要改原文必须人说「解除密封」或 `reopen`,那是导体的事。
 4. **不写签字字段。** `sealed` / `accepted` / `aligned` / `reopen_baseline` / `semantic_gate.*.passed` 一律不碰。`by:` 必须是人名,**禁止** `agent` / `ai` —— 你填不了。
 5. **过专家拒过清单才能请签**(`$IDEV/deliver/references/experts.md`)。清单不过就停,不要用"资深意见"绕过。

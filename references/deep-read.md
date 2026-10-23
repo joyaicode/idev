@@ -24,6 +24,7 @@ bash ~/.cursor/skills/idev/scripts/install-weekly-audit.sh
 | **阶段页未写入 opened** | trace 有 `extensions`，其中路径不在 `opened` | 把 `OPEN` 行抄进 `opened` 后再请签 |
 | **有标记的产品 trace 缺 extensions** | 产品仓 `.idev/traces/` 的 trace 没有 `extensions` 字段 | 补 `extensions: []` 或本轮 `OPEN` 路径 |
 | 仅否定/描述签收词 | 「不写 aligned / 他票仍 sealed」 | **不算违规** |
+| 观察覆盖（技能 / 委派 / 模型 / 组件跳） | 窗口里写了可选字段的条数 | **不是报警**。空着说明没记，用来看优化材料够不够。字段见 [trace.md](trace.md) |
 
 本轮若写入签收字段，trace 必须带：
 

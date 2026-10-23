@@ -126,14 +126,14 @@ S1 新票→deliver `req-review`（必开 `docs/SKILL.md` 与 grilling）· S2 �
 
 1. 先守公共规约（[conventions/SKILL.md](conventions/SKILL.md)）。产线做端到端交付时先走内核。idev 识别产线侧特性，需要保存时写入该工程 `.idev/`（含 `marker: idev`），后续会话再读。写产线文档前打开 [docs/SKILL.md](docs/SKILL.md)（目录认 setup-agents-docs，问句认 grilling）。进入阶段先跑 `scripts/session-context.py`，只打开它列出的 `OPEN` 行；点了产品名就加 `--product`。人说「提升到内核」并完成产品剥离后，才写进内核。详见 [conventions/scope.md](conventions/scope.md)。
 2. **证据优先**：AI 反馈与文档不可信，代码逻辑可信仍须用例证明；每步先设计用例再推下一步。[conventions/evidence.md](conventions/evidence.md)
-2a. **边界未订死必须自动唤起 grilling**（`~/.cursor/skills/grilling/SKILL.md`），不准自拷问顶替；未到 frontier 空且人未确认前**禁止**写 sealed/accepted/aligned/resolved、禁止进下一阶段。触发细则 [cheatsheet §7.2](references/operator-cheatsheet.md)。
-3. 尺是密封基线。无本轮确认用语不得写 `sealed`/`accepted`/`aligned`/`resolved`/`reopen_baseline`/`semantic_gate.*.passed`，唯一例外是 P1/P2 的 plan / resolved 机检无信号时写 `auto:`；`继续` 不算；不准用确认改 goal。[references/chat-confirm-signoff.md](references/chat-confirm-signoff.md)
+2a. **边界未订死必须自动唤起 grilling**（`~/.cursor/skills/grilling/SKILL.md`），不准自拷问顶替。需求阶段把本轮能问的问题一次问完，允许多轮；答问不是签字。frontier 空之前禁止写 sealed。架构先出完整方案，只有真有分叉才拷问。触发细则 [cheatsheet §7.2](references/operator-cheatsheet.md)。
+3. 尺是密封基线。无本轮确认用语不得写 `sealed`/`accepted`/`aligned`/`resolved`/`reopen_baseline`/`semantic_gate.*.passed`，唯一例外是 plan（每个档位）与 P1/P2 的 resolved 在机检无信号时写 `auto:`；`继续` 不算；不准用确认改 goal。交付主路径只停四次：需求通过、架构通过、实现审核、提测结果。[references/chat-confirm-signoff.md](references/chat-confirm-signoff.md)
 3a. **架构与设计质量**：`arch` 阶段和任何“加层 / 拆分 / 缓存 / 队列 / 重写”念头，先按 [conventions/canon.md](conventions/canon.md) §1 协议执行（T1–T12、A1–A8）；命中即停按动作做，落到 P/C/R；不新增强门禁。
 4. 红绿只走 verify。不准第二套测试框架或分数门禁。
 5. 签字前 `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>`；已 accepted 的 plan 再 `run` 不重跑 verify-plan。
 6. 巡检包 `verify/scripts/promote.sh <feature>`：人没提 promote / 巡检包则不问、不跑。
 7. **改本 Skill 只改真源** `~/.cursor/skills/idev/`（`~/.claude`、`~/.agents`、`~/.joycode` 是 symlink，勿复制第二份）；提案 + 拷问后再改。
-8. **每轮路由后写 trace（schema v2）**：`bash ~/.cursor/skills/idev/scripts/trace.sh append`。产品仓会话落 `<repo>/.idev/traces/`，不写进 idev 内核；只有导体自身会话才落内核 `state/traces/`。必写 `route.scenario`、`invoke.trigger`/`matched`、`thinking.summary`、真实 `calls[]`/`opened[]`，不准伪造调用，不为观测另停；对话给一行运行路径（`scripts/path-view.sh`）。[references/trace.md](references/trace.md) · [references/invoke.md](references/invoke.md)
+8. **每轮路由后写 trace（schema v2）**：`bash ~/.cursor/skills/idev/scripts/trace.sh append`。产品仓会话落 `<repo>/.idev/traces/`，不写进 idev 内核；只有导体自身会话才落内核 `state/traces/`。必写 `route.scenario`、`invoke.trigger`/`matched`、`thinking.summary`、真实 `calls[]`/`opened[]`，不准伪造调用，不为观测另停。技能怎么调起、委派给谁、模型与一行思考、组件从哪跳到哪，有就写进 `invoke.how` / `invoke.skills[]`、`decisions` 的 `delegate` / `model`、`calls` 的 `from` / `to` / `model` / `thinking`；缺了不挡本轮。对话给一行运行路径（`scripts/path-view.sh`）。[references/trace.md](references/trace.md) · [references/invoke.md](references/invoke.md)
 
 ## 链接
 

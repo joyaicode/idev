@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from kind_agents import AGENTS  # noqa: E402
 from product_sink import sink_dir  # noqa: E402
 
 
@@ -41,16 +42,27 @@ TIERS = ("", "P0", "P1", "P2")
 SCENARIOS = ("", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8")
 SHORT_SCENARIOS = ("S2", "S3", "S5", "S8")
 CHECKS = ("", "PASS", "FAIL", "skipped")
-KINDS = ("route", "gate", "stop", "refuse", "handoff", "call", "open")
-CALL_KINDS = ("script", "module", "skill", "repo", "tool", "agent")
+KINDS = ("route", "gate", "stop", "refuse", "handoff", "call", "open", "delegate", "model")
+CALL_KINDS = ("script", "module", "skill", "repo", "tool", "agent", "model")
+# Conductor-kept steps use the same word workflow.py prints: "DELEGATE none".
+DELEGATE_CHOICES = AGENTS + ("none", "-")
+INVOKE_HOW = ("explicit", "alias", "implicit", "continuation")
+DURATION = re.compile(r"^\d+(\.\d+)?$")
 ITEM_KEYS = (
     "kind",
     "module",
     "chose",
     "why",
     "name",
+    "path",
     "args",
     "result",
+    "target",
+    "model",
+    "from",
+    "to",
+    "thinking",
+    "duration_s",
     "n",
     "do",
     "so",
@@ -73,8 +85,7 @@ def block(text: str, heading: str) -> str:
     return m.group("body") if m else ""
 
 
-def dash_maps(text: str, heading: str) -> list[dict[str, str]]:
-    body = block(text, heading)
+def maps_from_body(body: str) -> list[dict[str, str]]:
     if not body:
         return []
     chunks = re.split(r"(?m)^\s+-\s+", body)
@@ -91,6 +102,39 @@ def dash_maps(text: str, heading: str) -> list[dict[str, str]]:
         if item:
             out.append(item)
     return out
+
+
+def dash_maps(text: str, heading: str) -> list[dict[str, str]]:
+    return maps_from_body(block(text, heading))
+
+
+def nested_block(text: str, heading: str) -> str:
+    """Body under a nested key, stopping when indentation returns."""
+    m = re.search(
+        r"^(?P<indent>[ \t]*)" + re.escape(heading) + r":[ \t]*(?:\[\][ \t]*)?\s*$",
+        text,
+        re.M,
+    )
+    if not m:
+        return ""
+    base = len(m.group("indent"))
+    rest = text[m.end() :]
+    if rest.startswith("\n"):
+        rest = rest[1:]
+    lines: list[str] = []
+    for line in rest.splitlines(keepends=True):
+        if line.strip() == "":
+            lines.append(line)
+            continue
+        lead = len(line) - len(line.lstrip(" \t"))
+        if lead <= base:
+            break
+        lines.append(line)
+    return "".join(lines)
+
+
+def nested_maps(text: str, heading: str) -> list[dict[str, str]]:
+    return maps_from_body(nested_block(text, heading))
 
 
 def list_scalars(text: str, heading: str) -> list[str]:
@@ -171,6 +215,8 @@ def validate(text: str, *, for_append: bool = False) -> list[str]:
             errors.append("decisions item missing why")
         if not item.get("chose"):
             errors.append("decisions item missing chose")
+        if item.get("kind") == "delegate" and item.get("chose") not in DELEGATE_CHOICES:
+            errors.append("decisions.delegate unknown: %s" % (item.get("chose") or "empty"))
 
     if ver == "2":
         invoke = block(text, "invoke")
@@ -181,6 +227,15 @@ def validate(text: str, *, for_append: bool = False) -> list[str]:
                 errors.append("invoke.trigger empty")
             if not field(invoke, "matched"):
                 errors.append("invoke.matched empty")
+            how = field(invoke, "how")
+            if how and how not in INVOKE_HOW:
+                errors.append("invoke.how unknown: %s" % how)
+            skills_body = nested_block(invoke, "skills")
+            if skills_body.strip():
+                skills = maps_from_body(skills_body)
+                n_raw = len(re.findall(r"(?m)^\s+-\s+\S", skills_body))
+                if n_raw != len(skills) or any(not s.get("name") for s in skills):
+                    errors.append("invoke.skills item missing name")
         thinking = block(text, "thinking")
         if not thinking:
             errors.append("thinking block missing")
@@ -192,6 +247,14 @@ def validate(text: str, *, for_append: bool = False) -> list[str]:
                 errors.append("calls.kind unknown: %s" % (item.get("kind") or "empty"))
             if not item.get("name"):
                 errors.append("calls item missing name")
+            if item.get("duration_s") and not DURATION.match(item["duration_s"]):
+                errors.append("calls.duration_s not a number: %s" % item["duration_s"])
+            if ("from" in item or "to" in item) and not (item.get("from") and item.get("to")):
+                errors.append("calls.from and calls.to must both be set")
+            if "model" in item and not item.get("model"):
+                errors.append("calls.model empty")
+            if "thinking" in item and not item.get("thinking"):
+                errors.append("calls.thinking empty")
         if thinking:
             steps_body_m = re.search(
                 r"^[ \t]*steps:\s*(?:\[\]\s*)?\n(?P<body>(?:[ \t].*\n)*)",
@@ -244,6 +307,51 @@ def _join(items, empty: str = "—") -> str:
 
 
 
+def skills_line(invoke: str) -> str:
+    if not invoke:
+        return ""
+    how = field(invoke, "how")
+    parts = []
+    for item in nested_maps(invoke, "skills"):
+        bit = item.get("name") or "?"
+        if item.get("why"):
+            bit += "（%s）" % item["why"][:60]
+        parts.append(bit)
+    body = " · ".join(parts)
+    if how and body:
+        return "%s: %s" % (how, body)
+    return body or how
+
+
+def choices_line(text: str) -> str:
+    parts = []
+    for item in dash_maps(text, "decisions"):
+        if item.get("kind") in ("delegate", "model"):
+            parts.append("%s→%s" % (item.get("kind"), item.get("chose") or "?"))
+    return " · ".join(parts)
+
+
+def hops_line(calls: list[dict[str, str]]) -> str:
+    parts = []
+    n = 0
+    for item in calls:
+        if not (item.get("from") and item.get("to")):
+            continue
+        n += 1
+        bit = "%s→%s" % (item["from"], item["to"])
+        model = item.get("model") or (item.get("name") if item.get("kind") == "model" else "")
+        if model:
+            bit += " model=%s" % model[:40]
+        if item.get("thinking"):
+            bit += " 「%s」" % item["thinking"][:50]
+        if item.get("duration_s"):
+            bit += " %ss" % item["duration_s"]
+        if item.get("result"):
+            bit += " → %s" % item["result"][:40]
+        parts.append("%d.%s" % (n, bit))
+    return " → ".join(parts)
+
+
 def path_segments(text: str) -> dict[str, str]:
     """Extract the actual runtime path pieces from one trace (no scores)."""
     route = block(text, "route")
@@ -287,6 +395,9 @@ def path_segments(text: str) -> dict[str, str]:
         "why": field(route, "why") or "",
         "steps": " → ".join(step_parts) if step_parts else "",
         "calls": " → ".join(call_parts) if call_parts else "(none)",
+        "skills": skills_line(invoke),
+        "choices": choices_line(text),
+        "hops": hops_line(calls),
         "opened": " · ".join(opened[:8]) if opened else "(none)",
         "rejected": rej or "(none)",
         "next": field(text, "next") or "",
@@ -300,7 +411,14 @@ def path_oneline(seg: dict[str, str]) -> str:
     if seg.get("trigger"):
         parts.append("「%s」" % seg["trigger"][:40])
     parts.append(seg.get("route") or "?")
-    if seg.get("calls") and seg["calls"] != "(none)":
+    if seg.get("choices"):
+        parts.append(seg["choices"][:80])
+    if seg.get("hops"):
+        short = seg["hops"]
+        if len(short) > 120:
+            short = short[:117] + "..."
+        parts.append("hops[%s]" % short)
+    elif seg.get("calls") and seg["calls"] != "(none)":
         short = seg["calls"]
         if len(short) > 120:
             short = short[:117] + "..."
@@ -323,6 +441,9 @@ def render_path(text: str, *, name: str = "") -> str:
     lines.append("route:    %s" % seg["route"])
     if seg["why"]:
         lines.append("why:      %s" % seg["why"])
+    lines.append("skills:   %s" % (seg["skills"] or "(none)"))
+    lines.append("choices:  %s" % (seg["choices"] or "(none)"))
+    lines.append("hops:     %s" % (seg["hops"] or "(none)"))
     if seg["steps"]:
         lines.append("steps:    %s" % seg["steps"])
     lines.append("calls:    %s" % seg["calls"])
@@ -384,6 +505,10 @@ def cmd_path_stats(limit: int) -> int:
         return 0
     skel = Counter()
     call0 = Counter()
+    hows = Counter()
+    deleg = Counter()
+    models = Counter()
+    handoff = Counter()
     for path in files:
         text = path.read_text(encoding="utf-8")
         seg = path_segments(text)
@@ -394,6 +519,17 @@ def cmd_path_stats(limit: int) -> int:
             call0[c0] += 1
         else:
             call0["(none)"] += 1
+        how = field(block(text, "invoke"), "how")
+        if how:
+            hows[how] += 1
+        for item in dash_maps(text, "decisions"):
+            if item.get("kind") == "delegate":
+                deleg[item.get("chose") or "?"] += 1
+        for item in calls:
+            if item.get("kind") == "model":
+                models[item.get("model") or item.get("name") or "?"] += 1
+            if item.get("from") and item.get("to"):
+                handoff["%s→%s" % (item["from"], item["to"])] += 1
     print("## path-stats (last %d)" % len(files))
     print("### route skeleton")
     for k, n in skel.most_common():
@@ -401,9 +537,25 @@ def cmd_path_stats(limit: int) -> int:
     print("### first call")
     for k, n in call0.most_common(15):
         print("- %s × %d" % (k, n))
+    print("### skill how")
+    _print_counts(hows)
+    print("### delegate")
+    _print_counts(deleg)
+    print("### model call")
+    _print_counts(models)
+    print("### handoff")
+    _print_counts(handoff, limit=15)
     print("")
-    print("用途: 看哪条场景/模块/首调用最热，便于减负与 shortcut。无分数。")
+    print("用途: 看哪条场景/模块/首调用最热，以及技能入口、委派、模型与组件跳有没有被记下来。无分数。")
     return 0
+
+
+def _print_counts(counter, limit: int = 10) -> None:
+    if not counter:
+        print("- (none)")
+        return
+    for k, n in counter.most_common(limit):
+        print("- %s × %d" % (k, n))
 
 
 def render(text: str) -> str:
@@ -433,16 +585,19 @@ def render(text: str) -> str:
         )
         opened = list_scalars(text, "opened")
         opened_line = _join(opened)
+        seg = path_segments(text)
         rows = [
             ("intent", field(text, "intent") or "—"),
             ("feature", field(text, "feature") or "—"),
             ("trigger", field(invoke, "trigger") if invoke else "—"),
             ("matched", field(invoke, "matched") if invoke else "—"),
+            ("skills", seg["skills"] or "—"),
             ("route", route_line or "—"),
             ("why", field(route, "why") or "—"),
             ("rejected", rej),
             ("thinking", field(thinking, "summary") if thinking else "—"),
             ("calls", call_line),
+            ("hops", seg["hops"] or "—"),
             ("opened", opened_line),
             ("conventions", field(route, "convention_class") or "—"),
             ("decisions", dec),

@@ -1,0 +1,71 @@
+schema_version: 2
+at: "2026-10-23T21:50:00+08:00"
+feature: idev-conductor
+intent: "交付主路径收成四次人确认"
+invoke:
+  trigger: "流程优化：签字确认太多"
+  matched: "改停问点 / chat-confirm-signoff"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: explicit
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "人要求减少签字"
+route:
+  scenario: S2
+  module: deliver
+  convention_class: ""
+  stage: ""
+  risk_tier: P1
+  why: "改的是导体停问，不是一张产品票"
+rejected: []
+thinking:
+  summary: "四次停问：需求通过、架构整包评审、自测后的实现审核、提测结果。问答不是签字。"
+  signals: []
+  excluded: []
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "对照 chat-confirm 与 check-feature"
+      so: "P0 也不再把密封和拆解拆开"
+opened:
+  - "references/chat-confirm-signoff.md"
+  - "deliver/SKILL.md"
+  - "scripts/check-feature.py"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "原话要求减少签字"
+    result: "loaded"
+  - kind: module
+    name: deliver/SKILL.md
+    from: conductor
+    to: module:deliver
+    args: "signoff"
+    result: "four gates"
+  - kind: script
+    name: check-feature-tiers.sh
+    from: conductor
+    to: script:check-feature-tiers.sh
+    result: "PASS"
+decisions:
+  - kind: route
+    chose: deliver
+    why: "停问权威页在 references，阶段步骤在 deliver"
+  - kind: delegate
+    chose: none
+    why: "本步没有 DELEGATE"
+  - kind: refuse
+    chose: "do not drop the architecture review"
+    why: "2026-10-21 已要求架构仍由人签"
+stop: "none"
+next: "next ticket follows the four stops"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

@@ -30,7 +30,7 @@
 - [ ] 每个 item 至少一条 slice；每条 slice 恰好一个 `baseline_item_id`
 - [ ] 每条 slice.must 与对应 item 原文一致（脚本）；没有基线里不存在的义务
 - [ ] 每条 slice 过 INVEST；故事 > 8 点已拆（[req-quality.md](req-quality.md) §2/§4）
-- [ ] P0：`semantic_gate.req-review.passed` + 人名 `by`。P1/P2：基线未密封时 `check-feature req` 照查基线就绪与 grill 闭合，本阶段末与 `req.accepted` 同签
+- [ ] 每个档位：基线未密封时 `check-feature req` 照查基线就绪与 frontier 已空，本阶段末一次签 `sealed` + `req.accepted`。`shared_understanding` 随这次确认写入
 
 ## arch
 
@@ -38,6 +38,8 @@
 - [ ] 意图都有 `baseline_item_id`
 - [ ] `approach` 未改写 goal / non_goal
 - [ ] `semantic_gate.req-review` 与 `semantic_gate.req` 已记录
+- [ ] 方案整包已交出。有 `## arch` 轮时 `arch_frontier` 已空；没有未决问题就不要造一轮
+- [ ] 本阶段不要求 `verify/plan.yaml`
 
 ## 调用 verify
 
@@ -58,6 +60,7 @@
 - [ ] 本轮废弃无用的代码 / 导入 / 方法 / 字段已删；注释与文档已对齐代码
 - [ ] 已按 [coding-tables.md](../../conventions/coding-tables.md) §3.8 增强扫描：`coding-scan.sh` + 五轴 + 栈指南；`review.md` 写了五轴 / 栈指南 / 增强扫描
 - [ ] 已跑该仓编码规范扫描，并清掉本轮引入的提示（Java：Problems / Qodana；前端：`lint-fix`；仓内若有 Checkstyle/PMD/SpotBugs 一并绿）
+- [ ] 自测有跑证之后才请实现审核。确认写入 `semantic_gate.code` 并把 stage 改为 `test`
 - [ ] `by:` 不是 agent / AI（对话确认后代写时须是人名）
 
 ## test
@@ -65,7 +68,7 @@
 - [ ] 每条基线 item 至少一条 `mode=test` case
 - [ ] UNPROVEN 写清缺基线或 non_goal，不写成达标
 - [ ] 已按 [unproven-gate.md](../../verify/references/unproven-gate.md) 覆盖维表六族（case 或显式 UNPROVEN；correctness 不得免测）
-- [ ] `semantic_gate` 已记到 `arch`；人已确认接受残留 UNPROVEN 风险
+- [ ] `semantic_gate` 已记到 `code`（实现审核）；人已确认接受残留 UNPROVEN 风险
 
 ## ops
 

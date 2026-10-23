@@ -49,13 +49,13 @@
 
 1. **先守公共规约。** 按场景对类后执行（S2/S3/S5 不强制先读 conventions 长文）。通用闭环打架改 [conventions/evidence.md](../conventions/evidence.md)。产品专有摘要留在该仓。**从产品沉淀到 idev 核心之前，先剔除该产品专有逻辑**；剥不干净只留在该产品仓。
 2. **分析 / 论证 / 推测须辅助证据。** 见 [conventions/evidence.md](../conventions/evidence.md)：AI 反馈与文档**不可信**；代码逻辑可信，仍须用例证明。每一步先设计用例证明，再推下一步，直到根因。
-2a. **边界未订死必须自动唤起 grilling**（`~/.cursor/skills/grilling/SKILL.md`；S1 未清异议、`open_questions`/边界含糊、请签前有分叉、`arch` 分叉、`code` 疑基线错）。不准自拷问顶替；未到 frontier 空且人未确认前**禁止**写 sealed/accepted/aligned/resolved、禁止进下一阶段。触发细则：[cheatsheet §7.2](operator-cheatsheet.md)。
+2a. **边界未订死必须自动唤起 grilling**（`~/.cursor/skills/grilling/SKILL.md`；S1 未清异议、`open_questions`/边界含糊、请签前有分叉、架构真有分叉、`code` 疑基线错）。不准自拷问顶替。需求把本轮问题一次问完；frontier 空之前禁止写 sealed。答问不是另一次确认。触发细则：[cheatsheet §7.2](operator-cheatsheet.md)。
 3. 尺是密封基线。签字按 [references/chat-confirm-signoff.md](chat-confirm-signoff.md)：无本轮确认用语不得写 `sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed`；有确认用语则只代写**当前停问点**（含对应 `semantic_gate`）并立刻下一步。`继续` 不算。不准用确认改 goal。
 4. 红绿只走 verify。不准第二套测试框架或分数门禁。
 5. 签字前：`bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>`。`verify-plan` 只在起草或调整用例、请人 `accepted` 时跑；已 accepted 的 plan 再 `run` 不重跑、不请签。
 6. 巡检包：`bash ~/.cursor/skills/idev/verify/scripts/promote.sh <feature>`。人没提提升 / 巡检包 / promote 则不问、不跑。
 7. 改本 Skill：提案 + 拷问后只改真源 `~/.cursor/skills/idev/`（勿改 `~/.agents` / `~/.joycode` 副本；二者应为 symlink）。平台改了通用禁令 → 回填 `conventions/`。不要把本 Skill 登记成平台规约类。
-8. **每轮路由后输出决策（schema v2）。** 落盘完整 v2；对话短表：S2/S3/S5 只打 trigger / route / stop / next，其余全表。写 `route.scenario: S1`…`S8`（**必写**；缺省当 S1）。`bash ~/.cursor/skills/idev/scripts/trace.sh append` 在产品仓落到 `<repo>/.idev/traces/`，不进 idev 内核。导体自身会话才落到内核 `state/traces/`。必写 `invoke.trigger` / `invoke.matched`、`thinking.summary`，以及本轮真实 `calls[]` / `opened[]`。不为观测另停、不准伪造调用。契约：[references/trace.md](trace.md) · 场景 / 认票 / 停问：[references/invoke.md](invoke.md)。写完后在对话展示一行**运行路径**（trigger → 场景/模块 → calls → next）；可用 `scripts/path-view.sh`（`path-view.sh stats` 热路径）。不为观测另停（H5）。
+8. **每轮路由后输出决策（schema v2）。** 落盘完整 v2；对话短表：S2/S3/S5 只打 trigger / route / stop / next，其余全表。写 `route.scenario: S1`…`S8`（**必写**；缺省当 S1）。`bash ~/.cursor/skills/idev/scripts/trace.sh append` 在产品仓落到 `<repo>/.idev/traces/`，不进 idev 内核。导体自身会话才落到内核 `state/traces/`。必写 `invoke.trigger` / `invoke.matched`、`thinking.summary`，以及本轮真实 `calls[]` / `opened[]`。不为观测另停、不准伪造调用。技能怎么调起、委派给谁、模型与一行思考、组件从哪跳到哪，有就写进 `invoke.how` / `invoke.skills[]`、`decisions` 的 `delegate` / `model`、`calls` 的 `from` / `to` / `model` / `thinking`；缺了不挡本轮。契约：[references/trace.md](trace.md) · 场景 / 认票 / 停问：[references/invoke.md](invoke.md)。写完后在对话展示一行**运行路径**（trigger → 场景/模块 → skills / choices / hops → next）；可用 `scripts/path-view.sh`（`path-view.sh stats` 热路径，含技能入口、委派、模型与组件跳的次数）。不为观测另停（H5）。
 
 ## 产品工程 `.idev`（非核心）
 

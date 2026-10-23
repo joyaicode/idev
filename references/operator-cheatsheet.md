@@ -54,16 +54,17 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> <workflow_id> [--pr
 ## 3. 轻量模式（小改动）
 
 同时满足：已有票且 `stage` 在 `code` / `test`（或人说小改）；**不**改 goal / baseline / 架构；改动面已 `include` 或人指定。  
-走 S8 **`lite-change`**（定界 → 编码 → selftest → 停问提测）。禁止改密封正文、跳阶段、自动 `sealed`/`accepted`、不问就 promote。  
+走 S8 **`lite-change`**（定界 → 编码 → selftest → 实现审核）。禁止改密封正文、跳阶段、自动 `sealed`/`accepted`、不问就 promote。  
 踩坑：[lite-change-pitfalls.md](lite-change-pitfalls.md)。
 
-## 3.5 selftest / test / promote / aligned（四格）
+## 3.5 自测、实现审核、提测、结果、巡检
 
 | 格 | 是什么 | 谁触发 | 产物 |
 |----|--------|--------|------|
-| **selftest** | 开发自测门：`plan.mode=selftest`，证明实现不漂基线 | 人确认 plan 后 `run`；H6：人没说「提测」不进 test | `verify/plan.yaml` + 跑证；`stage` 仍可在 `code` |
-| **test** | 提测包：`plan.mode=test`，维表六族齐（缺则 UNPROVEN 明示） | 人说「提测」或 S8 `test-pack` | 同 plan 改 mode；`check-feature <f> test` |
-| **aligned** | 人接受提测结果与残留 UNPROVEN 风险 | 确认用语或「提测」停问点代写 | `deliver.aligned=true` → `stage=done` |
+| **selftest** | 开发自测：`plan.mode=selftest`，证明实现不漂基线 | 架构通过后直接起草并跑，计划不单独请签 | `verify/plan.yaml` + 跑证；`stage` 仍在 `code` |
+| **实现审核** | 自测完成后看用例、diff、跑证 | 确认用语写入 `semantic_gate.code`，stage 改为 `test` | 不另问要不要提测 |
+| **test** | 提测：`plan.mode=test`，维表六族齐（缺则 UNPROVEN 明示） | 实现审核通过后，或 S8 `test-pack` | `check-feature <f> test` |
+| **aligned** | 人接受提测结果与残留 UNPROVEN 风险 | 测试结果那一次确认 | `deliver.aligned=true` → `stage=done` |
 | **promote** | 把**当前** accepted+已跑 plan 快照成巡检包 | 人说提升 / 巡检包 / promote / 「继续」（done 后） | `doc_home.py --key patrol` |
 
 钉死：promote 吃的是快照那份 plan（可以是 selftest 或 test）。aligned 是人签，promote 是另一刀（H2，全文见 invoke）。
@@ -114,12 +115,12 @@ healthcheck：真源实目录、软链、配方、最近 50 条审计、outbound
 
 下列任一成立时，**本轮立刻**打开并执行 `~/.cursor/skills/grilling/SKILL.md`（缺则先 `scripts/link-companion-skills.sh`），不准用「自己拷问几句」顶替，不准跳过直接请签/代写：
 
-- S1 / `req-review`：需求分析、正确性/合理性/边界/细节未订死；`grill.md` 的 frontier 不是 `empty`；`objections` 或 `review_questions` 非空
+- S1 / `req-review`：需求分析、正确性/合理性/边界/细节未订死；`grill.md` 的 frontier 不是 `empty`；`objections` 或 `review_questions` 非空。本轮能问的一次问完
 - 任意阶段出现 `open_questions` / `baseline-conflict` / 目标或边界含糊 / 人说「不确定」「再想想」「帮我定一下」
-- 即将请签 `sealed` / `accepted` / `aligned` / `resolved` 前，仍有未回答分叉或未清空异议
-- `arch` 方案分叉；`code` 发现像基线写错（先 grill 理解冲突，禁止默许改 goal）
+- 即将请签前，仍有未回答分叉或未清空异议
+- 架构方案已经交出，人 Review 时仍有分叉；`code` 发现像基线写错（先问清冲突，禁止默许改 goal）
 
-grilling 会话未到 frontier 空且人未确认共享理解前：**禁止**写 `sealed`/`accepted`/`aligned`/`resolved`，禁止进入下一阶段。
+frontier 未空之前禁止写 `sealed`。答问不是签字。共享理解写在需求通过那一次确认里。架构没有分叉就不要先拷问再给方案。
 
 ### 7.3 认票
 

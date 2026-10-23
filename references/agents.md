@@ -223,7 +223,10 @@ Cursor 侧这些收紧不生效(它忽略 `tools`,subagent 继承父级全部工
 
 ## trace
 
-委派记成 `calls[].kind: agent`(已在 `scripts/trace.py` 的 `CALL_KINDS` 里),`target` 写 agent 名。
+委派记成 `calls[].kind: agent`(已在 `scripts/trace.py` 的 `CALL_KINDS` 里),`target` 写 agent 名,`from: conductor`,`to: agent:<name>`。
+知道模型就写 `model`(通常 `inherit`),这一跳的思考压成一行 `thinking`,有计时再写 `duration_s`。
+同时在 `decisions` 记一条 `kind: delegate`(`chose: none` 表示导体自己做)。模型这一跳另记 `calls[].kind: model`,不要伪装成 script。
+这些字段都可选:缺了不挡委派,有了才能看出谁调了谁、想了什么。字段表在 [trace.md](trace.md)。
 **不要记成 `module`** —— 否则一轮里多次委派会被周审计的 `multi-exec-calls` 当成「calls 跨多执行模块」硬报警。
 记成 `tool` 不会报警,但分不出「这一轮委派了谁」。
 

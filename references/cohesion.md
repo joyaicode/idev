@@ -7,7 +7,7 @@
 | deliver | 阶段机、密封基线、专家拒过、回退指针 | runner、巡检包、接入 Confirm、集群预案 |
 | verify | plan / run / promote / clean、维度与 runner 表 | 拷问密封、分类 handoff、改 goal |
 | ops | 现场分类、handoff、origin 指针 | 第二套断言、交出口正文、拆解 slices |
-| 入口 traces | 路由 / 拒过 / 停问的可观测记录 | 分数、签字、第二套 eval |
+| 入口 traces | 路由 / 技能调起 / 委派 / 模型 / 组件跳 / 拒过 / 停问的可观测记录 | 分数、签字、第二套 eval |
 | workflows | 快捷指令配方登记表与 run 契约 | 新模块、第二套阶段机、跳过签字 |
 | agents | 执行者定义 + `kind → agent` 登记表 | **顶层 `name:`**、签字、trace、第二套路由 |
 
