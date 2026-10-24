@@ -1,0 +1,7 @@
+# evolve-review receipt
+
+at: 2026-10-24T10:15:45+08:00
+draft: `/Users/wangwei794/go/src/github.com/idev/state/proposals/20261024-101544-evolve-review.md`
+HARD_COUNT: 0
+hot_tags: (none)
+signal: 1
