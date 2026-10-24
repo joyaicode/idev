@@ -1,0 +1,7 @@
+# a grouped step may not record a file outside its writes
+# cmd: W record review PASS --evidence review.md --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED review changed files outside its writes (review.md): verify/plan.yaml — revert them; this step writes only those paths

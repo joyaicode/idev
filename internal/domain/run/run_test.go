@@ -894,6 +894,39 @@ func TestPropertyGatesAndStatusHoldUnderAnySequence(t *testing.T) {
 	})
 }
 
+func TestGroupActivatesTogether(t *testing.T) {
+	r := run.Run{
+		ID: "01GROUP", WorkflowID: "lite-change", Feature: "demo",
+		Steps: []run.Step{
+			{ID: "preflight", Kind: "preflight.inputs", Executor: run.ByConductor, State: run.StepPending},
+			{ID: "plan", Kind: "verify.plan", Executor: run.ByAgent, Group: "check", Writes: []string{"verify/plan.yaml"}, State: run.StepPending},
+			{ID: "run", Kind: "verify.run", Executor: run.ByAgent, Group: "check", Writes: []string{"verify/selftest.md"}, State: run.StepPending},
+			{ID: "gate", Kind: "human.gate", Executor: run.ByConductor, IsGate: true, State: run.StepPending},
+		},
+	}
+	if got := r.Open(); len(got) != 1 || got[0].ID != "preflight" {
+		t.Fatalf("before the group, open = %v", got)
+	}
+	mustFail(t, r, run.Event{Kind: run.EvStepActivated, Actor: run.ActorSystem, StepID: "run"}, "the group waits for preflight")
+
+	r = must(t, r, run.Event{Kind: run.EvStepActivated, Actor: run.ActorSystem, StepID: "preflight"})
+	r = must(t, r, run.Event{Kind: run.EvConductorStepStarted, Actor: run.ActorConductor, StepID: "preflight"})
+	r = must(t, r, run.Event{
+		Kind: run.EvConductorStepRecorded, Actor: run.ActorConductor, StepID: "preflight",
+		Outcome: run.StepPASS, Evidence: "docs/probe.md",
+	})
+
+	opened := r.Open()
+	if len(opened) != 2 || opened[0].ID != "plan" || opened[1].ID != "run" {
+		t.Fatalf("open group = %v", opened)
+	}
+	r = must(t, r, run.Event{Kind: run.EvStepActivated, Actor: run.ActorSystem, StepID: "run"})
+	if state(t, r, "run") != run.StepReady || state(t, r, "plan") != run.StepPending {
+		t.Fatalf("run=%s plan=%s", state(t, r, "run"), state(t, r, "plan"))
+	}
+	mustFail(t, r, run.Event{Kind: run.EvStepActivated, Actor: run.ActorSystem, StepID: "gate"}, "the gate waits for the group")
+}
+
 // --- helpers ---------------------------------------------------------------
 
 func ready(t *testing.T, r run.Run, id string) run.Run {

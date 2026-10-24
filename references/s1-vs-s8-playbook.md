@@ -38,14 +38,16 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> lite-change
 
 （在产品仓目录执行，或设 `IDEV_REPO`。）BLOCKED → 列缺项后停，不准编造覆盖率。
 
-**逐步只开当前 step 对应的一页**（禁止多模块同载）：
+没有 `PARALLEL` 时只开当前 step 对应的一页。`next` 打出 `PARALLEL` 时，本轮同时派这一波里的每个 `DELEGATE`，每个回报只记自己的 step。
 
 1. `preflight.inputs` — 票/路径可读  
 2. `route.s4` — 确认不改 goal/baseline；定界  
-3. `deliver.code_pass` — 只改 `include: true`；写 `review.md`  
-4. `verify.plan` mode=`selftest` → 人 `accepted`（已 accepted 且未改则跳过，H4）  
-5. `verify.run` — 只跑已勾选  
-6. **默认结束。** 人没说「提测」不问 `mode=test`（H6）；不自动 promote。
+3. `deliver.code_pass` — 只改 `include: true`  
+4. 同一波 `group: check`：`verify.plan` 写 `verify/plan.yaml`，`verify.run` 写 `verify/selftest.md`，`review.report` 写 `review.md`，验收索引写 `verify/accept.md`  
+5. 计划无信号则 `gate-plan` 记 `AUTO`（H4）  
+6. `review.fix` 改掉全部 `I*`  
+7. `verify.run` 复跑：回写 `plan.yaml` 的 status，并重写 `selftest.md` 与 `accept.md`，然后停在实现审核  
+8. **默认结束。** 人没说「提测」不问 `mode=test`（H6）；不自动 promote。
 
 踩坑：[lite-change-pitfalls.md](lite-change-pitfalls.md)。
 
@@ -53,7 +55,7 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> lite-change
 
 ## 共用硬规则（两轨都守）
 
-- 每轮**一个**执行模块；红绿只走 verify。  
+- 没有 `PARALLEL` 时每轮一个执行模块；`PARALLEL` 那一波每个 `DELEGATE` 各开自己的页。红绿只走 verify。  
 - 边界未订死 / 有 open_questions / 请签前仍有分叉 → **自动 grilling**；未完成前不准请签。  
 - 无本轮确认用语不得写 `sealed` / `accepted` / `aligned`。  
 - 签字前结构检查 FAIL → 不准请签。  

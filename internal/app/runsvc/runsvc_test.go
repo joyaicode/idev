@@ -614,6 +614,28 @@ func readRun(st *memstore.Store, id string) (run.Run, int64, error) {
 	return r, v, err
 }
 
+func TestNextForListsAnOpenGroup(t *testing.T) {
+	svc := runsvc.Service{Registry: kindreg.MustLoad()}
+	r := run.Run{
+		ID: "01GROUP", WorkflowID: "lite-change", Feature: "demo",
+		Steps: []run.Step{
+			{ID: "plan", Kind: "verify.plan", Executor: run.ByAgent, Group: "check", State: run.StepReady},
+			{ID: "run", Kind: "verify.run", Executor: run.ByAgent, Group: "check", State: run.StepPending},
+			{ID: "gate", Kind: "human.gate", Executor: run.ByConductor, IsGate: true, State: run.StepPending},
+		},
+	}
+	nxt := svc.NextFor(r)
+	if nxt.Action != runsvc.ActionDelegate || nxt.Step == nil || nxt.Step.ID != "plan" {
+		t.Fatalf("next = %+v", nxt)
+	}
+	if nxt.Agent != "idev-verifier" {
+		t.Fatalf("agent = %q", nxt.Agent)
+	}
+	if len(nxt.Steps) != 2 || nxt.Steps[0].ID != "plan" || nxt.Steps[1].ID != "run" {
+		t.Fatalf("steps = %+v", nxt.Steps)
+	}
+}
+
 func saveRun(st *memstore.Store, r run.Run, version int64) error {
 	return st.InTx(context.Background(), func(tx ports.Tx) error {
 		return tx.Runs().Save(context.Background(), r, version)

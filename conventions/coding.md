@@ -18,7 +18,7 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 2. **高内聚低耦合**：一个文件只为一种变更理由改动（C12 到文件级）；跨模块只走显式契约（**T4**）；职责不同的两条通道不合流（**P16**）。
 3. **条件链先上模式**：按类型分派已有 ≥2 分支且还会增，先扫 §1 **P5**（Strategy / 经典 switch / 查表）；零命中才写直白 if 链。
 4. **语法糖优先**：在该仓语言级别内先用语法糖减行（Java 见 [java.md](java.md) 四准则 2；Go 表驱动 / 函数值 / composite literal；Vue/TS 查表 + `computed` + 早返回）。不以「更明确」为由写笨代码。
-5. **复杂度有界**：[coding-tables.md](coding-tables.md) §2.4 全表（函数级五行 + 变更级两行）；超线要么当轮改，要么 `review.md` 写清为何允许并落 `C#`。
+5. **复杂度有界**：[coding-tables.md](coding-tables.md) §2.4 全表（函数级五行，以及单文件行数、新增文件、触及文件、净增行、一文件一理由）；超线要么当轮改，要么 `review.md` 写清为何允许并落 `C#`。
 
 ---
 
@@ -32,11 +32,13 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 3. 用这句话扫 [coding-tables.md](coding-tables.md) §1，命中**第一行**就停，按「运用」做，按「不要」拒绝。
 4. 零命中 → 写具体类型，**不准**为对称先上模式。
 5. 每新增一个函数 / 导出，立刻扫 [coding-tables.md](coding-tables.md) §2 + §2.4 量化阈值；命中当场改，不准留到「写完再说」。气味驱动的结构整理按 §3 小步做。
-6. 写完按文首**规范总则**回扫本轮 diff：净增行说得出换来什么、一文件一变更理由、条件链过了 §1、语法糖用了、§2.4 变更级两行已扫。
+6. 写完按文首**规范总则**回扫本轮 diff：净增行说得出换来什么、一文件一变更理由、单文件行数、每个新文件一种职责、每个触及文件为何必须动、条件链过了 §1、语法糖用了。
 
 **Review（对照基线之后、请人签字之前）**
 
-1. 先扫文首**规范总则**五条（含 [coding-tables.md](coding-tables.md) §2.4 变更级粗筛：净增行去向 / 一文件一理由）；命中译成 `T#`/`P#`/`C#`。
+编码者自己写的「编码规范」节不算 Review。这一节由 `idev-reviewer` 写，并写上 `审查者: idev-reviewer`。自测有跑证之后、实现审核之前做完。不另设人闸。交付主路径上 `review.fix` 的 `with.accept_all_findings: true` 表示全部 `I*` 当轮改；`code-review` 配方没有这个字段，仍只改已签收项。
+
+1. 先扫文首**规范总则**五条（含 [coding-tables.md](coding-tables.md) §2.4：净增行、单文件行数、新增文件、触及文件、一文件一理由）；命中译成 `T#`/`P#`/`C#`。
 2. 再扫 §1：该用的没用、不该用的用了，都是拒过。
 3. 逐条扫 §2：命中必须当轮改掉，只记账不算过。
 4. 若有重构：核对 §3 满足条件与「两顶帽子」；混做加功能 / 无护栏绿 = 拒过。
@@ -44,7 +46,7 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 6. 把命中与纠正写入 `review.md`「编码规范」节（模板见 review.example）；写五轴 / 栈指南 / 增强扫描。
 7. 跑该仓扫描（Java Problems / `qodana.starter`；前端 `lint-fix`）。黄条视为未完成。
 
-**例外（仅 S8 `review.report`）**：`code-review` 报告步允许只记账并标「待签收」，本步不改代码。`deliver.code_pass` 与 `review.fix` 对已签收 `I*` 仍当轮必改。全文 [workflow-code-review.md](../references/workflow-code-review.md)。
+**例外（仅 S8 `review.report`）**：报告步允许只记账并标「待签收」，本步不改代码。`review.fix` 在 `accept_all_findings: true` 时改全部 `I*`；否则只改已签收 `I*`。全文 [workflow-code-review.md](../references/workflow-code-review.md) 与 [lite-change](../workflows/lite-change.yaml)。
 
 命令式代码读一遍说不出失败条件 = 还在兜底 = §2 命中。
 
@@ -95,7 +97,8 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 
 - [ ] §1 已匹配或确认零命中（全表在 coding-tables.md）
 - [ ] §2 全表扫过，命中已改
-- [ ] §2.4 量化阈值已扫（函数≤20行 / 嵌套≤2 / 参数≤3 / 复杂度≤10 / 无三次重复 / 净增行可解释 / 一文件一理由）；超线已改或 `review.md` 写清理由并落 `C#`
+- [ ] §2.4 量化阈值已扫（函数≤20行 / 嵌套≤2 / 参数≤3 / 复杂度≤10 / 无三次重复 / 单文件≤400行 / 新增文件各有一种职责 / 触及文件说得出为何动 / 净增行可解释 / 一文件一理由）；超线已改或 `review.md` 写清理由并落 `C#`
+- [ ] `review.md` 写了 `审查者: idev-reviewer` 和带数字的 `文件与行数`
 - [ ] 若有结构调整：§3 R1–R6 满足，且 `review.md` 写了重构动机与护栏
 - [ ] 已按 §3.8 做增强扫描（`coding-scan.sh` + 五轴 + 栈指南）；blocking 已改
 - [ ] `review.md` 用本页 `P#`/`C#`/`R#`；写了命中行与纠正；写了五轴 / 栈指南 / 增强扫描

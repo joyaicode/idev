@@ -127,10 +127,98 @@ echo "=== 架构范式 ==="
 echo "  idev: ${IDEV}/conventions/canon.md  (T1-T12 念头表 / A1-A8 出门)"
 echo "  涉及加层/拆分/缓存/队列/重写 → 按 canon §1 协议扫 §2 信号，review.md 按 §7 模板记 T#"
 
+echo "=== size (coding-tables §2.4) ==="
+if git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "  diff:"
+  git -C "$REPO" diff --stat HEAD -- . \
+    ':(exclude)node_modules' ':(exclude)target' ':(exclude)dist' || true
+  echo "  longest tracked source files:"
+  REPO="$REPO" git -C "$REPO" ls-files -z -- '*.java' '*.go' '*.vue' '*.ts' '*.tsx' '*.py' '*.js' \
+    | REPO="$REPO" python3 -c '
+import os, sys
+repo = os.environ["REPO"]
+rows = []
+for raw in sys.stdin.buffer.read().split(b"\0"):
+    if not raw:
+        continue
+    rel = raw.decode()
+    path = os.path.join(repo, rel)
+    try:
+        with open(path, "rb") as fh:
+            n = sum(1 for _ in fh)
+    except OSError:
+        continue
+    rows.append((n, rel))
+rows.sort(reverse=True)
+if not rows:
+    print("  (none)")
+for n, rel in rows[:5]:
+    print("  %6d %s" % (n, rel))
+'
+else
+  echo "  git: none"
+fi
+run_configured_scanner() {
+  local wf flags name ran=0
+  wf="$(grep -Rls 'super-linter' "$REPO/.github" 2>/dev/null | head -1 || true)"
+  if [ -z "$wf" ]; then
+    echo "  scanner: no super-linter config — run the stack tools above if the repo already has them"
+    return
+  fi
+  echo "  scanner: super-linter config ${wf#"$REPO"/}"
+  flags="$(WF="$wf" python3 - <<'PY'
+import os, re
+text = open(os.environ["WF"], encoding="utf-8", errors="replace").read()
+for match in re.finditer(r"(?m)^[ \t#-]*(VALIDATE_[A-Z0-9_]+)[ \t]*:[ \t]*[\"']?true\b", text):
+    print(match.group(1))
+PY
+)"
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    case "$name" in
+      VALIDATE_PYTHON|VALIDATE_PYTHON_RUFF|VALIDATE_PYTHON_PYLINT|VALIDATE_PYTHON_FLAKE8|VALIDATE_PYTHON_ISORT|VALIDATE_PYTHON_BLACK)
+        echo "  scanner run: python3 compile ($name)"
+        if ! python3 -m compileall -q -x 'node_modules|target|dist|.git' "$REPO"; then
+          echo "  scanner result: python compile failed"
+        fi
+        ran=1
+        ;;
+      VALIDATE_GO|VALIDATE_GO_MODULES)
+        if command -v golangci-lint >/dev/null 2>&1; then
+          echo "  scanner run: golangci-lint ($name)"
+          if ! (cd "$REPO" && golangci-lint run --timeout 2m); then
+            echo "  scanner result: golangci-lint failed"
+          fi
+          ran=1
+        else
+          echo "  scanner skip: golangci-lint is not installed ($name); not downloading super-linter"
+        fi
+        ;;
+      VALIDATE_JAVASCRIPT_ES|VALIDATE_TYPESCRIPT_ES|VALIDATE_JAVASCRIPT_STANDARD)
+        if command -v eslint >/dev/null 2>&1; then
+          echo "  scanner run: eslint ($name)"
+          if ! (cd "$REPO" && eslint .); then
+            echo "  scanner result: eslint failed"
+          fi
+          ran=1
+        else
+          echo "  scanner skip: eslint is not installed ($name); not downloading super-linter"
+        fi
+        ;;
+    esac
+  done <<< "$flags"
+  if [ "$ran" = 0 ]; then
+    echo "  scanner: config present; no matching local tool ran; not downloading super-linter"
+  fi
+}
+run_configured_scanner
+
 echo "=== review.md must record ==="
+echo "  - 审查者: idev-reviewer"
+echo "  - 文件与行数: 触及 N 个文件，新增 M，最长 L 行"
 echo "  - 场景命中 / 气味命中 / 纠正 (P# C#)"
 echo "  - 五轴: 正确性/可读性/架构/安全/性能 — 各写 过 或 命中摘要"
 echo "  - 栈指南: java8|java|vue|go|… （本轮打开的 guide 名）"
 echo "  - 增强扫描: coding-scan + guides 已跑 / 未跑"
-echo "  - 扫描: Problems/Qodana 或 lint-fix — 干净/未跑"
+echo "  - 扫描: 仓内已有规范扫描 — 干净 / 本仓无规范扫描器"
 echo "=== done ==="

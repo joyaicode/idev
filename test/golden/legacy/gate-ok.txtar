@@ -2,10 +2,6 @@
 # cmd: W record gate-plan PASS --by tester --quote 确认 --feature demo
 
 -- exit --
-0
+2
 -- output --
-NEXT run  kind=verify.run  status=pending
-OPEN verify/SKILL.md
-DELEGATE idev-verifier
-LABEL 跑已勾选 cases
-WITH {'mode': 'selftest'}
+BLOCKED finish plan first; record it SKIPPED to skip

@@ -11,8 +11,8 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | 导体 | idev 内核：产品依赖它的通用工具；不含产品会话的中间文件 | `SKILL.md` |
 | 内核 | `~/.cursor/skills/idev/` 真源（即 `IDEV_ROOT` 指向的 checkout）。产品中间文件不进这里；Go CLI 的数据在 `IDEV_DATA`（`~/.idev`），不在内核 | [scope.md](../conventions/scope.md) |
 | `.idev` | idev 在产线交付中识别出的特性，以及需要保存的状态。写在产线工程里，供后续 idev 会话参考或使用 | [scope.md](../conventions/scope.md) |
-| 标识 | idev 写入 `.idev/marker.yaml` 的 `marker: idev`。后续会话靠它认出这份持久化；`evolve: pilot` 的仓进入自进化。`extension_root` 是指向另一标记仓的相对路径 | `scripts/lib/product_marker.py` |
-| 阶段页 | `.idev/extensions.yaml` 里某一阶段要打开的产线文件。进入阶段用 `session-context.py`，点名的产品传 `--product` | `scripts/session-context.py` |
+| 标识 | idev 写入 `.idev/marker.yaml` 的 `marker: idev`。后续会话靠它认出这份持久化；`evolve: pilot` 的仓进入自进化。`extension_root` 是指向另一标记仓的相对路径 | [extension-config.md](extension-config.md) |
+| 阶段页 | `.idev/extensions.yaml` 里某一阶段要打开的产线文件。进入阶段用 `session-context.py`，点名的产品传 `--product` | [extension-config.md](extension-config.md) |
 | 执行产物 | idev 跑阶段时留下的 trace、复盘、inbox。在产线 `.idev/`，给定自进化参考；`docs/task/` 不是执行产物。过时原件先摘要进 `memory.md` 再删 | `scripts/execution-clean.sh` |
 | memory.md | 产线 `.idev/` 里纳入版本库的摘要。自进化引用满 2 次或满 3 代时更新。外部清理忽略目录时靠 `!.idev/memory.md` 留下来 | `.idev/memory.md` |
 | 提升到内核 | 人主动要求后，剥离产品专有内容，`kernel-promote-check.sh` 通过，才写入内核 | [scope.md](../conventions/scope.md) |

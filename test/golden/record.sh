@@ -100,7 +100,7 @@ G() { python3 "${IDEV}/scripts/stage-gate.py" "$@"; }
 T() { python3 "${IDEV}/scripts/trace.py" "$@"; }
 
 # --- workflow: start, read, record ----------------------------------------
-record start-lite-change "$OUT" "start a 7-step recipe on a fresh ticket" -- \
+record start-lite-change "$OUT" "start an 11-step recipe on a fresh ticket" -- \
   W start lite-change --feature "$FEATURE"
 record next-after-start "$OUT" "NEXT/OPEN/DELEGATE for the first step" -- \
   W next --feature "$FEATURE"
@@ -133,7 +133,85 @@ W record code-pass PASS --evidence "docs/x.md" --verified-by idev-reviewer --ver
 # The report only has to exist at record time. Leaving it would show up in
 # the later timeline, which is a different scenario.
 rm -f "$WORK/.idev/task/${FEATURE}/workflow/delegations/review-1.yaml"
+record parallel-next "$OUT" "after code-pass the check group is open together" -- \
+  W next --feature "$FEATURE"
+record delegate-open "$OUT" "one command delegates every open agent step" -- \
+  W delegate --open --feature "$FEATURE"
+
+# A grouped step with a delegation must declare CHANGED, and only inside writes.
+cat > "$WORK/rec-outside.yaml" <<YAML
+step: review
+kind: review.report
+agent: idev-reviewer
+attempt: 1
+brief:
+  ticket_home: $WORK/.idev/task/${FEATURE}
+  repo: $WORK
+  stage: code
+  risk_tier: P1
+  must_read: conventions/coding.md
+  idev_root: ${IDEV}
+report:
+  raw: |
+    STATUS: PASS
+    FACTS: 源码 review.md:1
+    DOC_DRIFT: 无
+    CHANGED: verify/plan.yaml
+    ASSUMED: 无
+    EVIDENCE: review.md
+    CONCLUSION: golden
+YAML
+D write --feature "$FEATURE" --file "$WORK/rec-outside.yaml" >/dev/null
+record writes-outside "$OUT" "a grouped step may not record a file outside its writes" -- \
+  W record review PASS --evidence "review.md" --feature "$FEATURE"
+rm -f "$WORK/.idev/task/${FEATURE}/workflow/delegations/review-1.yaml"
+
+# --- signals: a load-bearing assumption stops PASS until a person decides ---
+# `run` is one member of the open group, so it can be recorded before plan.
+cat > "$WORK/rec-signal.yaml" <<YAML
+step: run
+kind: verify.run
+agent: idev-verifier
+attempt: 1
+brief:
+  ticket_home: $WORK/.idev/task/${FEATURE}
+  repo: $WORK
+  stage: test
+  risk_tier: P1
+  must_read: verify/SKILL.md
+  idev_root: ${IDEV}
+report:
+  raw: |
+    STATUS: PASS
+    FACTS: 源码 scripts/workflow.py:1
+    DOC_DRIFT: 无
+    ASSUMED: [承重] 测试库开跑前是空的
+    CHANGED: verify/selftest.md
+    EVIDENCE: $WORK/.idev/task/${FEATURE}/review.md
+    CONCLUSION: golden
+YAML
+record delegation-signal "$OUT" "a delegation with a load-bearing assumption raises a signal" -- \
+  D write --feature "$FEATURE" --file "$WORK/rec-signal.yaml"
+record signal-blocks-pass "$OUT" "PASS is refused while a signal has no decision" -- \
+  W record run PASS --evidence "docs/x.md" --feature "$FEATURE"
+record decide-non-answer "$OUT" "继续 is not an answer to the question" -- \
+  W decide run --signal "[承重] 测试库开跑前是空的" --question "测试库开跑前是空的吗" \
+    --answer "是" --quote "继续" --feature "$FEATURE"
+record decide-wrong-signal "$OUT" "a decision for a signal the record never raised" -- \
+  W decide run --signal "[承重] 别的事" --question "q" --answer "a" --quote "1" --feature "$FEATURE"
+record decide-ok "$OUT" "the person answers the question" -- \
+  W decide run --signal "[承重] 测试库开跑前是空的" --question "测试库开跑前是空的吗" \
+    --options "1 是 / 2 不是,先清库" --recommend "1" --answer "是,每次 CI 新建" --quote "1" --feature "$FEATURE"
+second="$(W decide run --signal "[承重] 测试库开跑前是空的" --question "测试库开跑前是空的吗" \
+  --answer "不是" --quote "2" --feature "$FEATURE" 2>&1)" && { echo "second decision accepted: $second"; exit 1; }
+printf '%s\n' "$second" | grep -q 'already decided (D1)' || { echo "second decision: $second"; exit 1; }
+record signal-answered-pass "$OUT" "PASS once every signal has a decision" -- \
+  W record run PASS --evidence "docs/x.md" --feature "$FEATURE"
+
+# The rest of the group closes before the plan gate becomes current.
 W record plan PASS --evidence "verify/plan.yaml" --feature "$FEATURE" >/dev/null 2>&1
+W record review PASS --evidence "review.md" --feature "$FEATURE" >/dev/null 2>&1
+W record accept PASS --evidence "verify/accept.md" --feature "$FEATURE" >/dev/null 2>&1
 
 # --- the human gate -------------------------------------------------------
 record gate-no-by "$OUT" "a gate PASS with no --by" -- \
@@ -173,46 +251,6 @@ record gate-auto-signal "$OUT" "AUTO on a clean check output that still raised a
 
 record gate-ok "$OUT" "a person with a real confirmation" -- \
   W record gate-plan PASS --by tester --quote "确认" --feature "$FEATURE"
-
-# --- signals: a load-bearing assumption stops PASS until a person decides ---
-cat > "$WORK/rec-signal.yaml" <<YAML
-step: run
-kind: verify.run
-agent: idev-verifier
-attempt: 1
-brief:
-  ticket_home: $WORK/.idev/task/${FEATURE}
-  repo: $WORK
-  stage: test
-  risk_tier: P1
-  must_read: verify/SKILL.md
-  idev_root: ${IDEV}
-report:
-  raw: |
-    STATUS: PASS
-    FACTS: 源码 scripts/workflow.py:1
-    DOC_DRIFT: 无
-    ASSUMED: [承重] 测试库开跑前是空的
-    EVIDENCE: $WORK/.idev/task/${FEATURE}/review.md
-    CONCLUSION: golden
-YAML
-record delegation-signal "$OUT" "a delegation with a load-bearing assumption raises a signal" -- \
-  D write --feature "$FEATURE" --file "$WORK/rec-signal.yaml"
-record signal-blocks-pass "$OUT" "PASS is refused while a signal has no decision" -- \
-  W record run PASS --evidence "docs/x.md" --feature "$FEATURE"
-record decide-non-answer "$OUT" "继续 is not an answer to the question" -- \
-  W decide run --signal "[承重] 测试库开跑前是空的" --question "测试库开跑前是空的吗" \
-    --answer "是" --quote "继续" --feature "$FEATURE"
-record decide-wrong-signal "$OUT" "a decision for a signal the record never raised" -- \
-  W decide run --signal "[承重] 别的事" --question "q" --answer "a" --quote "1" --feature "$FEATURE"
-record decide-ok "$OUT" "the person answers the question" -- \
-  W decide run --signal "[承重] 测试库开跑前是空的" --question "测试库开跑前是空的吗" \
-    --options "1 是 / 2 不是,先清库" --recommend "1" --answer "是,每次 CI 新建" --quote "1" --feature "$FEATURE"
-second="$(W decide run --signal "[承重] 测试库开跑前是空的" --question "测试库开跑前是空的吗" \
-  --answer "不是" --quote "2" --feature "$FEATURE" 2>&1)" && { echo "second decision accepted: $second"; exit 1; }
-printf '%s\n' "$second" | grep -q 'already decided (D1)' || { echo "second decision: $second"; exit 1; }
-record signal-answered-pass "$OUT" "PASS once every signal has a decision" -- \
-  W record run PASS --evidence "docs/x.md" --feature "$FEATURE"
 
 # --- delegation records ---------------------------------------------------
 cat > "$WORK/rec.yaml" <<YAML

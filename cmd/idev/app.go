@@ -541,6 +541,8 @@ type runFile struct {
 		Delegated *struct {
 			Agent string `yaml:"agent"`
 		} `yaml:"delegated"`
+		Group  string   `yaml:"group"`
+		Writes []string `yaml:"writes"`
 	} `yaml:"steps"`
 }
 
@@ -553,7 +555,7 @@ var finished = map[string]bool{"PASS": true, "SKIPPED": true, "UNPROVEN": true, 
 func (r runFile) projection(risk string) sqlite.ProjectedRun {
 	out := sqlite.ProjectedRun{ID: r.RunID, WorkflowID: r.WorkflowID, Feature: r.Feature, Risk: risk}
 	for _, st := range r.Steps {
-		ps := sqlite.ProjectedStep{ID: st.ID, Kind: st.Kind, State: run.StepPending}
+		ps := sqlite.ProjectedStep{ID: st.ID, Kind: st.Kind, State: run.StepPending, Group: st.Group, Writes: append([]string(nil), st.Writes...)}
 		switch {
 		case st.Delegated != nil && st.Delegated.Agent != "" && !finished[st.Status]:
 			ps.State, ps.Writer = run.StepDelegated, st.Delegated.Agent

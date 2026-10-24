@@ -51,6 +51,7 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
 | 认什么 | 打开 |
 |---|---|
 | 目录 | `~/.cursor/skills/setup-agents-docs/SKILL.md` 的 Rule 4(feature slug)与 Rule 10(`docs/` 目录表) |
+| 体例 | `$IDEV/docs/SKILL.md` 的「体例」:五份文档同一事实只写一处,人读与机读对同一批 id |
 | 问句 | `~/.cursor/skills/grilling/SKILL.md` |
 
 两份都打不开时先跑 `bash $IDEV/scripts/link-companion-skills.sh`;仍打不开就**停并回报
@@ -80,8 +81,7 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
      (零依赖预览,浏览器直接打开)
    - **`req`** — 只把密封 item 译成 slices,**不增不减**。译不清进 `open_questions`(只问理解);
      想加义务 → `baseline-conflict`,**停**
-   - **`arch`** — 需求签收后交评审包,再请人签。`design.md` 六节(目标/方案/契约/影响面/回退/用例),目标节照抄基线 goal;每条 item、每条 `case_intent` 点名。`arch.yaml` 的 `approach` 与 `non_approach` 都要有,`case_intents` 挂 `baseline_item_id`。同一轮让 verifier 起草 `verify/plan.yaml`,每条 intent 一条 case,slice/item/dimension 一致,先 `UNPROVEN`。方案"更好"但超基线 → 拒过。
-     回报 `BLOCKED(logic)`,让导体对**这份方案**唤起 grilling(`grill.md` 的 `## arch` 轮)。arch 轮未闭合不要请签。需求轮的 `frontier` 保持 empty。
+   - **`arch`** — 需求签收后交整包方案,再请人签。`design.md` 六节(目标/方案/契约/影响面/回退/用例),目标节照抄基线 goal;每条 item、每条 `case_intent` 点名。`arch.yaml` 的 `approach` 与 `non_approach` 都要有,`case_intents` 挂 `baseline_item_id`。本阶段不写 `verify/plan.yaml`。方案"更好"但超基线 → 拒过。没有未决分叉就不要写 `grill.md` 的 `## arch` 轮。有分叉才回报,让导体把问句写进那一轮。需求轮的 `frontier` 保持 empty。
      按 `$IDEV/conventions/canon.md` §1 协议扫 §2 信号与 §4 念头,§5 必答 A1–A8;
      答不出标 `UNPROVEN` 并写进方案节。引入新领域概念时先过 `conventions/domain-modeling.md` 建通用语言
    - **`test`** — 用例证明基线 item。疑问只拷问理解,**答案不得写成新 must**

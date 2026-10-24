@@ -54,7 +54,7 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> <workflow_id> [--pr
 ## 3. 轻量模式（小改动）
 
 同时满足：已有票且 `stage` 在 `code` / `test`（或人说小改）；**不**改 goal / baseline / 架构；改动面已 `include` 或人指定。  
-走 S8 **`lite-change`**（定界 → 编码 → selftest → 实现审核）。禁止改密封正文、跳阶段、自动 `sealed`/`accepted`、不问就 promote。  
+走 S8 **`lite-change`**（定界 → 编码 → 同一波用例/自测/审查/验收索引 → 改审查意见 → 复跑回写 → 实现审核）。禁止改密封正文、跳阶段、自动 `sealed`/`accepted`、不问就 promote。  
 踩坑：[lite-change-pitfalls.md](lite-change-pitfalls.md)。
 
 ## 3.5 自测、实现审核、提测、结果、巡检

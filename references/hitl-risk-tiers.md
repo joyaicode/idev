@@ -23,4 +23,4 @@
 | Promote / 巡检包 | `verify/scripts/promote.sh`（人触发） |
 | CI 绿 + 证明物 | `check-feature` + plan evidence；**不**替代仓内 CI |
 
-idev **不**内置并行 PR 阶段机；仓内 CI/MR 仍是产品仓责任。
+idev **不**内置并行 PR 阶段机；仓内 CI/MR 仍是产品仓责任。配方里同一 `group`、`writes` 不相交的 verify 步骤可以同时开，那是订死写集之后的一波。

@@ -4,4 +4,4 @@
 -- exit --
 2
 -- output --
-BLOCKED AUTO evidence not found: verify/plan-check.log (save the check output there first)
+BLOCKED finish plan first; record it SKIPPED to skip

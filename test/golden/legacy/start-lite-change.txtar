@@ -1,4 +1,4 @@
-# start a 7-step recipe on a fresh ticket
+# start an 11-step recipe on a fresh ticket
 # cmd: W start lite-change --feature demo
 
 -- exit --

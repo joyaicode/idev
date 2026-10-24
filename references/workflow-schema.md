@@ -36,6 +36,10 @@
 | `kind` | 见 kind 表 |
 | `with` | 可选参数（如 `mode: selftest`）。`shell.confirmed` 的 `with.command` 写已确认的那条命令；写 `status` 时读扩展根 `commands.status` |
 | `label` | 给人看的短名 |
+| `group` | 可选。同一 slug 的连续步骤同时开放。人闸和写租约不能进组。组内每步都要有 `writes` |
+| `writes` | 可选，只和 `group` 一起用。票内相对路径，组内两两不相交。`next` 打出 `WRITES`；这一步只写这些文件 |
+
+组里多于一步未完成时，`next` 先打 `PARALLEL <group>`，再按配方顺序列出每个未完成成员。`record` 和 `delegate` 接受其中任一步。组后面的步骤要等组内全部记完。这一步已经有委派时，回报要有 `CHANGED`；列出 `writes` 之外的路径，`record` 拒绝。没改文件写 `CHANGED: 无`。波次打开时给票目录留一份哈希。之后票里多出来的、且不在这一波任一 `writes` 里的文件，`record` 也拒绝。`workflow.py delegate --open` 一次委派当前波里每一个 agent 步骤。
 
 ## kind 登记表（加行，不新开 Skill）
 
@@ -53,7 +57,7 @@
 | `docs.backfill` | docs/SKILL.md | 契约 / 经验回填（S5）。打开该技能，再按 setup-agents-docs 归类 |
 | `docs.changelog` | docs/SKILL.md | 变更说明 / 任务小结。打开该技能后写入解析出的票目录 |
 | `review.report` | conventions/coding | 认语言 + 出审查报告；**不改代码**；命中标待签收（C14 例外） |
-| `review.fix` | conventions/coding | 只改已签收 `I*`（及显式纳入的 `O*`）；此步恢复当轮必改 |
+| `review.fix` | conventions/coding | 交付主路径 with.accept_all_findings 时改全部 I*；code-review 仍只改已签收 I* 与显式纳入的 O*。此步恢复当轮必改 |
 | `verify.plan` | verify | 起草/调整 plan；请人 accepted（已 accepted 且未改用例 → 跳过，H4） |
 | `verify.run` | verify | 跑已 accepted 且勾选的 cases |
 | `ops.classify` | ops | 现象分类 |
@@ -88,7 +92,7 @@
 | `status` | `pending` \| `running` \| `blocked` \| `done` \| `aborted` |
 | `params` | 绑定后的参数 |
 | `policy` | 起跑时抄下的配方 `policy` |
-| `steps[]` | 抄自配方的 `id` / `kind` / `label` / `with`。没有 `status` 就是还没跑；跑过是 `PASS` \| `FAIL` \| `UNPROVEN` \| `SKIPPED` \| `BLOCKED` \| `AUTO`，另有 `at`，`evidence` / `note` 可选。`human.gate` 为 `PASS` 时必须有 `signoff: {by, quote, at}`，`by` 是人名，`quote` 以确认用语开头；为 `AUTO` 时只有 `evidence`，没有 `signoff`。独立复核过的步骤另有 `verification: {by, evidence, at}` |
+| `steps[]` | 抄自配方的 `id` / `kind` / `label` / `with` / `group` / `writes`。没有 `status` 就是还没跑；跑过是 `PASS` \| `FAIL` \| `UNPROVEN` \| `SKIPPED` \| `BLOCKED` \| `AUTO`，另有 `at`，`evidence` / `note` 可选。`human.gate` 为 `PASS` 时必须有 `signoff: {by, quote, at}`，`by` 是人名，`quote` 以确认用语开头；为 `AUTO` 时只有 `evidence`，没有 `signoff`。独立复核过的步骤另有 `verification: {by, evidence, at}` |
 | `revisions[]` | 只追加；改已记录的步骤时写 `step` 与 `旧 -> 新: 原因` |
 | `feedback` | `status`：`pending` \| `filed`；试运行 tag 拷到 verify inbox |
 
@@ -139,7 +143,7 @@ $W abort --note <原因> --feature <f>
 
 ## UI 生命周期与知识沉淀
 
-产品目录、前端路径、启停和关审批的命令都在扩展根 `.idev/workflow-defaults.yaml` 的 `commands` 与 `products`（会话仓写了相对路径 `extension_root` 时读那一仓，不要在会话仓再放一份）。没有该文件或没有该键，`s8-preflight` BLOCKED。
+扩展根的 `marker.yaml`、`extensions.yaml`、`workflow-defaults.yaml` 每个键的解释和示例只在 [extension-config.md](extension-config.md)。会话仓写了 `extension_root` 时读那一仓，不要再放一份。没有文件或没有配方要的键，`s8-preflight` BLOCKED。
 
 `ui.fix_deposit` 落盘（禁止 `.scratch/`）：
 

@@ -81,7 +81,7 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 1. 读 plan：`accepted != true` 则拒跑。**不跑 `check-feature verify-plan`，不把该项 FAIL 当运行门禁，不请人再签。**
 2. 只跑 `cases[].accepted == true` 且 runner 可执行的项。日志：`{module}/target/verify/<case-id>/`。
 3. 回写每条 `status` + `evidence`。追加 `revisions[]`。
-4. 写同目录 `report.md`：索引过了什么、`UNPROVEN` 什么、`human_signoff` 仍 `PENDING` 什么。不准把人签项写成 PASS。
+4. 写同目录 `report.md`：索引过了什么、`UNPROVEN` 什么、`human_signoff` 仍 `PENDING` 什么。不准把人签项写成 PASS。不重写用例正文。体例见 [docs/SKILL.md](../docs/SKILL.md)。
 5. 写 `## conductor-eval` 计数（见 [evolve.md](references/evolve.md)）。诚实性检查失败必须写明，不得用「全面通过」盖住。
 6. 若台账 `phase: trial`：写下 `feedback.yaml`（`status: pending`，照 [feedback.example.yaml](references/feedback.example.yaml)），**停问**人要哪些 tag + 一句话。收到后写入，并拷到与 `product_sink.py inbox` 相同的目录（产品工程 `.idev/inbox/`；没有当前产品才是内核 `verify/state/inbox/`）。
 

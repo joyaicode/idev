@@ -36,7 +36,7 @@ description: >-
 [references/agents-playbook.md](references/agents-playbook.md)。
 
 S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none` 表示这一步你自己做
-（`human.gate` 永远是 none）。委派后按 [references/agents-evolve.md](references/agents-evolve.md)
+（`human.gate` 永远是 none）。`next` 打出 `PARALLEL` 时，先跑 `workflow.py delegate --open`，再把这一波里的每个 `DELEGATE` 派出去，每个回报只 `record` 自己的 step。委派后按 [references/agents-evolve.md](references/agents-evolve.md)
 落一份留痕，它是这一层可调试的全部前提。
 
 ## 提效三板斧

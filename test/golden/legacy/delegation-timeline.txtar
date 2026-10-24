@@ -12,9 +12,13 @@
 preflight         preflight.inputs      导体            PASS                    -  -
 scope-guard       route.s4              —               PASS                    -  -
 code-pass         review.report         idev-reviewer   PASS                    -  $WORK/.idev/task/demo/review.md
-plan              verify.plan           —               PASS                    -  -
-gate-plan         human.gate            导体(签字)      PASS                    -  -
+plan              verify.plan           —               pending                 -  -
 run               verify.run            idev-verifier   PASS                    -  $WORK/.idev/task/demo/review.md
+review            review.report         —               pending                 -  -
+accept            verify.run            —               pending                 -  -
+gate-plan         human.gate            导体(签字)      pending                 -  -
+fix               review.fix            —               pending                 -  -
+refresh           verify.run            —               pending                 -  -
 gate-review       human.gate            导体(签字)      pending                 -  -
 sign-claim *      review.report         idev-reviewer   PASS!                   -  $WORK/.idev/task/demo/review.md
                                                         ↳ check_fail: no-signoff-write

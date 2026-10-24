@@ -28,6 +28,18 @@ PASS  arch grill frontier empty
 PASS  arch grill shared understanding confirmed
 PASS  arch grill round has a question
 PASS  plan cases match case_intents
+PASS  design.md has 目标
+PASS  design.md has 方案
+PASS  design.md has 契约
+PASS  design.md has 影响面
+PASS  design.md has 回退
+PASS  design.md has 用例
+PASS  design.md names disabled-executes
+PASS  design.md names enabled-still-intercepts
+PASS  design.md names replay-untouched
+PASS  plan case matches disabled-executes
+PASS  plan case matches enabled-still-intercepts
+PASS  plan case matches replay-untouched
 PASS  deliver-eval.md exists
 PASS  no agent-filled signoff by
 PASS  no staged generatedverify

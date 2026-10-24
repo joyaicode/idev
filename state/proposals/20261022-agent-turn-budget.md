@@ -55,7 +55,7 @@
 
 ## 不改什么
 
-- 不并行多开执行者。`conventions/canon.md` 仍把「多开几个 Agent 就快了」列为反模式，串行委派保持。
+- 不并行多开执行者。`conventions/canon.md` 仍把「多开几个 Agent 就快了」列为反模式，串行委派保持。2026-10-24 收窄：同一 group、writes 不相交的 verify 步骤可以同一轮派。人闸、写租约、第二份活跃 run 仍一次一步。
 - 不改 `internal/adapters/store/sqlite/store.go` 的迁移跳过，也不改 `busy_timeout`。
 - 不改租约 TTL。出现 acquire 后不释放，再另开提案。
 - 不把批量只读做成门禁（`references/agent-accuracy.md` 已写明原因）。

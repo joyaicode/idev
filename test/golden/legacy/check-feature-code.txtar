@@ -34,6 +34,18 @@ PASS  no PASS without run evidence
 PASS  every plan case has slice_id
 PASS  plan slice_id exists in req
 PASS  plan baseline_item_id matches req slice
+PASS  design.md has 目标
+PASS  design.md has 方案
+PASS  design.md has 契约
+PASS  design.md has 影响面
+PASS  design.md has 回退
+PASS  design.md has 用例
+PASS  design.md names disabled-executes
+PASS  design.md names enabled-still-intercepts
+PASS  design.md names replay-untouched
+PASS  plan case matches disabled-executes
+PASS  plan case matches enabled-still-intercepts
+PASS  plan case matches replay-untouched
 PASS  deliver-eval.md exists
 PASS  review.md exists
 PASS  review.md has 编码规范
@@ -42,6 +54,8 @@ PASS  review.md has 气味命中
 PASS  review.md has 五轴
 PASS  review.md has 栈指南
 PASS  review.md has 增强扫描
+PASS  review.md has 审查者
+PASS  review.md has 文件与行数
 PASS  no agent-filled signoff by
 PASS  no staged generatedverify
 PASS  no tracked generatedverify

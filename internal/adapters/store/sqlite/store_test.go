@@ -95,6 +95,12 @@ func TestAStaleSchemaIsStillMigrated(t *testing.T) {
 	if _, err := s.DB().Exec(`DROP TABLE gate_subjects`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.DB().Exec(`ALTER TABLE steps DROP COLUMN writes_json`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB().Exec(`ALTER TABLE steps DROP COLUMN group_id`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.DB().Exec(`DELETE FROM goose_db_version WHERE version_id >= 2`); err != nil {
 		t.Fatal(err)
 	}
@@ -121,8 +127,15 @@ func TestAStaleSchemaIsStillMigrated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if v < 2 {
-		t.Fatalf("version = %d, want at least 2", v)
+	if v < 3 {
+		t.Fatalf("version = %d, want at least 3", v)
+	}
+	var cols int
+	if err := s.DB().QueryRow(`SELECT COUNT(*) FROM pragma_table_info('steps') WHERE name IN ('group_id', 'writes_json')`).Scan(&cols); err != nil {
+		t.Fatal(err)
+	}
+	if cols != 2 {
+		t.Fatalf("step wave columns = %d, want 2", cols)
 	}
 }
 

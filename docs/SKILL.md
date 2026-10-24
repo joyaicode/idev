@@ -53,6 +53,20 @@ Rule 10 里其余目录（`docs/adr/`、`docs/convention/`、`docs/agents/`、`d
 
 idev 的阶段文件都放在票目录里，文件名以各模块契约为准：交付看 `deliver/references/deliver-schema.md`（`baseline.yaml`、`req.yaml`、`deliver.yaml` 等），验证看 `verify/references/plan-schema.md`（`verify/plan.yaml`、`unproven.md`），排障看 `ops/references/ops-schema.md`（`ops.yaml`），配方看 `references/workflow-schema.md`（`workflow/run.yaml`、`lessons/`）。另有本页的 `grill.md` 和编码评审 `review.md`。契约里没有的文件名不要临场新建。规范目录里还可以有 setup-agents-docs 的 `issues/`。
 
+## 体例
+
+需求、设计、测试用例、Review、测试报告给人和 AI 看的是同一份。一处写事实，别处写路径和 id。不把规约抄进票，也不把票正文抄进规约。没有的节写「无」，不删标题。骨架以各 example 为准，这里不另抄一份。
+
+| 文档 | 人读 | 机读 | 只写什么 |
+|---|---|---|---|
+| 需求 | `docs/prd/<feature>.md` | `baseline.yaml` 的 `goal` / `items` / `non_goal` | 同一批 item id。问句只在 `grill.md` |
+| 设计 | `<票目录>/design.md` 六节 | `arch.yaml` | 目标节只照抄 `goal` 一句。配置若新增，方案里给一句解释和一例 |
+| 测试用例 | `docs/test-case/<feature>.md` | `verify/plan.yaml` | 一条 `case_intent` 一条 case。步骤只在 plan |
+| Review | `<票目录>/review.md` | — | 少做 / 多做 / 编码规范 / 扫描。编码规范节由 `idev-reviewer` 写 |
+| 测试报告 | `<票目录>/verify/report.md` | `plan.yaml` 的 `cases[].status` | 只索引 PASS / FAIL / UNPROVEN，不重写用例正文 |
+
+改了 item、slice 或 case 的 id，同一轮改所有引用。人读稿和机读稿对不上时，以密封基线为准，改人读稿。
+
 三处 review 不是同一份：
 
 | 路径 | 是什么 |

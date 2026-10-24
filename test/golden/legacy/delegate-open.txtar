@@ -1,0 +1,15 @@
+# one command delegates every open agent step
+# cmd: W delegate --open --feature demo
+
+-- exit --
+0
+-- output --
+WAVE check plan run review accept
+DELEGATE plan -> idev-verifier
+LEASE none (this kind does not write product code)
+DELEGATE run -> idev-verifier
+LEASE none (this kind does not write product code)
+DELEGATE review -> idev-reviewer
+LEASE none (this kind does not write product code)
+DELEGATE accept -> idev-verifier
+LEASE none (this kind does not write product code)

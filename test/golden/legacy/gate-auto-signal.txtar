@@ -4,4 +4,4 @@
 -- exit --
 2
 -- output --
-BLOCKED AUTO refused: the checks raised a question for a person — plan leaves UNPROVEN for a person to accept: perf-1
+BLOCKED finish plan first; record it SKIPPED to skip

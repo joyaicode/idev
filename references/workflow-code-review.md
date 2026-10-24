@@ -68,6 +68,7 @@ review.report → human.gate → verify.plan → human.gate → review.fix → v
 ## 5. `review.fix`
 
 只改已签收 `I*`（及显式纳入的 `O*`）点名的文件。此步恢复 C14：这些项当轮改掉，只记账不算过。  
+交付主路径（`lite-change`）的 `review.fix` 带 `accept_all_findings: true`，在实现审核前改全部 `I*`，不另设签收闸。本配方没有这个字段。  
 可跑 `lint-fix` / 扫描。更新 `review.md` 纠正栏。
 
 ## 6. `verify.run`

@@ -4,4 +4,4 @@
 -- exit --
 2
 -- output --
-BLOCKED AUTO needs a clean check output (a '0 FAIL' line) in verify/plan-check.log
+BLOCKED finish plan first; record it SKIPPED to skip

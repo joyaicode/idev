@@ -10,6 +10,7 @@ the module the step lands on.
   workflow.py start <id> [--feature F] [--param k=v ...]
   workflow.py next    [--feature F | --run PATH]
   workflow.py delegate <step>
+  workflow.py delegate --open
   workflow.py ask     <step>
   workflow.py record  <step> <STATUS> [--evidence P] [--by NAME --quote TEXT] [--note TEXT]
                       [--verified-by AGENT --verify-evidence P]
@@ -29,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import shutil
@@ -517,14 +519,114 @@ def arch_includes(run_path: Path) -> list[str]:
 
 def changed_paths(run_path: Path, step_id: str) -> list[str]:
     """The files the latest delegation report says it changed."""
-    import delegation  # noqa: PLC0415 - scripts/, imported only when a lease is checked
+    _has_report, _has_line, paths = delegation_changed(run_path, step_id)
+    return paths
 
-    record = latest_delegation(run_path, step_id) or {}
+
+def delegation_changed(run_path: Path, step_id: str) -> tuple[bool, bool, list[str]]:
+    """Whether a delegation exists, whether it declared CHANGED, and the paths."""
+    import delegation  # noqa: PLC0415 - scripts/, imported only when a report is read
+
+    record = latest_delegation(run_path, step_id)
+    if not record:
+        return False, False, []
     raw = str((record.get("report") or {}).get("raw", ""))
     hit = delegation.CHANGED_LINE.search(raw)
-    if not hit or delegation.NONE_VALUE.match(hit.group(1)):
+    if not hit:
+        return True, False, []
+    if delegation.NONE_VALUE.match(hit.group(1)):
+        return True, True, []
+    return True, True, sorted(delegation._paths(hit.group(1)))
+
+
+def ticket_tree(ticket: Path) -> dict[str, str]:
+    """Hash of each file in the ticket, excluding the workflow bookkeeping directory."""
+    found: dict[str, str] = {}
+    if not ticket.is_dir():
+        return found
+    for path in ticket.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(ticket).as_posix()
+        if rel == "workflow" or rel.startswith("workflow/"):
+            continue
+        found[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return found
+
+
+def stamp_open_group(run: dict, ticket: Path) -> None:
+    """Remember the ticket as the wave opens, so a later record can see what changed."""
+    opened = open_steps(run)
+    if not opened or not opened[0].get("group"):
+        return
+    if all(isinstance(step.get("tree"), dict) for step in opened):
+        return
+    tree = ticket_tree(ticket)
+    for step in opened:
+        if not isinstance(step.get("tree"), dict):
+            step["tree"] = dict(tree)
+
+
+def group_writes(run: dict, step: dict) -> list[str]:
+    group = step.get("group")
+    owned: list[str] = []
+    for item in run.get("steps") or []:
+        if item.get("group") == group:
+            owned.extend(str(w) for w in (item.get("writes") or []) if str(w).strip())
+    return owned
+
+
+def disk_outside_group(run: dict, step: dict, ticket: Path) -> list[str]:
+    """Ticket files changed since the wave opened that no member of the group may write."""
+    tree = step.get("tree")
+    if not isinstance(tree, dict) or not step.get("writes"):
         return []
-    return sorted(delegation._paths(hit.group(1)))
+    allowed = group_writes(run, step)
+    now = ticket_tree(ticket)
+    outside: list[str] = []
+    for rel in sorted(set(tree) | set(now)):
+        if tree.get(rel) == now.get(rel):
+            continue
+        if covered_by_writes(allowed, rel):
+            continue
+        outside.append(rel)
+    return outside
+
+
+def covered_by_writes(writes: list[str], path: str) -> bool:
+    """True when a reported path is exactly one writes entry, or sits under a directory entry."""
+    norm = path.replace("\\", "/").lstrip("./")
+    if not norm or ".." in Path(norm).parts:
+        return False
+    for raw in writes:
+        write = str(raw).replace("\\", "/").strip().lstrip("./")
+        if not write:
+            continue
+        if norm == write or norm.endswith("/" + write):
+            return True
+        if write.endswith("/") and norm.startswith(write):
+            return True
+    return False
+
+
+def writes_block(step_id: str, writes: list[str], has_report: bool, has_line: bool, changed: list[str]) -> str:
+    """Refuse a grouped step whose report writes something else, or never says what it wrote."""
+    if not writes or not has_report:
+        return ""
+    allowed = ", ".join(writes)
+    if not has_line:
+        return (
+            f"{step_id} report needs a CHANGED line (无 if it wrote nothing); "
+            f"this step writes only {allowed}"
+        )
+    outside = [path for path in changed if not covered_by_writes(writes, path)]
+    if outside:
+        return (
+            f"{step_id} changed files outside its writes ({allowed}): "
+            + ", ".join(outside)
+            + " — revert them; this step writes only those paths"
+        )
+    return ""
 
 
 def risk_tier_of(run: dict, run_path: Path) -> str:
@@ -550,12 +652,54 @@ def current_step(run: dict) -> dict | None:
     return None
 
 
+def open_steps(run: dict) -> list[dict]:
+    """Steps that may be recorded or delegated now.
+
+    A step with no group is alone. A contiguous group is open together, from
+    the first unfinished member through the last member of that group. Steps
+    after the group stay closed until every member is done.
+    """
+    steps = run.get("steps") or []
+    start = next((i for i, step in enumerate(steps) if step.get("status") not in STEP_DONE), None)
+    if start is None:
+        return []
+    group = steps[start].get("group")
+    if not group:
+        return [steps[start]]
+    opened: list[dict] = []
+    for step in steps[start:]:
+        if step.get("group") != group:
+            break
+        if step.get("status") not in STEP_DONE:
+            opened.append(step)
+    return opened
+
+
+def _step_open(run: dict, step: dict) -> bool:
+    return any(item is step for item in open_steps(run))
+
+
 def next_line(run: dict) -> list[str]:
     if run["status"] in ("done", "aborted"):
         return [f"RUN {run['status'].upper()}"]
-    step = current_step(run)
-    if step is None:
+    opened = open_steps(run)
+    if not opened:
         return ["RUN DONE"]
+    blocks = [_step_lines(run, step) for step in opened]
+    if len(blocks) == 1:
+        lines = blocks[0]
+    else:
+        lines = [f"PARALLEL {opened[0].get('group')}"]
+        for i, block in enumerate(blocks):
+            if i:
+                lines.append("---")
+            lines.extend(block)
+    if run["status"] == "blocked":
+        lines.insert(0, "RUN BLOCKED; fix this step, then record it again")
+    return lines
+
+
+def _step_lines(run: dict, step: dict) -> list[str]:
     kind = step["kind"]
     lines = [
         f"NEXT {step['id']}  kind={kind}  status={step.get('status', 'pending')}",
@@ -564,6 +708,10 @@ def next_line(run: dict) -> list[str]:
     ]
     if step.get("label"):
         lines.append(f"LABEL {step['label']}")
+    if step.get("group"):
+        lines.append(f"GROUP {step['group']}")
+    if step.get("writes"):
+        lines.append("WRITES " + ", ".join(step["writes"]))
     if step.get("with"):
         lines.append(f"WITH {step['with']}")
     key = workflow_defaults.KIND_COMMANDS.get(kind)
@@ -589,8 +737,6 @@ def next_line(run: dict) -> list[str]:
     verifier = kind_agents.KIND_VERIFIER.get(kind)
     if verifier:
         lines.append(f"VERIFY {verifier} confirms before PASS: --verified-by {verifier} --verify-evidence <report>")
-    if run["status"] == "blocked":
-        lines.insert(0, "RUN BLOCKED; fix this step, then record it again")
     return lines
 
 
@@ -662,12 +808,13 @@ def cmd_start(args: argparse.Namespace) -> int:
         "params": params,
         "policy": recipe.get("policy") or {},
         "steps": [
-            {k: step[k] for k in ("id", "kind", "label", "with") if k in step}
+            {k: step[k] for k in ("id", "kind", "label", "with", "group", "writes") if k in step}
             for step in recipe["steps"]
         ],
         "revisions": [],
         "feedback": {"status": "pending"},
     }
+    stamp_open_group(run, ticket_of(run_path))
     claim_run(run_path, run)
     write_report(run_path, run)
     print(f"RUN {run_path}")
@@ -729,6 +876,11 @@ def cmd_record(args: argparse.Namespace) -> int:
             return
         held = step.get("lease") or {}
         purpose = lease_purpose(run, step) if status == "PASS" else None
+        writes = [str(w) for w in (step.get("writes") or []) if str(w).strip()]
+        has_report, has_line, write_changed = (False, False, [])
+        if writes:
+            has_report, has_line, write_changed = delegation_changed(path, step["id"])
+        disk_outside = disk_outside_group(run, step, ticket_of(path)) if writes else []
         pre.update(
             seen=True,
             kind=step["kind"],
@@ -736,6 +888,12 @@ def cmd_record(args: argparse.Namespace) -> int:
             lease_id=str(held.get("id") or ""),
             purpose=purpose,
             changed=changed_paths(path, step["id"]) if purpose else [],
+            writes=writes,
+            has_report=has_report,
+            has_changed=has_line,
+            write_changed=write_changed,
+            disk_outside=disk_outside,
+            group_writes=group_writes(run, step) if writes else [],
             verifier=kind_agents.KIND_VERIFIER.get(step["kind"]),
         )
 
@@ -768,6 +926,24 @@ def cmd_record(args: argparse.Namespace) -> int:
                 + ", ".join(outside)
                 + " — revert them, or include them in arch.yaml and delegate again"
             )
+    if pre.get("writes"):
+        blocked = writes_block(
+            args.step,
+            pre["writes"],
+            bool(pre.get("has_report")),
+            bool(pre.get("has_changed")),
+            list(pre.get("write_changed") or []),
+        )
+        if blocked:
+            raise Blocked(blocked)
+        outside_disk = list(pre.get("disk_outside") or [])
+        if outside_disk:
+            allowed = ", ".join(pre.get("group_writes") or [])
+            raise Blocked(
+                f"{args.step} disk changed files outside the group writes ({allowed}): "
+                + ", ".join(outside_disk)
+                + " — revert them; this wave writes only those paths"
+            )
 
     def mutate(run: dict) -> dict:
         if not run or "steps" not in run:
@@ -778,10 +954,11 @@ def cmd_record(args: argparse.Namespace) -> int:
         step = steps.get(args.step)
         if step is None:
             raise Blocked(f"no step {args.step} in this run")
-        cur = current_step(run)
-        if cur is not None and step is not cur:
+        if not _step_open(run, step):
             if "status" not in step:
-                raise Blocked(f"finish {cur['id']} first; record it SKIPPED to skip")
+                cur = current_step(run)
+                who = cur["id"] if cur else "the open steps"
+                raise Blocked(f"finish {who} first; record it SKIPPED to skip")
             if not args.note:
                 raise Blocked(f"{step['id']} is already {step['status']}; changing it needs --note")
         if step["kind"] == "human.gate":
@@ -875,6 +1052,7 @@ def cmd_record(args: argparse.Namespace) -> int:
             run["status"] = "done"
         else:
             run["status"] = "running"
+        stamp_open_group(run, ticket_of(path))
         errors: list[str] = []
         check_run(run, path, errors)
         if errors:
@@ -897,8 +1075,30 @@ def cmd_record(args: argparse.Namespace) -> int:
 
 
 def cmd_delegate(args: argparse.Namespace) -> int:
-    """Hand the current step to its agent, with a write lease when it writes code."""
+    """Hand the current step, or every open agent step, to its agent."""
     path = find_run(args)
+    if args.open:
+        if args.step:
+            raise SystemExit("delegate --open does not take a step")
+        run = load_yaml(path) or {}
+        opened = [
+            step for step in open_steps(run)
+            if kind_agents.KIND_AGENTS.get(step["kind"], "-") != "-"
+        ]
+        if not opened:
+            raise Blocked("no open agent step to delegate")
+        print(f"WAVE {opened[0].get('group') or '-'} " + " ".join(step["id"] for step in opened))
+        for step in opened:
+            args.step = step["id"]
+            delegate_one(args, path)
+        return 0
+    if not args.step:
+        raise SystemExit("delegate needs a step, or --open for the current wave")
+    return delegate_one(args, path)
+
+
+def delegate_one(args: argparse.Namespace, path: Path) -> int:
+    """Hand one open step to its agent, with a write lease when it writes code."""
     # A recorded step can still hold a token when the release that followed
     # the record failed. Free those before taking another lease on this feature.
     prior = load_yaml(path) or {}
@@ -938,7 +1138,7 @@ def cmd_delegate(args: argparse.Namespace) -> int:
         step = next((s for s in run["steps"] if s["id"] == args.step), None)
         if step is None:
             raise Blocked(f"no step {args.step} in this run")
-        if step is not current_step(run):
+        if not _step_open(run, step):
             raise Blocked(f"{args.step} is not the current step")
         agent = kind_agents.KIND_AGENTS.get(step["kind"], "-")
         if agent == "-":
@@ -947,6 +1147,7 @@ def cmd_delegate(args: argparse.Namespace) -> int:
         if held.get("token"):
             raise Blocked(f"{args.step} already holds lease {held['id']}; record the step to release it")
         step["delegated"] = {"agent": agent, "at": now()}
+        stamp_open_group(run, ticket_of(path))
         marked.update(
             agent=agent, lease=lease_purpose(run, step), tier=risk_tier_of(run, path),
             feature_id=feature_id(run, path),
@@ -1036,7 +1237,7 @@ def remember_gate(path: Path, step_id: str, asked: dict) -> None:
         if not run or "steps" not in run:
             raise Blocked(f"{path} is empty or unreadable; not overwriting it")
         step = next((s for s in run["steps"] if s["id"] == step_id), None)
-        if step is None or step.get("kind") != "human.gate" or step is not current_step(run):
+        if step is None or step.get("kind") != "human.gate" or not _step_open(run, step):
             raise Blocked(
                 f"gate {asked['gate_id']} was asked but {step_id} is no longer the current step; "
                 f"idev gate reject {asked['gate_id']}"
@@ -1072,7 +1273,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
             raise Blocked(f"no step {args.step} in this run")
         if step["kind"] != "human.gate":
             raise Blocked(f"{args.step} is {step['kind']}, not a human.gate; only a gate asks a person")
-        if step is not current_step(run):
+        if not _step_open(run, step):
             raise Blocked(f"{args.step} is not the current step")
         prepared["prior"] = str((step.get("gate") or {}).get("id") or "")
         prepared["question"] = gate_question(run, path, step)
@@ -1298,7 +1499,8 @@ def main(argv: list[str] | None = None) -> int:
     locate(p)
     p.set_defaults(func=cmd_ask)
     p = sub.add_parser("delegate")
-    p.add_argument("step")
+    p.add_argument("step", nargs="?")
+    p.add_argument("--open", action="store_true", help="delegate every open agent step in the current wave")
     locate(p)
     p.set_defaults(func=cmd_delegate)
     p = sub.add_parser("record")

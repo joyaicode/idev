@@ -9,7 +9,7 @@ aliases:
   - lite-change
   - 对这个 diff 走轻量
 summary: >-
-  小改捷径（不改 goal/baseline）：定界论证 → 编码纪律 → selftest plan/跑测。计划无信号则自动过，不单独请签。跑完停在实现审核；通过后才走 test-pack。禁止跳签、改密封正文、自动 promote。产线自己的小改踩坑写在该仓 .idev/pack/，挂到 extensions.yaml 的 code 阶段，由 session-context 打开。
+  小改捷径（不改 goal/baseline）：定界论证 → 编码纪律 → 同一波起草用例、自测、独立审查、验收索引 → 改掉 I* → 复跑并回写用例状态。计划无信号则自动过，不单独请签。审查不另设人闸。跑完停在实现审核；通过后才走 test-pack。禁止跳签、改密封正文、自动 promote。产线自己的小改踩坑写在该仓 .idev/pack/，挂到 extensions.yaml 的 code 阶段，由 session-context 打开。
 risk_tier: P1
 params:
   - name: feature
@@ -34,8 +34,27 @@ steps:
     label: 编码纪律与 review
   - id: plan
     kind: verify.plan
+    group: check
+    writes: ["verify/plan.yaml"]
     with: { mode: selftest }
-    label: 起草或确认 selftest plan
+    label: 起草测试用例（与审查、自测、验收索引并行）
+  - id: run
+    kind: verify.run
+    group: check
+    writes: ["verify/selftest.md"]
+    with: { mode: selftest }
+    label: 自测（只写自测报告，不改用例文件）
+  - id: review
+    kind: review.report
+    group: check
+    writes: ["review.md"]
+    label: 独立审查（只写 review.md）
+  - id: accept
+    kind: verify.run
+    group: check
+    writes: ["verify/accept.md"]
+    with: { mode: selftest }
+    label: 验收索引（只写验收报告，不改用例、不写 aligned）
   - id: gate-plan
     kind: human.gate
     label: 人 accepted plan（已 accepted 且未改则跳过）
@@ -43,13 +62,18 @@ steps:
       will_write: ["verify/plan.yaml accepted"]
       proof: "verify-plan 门禁结果 / case 数"
       auto_tiers: [P0, P1, P2]
-  - id: run
+  - id: fix
+    kind: review.fix
+    label: 按审查清单改掉全部 I*（实现审核前，不另请签）
+    with:
+      accept_all_findings: true
+  - id: refresh
     kind: verify.run
     with: { mode: selftest }
-    label: 跑已勾选 cases
+    label: 审查修改之后复跑，回写 plan.yaml 的 status，并重写 selftest.md 与 accept.md
   - id: gate-review
     kind: human.gate
     label: 实现审核（自测已跑完；确认后才提测，这里不签测试结果）
     with:
       will_write: ["deliver.semantic_gate.code", "deliver.stage=test"]
-      proof: "check-feature code；selftest PASS/FAIL/UNPROVEN"
+      proof: "check-feature code；refresh 回写后的 PASS/FAIL/UNPROVEN"

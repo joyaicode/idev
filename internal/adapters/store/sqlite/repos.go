@@ -457,6 +457,8 @@ type ProjectedStep struct {
 	Kind   string
 	State  run.StepState
 	Writer string
+	Group  string
+	Writes []string
 }
 
 // ProjectedRun is a run.yaml reduced to what the Go services read.
@@ -490,12 +492,17 @@ func (s *Store) ProjectRun(ctx context.Context, r ProjectedRun) error {
 			return fmt.Errorf("sqlite: projecting run %s: %w", r.ID, err)
 		}
 		for i, st := range r.Steps {
+			writes, err := json.Marshal(nonNil(st.Writes))
+			if err != nil {
+				return fmt.Errorf("sqlite: projecting step %s: %w", st.ID, err)
+			}
 			if _, err := tx.ExecContext(ctx, `INSERT INTO steps
-				(run_id, step_id, ordinal, kind, state, writer)
-				VALUES (?, ?, ?, ?, ?, ?)
+				(run_id, step_id, ordinal, kind, state, writer, group_id, writes_json)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 				ON CONFLICT(run_id, step_id) DO UPDATE SET
-				  kind = excluded.kind, state = excluded.state, writer = excluded.writer`,
-				r.ID, st.ID, i, st.Kind, string(st.State), nullable(st.Writer)); err != nil {
+				  kind = excluded.kind, state = excluded.state, writer = excluded.writer,
+				  group_id = excluded.group_id, writes_json = excluded.writes_json`,
+				r.ID, st.ID, i, st.Kind, string(st.State), nullable(st.Writer), st.Group, string(writes)); err != nil {
 				return fmt.Errorf("sqlite: projecting step %s: %w", st.ID, err)
 			}
 		}
@@ -524,7 +531,7 @@ func (r runRepo) Get(ctx context.Context, runID string) (run.Run, int64, error) 
 	if err != nil {
 		return run.Run{}, 0, err
 	}
-	rows, err := r.tx.QueryContext(ctx, `SELECT step_id, kind, state, writer FROM steps
+	rows, err := r.tx.QueryContext(ctx, `SELECT step_id, kind, state, writer, group_id, writes_json FROM steps
 		WHERE run_id = ? ORDER BY ordinal`, runID)
 	if err != nil {
 		return run.Run{}, 0, err
@@ -535,9 +542,15 @@ func (r runRepo) Get(ctx context.Context, runID string) (run.Run, int64, error) 
 			st     run.Step
 			state  string
 			writer sql.NullString
+			writes string
 		)
-		if err := rows.Scan(&st.ID, &st.Kind, &state, &writer); err != nil {
+		if err := rows.Scan(&st.ID, &st.Kind, &state, &writer, &st.Group, &writes); err != nil {
 			return run.Run{}, 0, err
+		}
+		if writes != "" && writes != "[]" {
+			if err := json.Unmarshal([]byte(writes), &st.Writes); err != nil {
+				return run.Run{}, 0, err
+			}
 		}
 		st.State, st.Writer, st.IsGate = run.StepState(state), writer.String, st.Kind == "human.gate"
 		out.Steps = append(out.Steps, st)

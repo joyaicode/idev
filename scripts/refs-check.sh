@@ -66,6 +66,10 @@ while IFS= read -r name; do
   fi
 done <<<"$names"
 
+if ! python3 "$ROOT/scripts/config-doc-check.py"; then
+  fail=1
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "refs-check FAIL"
   exit 1

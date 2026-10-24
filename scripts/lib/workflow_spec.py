@@ -33,7 +33,7 @@ TOP_FIELDS = {
 }
 PARAM_FIELDS = {"name", "required", "from", "default", "product_key"}
 PARAM_FROM = {"user", "deliver.yaml", "default", "product"}
-STEP_FIELDS = {"id", "kind", "label", "with"}
+STEP_FIELDS = {"id", "kind", "label", "with", "group", "writes"}
 RISK_TIERS = {"P0", "P1", "P2"}
 POLICY: dict[str, Any] = {
     "on_fail": {"stop", "ask"},
@@ -191,6 +191,67 @@ def check_recipe(data: Any, path: Path, errors: list[str]) -> None:
             errors.append(f"{path}: steps[{i}].with must be a mapping")
         elif kind == "human.gate":
             _check_gate(step, f"{path}: steps[{i}]", errors)
+    _check_parallel(steps, path, errors)
+
+
+def _writes_overlap(a: str, b: str) -> bool:
+    """True when two ticket-relative paths name the same file or one contains the other."""
+    if a == b:
+        return True
+    left, right = a.rstrip("/") + "/", b.rstrip("/") + "/"
+    return left.startswith(right) or right.startswith(left)
+
+
+def _check_parallel(steps: list, path: Path, errors: list[str]) -> None:
+    """A group is one wave: contiguous, verify-only, and the write paths do not overlap.
+
+    A human gate and a write lease stay one step at a time. Two members that
+    can both rewrite the same file are not a locked interface.
+    """
+    members: dict[str, list[int]] = {}
+    for i, step in enumerate(steps):
+        if not isinstance(step, dict):
+            continue
+        group = step.get("group")
+        writes = step.get("writes")
+        where = f"{path}: steps[{i}]"
+        if group is not None:
+            if not isinstance(group, str) or re.fullmatch(r"[a-z][a-z0-9-]*", group) is None:
+                errors.append(f"{where} group must be a slug")
+            kind = step.get("kind")
+            if kind == "human.gate":
+                errors.append(f"{where} a human.gate stays one step at a time")
+            if _gen.KIND_LEASE.get(kind) == "write":
+                errors.append(f"{where} a write lease stays one step at a time")
+            if "writes" not in step:
+                errors.append(f"{where} a group needs writes")
+        if writes is not None and group is None:
+            errors.append(f"{where} writes only goes with a group")
+        if writes is not None:
+            if not isinstance(writes, list) or not writes or not all(isinstance(w, str) and w for w in writes):
+                errors.append(f"{where} writes must be a non-empty list of paths")
+            else:
+                for w in writes:
+                    if not isinstance(w, str) or w.startswith("/") or ".." in Path(w).parts:
+                        errors.append(f"{where} writes path {w!r} must stay inside the ticket")
+        if isinstance(group, str) and group:
+            members.setdefault(group, []).append(i)
+    for name, idxs in members.items():
+        if idxs[-1] - idxs[0] + 1 != len(idxs):
+            errors.append(f"{path}: group {name} must be contiguous")
+            continue
+        owned: list[tuple[int, str]] = []
+        for i in idxs:
+            for w in steps[i].get("writes") or []:
+                if isinstance(w, str):
+                    owned.append((i, w))
+        for a in range(len(owned)):
+            for b in range(a + 1, len(owned)):
+                if _writes_overlap(owned[a][1], owned[b][1]):
+                    errors.append(
+                        f"{path}: group {name} writes overlap: "
+                        f"steps[{owned[a][0]}] {owned[a][1]} and steps[{owned[b][0]}] {owned[b][1]}"
+                    )
 
 
 def _check_gate(step: dict, where: str, errors: list[str]) -> None:

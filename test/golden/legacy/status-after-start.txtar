@@ -9,6 +9,10 @@ RUN $WORK/.idev/task/demo/workflow/run.yaml  lite-change  running
   pending   scope-guard  route.s4
   pending   code-pass  deliver.code_pass
   pending   plan  verify.plan
-  pending   gate-plan  human.gate
   pending   run  verify.run
+  pending   review  review.report
+  pending   accept  verify.run
+  pending   gate-plan  human.gate
+  pending   fix  review.fix
+  pending   refresh  verify.run
   pending   gate-review  human.gate

@@ -167,7 +167,7 @@ kinds:
   review.fix:
     page: conventions/coding.md
     lands: "conventions/coding"
-    note: "只改已签收 `I*`（及显式纳入的 `O*`）；此步恢复当轮必改"
+    note: "交付主路径 with.accept_all_findings 时改全部 I*；code-review 仍只改已签收 I* 与显式纳入的 O*。此步恢复当轮必改"
     agent: idev-coder
     lease: write
     verify: independent

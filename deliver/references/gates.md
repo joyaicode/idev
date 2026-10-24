@@ -59,8 +59,9 @@
 - [ ] `check-feature.sh <feature> code` PASS（含编码规范弱门禁）
 - [ ] 本轮废弃无用的代码 / 导入 / 方法 / 字段已删；注释与文档已对齐代码
 - [ ] 已按 [coding-tables.md](../../conventions/coding-tables.md) §3.8 增强扫描：`coding-scan.sh` + 五轴 + 栈指南；`review.md` 写了五轴 / 栈指南 / 增强扫描
-- [ ] 已跑该仓编码规范扫描，并清掉本轮引入的提示（Java：Problems / Qodana；前端：`lint-fix`；仓内若有 Checkstyle/PMD/SpotBugs 一并绿）
-- [ ] 自测有跑证之后才请实现审核。确认写入 `semantic_gate.code` 并把 stage 改为 `test`
+- [ ] `review.md` 的 `审查者` 是 `idev-reviewer`，`文件与行数` 有数字
+- [ ] 已跑该仓已有的规范扫描（有 super-linter 就跑那一套；否则 Java：Problems / Qodana；前端：`lint-fix`；Go：已安装的 golangci-lint；仓内若有 Checkstyle/PMD/SpotBugs 一并绿）。没有扫描器就在 `review.md` 写明，不新装一套
+- [ ] 自测有跑证且独立审查已写入之后才请实现审核。确认写入 `semantic_gate.code` 并把 stage 改为 `test`
 - [ ] `by:` 不是 agent / AI（对话确认后代写时须是人名）
 
 ## test

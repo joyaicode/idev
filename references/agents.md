@@ -67,11 +67,11 @@
 | 是 | 不是 |
 |---|---|
 | 每个 step 多一行「这步谁去做」 | 新的状态机(run 状态机一个字节没改) |
-| 专职 prompt + 按职责收紧的工具集 | 并行(一次仍只推进一个 step) |
+| 专职 prompt + 按职责收紧的工具集 | 无界 fan-out。人闸和写租约一次一步；同一 `group` 且 `writes` 不相交的 verify 步骤同时开 |
 | 独立上下文,互不污染 | 新的签字权(人签字的规则完全不变) |
 | 强化「只开一个执行模块」 | 新的验收权威或分数门禁 |
 
-**为什么这不违反内核对并行的反对:** `conventions/canon.md:181` 把「多开几个 Agent 就快了」列为反模式、`references/hitl-risk-tiers.md:33` 说不内置并行阶段机 —— 这两条针对**并行**。本层是**串行委派**:`current_step()` 单指针、`find_run()` 拒多活跃 run、所有停问点原样保留。换的只是「这一步由谁执行」。
+`find_run()` 仍拒绝第二份活跃 run。人闸和 `lease: write` 一次只开一步。配方里同一个 `group`、并且 `writes` 两两不相交的 verify 步骤，从第一个未完成成员到组尾同时开放：`next` 打出 `PARALLEL`，`record` 和 `delegate` 接受组内任一未完成步骤。这是先订死写集再并行，对应 `conventions/canon.md` 对「先订接口再并行」的要求。`references/hitl-risk-tiers.md` 说的不内置并行 PR 阶段机仍然成立：组不是一条并行的合并流水线。
 
 `conventions/evidence.md:4` 已经为此留了口子:「复杂问题可并行多个 Agent,但不能用『另一个 Agent 猜过了』代替证据。」—— 所以每个 agent 的回报都必须带证据路径,**agent 说过不算证据**。
 

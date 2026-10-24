@@ -191,6 +191,26 @@ def check_review_coding(review_text: str, errors: list) -> None:
         else:
             ok("review.md has 增强扫描")
 
+    who = [ln for ln in body.splitlines() if re.search(r"审查者", ln)]
+    if not who:
+        fail("review.md missing 审查者", errors)
+    else:
+        blob = "\n".join(who)
+        if re.search(r"\bidev-reviewer\b", blob):
+            ok("review.md has 审查者")
+        else:
+            fail("review.md 审查者 must be idev-reviewer", errors)
+
+    size = [ln for ln in body.splitlines() if re.search(r"文件与行数", ln)]
+    if not size:
+        fail("review.md missing 文件与行数", errors)
+    else:
+        blob = "\n".join(size)
+        if re.search(r"\d", blob):
+            ok("review.md has 文件与行数")
+        else:
+            fail("review.md 文件与行数 needs a count", errors)
+
 
 # One blacklist, not two. This file used to carry its own copy, and it had
 # already drifted: a blank name passed here and was rejected by
@@ -945,6 +965,89 @@ def tracked_generatedverify(repo: Path) -> list[str]:
     return git_names(repo, "ls-files")
 
 
+DESIGN_HEADINGS = ("目标", "方案", "契约", "影响面", "回退", "用例")
+
+
+def check_doc_form(
+    repo: Path, feature: str, root: Path, arch: dict, plan: dict | None, baseline: dict | None, errors: list
+) -> None:
+    """The shared shape in docs/SKILL.md 体例: six design headings, one intent id, one case."""
+    design_path = root / "design.md"
+    if not design_path.is_file():
+        fail("missing design.md", errors)
+        return
+    text = design_path.read_text(encoding="utf-8")
+    for title in DESIGN_HEADINGS:
+        if re.search(rf"(?m)^##[ \t]+{re.escape(title)}[ \t]*$", text):
+            ok(f"design.md has {title}")
+        else:
+            fail(f"design.md missing ## {title}", errors)
+    usecase = ""
+    hit = re.search(r"(?m)^##[ \t]+用例[ \t]*\n(?P<body>.*?)(?=^##[ \t]|\Z)", text, re.S)
+    if hit:
+        usecase = hit.group("body")
+    intents = [item for item in (arch.get("case_intents") or []) if isinstance(item, dict)]
+    for intent in intents:
+        iid = str(intent.get("id") or "").strip()
+        if iid and iid not in usecase:
+            fail(f"design.md 用例节 missing case_intent {iid}", errors)
+        elif iid:
+            ok(f"design.md names {iid}")
+    if not isinstance(plan, dict):
+        return
+    cases = [item for item in (plan.get("cases") or []) if isinstance(item, dict)]
+    for intent in intents:
+        key = (str(intent.get("slice_id") or ""), str(intent.get("baseline_item_id") or ""))
+        if not key[0] or not key[1]:
+            continue
+        matched = [
+            case for case in cases
+            if str(case.get("slice_id") or "") == key[0]
+            and str(case.get("baseline_item_id") or "") == key[1]
+        ]
+        label = intent.get("id") or key[0]
+        if matched:
+            ok(f"plan case matches {label}")
+        else:
+            fail(f"plan missing case for {label} ({key[0]} / {key[1]})", errors)
+    report_path = root / "verify" / "report.md"
+    if not report_path.is_file():
+        return
+    report = report_path.read_text(encoding="utf-8")
+    for case in cases:
+        cid = str(case.get("id") or "").strip()
+        goal = str(case.get("goal") or "").strip()
+        if cid and cid not in report:
+            fail(f"verify/report.md missing case {cid}", errors)
+        elif cid:
+            ok(f"verify/report.md indexes {cid}")
+        if len(goal) >= 24 and goal in report:
+            fail(f"verify/report.md copies the goal of {cid or '?'}", errors)
+    if isinstance(baseline, dict):
+        prd = repo / "docs" / "prd" / f"{feature}.md"
+        if prd.is_file():
+            prose = prd.read_text(encoding="utf-8")
+            for item in baseline.get("items") or []:
+                iid = str(item.get("id") or "").strip() if isinstance(item, dict) else ""
+                if not iid:
+                    continue
+                if iid in prose:
+                    ok(f"prd names {iid}")
+                else:
+                    fail(f"docs/prd/{feature}.md missing item {iid}", errors)
+    cases_md = repo / "docs" / "test-case" / f"{feature}.md"
+    if cases_md.is_file():
+        prose = cases_md.read_text(encoding="utf-8")
+        for intent in intents:
+            iid = str(intent.get("id") or "").strip()
+            if not iid:
+                continue
+            if iid in prose:
+                ok(f"test-case names {iid}")
+            else:
+                fail(f"docs/test-case/{feature}.md missing case_intent {iid}", errors)
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--repo", default=".")
@@ -1152,6 +1255,17 @@ def main() -> int:
                         ok("plan baseline_item_id matches req slice")
                 if any(h > 1 for h in collect_hops(plan)):
                     fail("plan impact hop > 1", errors)
+
+    if args.stage in ("arch", "code", "test", "verify-plan"):
+        check_doc_form(
+            repo,
+            args.feature,
+            root,
+            arch if isinstance(arch, dict) else {},
+            plan if isinstance(plan, dict) else None,
+            baseline if isinstance(baseline, dict) else None,
+            errors,
+        )
 
     if args.stage in ("req-review", "req", "arch", "code", "test"):
         ev = root / "deliver-eval.md"

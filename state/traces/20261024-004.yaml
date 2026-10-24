@@ -1,0 +1,86 @@
+schema_version: 2
+at: "2026-10-24T18:11:13+08:00"
+feature: idev-conductor
+intent: "补完并行波的磁盘围栏、一次委派、文档机检和扫描执行"
+invoke:
+  trigger: "继续完成所有改造"
+  matched: "上一轮列出的五处缺口"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: explicit
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "人要把还敞着的改造做完"
+route:
+  scenario: S5
+  module: conventions
+  convention_class: coding
+  stage: code
+  risk_tier: P1
+  why: "补的是编排、投影、体例机检和扫描。不另加人签。"
+rejected:
+  - module: verify
+    why: "没有产品票要跑"
+  - module: ops
+    why: "不是投产现象"
+thinking:
+  summary: "波次打开时给票目录留哈希，组外新文件 record 拒绝。delegate --open 一次委派整波。steps 投影带 group 和 writes。design 六节和报告索引进 check-feature。super-linter 配置改跑本机已有工具。"
+  signals:
+    - "golden verify 53 same"
+    - "sqlite TestProjectRunKeepsTheWave ok"
+    - "doc form 与 disk 与 coding-scan exec ok"
+  excluded:
+    - "不下载 super-linter"
+    - "不从 Python 去拉起 Cursor 的 subagent"
+  uncertainty: "同一波里静默改写兄弟步骤的文件，磁盘对账认作对方的 writes，分不出是谁写的。"
+  steps:
+    - n: 1
+      do: "record 对照波次打开时的票目录哈希"
+      so: "组外的新文件记不进去"
+    - n: 2
+      do: "delegate --open、投影列、体例机检、本地扫描"
+      so: "上一轮列出的缺口都有对应的检查或命令"
+opened:
+  - "scripts/workflow.py"
+  - "scripts/check-feature.py"
+  - "scripts/coding-scan.sh"
+  - "internal/adapters/store/sqlite/migrations/00003_step_group.sql"
+  - "cmd/idev/app.go"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "原话是继续完成所有改造"
+    result: "loaded"
+  - kind: script
+    name: test/golden/record.sh
+    from: conductor
+    to: script:record.sh
+    args: "--verify"
+    result: "53 same 0 different"
+  - kind: script
+    name: go test
+    from: conductor
+    to: script:go-test
+    args: "./internal/adapters/store/sqlite/"
+    result: "ok"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "缺口在内核编排和机检，不在某一张产品票"
+  - kind: delegate
+    chose: none
+    why: "改的是内核，由导体落笔"
+  - kind: model
+    chose: inherit
+    why: "本轮没有换模型"
+  - kind: refuse
+    chose: "no super-linter download"
+    why: "扫描只跑本机已经安装的工具"
+stop: ""
+next: ""
+check_feature: skipped
+extensions: []
+notes: "仍未提交。state/reviews 的周审计日志不要带上。Cursor 的 subagent 仍由导体按 DELEGATE 行派，引擎不起那些进程。"

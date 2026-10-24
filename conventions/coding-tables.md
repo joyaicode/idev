@@ -63,7 +63,7 @@
 ## 2.4 量化阈值（可测量硬线）
 
 §2 是气味判断（要读代码），本节是**可测量的粗筛线**：超线只是"停下来看"的信号，命中后仍按 §2 判定并译成 `C#` 记账，**不另起严重度码表**（守 §3.5）。粗筛线本身不是拒过理由——能说清为何这段必须长/深，就写进 `review.md`；说不清就是真命中。  
-前五行审**单个函数**，末两行审**本轮 diff**（变更级，接 [coding.md](coding.md) 文首规范总则），测量与判定同一套。
+前五行审**单个函数**，其后各行审**本轮 diff**（变更级，接 [coding.md](coding.md) 文首规范总则），测量与判定同一套。
 
 | 指标 | 硬线 | 测量方法 | 超线 → 落编号 |
 |------|------|----------|---------------|
@@ -73,6 +73,9 @@
 | 圈复杂度 | ≤ 10 | 独立分支路径数（`if/case/&&/||/catch` +1） | 拆函数 / 提策略 → **C1** / **P5** |
 | 重复代码 | 第 3 次即 0 容忍 | 同一逻辑出现次数 | **C10**（字面量）/ **P1**（构造）/ §3 R5 提取 |
 | 净增行数 | 说得出换来什么（消重 / 收拢 / 新基线行为） | `git diff --stat` / 票内 diff 汇总 | 多为包装 / 预置模式 / 未引用 → **T1** / **C3** / **C6** |
+| 单文件长度 | ≤ 400 行（含空行/注释） | 该文件行数 | 多职责堆在一个文件 → **C12** / **C1** |
+| 本轮新增文件 | 每个新文件一种职责，且被本轮基线 item 用到 | `git diff --stat` 里新增的文件 | 预置、无引用 → **T1** / **C6** |
+| 本轮触及文件 | 每个文件说得出为何必须动 | diff 文件列表 | 说不出的列入 UNRELATED，不准顺手改 → **C12** |
 | 单文件变更理由 | = 1（一个文件只为一种理由改） | 本轮触及文件按变更理由分组 | 一文件多理由 → **C12**（职责）/ **C1**（拆轮次） |
 
 **嵌套以 C9（≤2 层）为准，不采纳 aisel 的 ≤3。** 两者冲突时 idev 更严的线优先。  
@@ -163,12 +166,11 @@ Java 圈复杂度看 Qodana / IDE Problems 报告的方法复杂度；前端看 
 
 | 层 | 工具 | 挡住什么 | 与本页 |
 |----|------|----------|--------|
-| 必跑 | IDE Problems / `qodana.starter`；前端 `lint-fix` | 卫生黄条 | §5 出门；[java.md](java.md) |
-| 仓内若已配 | Checkstyle / Spotless | 格式与命名 | 不替代 §1/§2；绿了仍要扫气味 |
-| 仓内若已配 | PMD / SpotBugs / Error Prone | 坏味道 / bug 模式 | 命中时在 review 用 `C#` 记账并改 |
-| 不要 | 为消本页门禁去新起一套与 P/C 平行的公司码表 | — | 违反 §3.5 |
+| 必跑 | 仓内已有的规范扫描。配置了 super-linter（或同类多语言扫描）就跑那一套；否则 Java 跑 Problems / `qodana.starter`，前端跑 `lint-fix`，Go 有 golangci-lint 就跑。仓内已配的 Checkstyle / PMD / SpotBugs 一并跑 | 格式、坏味道、语言级告警 | 命中译成 `C#` 当轮改。不另起码表 |
+| 始终 | `coding-scan.sh` 打出的文件数与行数 | §2.4 的单文件、新增文件、触及文件 | 超线写理由或改。`review.md` 的 `文件与行数` 要有数字 |
+| 不要 | 为了本门禁新装一套扫描器，包括新装 super-linter；也不新起与 P/C 平行的码表 | — | 没有扫描器时写「本仓无规范扫描器」。文件数与行数仍要写。违反 §3.5 |
 
-未配置 Checkstyle/PMD/SpotBugs 时，**不要求**为本门禁临时引入；先保证 Problems/Qodana（或前端 lint）干净。
+super-linter 是「仓内已有就跑」的例子，不是要新装的依赖。`coding-scan.sh` 读配置里打开的 `VALIDATE_*`，跑本机已经安装的对应工具，不下载 super-linter。未配置 Checkstyle/PMD/SpotBugs 时不为本门禁引入。
 
 ---
 
@@ -184,8 +186,8 @@ Java 圈复杂度看 Qodana / IDE Problems 报告的方法复杂度；前端看 
 4. **按栈打开** `code-review-skill` 指南（compiler=8 Java → `reference/java8.md`；Vue → `vue.md`；Go → `go.md`）+ `common-bugs-checklist.md`。
 5. 触及身份 / 输入 / 出站 / 密钥 → 再开 `security-and-hardening`；Java 可叠 plinth `124-java-secure-coding`。
 6. 测试已绿、只想减复杂度 → `code-simplification`（行为不变；仍须满足 §3 R1–R6）。
-7. 跑 Problems / `qodana.starter` 或前端 `lint-fix`；仓内若有 Checkstyle/PMD/SpotBugs 一并跑（§3.7）。
-8. `review.md` 写清：五轴结果、栈指南名、增强扫描是否已跑；气味/场景仍用本页编号。
+7. 跑仓内已有的规范扫描（§3.7）：有 super-linter 就跑那一套，否则 Problems / `qodana.starter`、前端 `lint-fix`、已安装的 golangci-lint；仓内若有 Checkstyle/PMD/SpotBugs 一并跑。不为这一步新装扫描器。
+8. `review.md` 写清：五轴结果、栈指南名、增强扫描是否已跑、`审查者: idev-reviewer`、带数字的 `文件与行数`；气味/场景仍用本页编号。
 
 ### 严重度（外挂标注 → 本页动作）
 

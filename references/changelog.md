@@ -1,5 +1,10 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-24：波次打开时给票目录留哈希，组外的新文件 `record` 拒绝。`delegate --open` 一次委派当前波的每个 agent 步骤。`steps` 投影带上 `group_id` 和 `writes_json`，读回来的 run 用 `Open`。`design.md` 六节、`case_intent` 和报告只索引进了 `check-feature`。配置了 super-linter 时 `coding-scan.sh` 跑本机已有的对应工具，不下载。
+- 2026-10-24：`review.fix` 之后增加 `refresh`，把 case status 回写 `verify/plan.yaml`，并重写 `selftest.md` 和 `accept.md`。带 `writes` 的步骤若已有委派，回报必须有 `CHANGED`，写出清单之外的路径则 `record` 拒绝。Go 的 `Run.Open` 让同一 group 的步骤可以一起激活，组后面的步骤仍要等组内全部完成。
+- 2026-10-24：`lite-change` 在编码之后把用例、自测、独立审查、验收索引放进同一个 `group: check`，写集分别是 `verify/plan.yaml`、`verify/selftest.md`、`review.md`、`verify/accept.md`。`next` 打出 `PARALLEL`，`record` 和 `delegate` 接受组内任一未完成步骤。人闸和写租约留在组外，审查修改和实现审核仍在这一波之后。
+- 2026-10-24：五份文档收成同一体例；编码完成前必须由审查者写编码规范节；扩展配置的每个键有解释和示例。需求、设计、用例、Review、测试报告同一事实只写一处，人读和机读对同一批 id（`docs/SKILL.md`）。`lite-change` 在实现审核前增加 `review.report` 与 `review.fix`（`accept_all_findings`），不另设人闸。`review.md` 要有 `审查者: idev-reviewer` 和带数字的 `文件与行数`。§2.4 补单文件 400 行、新增文件、触及文件。规范扫描跑仓内已有的那一套（super-linter 是例子，不新装）。`references/extension-config.md` 解释 marker / extensions / workflow-defaults 的每个键并给示例；`config-doc-check.py` 对一下内核真的去读的键。
+
 - 2026-10-23：trace 补四层可选观察，给减负和 shortcut 用，不新增门禁。技能调起写 `invoke.how` / `invoke.skills[]`；委派决定写 `decisions.kind: delegate`（`none` 表示导体自己做）；模型与一行思考写 `kind: model` 和 `calls.thinking`；组件从哪跳到哪写 `calls.from` / `calls.to`。运行路径多 `skills` / `choices` / `hops` 三行，空着是 `(none)`。`path-stats` 与周审计各加一组计数（技能入口、委派、模型、组件跳），不进 `HARD_COUNT`，也不进必须清零。旧痕迹不用回填。
 
 - 2026-10-23：交付主路径收成四次人确认。需求把不明确的问题一轮问完（可多轮），回答不是签字，每个档位在拆解末一次写密封和拆解通过。架构先交整包方案等人 Review，有分叉才拷问，此阶段不交用例。通过后连续做用例、编码、自测，计划无信号则自动过。自测完成后停一次实现审核，然后提测，最后只确认测试结果。promote、推送、解封、回退、经验入库不动。提案 `state/proposals/20261023-fewer-signoffs.md`。

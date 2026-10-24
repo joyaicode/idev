@@ -14,11 +14,12 @@
 | 阶段指针 / 回退 | `<票目录>/deliver.yaml` | 本契约 |
 | 可执行验收 | `<票目录>/verify/plan.yaml` | idev verify 模块 |
 | 未决问句 | `<票目录>/grill.md` | grilling 的问句；`sealed: true` 时 frontier 必须已空。方案有未决分叉时才另写 `## arch` 轮 |
-| Review | `<票目录>/review.md` | code 阶段对照基线。不是 `reviews/`，也不是 `.idev/reviews/` |
+| Review | `<票目录>/review.md` | code 阶段对照基线。编码规范节由 `idev-reviewer` 写。不是 `reviews/`，也不是 `.idev/reviews/` |
 | 阶段计数 | `<票目录>/deliver-eval.md` | 每阶段结束；只计件数 |
 | 排障单 | `<票目录>/ops.yaml` | ops 模块；红绿仍在 verify |
 
 扩展加本文件登记表。不兼容升 `schema_version` + ADR。未知字段忽略。  
+需求、设计、测试用例、Review、测试报告的体例（精简、同一事实、人机同一批 id）只看 [docs/SKILL.md](../../docs/SKILL.md)。  
 专家拒过清单：[experts.md](experts.md)。
 
 ## 阶段（只许向前一格或回退到 defect_origin）
@@ -28,7 +29,7 @@
 | `req-review` | 人给 feature + 原始诉求 | `baseline.yaml` + 规格正文；不明确的问题一轮问完 | 不停。frontier 空后进 `req` 起草拆解 |
 | `req` | 基线就绪、frontier 已空 | `req.yaml`（每条 slice 挂 `baseline_item_id`） | 每个档位一次：`sealed: true` 与 `accepted: true` |
 | `arch` | `req.accepted` | `design.md` + `arch.yaml`。有未决分叉才写 `grill.md` 的 `## arch` 轮 | `accepted: true`。本阶段不交 `verify/plan.yaml` |
-| `code` | `arch.accepted` | 用例 + 代码 + Review + **verify `logic`/`selftest`**。中间不再请签 | 自测完成后的实现审核（`semantic_gate.code`） |
+| `code` | `arch.accepted` | 用例 + 代码 + 独立 Review + **verify `logic`/`selftest`**。中间不再请签。审查者不另设人闸 | 自测和独立审查之后的实现审核（`semantic_gate.code`） |
 | `test` | 实现审核已过 | **verify `mode=test`**，对齐基线 item | 测试结果确认 |
 | `done` | 提测门 + 人 `aligned: true` | 基线未 reopen 则不再改原文 | 人签 |
 | `ops` | 已是 `done`，或交付中途就地 debug（不改 stage） | `ops.yaml` 分类；verify `debug`/`patrol` 或 handoff | 人写 `resolved` 或确认 `defect_origin` |

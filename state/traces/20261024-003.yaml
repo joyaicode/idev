@@ -1,0 +1,87 @@
+schema_version: 2
+at: "2026-10-24T17:53:31+08:00"
+feature: idev-conductor
+intent: "复跑回写用例，并拦住 writes 之外的改动"
+invoke:
+  trigger: "继续修上一轮列出的问题"
+  matched: "lite-change 的 refresh 与 writes 检查"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: explicit
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "人要接着修并行之后还敞着的口子"
+route:
+  scenario: S5
+  module: conventions
+  convention_class: coding
+  stage: code
+  risk_tier: P1
+  why: "补的是配方、record 和 Go 领域模型。不另加人签。"
+rejected:
+  - module: verify
+    why: "没有产品票要跑"
+  - module: ops
+    why: "不是投产现象"
+thinking:
+  summary: "review.fix 之后加 refresh，回写 plan.yaml 并重写两份报告。有委派的 grouped 步骤，CHANGED 超出 writes 就拒绝 record。Go 的 Open 允许同一 group 一起激活。"
+  signals:
+    - "go test domain/run 与 runsvc 通过"
+    - "golden verify 52 same"
+    - "writes-outside 退出码 2"
+  excluded:
+    - "不把没交委派的 record 当成写过文件"
+    - "不改 SQLite steps 表"
+  uncertainty: "Go 的 run Create 仍未接线，导体路径还是 workflow.py。"
+  steps:
+    - n: 1
+      do: "在 fix 和实现审核之间加 refresh"
+      so: "实现审核看到的是改完代码之后的跑证"
+    - n: 2
+      do: "record 对照 CHANGED 和 writes；Go priorsFinished 放过同组"
+      so: "越界路径记不进去，组后的人闸仍要等"
+opened:
+  - "workflows/lite-change.yaml"
+  - "scripts/workflow.py"
+  - "internal/domain/run/run.go"
+  - "internal/app/runsvc/runsvc.go"
+  - "agents/idev-verifier.md"
+  - "test/golden/record.sh"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "原话是继续"
+    result: "loaded"
+  - kind: script
+    name: go test
+    from: conductor
+    to: script:go-test
+    args: "./internal/domain/run/ ./internal/app/runsvc/"
+    result: "ok"
+  - kind: script
+    name: test/golden/record.sh
+    from: conductor
+    to: script:record.sh
+    args: "--verify"
+    result: "52 same 0 different"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "缺口在编排，不在某一张产品票"
+  - kind: delegate
+    chose: none
+    why: "改的是内核，由导体落笔"
+  - kind: model
+    chose: inherit
+    why: "本轮没有换模型"
+  - kind: refuse
+    chose: "no sqlite migration"
+    why: "run 的 Create 还没接线，组字段先留在领域模型"
+stop: ""
+next: "下一轮再看：没交委派时 writes 不查磁盘、文档体例仍无机检、扫描器仍不执行"
+check_feature: skipped
+extensions: []
+notes: "仍未提交。state/reviews 的周审计日志不要带上。"

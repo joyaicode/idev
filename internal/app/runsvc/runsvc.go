@@ -342,6 +342,9 @@ type Next struct {
 	// Action is delegate, conductor, gate, done or blocked.
 	Action string
 	Step   *run.Step
+	// Steps is the open wave. Step is its first member. A group lists every
+	// member that is still unfinished; a step with no group is the only entry.
+	Steps  []run.Step
 	Agent  string
 	Status run.Status
 }
@@ -367,27 +370,28 @@ func (s Service) Next(ctx context.Context, runID string) (Next, error) {
 // NextFor is Next on an already-loaded run.
 func (s Service) NextFor(r run.Run) Next {
 	status := r.Status()
+	opened := r.Open()
+	cur := r.Current()
 	switch status {
 	case run.StatusDone, run.StatusAborted:
 		return Next{Action: ActionDone, Status: status}
 	case run.StatusBlocked:
-		return Next{Action: ActionBlocked, Step: r.Current(), Status: status}
+		return Next{Action: ActionBlocked, Step: cur, Steps: opened, Status: status}
 	}
-	cur := r.Current()
 	if cur == nil {
 		return Next{Action: ActionDone, Status: run.StatusDone}
 	}
 	switch {
 	case cur.IsGate:
-		return Next{Action: ActionGate, Step: cur, Status: status}
+		return Next{Action: ActionGate, Step: cur, Steps: opened, Status: status}
 	case cur.Executor == run.ByAgent:
 		agent := ""
 		if s.Registry != nil {
 			agent = s.Registry.AgentFor(cur.Kind)
 		}
-		return Next{Action: ActionDelegate, Step: cur, Agent: agent, Status: status}
+		return Next{Action: ActionDelegate, Step: cur, Steps: opened, Agent: agent, Status: status}
 	default:
-		return Next{Action: ActionConductor, Step: cur, Status: status}
+		return Next{Action: ActionConductor, Step: cur, Steps: opened, Status: status}
 	}
 }
 

@@ -24,7 +24,7 @@ is_background: false
 | 命中 canon 的 `T#` 一并记入 review.md | 顺手修 UNRELATED 的脏文件 |
 | 对不清楚的边界在回报里写明 | 写 `sealed`/`accepted`/`aligned`/`resolved` 任一字段 |
 
-你有 `Write` 是为了写 `review.md`,**不是**为了改代码。没有 `Edit` 工具是有意的:你不需要改已有代码文件。
+你有 `Write` 是为了写 `review.md`,**不是**为了改代码。没有 `Edit` 工具是有意的:你不需要改已有代码文件。并行组里本步的 `WRITES` 只有 `review.md`。回报写 `CHANGED: review.md`；没改文件写 `CHANGED: 无`。
 
 ## 本步怎么做
 
@@ -58,7 +58,7 @@ is_background: false
    bash $IDEV/scripts/coding-scan.sh <仓根>
    ```
    做五轴 + 栈指南;blocking 项译成 `P#` / `C#`。
-4. 写 `<票目录>/review.md`(照 `$IDEV/deliver/references/review.example.md`):必须写清 §1 命中 / 零命中、§2 已扫、命中的 `T#`。每条发现给编号 `I*`,状态标**待签收**。与本轮无关的脏文件写进 UNRELATED 段,**不改它们**。
+4. 写 `<票目录>/review.md`(照 `$IDEV/deliver/references/review.example.md`):必须写清 §1 命中 / 零命中、§2 已扫、命中的 `T#`、`审查者: idev-reviewer`、带数字的 `文件与行数`(取 coding-scan 的 size 段)。单文件超过 400 行、说不出职责的新文件、说不出为何动的触及文件,译成 `C#` / `T#`。每条发现给编号 `I*`,状态标**待签收**。与本轮无关的脏文件写进 UNRELATED 段,**不改它们**。编码者自己写过的编码规范节由你重写。
 5. 回报(见下)。不要 `trace.sh append` —— trace 由导体统一写,本步不另开账。
 
 ## 硬规则

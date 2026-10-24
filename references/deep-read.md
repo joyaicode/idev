@@ -15,7 +15,7 @@ bash ~/.cursor/skills/idev/scripts/install-weekly-audit.sh
 | 报警 | 含义 | 通常处理 |
 |------|------|----------|
 | 缺 scenario | 没记 S1–S8 | 补路由习惯 |
-| **同轮多模块执行 calls** | calls 跨 deliver/verify/ops | 收敛到单模块；拆两轮 |
+| **同轮多模块执行 calls** | calls 跨 deliver/verify/ops | deliver、verify、ops 仍拆开。同一 group 的步骤记成 `kind: agent`，不要记成两个 module |
 | 仅 opened 多模块（深读） | 单执行 + 邻接只读 | **允许**（见下） |
 | calls 弱/空 | 无可核验调用 | 补真实 calls |
 | `feature: -` 未绑票 | 产品会话未认票 | 小改走 s8-preflight；非交付说明原因 |
@@ -46,7 +46,7 @@ signoff:
 |----------|------|
 | S4 对照阅读 | `route.module=conventions`；calls 不做阶段推进 |
 | 边界只读 | 执行 calls 只落在当前模块；不写邻接工件 |
-| 改 idev / 新配方提案 | 本轮不落仓内票；不并行执行 verify/ops |
+| 改 idev / 新配方提案 | 本轮不落仓内票。这条说的是改内核时的深读；lite-change 的 check 组不在这里 |
 | 入口短页 | 打开 `idev/SKILL.md` + 当前模块 |
 
 | 应收敛 | 为什么 |

@@ -106,7 +106,7 @@ python3 scripts/delegation.py replay --feature <f> --step <step>
 
 | 不要 | 为什么 |
 |---|---|
-| 同一轮派两个 agent 「并行省时间」 | `conventions/canon.md:181` 的反模式。先订死接口再并行，否则合并成本比省下的多 |
+| 没有 `group` 就同一轮派两个 agent | 写集没订死。`next` 打出 `PARALLEL` 时，先 `workflow.py delegate --open`，再把这一波的每个 `DELEGATE` 都派出去；人闸和写租约不在这一波里 |
 | 让 agent 去问人 | 它问不到。要停问就 `BLOCKED` 回报，由导体停 |
 | 跳过 `next` 直接派你觉得对的 agent | 配方改过 step 你就派错了；而且 trace 里对不上账 |
 | 替 agent 写 `FACTS` / `EVIDENCE` | 那是它的交代。你代写就等于没有交代 |

@@ -117,7 +117,7 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 | # | 东西 | 为什么不做 | 要做的话先解决 |
 |---|---|---|---|
-| 12 | 并行 fan-out | `conventions/canon.md:181` 把「多开几个 Agent 就快了」列为反模式；`references/hitl-risk-tiers.md:33` 不内置并行阶段机 | 重做 `current_step()` 单指针与 `find_run()` 拒多活跃 run；重新定义周审计 `multi-exec-calls` 口径 |
+| 12 | 无界 fan-out（多份活跃 run） | 同一 `group` 且 `writes` 不相交的 verify 步骤已经可以同时开。多份活跃 run、人闸并行、写租约并行仍不做 | `find_run()` 仍拒第二份 run；周审计 `multi-exec-calls` 口径还没改 |
 | 13 | step 级 `agent:` 字段覆盖 | 走 kind 默认表够用，且不动配方语法 | 同时改 `STEP_FIELDS` + `workflow-check` + `workflow-schema.md` 三处 |
 | 14 | 继续细分 agent（回到八个或更多） | 一个阶段里的动作同进同退；切碎只会让导体多组委派包，每组一次多一次 `brief-complete` 出错机会 | 先有数据证明某个 agent 职责确实冲突（`agent-metrics` 里它的密度明显高于其它） |
 | 15 | 把导体也做成 agent | subagent 看不到对话历史、`is_human()` 黑名单含 `agent/ai/cursor/assistant`、Cursor 的嵌套限制 | 无 —— 这会把「人机共驾」降级成「无人值守」 |
@@ -144,7 +144,7 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 活路径是 `workflow.py` 写 `run.yaml`。Go 的 `runsvc` 在进程内 e2e 里成立，`record` 不进入它。SQLite 可写的是 gate、lease、audit；run 的 `Create`/`Save`、delegation、baseline 仍返回未接线。先让一笔状态迁移落在一个事务里，再暴露 MCP。
 
-阶段 1 不接 passkey。`AllowLowForHigh` 保持开着，降级继续进审计。有意不做、不必列入下面表格的：第二个顶层 Skill、分数门禁、并行 fan-out、把导体做成 subagent、B 类另开 decision gate、现在改用 sqlc。
+阶段 1 不接 passkey。`AllowLowForHigh` 保持开着，降级继续进审计。有意不做、不必列入下面表格的：第二个顶层 Skill、分数门禁、把导体做成 subagent、B 类另开 decision gate、现在改用 sqlc。写集已订死的一组 verify 步骤已在 2026-10-24 放开；多份活跃 run 仍不做，见上表 #12。
 
 2026-10-20 验收：`test/lease-channel.sh` 17 OK / 0 FAIL（含 verify 租约围栏，以及 `IDEV_ENGINE=python` 不领租约仍可 `record PASS`）。设计文件 SHA-256 验收时点为 `7672a259…9824fea0`（同日文首补 N1 术语注记后为 `7db523d4…974fcbde`，与 README 一致）。`check_recipe` 拒绝 `gate_type: sealed`；`deliver-next` 的自然语言 `will_write` 能过配方检查，推导结果是 `step_confirm`、无 subject。
 

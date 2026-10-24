@@ -48,6 +48,8 @@ BASE = """- 场景命中: 零命中
 - 五轴: 正确性过；可读性过；架构过；安全过；性能过
 - 栈指南: java8
 - 增强扫描: 已跑 coding-scan + 五轴 + 栈指南
+- 审查者: idev-reviewer
+- 文件与行数: 触及 1 个文件，新增 0，最长 40 行
 """
 
 
@@ -224,6 +226,32 @@ class Independence(unittest.TestCase):
         self.assertTrue(any("missing 编码规范" in e for e in errors))
 
 
+class ReviewerAndSize(unittest.TestCase):
+    """The coding section is an independent review with a measured diff."""
+
+    def _errors(self, body: str) -> list:
+        errors: list = []
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            cf.check_review_coding("## 编码规范\n\n" + body, errors)
+        return errors
+
+    def test_missing_reviewer_fails(self) -> None:
+        body = BASE.replace("- 审查者: idev-reviewer\n", "")
+        self.assertTrue(any("missing 审查者" in e for e in self._errors(body)))
+
+    def test_other_name_fails(self) -> None:
+        body = BASE.replace("idev-reviewer", "idev-coder")
+        self.assertTrue(any("must be idev-reviewer" in e for e in self._errors(body)))
+
+    def test_size_without_a_count_fails(self) -> None:
+        body = BASE.replace(
+            "- 文件与行数: 触及 1 个文件，新增 0，最长 40 行\n",
+            "- 文件与行数: 已看过\n",
+        )
+        self.assertTrue(any("needs a count" in e for e in self._errors(body)))
+
+
 class FilledExamplePasses(unittest.TestCase):
     """The example block in review.example.md, filled in, must be green."""
 
@@ -237,6 +265,8 @@ class FilledExamplePasses(unittest.TestCase):
 - 五轴: 正确性过；可读性命中已改；架构过；安全过；性能过
 - 栈指南: java8
 - 增强扫描: 已跑
+- 审查者: idev-reviewer
+- 文件与行数: 触及 1 个文件，新增 0，最长 40 行
 """
         errors = []
         buf = io.StringIO()

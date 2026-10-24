@@ -63,6 +63,10 @@ is_background: false
 
 ## kind = verify.run
 
+委派包或 `next` 的 `WRITES` 列出本步唯一可以写的票内路径。有这份清单时只写这些路径：`verify/plan.yaml` 不在清单里就不改它，也不回写 case 的 `status`。不写 `aligned`，不改 `deliver.stage`。自测报告写 `verify/selftest.md`，验收索引写 `verify/accept.md`。验收索引只列基线项和证据，不是人的确认。回报写 `CHANGED:`，只列这些路径；没改文件写 `CHANGED: 无`。
+
+没有 `WRITES` 的 `verify.run`（`review.fix` 之后那一次）要把 case `status` 回写 `verify/plan.yaml`，并重写 `verify/selftest.md` 和 `verify/accept.md`。带 `WRITES` 的自测和验收索引是草稿，以这一步为准。
+
 1. 读 plan:`accepted != true` 则**拒跑**,回报 `BLOCKED(brief)`。
 2. **不跑** `check-feature verify-plan`、不把该项 FAIL 当运行门禁、不请人再签(H4)。
 3. 只跑 `cases[].accepted == true` 且 runner 可执行的项。日志落 `{module}/target/verify/<case-id>/`。

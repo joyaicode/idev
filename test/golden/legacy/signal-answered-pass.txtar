@@ -2,12 +2,6 @@
 # cmd: W record run PASS --evidence docs/x.md --feature demo
 
 -- exit --
-0
+2
 -- output --
-NEXT gate-review  kind=human.gate  status=pending
-OPEN references/chat-confirm-signoff.md
-DELEGATE none; the conductor does this step
-LABEL 实现审核（自测已跑完；确认后才提测，这里不签测试结果）
-WITH {'will_write': ['deliver.semantic_gate.code', 'deliver.stage=test'], 'proof': 'check-feature code；selftest PASS/FAIL/UNPROVEN'}
-GATE stop here; post this line and the proof: 将代写: deliver.semantic_gate.code、deliver.stage=test
-GATE the person's reply of 确认 / 同意 / 全签 / LGTM is the signoff; record PASS --by <name> --quote "<their words>"
+BLOCKED run disk changed files outside the group writes (verify/plan.yaml, verify/selftest.md, review.md, verify/accept.md): decisions.yaml, decisions.yaml.lock — revert them; this wave writes only those paths

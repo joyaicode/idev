@@ -120,6 +120,11 @@ type Step struct {
 	// ApprovalID is set when a gate passed, or when a gate was skipped by
 	// referencing an earlier approval.
 	ApprovalID string
+	// Group is the wave this step shares. Empty means the step stands alone.
+	// Members of one group may be activated while their siblings are still open.
+	Group string
+	// Writes are the ticket-relative paths a grouped step may change.
+	Writes []string
 }
 
 // Revision records a change to an already-finished step. Nothing is deleted:
@@ -264,6 +269,11 @@ func (r Run) Clone() Run {
 	out := r
 	out.Steps = make([]Step, len(r.Steps))
 	copy(out.Steps, r.Steps)
+	for i := range out.Steps {
+		if r.Steps[i].Writes != nil {
+			out.Steps[i].Writes = append([]string(nil), r.Steps[i].Writes...)
+		}
+	}
 	out.Revisions = make([]Revision, len(r.Revisions))
 	copy(out.Revisions, r.Revisions)
 	return out
@@ -305,14 +315,48 @@ func (r Run) allPending() bool {
 }
 
 // Current returns the first step that has not finished, or nil when the run
-// is complete. This is what drives the NEXT/OPEN/DELEGATE view.
+// is complete. Open is the set that may proceed; Current is Open's first step.
 func (r Run) Current() *Step {
+	opened := r.Open()
+	if len(opened) == 0 {
+		return nil
+	}
 	for i := range r.Steps {
-		if !done[r.Steps[i].State] {
+		if r.Steps[i].ID == opened[0].ID {
 			return &r.Steps[i]
 		}
 	}
 	return nil
+}
+
+// Open returns the steps that may be activated now. A step with no group is
+// alone. A contiguous group stays open together until every member is done.
+// Steps after the group stay closed.
+func (r Run) Open() []Step {
+	start := -1
+	for i := range r.Steps {
+		if !done[r.Steps[i].State] {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return nil
+	}
+	group := r.Steps[start].Group
+	if group == "" {
+		return []Step{r.Steps[start]}
+	}
+	opened := make([]Step, 0, len(r.Steps)-start)
+	for i := start; i < len(r.Steps); i++ {
+		if r.Steps[i].Group != group {
+			break
+		}
+		if !done[r.Steps[i].State] {
+			opened = append(opened, r.Steps[i])
+		}
+	}
+	return opened
 }
 
 // Live reports whether the run can still accept events.
@@ -721,7 +765,11 @@ func transition(out *Run, step *Step, idx int, ev Event) ([]Effect, error) {
 }
 
 func priorsFinished(r Run, idx int) bool {
+	group := r.Steps[idx].Group
 	for i := 0; i < idx; i++ {
+		if group != "" && r.Steps[i].Group == group {
+			continue
+		}
 		if !done[r.Steps[i].State] {
 			return false
 		}

@@ -12,14 +12,16 @@ wrote $WORK/traces/<DATE>-<NNN>.yaml
 | feature | example-change |
 | trigger | 把剩余审批拦截器测试补完 |
 | matched | 编码到提测 / deliver.yaml.stage=code |
+| skills | explicit: idev（用户要求补完剩余测试） |
 | route | deliver / code / P1 |
 | why | deliver.yaml.stage=code; user asked to implement include paths, not a phenomenon. |
 | rejected | ops（no env/artifact/observable; not a post-ship incident）; verify（plan not accepted yet; deliver still owns the turn） |
 | thinking | 看到 stage=code 与「补测试」诉求；排除 ops（无现象）与直接 verify（plan 未 accepted）；先走 deliver/code，并打开 java 规约。 |
-| calls | module:deliver/SKILL.md; repo:docs/task/example-change/deliver.yaml; script:check-feature.sh |
+| calls | skill:idev; model:inherit; module:deliver/SKILL.md; repo:docs/task/example-change/deliver.yaml; script:check-feature.sh |
+| hops | 1.user→skill:idev → loaded → 2.conductor→skill:idev model=inherit 「stage=code，要补测试；排除无现象的 ops」 4s → module=deliver → 3.conductor→module:deliver → continue implement → 4.conductor→repo:deliver.yaml → stage=code risk_tier=P1 → 5.conductor→script:check-feature.sh → skipped-until-before-signoff |
 | opened | conventions/java.md; deliver/SKILL.md; docs/task/example-change/deliver.yaml |
 | conventions | java |
-| decisions | route→deliver; open→conventions/java.md; refuse→do not write aligned |
+| decisions | route→deliver; delegate→none; model→inherit; open→conventions/java.md; refuse→do not write aligned |
 | stop | wait for human to accept verify/plan.yaml |
 | check | skipped |
 | next | draft plan (goal copied from baseline) then check-feature code |
@@ -30,11 +32,14 @@ trigger:  把剩余审批拦截器测试补完
 matched:  编码到提测 / deliver.yaml.stage=code
 route:    S1 → deliver → code → P1
 why:      deliver.yaml.stage=code; user asked to implement include paths, not a phenomenon.
+skills:   explicit: idev（用户要求补完剩余测试）
+choices:  delegate→none · model→inherit
+hops:     1.user→skill:idev → loaded → 2.conductor→skill:idev model=inherit 「stage=code，要补测试；排除无现象的 ops」 4s → module=deliver → 3.conductor→module:deliver → continue implement → 4.conductor→repo:deliver.yaml → stage=code risk_tier=P1 → 5.conductor→script:check-feature.sh → skipped-until-before-signoff
 steps:    1.读 deliver.yaml.stage→仍在 code，不是 ops → 2.对照 invoke 表：编码/自测归 deliver→本轮 module=deliver → 3.改动面是 starter Java→深读 conventions/java.md
-calls:    1.module:deliver/SKILL.md(stage=code)→continue implement → 2.repo:docs/task/example-change/deliver.yaml→stage=code risk_tier=P1 → 3.script:check-feature.sh(example-change code)→skipped-until-before-signoff
+calls:    1.skill:idev→loaded → 2.model:inherit→module=deliver → 3.module:deliver/SKILL.md(stage=code)→continue implement → 4.repo:docs/task/example-change/deliver.yaml→stage=code risk_tier=P1 → 5.script:check-feature.sh(example-change code)→skipped-until-before-signoff
 opened:   conventions/java.md · deliver/SKILL.md · docs/task/example-change/deliver.yaml
 rejected: ops, verify
 stop:     wait for human to accept verify/plan.yaml
 next:     draft plan (goal copied from baseline) then check-feature code
 
-一行: 「把剩余审批拦截器测试补完」 → S1 → deliver → code → P1 → calls[1.module:deliver/SKILL.md(stage=code)→continue implement → 2.repo:docs/task/example-change/deliver.yaml→stage=code ri...] → next:draft plan (goal copied from baseline) t
+一行: 「把剩余审批拦截器测试补完」 → S1 → deliver → code → P1 → delegate→none · model→inherit → hops[1.user→skill:idev → loaded → 2.conductor→skill:idev model=inherit 「stage=code，要补测试；排除无现象的 ops」 4s → module=deliver → ...] → next:draft plan (goal copied from baseline) t
