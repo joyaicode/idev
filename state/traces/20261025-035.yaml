@@ -1,0 +1,73 @@
+schema_version: 2
+at: "2026-10-25T20:50:00+08:00"
+feature: "-"
+intent: "用户要求把本地 v2 推到 origin。"
+invoke:
+  trigger: "推送"
+  matched: "入库之后推送"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "github.com 的 443 连不上，改经 api.github.com 推两个提交"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: coding
+  stage: code
+  risk_tier: P2
+  why: "人说推送。普通 git push 超时，接口推上去且提交号一致。"
+rejected:
+  - module: deliver
+    why: "无票"
+  - module: verify
+    why: "没有用例要跑"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "git push 连 github.com:443 超时。SSH 能到 22 但没有公钥。api.github.com 可用。两个提交的树和提交号与本地一致后，v2 指到 532ff3d。没有 force。"
+  signals:
+    - "origin/v2 原先是 1a4b224"
+    - "2733a4c 与 532ff3d 提交号一致"
+  excluded:
+    - "force 更新分支"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "经 Git 数据接口写入同样的提交"
+      so: "远端 v2 是 532ff3d"
+opened:
+  - "references/changelog.md"
+calls:
+  - kind: script
+    name: git push
+    from: conductor
+    to: script:git
+    why: "人要求推送"
+    result: "github.com:443 超时"
+  - kind: script
+    name: gh api refs/heads/v2
+    from: conductor
+    to: script:gh
+    why: "443 不通时仍要把同一提交号推上去"
+    result: "532ff3d"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "推的是已提交的规范插件"
+  - kind: delegate
+    chose: none
+    why: "导体推送"
+  - kind: model
+    chose: inherit
+    why: "导体自己推"
+  - kind: stop
+    chose: none
+    why: "人已经说推送"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+next: "远端 v2 已是 532ff3d。本地 git status 要等 github.com:443 能 fetch 才会跟上。"
