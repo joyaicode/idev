@@ -14,7 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import source_diff  # noqa: E402
 
-_EQ = re.compile(r"([=!]=)(?!=)")
+# The second "=" of "===" must not count as "==". Same for "!==".
+_EQ = re.compile(r"(?<![!=])([=!]=)(?!=)")
 _NULL = re.compile(r"^[ \t]*(?:null|undefined)\b")
 _VAR = re.compile(r"\bvar[ \t]+[A-Za-z_$]")
 _TAG = re.compile(r"<([A-Za-z][\w:-]*)\b[^>]*>")

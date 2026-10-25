@@ -169,16 +169,36 @@ def _statement_start(text: str, pos: int) -> int:
     return 0
 
 
+def _in_try_with_resources(text: str, pos: int) -> bool:
+    """True when pos sits in a try ( ... ) resource list, including later resources."""
+    depth = 0
+    i = pos - 1
+    while i >= 0:
+        ch = text[i]
+        if ch == ")":
+            depth += 1
+        elif ch == "(":
+            if depth == 0:
+                head = text[max(0, i - 24):i]
+                return re.search(r"\btry\s*$", head) is not None
+            depth -= 1
+        elif ch in "{}" and depth == 0:
+            return False
+        i -= 1
+    return False
+
+
 def arm_hits(text: str, rel: str) -> list[tuple[str, int, str]]:
     comments, strings = _spans(text)
     hits = []
     for match in _ARM.finditer(text):
         if _inside(comments, match.start()) or _inside(strings, match.start()):
             continue
+        if _in_try_with_resources(text, match.start()):
+            continue
         start = _statement_start(text, match.start())
         segment = text[start + 1:match.start()]
-        before = text[max(0, start - 12):start + 1]
-        if re.search(r"\btry\s*\($", before) or re.search(r"\btry\b|\breturn\b", segment):
+        if re.search(r"\breturn\b", segment):
             continue
         if "=" not in segment:
             continue

@@ -54,7 +54,7 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 4. 逐条扫 §2：命中必须当轮改掉，只记账不算过。
 5. 若有重构：核对 §3 满足条件与「两顶帽子」；混做加功能 / 无护栏绿 = 拒过。
 6. 五轴 + 栈指南。把命中与纠正写入 `review.md`「编码规范」节（模板见 review.example）；写五轴 / 栈指南 / 增强扫描。黄条不新编号，`I*` 的根据写 java.md 那一行的提示名。
-7. 验收看同一次 `coding-scan.sh` 末尾的 `problems` 和 `lang`。两边都是退出码 0，且插件 `convention` 为 0，才算这层扫完。退出码 2 是 `UNPROVEN`（插件文件不在）。`java_hygiene.py` 的 0、`python3 -m compileall` 的 0、以及「工具没装就跳过」，都不够。Java 插件另外看未收进 `try (` 的流、没有调用的私有方法、至少两处调用都是同一字面量的私有形参。Python 插件看 `== None`、裸 `except:`、可变默认参数。Go 插件看循环里的 `time.Sleep` 和被丢掉的返回值。Shell 插件看没加引号的变量。JS/Vue 插件看 `==` / `!=`、`var`、以及 `v-for` 缺少 `key`。前端已有的 `lint-fix` 仍要跑。`delegation.py` 的 `java-hygiene` 只对照正则子集打回漏记的 Java `file:line`。
+7. 验收看同一次 `coding-scan.sh` 末尾的 `problems` 和 `lang`。两边都是退出码 0，且插件 `convention` 为 0，才算这层扫完。退出码 2 是 `UNPROVEN`（插件文件不在）。`java_hygiene.py` 的 0、`python3 -m compileall` 的 0、以及「工具没装就跳过」，都不够。Java 插件另外看未收进 `try (` 的流、没有调用的私有方法、至少两处调用都是同一字面量的私有形参。Python 插件看 `== None`、裸 `except:`、可变默认参数。Go 插件看循环里的 `time.Sleep`。返回值丢掉与否要类型，正则分不清剩余参数和错误，不报。Shell 插件看分词位置上没加引号的变量；引号、命令替换里的引号、heredoc、`[[ ]]`、`$(( ))`，以及写了 `shellcheck disable=SC2086` 的那一处不算。JS/Vue 插件看 `==` / `!=`（已经是 `===` / `!==` 的不算）、`var`、以及 `v-for` 缺少 `key`。前端已有的 `lint-fix` 仍要跑。`delegation.py` 的 `java-hygiene` 只对照正则子集打回漏记的 Java `file:line`。
 
 **例外（仅 S8 `review.report`）**：报告步允许只记账并标「待签收」，本步不改代码。`review.fix` 在 `accept_all_findings: true` 时改全部 `I*`；否则只改已签收 `I*`。全文 [workflow-code-review.md](../references/workflow-code-review.md) 与 [lite-change](../workflows/lite-change.yaml)。
 

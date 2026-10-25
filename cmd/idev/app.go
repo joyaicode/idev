@@ -373,14 +373,20 @@ func (a app) answer(ctx context.Context, args []string, reject bool) error {
 
 	in := bufio.NewReader(a.stdin)
 	fmt.Fprintf(a.stdout, "type the last %d characters of the gate id to answer as %s: ", shortLen, cred.Handle)
-	typed, _ := in.ReadString('\n')
+	typed, err := in.ReadString('\n')
+	if err != nil {
+		return err
+	}
 	if strings.TrimSpace(typed) != short(g.ID) {
 		return errors.New("the short code does not match; nothing was recorded")
 	}
 	q := strings.TrimSpace(*quote)
 	if q == "" {
 		fmt.Fprint(a.stdout, "your words, verbatim: ")
-		line, _ := in.ReadString('\n')
+		line, err := in.ReadString('\n')
+		if err != nil {
+			return err
+		}
 		q = strings.TrimSpace(line)
 	}
 	if reject && !signoff.IsReject(q) {

@@ -38,53 +38,53 @@ fi
 
 if [[ -x "$ROOT/scripts/link-idev-aliases.sh" ]]; then
   set +e
-  bash "$ROOT/scripts/link-idev-aliases.sh" >$HC_TMP/idev-aliases.out 2>&1
+  bash "$ROOT/scripts/link-idev-aliases.sh" >"$HC_TMP"/idev-aliases.out 2>&1
   alias_rc=$?
   set -e
   if [[ $alias_rc -eq 0 ]]; then
     echo "OK  idev aliases (~/.claude + ~/.agents + ~/.joycode -> true source)"
-    grep '^OK  ' $HC_TMP/idev-aliases.out || true
+    grep '^OK  ' "$HC_TMP"/idev-aliases.out || true
   else
     echo "FAIL idev aliases"
-    cat $HC_TMP/idev-aliases.out || true
+    cat "$HC_TMP"/idev-aliases.out || true
     fail=1
   fi
 fi
 
-if bash "$ROOT/scripts/workflow-check.sh" >$HC_TMP/idev-wf-check.out 2>&1; then
+if bash "$ROOT/scripts/workflow-check.sh" >"$HC_TMP"/idev-wf-check.out 2>&1; then
   echo "OK  workflow-check"
 else
   echo "FAIL workflow-check"
-  tail -20 $HC_TMP/idev-wf-check.out || true
+  tail -20 "$HC_TMP"/idev-wf-check.out || true
   fail=1
 fi
 
-if bash "$ROOT/scripts/lite-change-smoke.sh" >$HC_TMP/idev-lite-smoke.out 2>&1; then
+if bash "$ROOT/scripts/lite-change-smoke.sh" >"$HC_TMP"/idev-lite-smoke.out 2>&1; then
   echo "OK  lite-change smoke"
-  grep -E 'SMOKE_OK|real-ticket|WARN' $HC_TMP/idev-lite-smoke.out || true
-  if grep -q '^WARN ' $HC_TMP/idev-lite-smoke.out; then
+  grep -E 'SMOKE_OK|real-ticket|WARN' "$HC_TMP"/idev-lite-smoke.out || true
+  if grep -q '^WARN ' "$HC_TMP"/idev-lite-smoke.out; then
     warn=$((warn + 1))
   fi
 else
   echo "FAIL lite-change smoke"
-  tail -40 $HC_TMP/idev-lite-smoke.out || true
+  tail -40 "$HC_TMP"/idev-lite-smoke.out || true
   fail=1
 fi
 
-if bash "$ROOT/scripts/late-lifecycle-smoke.sh" >$HC_TMP/idev-late-smoke.out 2>&1; then
+if bash "$ROOT/scripts/late-lifecycle-smoke.sh" >"$HC_TMP"/idev-late-smoke.out 2>&1; then
   echo "OK  late-lifecycle smoke"
-  grep -E 'LATE_LIFECYCLE_SMOKE_OK|OK  ' $HC_TMP/idev-late-smoke.out | tail -8 || true
+  grep -E 'LATE_LIFECYCLE_SMOKE_OK|OK  ' "$HC_TMP"/idev-late-smoke.out | tail -8 || true
 else
   echo "FAIL late-lifecycle smoke"
-  tail -50 $HC_TMP/idev-late-smoke.out || true
+  tail -50 "$HC_TMP"/idev-late-smoke.out || true
   fail=1
 fi
 
-if bash "$ROOT/scripts/second-product-smoke.sh" >$HC_TMP/idev-second.out 2>&1; then
+if bash "$ROOT/scripts/second-product-smoke.sh" >"$HC_TMP"/idev-second.out 2>&1; then
   echo "OK  second-product smoke"
 else
   echo "FAIL second-product smoke"
-  cat $HC_TMP/idev-second.out || true
+  cat "$HC_TMP"/idev-second.out || true
   fail=1
 fi
 
@@ -92,17 +92,17 @@ fi
 # S8 preflight script must exist and fail-closed on missing ticket
 if [[ -x "$ROOT/scripts/s8-preflight.sh" ]]; then
   set +e
-  bash "$ROOT/scripts/s8-preflight.sh" >$HC_TMP/idev-s8-pf-usage.out 2>&1
+  bash "$ROOT/scripts/s8-preflight.sh" >"$HC_TMP"/idev-s8-pf-usage.out 2>&1
   u_rc=$?
-  bash "$ROOT/scripts/s8-preflight.sh" "__idev_hc_missing__" lite-change >$HC_TMP/idev-s8-pf-block.out 2>&1
+  bash "$ROOT/scripts/s8-preflight.sh" "__idev_hc_missing__" lite-change >"$HC_TMP"/idev-s8-pf-block.out 2>&1
   b_rc=$?
   set -e
-  if [[ $u_rc -eq 1 ]] && grep -q 'usage:' $HC_TMP/idev-s8-pf-usage.out \
-     && [[ $b_rc -eq 2 ]] && grep -q 'BLOCKED' $HC_TMP/idev-s8-pf-block.out; then
+  if [[ $u_rc -eq 1 ]] && grep -q 'usage:' "$HC_TMP"/idev-s8-pf-usage.out \
+     && [[ $b_rc -eq 2 ]] && grep -q 'BLOCKED' "$HC_TMP"/idev-s8-pf-block.out; then
     echo "OK  s8-preflight (usage=1, missing-ticket=BLOCKED/2)"
   else
     echo "FAIL s8-preflight self-check (usage_rc=$u_rc block_rc=$b_rc)"
-    tail -20 $HC_TMP/idev-s8-pf-usage.out $HC_TMP/idev-s8-pf-block.out 2>/dev/null || true
+    tail -20 "$HC_TMP"/idev-s8-pf-usage.out "$HC_TMP"/idev-s8-pf-block.out 2>/dev/null || true
     fail=1
   fi
 else
@@ -110,41 +110,41 @@ else
   fail=1
 fi
 
-if bash "$ROOT/scripts/refs-check.sh" >$HC_TMP/idev-refs.out 2>&1; then
+if bash "$ROOT/scripts/refs-check.sh" >"$HC_TMP"/idev-refs.out 2>&1; then
   echo "OK  refs-check"
 else
   echo "FAIL refs-check"
-  grep -E 'MISS|FAIL' $HC_TMP/idev-refs.out || tail -20 $HC_TMP/idev-refs.out || true
+  grep -E 'MISS|FAIL' "$HC_TMP"/idev-refs.out || tail -20 "$HC_TMP"/idev-refs.out || true
   fail=1
 fi
 
-if bash "$ROOT/scripts/product-checks.sh" >$HC_TMP/idev-product-checks.out 2>&1; then
+if bash "$ROOT/scripts/product-checks.sh" >"$HC_TMP"/idev-product-checks.out 2>&1; then
   echo "OK  product-checks"
 else
   echo "FAIL product-checks"
-  cat $HC_TMP/idev-product-checks.out || true
+  cat "$HC_TMP"/idev-product-checks.out || true
   fail=1
 fi
 
-if python3 "$ROOT/scripts/product-layout-check.py" --from-install >$HC_TMP/idev-product-layout.out 2>&1; then
-  if grep -q '^WARN ' $HC_TMP/idev-product-layout.out; then
+if python3 "$ROOT/scripts/product-layout-check.py" --from-install >"$HC_TMP"/idev-product-layout.out 2>&1; then
+  if grep -q '^WARN ' "$HC_TMP"/idev-product-layout.out; then
     echo "WARN product-layout"
-    cat $HC_TMP/idev-product-layout.out || true
+    cat "$HC_TMP"/idev-product-layout.out || true
     warn=$((warn + 1))
   else
     echo "OK  product-layout"
   fi
 else
   echo "FAIL product-layout"
-  cat $HC_TMP/idev-product-layout.out || true
+  cat "$HC_TMP"/idev-product-layout.out || true
   fail=1
 fi
 
-if bash "$ROOT/scripts/core-strip-check.sh" >$HC_TMP/idev-core-strip.out 2>&1; then
+if bash "$ROOT/scripts/core-strip-check.sh" >"$HC_TMP"/idev-core-strip.out 2>&1; then
   echo "OK  core-strip-check"
 else
   echo "FAIL core-strip-check"
-  cat $HC_TMP/idev-core-strip.out || true
+  cat "$HC_TMP"/idev-core-strip.out || true
   fail=1
 fi
 
@@ -158,15 +158,15 @@ elif [[ ! -d "$GRILL" ]]; then
   warn=$((warn + 1))
 elif [[ -x "$ROOT/scripts/link-companion-skills.sh" ]]; then
   set +e
-  bash "$ROOT/scripts/link-companion-skills.sh" grilling >$HC_TMP/idev-companion.out 2>&1
+  bash "$ROOT/scripts/link-companion-skills.sh" grilling >"$HC_TMP"/idev-companion.out 2>&1
   comp_rc=$?
   set -e
   if [[ $comp_rc -eq 0 ]]; then
     echo "OK  companion grilling true source + aliases"
-    grep '^OK  ' $HC_TMP/idev-companion.out || true
+    grep '^OK  ' "$HC_TMP"/idev-companion.out || true
   else
     echo "FAIL companion grilling aliases"
-    cat $HC_TMP/idev-companion.out || true
+    cat "$HC_TMP"/idev-companion.out || true
     fail=1
   fi
 fi
@@ -177,21 +177,21 @@ if [[ ! -f "$DOCS_SKILL" ]]; then
   warn=$((warn + 1))
 elif [[ -x "$ROOT/scripts/link-companion-skills.sh" ]]; then
   set +e
-  bash "$ROOT/scripts/link-companion-skills.sh" setup-agents-docs >$HC_TMP/idev-docs-companion.out 2>&1
+  bash "$ROOT/scripts/link-companion-skills.sh" setup-agents-docs >"$HC_TMP"/idev-docs-companion.out 2>&1
   docs_rc=$?
   set -e
   if [[ $docs_rc -eq 0 ]]; then
     echo "OK  companion setup-agents-docs + aliases"
-    grep '^OK  ' $HC_TMP/idev-docs-companion.out || true
+    grep '^OK  ' "$HC_TMP"/idev-docs-companion.out || true
   else
     echo "FAIL companion setup-agents-docs aliases"
-    cat $HC_TMP/idev-docs-companion.out || true
+    cat "$HC_TMP"/idev-docs-companion.out || true
     fail=1
   fi
 fi
 
-if bash "$ROOT/scripts/audit-traces.sh" 50 >$HC_TMP/idev-audit.out 2>&1; then
-  hard=$(sed -n 's/^HARD_COUNT=//p' $HC_TMP/idev-audit.out | tail -1)
+if bash "$ROOT/scripts/audit-traces.sh" 50 >"$HC_TMP"/idev-audit.out 2>&1; then
+  hard=$(sed -n 's/^HARD_COUNT=//p' "$HC_TMP"/idev-audit.out | tail -1)
   hard="${hard:-0}"
   echo "OK  audit-traces 50 (hard=$hard)"
   if [[ "$hard" != "0" ]]; then
@@ -211,7 +211,7 @@ else
   echo "WARN self-evolution tooling incomplete"
   warn=$((warn + 1))
 fi
-if bash "$ROOT/scripts/path-view.sh" >$HC_TMP/idev-path-hc.out 2>&1 && grep -q '运行路径' $HC_TMP/idev-path-hc.out; then
+if bash "$ROOT/scripts/path-view.sh" >"$HC_TMP"/idev-path-hc.out 2>&1 && grep -q '运行路径' "$HC_TMP"/idev-path-hc.out; then
   echo "OK  path-view"
 else
   echo "WARN path-view"
@@ -241,24 +241,24 @@ fi
 if [[ -x "$ROOT/scripts/outbound-skills-check.sh" ]]; then
   if [[ "${HEALTHCHECK_AUTO_OUTBOUND:-1}" == "1" ]]; then
     set +e
-    bash "$ROOT/scripts/link-outbound-skills.sh" --heal >$HC_TMP/idev-outbound-link.out 2>&1
+    bash "$ROOT/scripts/link-outbound-skills.sh" --heal >"$HC_TMP"/idev-outbound-link.out 2>&1
     link_rc=$?
     set -e
     if [[ $link_rc -eq 0 ]]; then
       echo "OK  outbound links ensured"
     else
       echo "WARN outbound link ensure skipped/failed"
-      grep -E 'FAIL|MISS|HINT' $HC_TMP/idev-outbound-link.out | head -8 || true
+      grep -E 'FAIL|MISS|HINT' "$HC_TMP"/idev-outbound-link.out | head -8 || true
       warn=$((warn + 1))
     fi
   fi
   set +e
-  bash "$ROOT/scripts/outbound-skills-check.sh" --install >$HC_TMP/idev-outbound.out 2>&1
+  bash "$ROOT/scripts/outbound-skills-check.sh" --install >"$HC_TMP"/idev-outbound.out 2>&1
   oc=$?
   set -e
   if [[ $oc -eq 0 ]]; then
     echo "OK  outbound-skills-check"
-    grep -E 'OK  |WARN |note:' $HC_TMP/idev-outbound.out || true
+    grep -E 'OK  |WARN |note:' "$HC_TMP"/idev-outbound.out || true
     if [[ -f "$ROOT/state/outbound-config.json" ]]; then
       echo "OK  outbound-config present"
     else
@@ -267,7 +267,7 @@ if [[ -x "$ROOT/scripts/outbound-skills-check.sh" ]]; then
     fi
   else
     echo "WARN outbound handoff gaps (not idev-core)"
-    grep -E 'MISS|FAIL|WARN|OK  |note:|HINT' $HC_TMP/idev-outbound.out || true
+    grep -E 'MISS|FAIL|WARN|OK  |note:|HINT' "$HC_TMP"/idev-outbound.out || true
     warn=$((warn + 1))
     if [[ "${HEALTHCHECK_STRICT_OUTBOUND:-0}" == "1" ]]; then
       echo "FAIL outbound (HEALTHCHECK_STRICT_OUTBOUND=1)"

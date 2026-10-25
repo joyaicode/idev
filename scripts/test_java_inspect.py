@@ -56,6 +56,54 @@ class PluginTest(unittest.TestCase):
         })
         self.assertFalse(any("try-with-resources" in title for title in titles(root)))
 
+    def test_second_resource_in_try_is_quiet(self) -> None:
+        root = repo_with({
+            "src/A.java": """\
+                class A {
+                    void run() throws Exception {
+                        try (java.io.FileInputStream in = new java.io.FileInputStream("a");
+                             java.io.FileOutputStream out = new java.io.FileOutputStream("b")) {
+                            out.write(in.read());
+                        }
+                    }
+                }
+                """,
+        })
+        self.assertFalse(any("try-with-resources" in title for title in titles(root)))
+
+    def test_multiline_try_resource_is_quiet(self) -> None:
+        root = repo_with({
+            "src/A.java": """\
+                class A {
+                    void run() throws Exception {
+                        try (
+                            java.io.FileInputStream in = new java.io.FileInputStream("a");
+                            java.io.FileOutputStream out = new java.io.FileOutputStream("b")
+                        ) {
+                            out.write(1);
+                        }
+                    }
+                }
+                """,
+        })
+        self.assertFalse(any("try-with-resources" in title for title in titles(root)))
+
+    def test_stream_in_try_block_is_still_a_finding(self) -> None:
+        root = repo_with({
+            "src/A.java": """\
+                class A {
+                    void run() throws Exception {
+                        try {
+                            java.io.FileOutputStream out = new java.io.FileOutputStream("a");
+                            out.close();
+                        } catch (Exception ignored) {
+                        }
+                    }
+                }
+                """,
+        })
+        self.assertTrue(any("try-with-resources" in title for title in titles(root)))
+
     def test_returned_stream_is_quiet(self) -> None:
         root = repo_with({
             "src/A.java": """\

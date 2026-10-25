@@ -60,7 +60,7 @@ func g() (int, error) { return 0, nil }
 EOF
 out="$(python3 "$ROOT/plugin/go_inspect.py" "$WORK/go" || true)"
 printf '%s\n' "$out" | grep -q 'a.go:7 WARNING 循环里的 time.Sleep' || fail "sleep missed: $out"
-printf '%s\n' "$out" | grep -q '返回值被丢掉' || fail "blank result missed: $out"
+printf '%s\n' "$out" | grep -q '返回值被丢掉' && fail "blank identifier is not a sleep finding: $out"
 python3 "$ROOT/plugin/go_inspect.py" "$WORK/go" >/dev/null 2>&1 && fail "go finding must exit 1"
 
 repo "$WORK/go-clean"
@@ -85,8 +85,28 @@ printf '%s\n' "$out" | grep -q 'run.sh:1 WARNING 变量没有加引号' || fail 
 python3 "$ROOT/plugin/shell_inspect.py" "$WORK/sh" >/dev/null 2>&1 && fail "shell finding must exit 1"
 
 repo "$WORK/sh-clean"
-printf 'name=$1\necho "$1"\n' > "$WORK/sh-clean/run.sh"
+cat > "$WORK/sh-clean/run.sh" << 'ENDSH'
+name=$1
+echo "$1"
+echo "$(echo "$1")"
+echo "$(python3 "${S}/x" "${TMP}/y")"
+cat <<EOF
+${TICKET}
+EOF
+[[ -n $1 ]]
+n=$(($1 + 1))
+echo $((1 + 2))
+ENDSH
 python3 "$ROOT/plugin/shell_inspect.py" "$WORK/sh-clean" >/dev/null || fail "quoted shell must exit 0"
+
+repo "$WORK/sh-nested"
+printf 'echo "$(echo $1)"\n' > "$WORK/sh-nested/run.sh"
+out="$(python3 "$ROOT/plugin/shell_inspect.py" "$WORK/sh-nested" || true)"
+printf '%s\n' "$out" | grep -q 'run.sh:1 WARNING 变量没有加引号' || fail "unquoted inside substitution missed: $out"
+
+repo "$WORK/sh-off"
+printf '# shellcheck disable=SC2086\necho $1\n' > "$WORK/sh-off/run.sh"
+python3 "$ROOT/plugin/shell_inspect.py" "$WORK/sh-off" >/dev/null || fail "SC2086 disable must exit 0"
 
 repo "$WORK/js"
 printf 'function f(a, b) {\n  if (a == b) {\n    var n = 1\n  }\n}\n' > "$WORK/js/a.js"
@@ -96,7 +116,7 @@ printf '%s\n' "$out" | grep -q 'a.js:3 WARNING 用 let 或 const' || fail "var m
 python3 "$ROOT/plugin/js_inspect.py" "$WORK/js" >/dev/null 2>&1 && fail "js finding must exit 1"
 
 repo "$WORK/js-clean"
-printf 'function f(a) {\n  if (a == null) {\n    const n = 1\n    return n\n  }\n}\n' > "$WORK/js-clean/a.js"
+printf 'function f(a, b) {\n  if (a === b && a !== b && a == null) {\n    const n = 1\n    return n\n  }\n}\n' > "$WORK/js-clean/a.js"
 python3 "$ROOT/plugin/js_inspect.py" "$WORK/js-clean" >/dev/null || fail "clean js must exit 0"
 
 repo "$WORK/vue"

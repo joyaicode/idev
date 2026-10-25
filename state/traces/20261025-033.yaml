@@ -1,0 +1,80 @@
+schema_version: 2
+at: "2026-10-25T20:28:00+08:00"
+feature: "-"
+intent: "用户以整句确认认可规范插件这轮改动。"
+invoke:
+  trigger: "确认"
+  matched: "确认文法"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "把这句确认记到规范插件那一条变更记录"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: coding
+  stage: code
+  risk_tier: P2
+  why: "没有票。确认的是规范插件不再把正确写法报成违规。"
+rejected:
+  - module: deliver
+    why: "无票"
+  - module: verify
+    why: "没有用例要跑"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "parse_confirm 对「确认」返回 ok。wangwei794 在白名单里。规范插件那一条补上 by 和原话。无票，不写 sealed、accepted、aligned。也不提交。"
+  signals:
+    - "原话是确认"
+    - "parse_confirm ok=true"
+    - "is_human wangwei794"
+    - "pending 0"
+  excluded:
+    - "提交工作区"
+    - "写 sealed、accepted、aligned"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "整句交给 parse_confirm"
+      so: "ok，by 取 git user.name"
+    - n: 2
+      do: "变更记录补上 by 和原话"
+      so: "只记这一条"
+opened:
+  - "references/changelog.md"
+  - "scripts/lib/workflow_spec.py"
+calls:
+  - kind: script
+    name: parse_confirm
+    from: conductor
+    to: script:workflow_spec
+    why: "整句是不是确认"
+    result: "ok=true"
+  - kind: script
+    name: is_human
+    from: conductor
+    to: script:workflow_spec
+    why: "署名能不能落笔"
+    result: "wangwei794 true"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "确认落在规范插件这条记录上"
+  - kind: delegate
+    chose: none
+    why: "导体记确认"
+  - kind: model
+    chose: inherit
+    why: "导体自己记"
+  - kind: stop
+    chose: none
+    why: "无票，没有 A 类闸"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+next: "未提交。要入库再说提交。"

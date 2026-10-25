@@ -7,16 +7,11 @@ toolchain, and it does not download.
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
 import source_diff  # noqa: E402
-
-_BLANK = re.compile(
-    r"(?:^|[\n;])[ \t]*(?:[A-Za-z_]\w*[ \t]*,[ \t]*)?_[ \t]*:?=[ \t]*[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*\s*\("
-)
 
 
 def _mask(text: str) -> str:
@@ -95,8 +90,6 @@ def inspect_text(text: str, rel: str) -> list[tuple[str, int, str]]:
         elif pending and ch == "\n":
             pending = False
         i += 1
-    for match in _BLANK.finditer(masked):
-        hits.append((rel, _line(text, match.start()), "返回值被丢掉"))
     return hits
 
 
