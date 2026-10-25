@@ -1,5 +1,27 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-25：前置节只要列出既有问题就问人，选项是先修或本次不修。小于本需求改动的 1/5 或边界分得开，只写进 `scope_debt.recommend: mark`，不代替人的选择。一条都没有才直接 `mark`。仍是 B 类决策，不增加第五次签字。
+
+- 2026-10-25：架构方案在六节之前写 `## 前置`。先审影响范围内已经存在的问题。没有重大缺陷，并且规范与质量改动小于本需求改动的 1/5，或者和本次改动分得开，就只在方案里标明，不另开子需求。有重大缺陷，或比例达到 1/5 且分不开，先问人要不要先修；同意则另开缺陷修复或重构子需求，从头做完再实施本需求。不新增机检，不增加第五次签字。判据只在 `deliver/SKILL.md` 的架构阶段。人确认：by wangwei794，quote「确认」，2026-10-25T15:55+08:00。无票、无 A 类闸，不写 `sealed` / `accepted` / `aligned`。
+
+- 2026-10-25：Python、Go、Shell、JS/Vue 规范扫描只依赖 `scripts/plugin/` 里的 `python_inspect.py`、`go_inspect.py`、`shell_inspect.py`、`js_inspect.py`。`coding-scan.sh` 调用 `lang-scan.sh`。不安装 ruff、golangci-lint、shellcheck、eslint 或 Node，也不下载。插件不在时退出码 2，是 `UNPROVEN`。`python3 -m compileall` 的 0 不是这层扫完。
+- 2026-10-25：Java 规范扫描只依赖 `scripts/plugin/java_inspect.py`。`problems-scan.sh` 不再安装 IntelliJ，也不安装 JDK。插件看未收进 `try (` 的流、没有调用的私有方法，以及至少两处调用都是同一字面量的私有形参。插件不在时退出码 2，是 `UNPROVEN`。
+- 2026-10-25：编码和 Review 的 Java 规范扫描加上 Qodana。`coding-scan.sh` 调用 `problems-scan.sh`：本机已有 CLI 和检查插件就用；没有就远程安装到 `$HOME/.cache/idev/qodana`；没有网络就用 `offline/qodana`。插件不可用时仍用本机 IntelliJ `idea-inspect.sh`。两个引擎都没有报告是 `UNPROVEN`，不是扫干净。二进制不进 git。
+
+- 2026-10-25：编码和 Review 的 Java 规范扫描由 `coding-scan.sh` 调起 `idea-inspect.sh`。它用本机已安装的 IntelliJ（`IDEA_HOME` 或本机 Applications / Toolbox），profile 名 `Project Default`，不下载，不改 `idea.plugins.path`。没有安装时退出码 2，输出 `UNPROVEN`。`java_hygiene.py` 的 0 仍然不是 Problems 已空。易受攻击的依赖项只计数，不作为这次失败。
+
+- 2026-10-25：架构方案和编码补上码如文字、最小实现。定义仍在 `coding.md` 底线 4、5，已确认的前三条不改。方案和代码顺着读要能指出重点；注释只写代码看不出的为什么。用最少的代码实现目标，只权衡这一轮碰到的性能、并发安全、易使用、易扩展，无基线不优化。文件数和行数说不出换来什么就是膨胀。只有 get/set、没有业务信息的哑对象是拒过；协议形状可以只有字段。`design.md` 方案节和 A1 要答到这一点。不另起编号，不新增机检。人确认：by wangwei794，quote「确认」，2026-10-25T14:35+08:00。无票、无 A 类闸，不写 `sealed` / `accepted` / `aligned`。
+
+- 2026-10-25：`java_hygiene.py` 报 blocking 0 不能当成 Problems 已空。它只覆盖正则能判定的子集。验收以 IntelliJ「Project Default」对改动模块的 `inspect.sh`（或同一配置下的 Problems）为准。try-with-resources、形参恒定、非 getter 的未使用方法、拼写不在这套正则里。
+
+- 2026-10-25：编码和 Review 守住文首底线三条，定义只在 `coding.md`。大道至简：不把问题做成框架或分层；关键路径（失败会让基线结果错或没有）当轮写失败条件、怎么停或怎么降、日志，其它路径不加 catch / 默认值 / 重试。易用性：人能看出入口和失败时怎样；扩展沿现有类型和契约加，不改已有分支的含义，也不为以后预埋钩子。禁止随意发挥：每段新代码要指得出依据（基线、本轮那句话、第三次重复、或已经看到的失败），指不出就删。命中仍落 `T#`/`C#`/`P#`/`F#`，不另起编号，不新增机检。`idev-coder` 写前过，`idev-reviewer` 先于总则写成 `I*`。人确认：by wangwei794，quote「确认」，2026-10-25T14:15+08:00。无票、无 A 类闸，不写 `sealed` / `accepted` / `aligned`。
+
+- 2026-10-25：`TaskStore` 的 Problems 仍在时，审查不能报 blocking 0。blocking 补上 `Collections.sort` → `List.sort`、`(a, b) -> a.f.compareTo(b.f)` → `Comparator.comparing`、循环里的 `Thread.sleep`、40 行内相同的日志句子。间隔等待改 `TimeUnit.MILLISECONDS.sleep`。没人用的返回值改 `void`，没人调用的方法删掉。
+
+- 2026-10-25：`TaskExecutor` 的 Problems 仍在时，审查不能报 blocking 0。`Collections.<K, V>emptyMap()` 这类「可以推断」改为 blocking。`src/main` 里简单 getter 没有生产调用记「方法从未使用」（只在测试里调用也算未使用）；模块 pom 已有 Lombok 时，仍被生产调用的 `return field` 记「可以具有 Lombok @Getter」。`Collectors.<T>toList()` 仍是 note。
+
+- 2026-10-25：代码审查先清 java.md 里能机检的黄条，再写内聚和设计模式。`scripts/lib/java_hygiene.py` 扫分支 diff。blocking 是构造上的显式类型参数（`new ArrayList<String>()` → `<>`）、`valueOf`、compiler=8 的 `List.of`；匿名类在 compiler=8 不报。`Collectors.<T>toList()` 只作 note，Java 8 经常推断不出来，不打回。`coding-scan.sh` 会打出这些行。`review.report` 漏记 blocking 的 `file:line`、以及 `code_pass` / `review.fix` 把 blocking 留在 `CHANGED` 里，`delegation.py` 的 `java-hygiene` 打回。不新编号。
+
 - 2026-10-25：五个执行者都能沿交付链读上游的尺和下游的后果，落笔仍只在自己的 kind。本领域以拒过清单为下限。指导别的角色只经导体：回报 `GUIDE` 由导体抄进下一委派包；`BLOCKED(domain)` 才另派一次咨询，不问人，咨询不套娃。`SUGGEST` 仍只说本定义哪一步含糊。`delegation.py write` 把抄约束、咨询、打回打成 `HANDOFF` / `CONSULT` / `REBRIEF`，导体照着做。
 
 - 2026-10-24：中控台加上计量和定向调整。计量把最近窗口的场景、执行者耗时、观察覆盖、回报、技能调起和假设摊成件数，不打分、不设阈值。点某一格，依据写进意见。意见分改关口、改这一步、补观测、质疑基线，仍进 console 线程，下一轮由导体读取。页面不派工、不签字。

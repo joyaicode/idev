@@ -114,13 +114,17 @@ semantic_gate:
 | `approach` / `non_approach` | 不得改写基线 goal/non_goal |
 | `impact_candidates` | hop ≤ 1，人 `include` |
 | `case_intents[]` | `id` + `slice_id` + `baseline_item_id` + `dimension` + `hint` |
+| `scope_debt.decision` | `pending`（有既有问题，等人选）、`mark`（本次不修，或一条都没有）、`fix-first` |
+| `scope_debt.recommend` | 建议：`mark` 或 `fix-first`。人还没选时也要写。判据只在架构阶段 |
+| `scope_debt.child` | `fix-first` 时写子需求的 feature；其它情况空 |
+| `scope_debt.requirement_lines` / `debt_lines` | 与 `design.md` 前置节同一对行数 |
 | `accepted` | 人改 true，或确认用语代写 |
 
-每个 include 的影响面、每条基线 item 至少一条 `case_intents`。`approach` 与 `non_approach` 都要有正文。
+每个 include 的影响面、每条基线 item 至少一条 `case_intents`。`approach` 与 `non_approach` 都要有正文。行数怎么比、什么时候不另开子需求，只在 [deliver/SKILL.md](../SKILL.md) 的架构阶段。`pending` 时不准 `accepted`。`fix-first` 在子需求 `done` 之前不准进入本需求编码。
 
 ## `design.md`
 
-给人评审的方案，不是 `approach` 的重复一句。六节都要有正文：`目标`、`方案`、`契约`、`影响面`、`回退`、`用例`。
+给人评审的方案，不是 `approach` 的重复一句。六节都要有正文：`目标`、`方案`、`契约`、`影响面`、`回退`、`用例`。`## 前置` 放在 `## 目标` 之前，写影响范围内的既有问题；六节不因为它而减少。方案节顺着读能指出重点。业务落在带行为的类型上，不计划一串只有 get/set 的对象。判据在 [coding.md](../../conventions/coding.md) 底线 4、5。
 
 - `目标` 照抄基线 `goal`，不改写。
 - 每条基线 item 的 id 在文中出现。

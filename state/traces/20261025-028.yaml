@@ -1,0 +1,82 @@
+schema_version: 2
+at: "2026-10-25T15:58:37+08:00"
+feature: "-"
+intent: "前置节有既有问题时先问人，比例和边界只用来给建议。"
+invoke:
+  trigger: "问人"
+  matched: "影响范围内的既有问题"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "把标明从自动决定改成问人之后的选项"
+route:
+  module: deliver
+  scenario: S2
+  convention_class: docs
+  stage: arch
+  risk_tier: P1
+  why: "人要求有既有问题时问人。建议仍按 1/5 和边界给。"
+rejected:
+  - module: verify
+    why: "没有用例要跑"
+  - module: conventions
+    why: "编码底线不改"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "有既有问题时 scope_debt.decision 停在 pending，问先修还是本次不修。没有重大缺陷且小于 1/5 或分得开，建议 mark。有重大缺陷或达到 1/5 且分不开，建议 fix-first。一条都没有才直接 mark。仍是 B 类，不增加第五次签字。这句改动还没有 by。"
+  signals:
+    - "用户原话是问人"
+    - "15:55 的确认还停在自动标明"
+  excluded:
+    - "把这句记成已经确认"
+    - "第五次签字"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "有既有问题就 pending"
+      so: "比例不再直接写成 mark"
+    - n: 2
+      do: "建议放进 recommend"
+      so: "问人时带得上建议"
+opened:
+  - "deliver/SKILL.md"
+  - "references/chat-confirm-signoff.md"
+  - "deliver/references/deliver-schema.md"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "有既有问题先问人"
+    result: "loaded"
+  - kind: module
+    name: deliver/SKILL.md
+    from: conductor
+    to: module:deliver
+    why: "改架构阶段的问人条件"
+    result: "pending 直到人选"
+decisions:
+  - kind: route
+    chose: deliver
+    why: "问人发生在架构方案交出之前"
+  - kind: delegate
+    chose: none
+    why: "内核规矩由导体写"
+  - kind: model
+    chose: inherit
+    why: "导体自己改"
+  - kind: stop
+    chose: confirm
+    why: "这句改了 15:55 已确认的自动标明，要单独再确认"
+stop: "单独回确认"
+next: "收到整句确认后，把 by wangwei794 和原话记进这一条变更记录。"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

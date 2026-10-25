@@ -46,7 +46,7 @@ S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none`
 
 | 阶段 | 执行者 | 做什么 |
 |---|---|---|
-| 编码 | `idev-coder` | `coding.md` §0 三项交代（`CHANGE_KIND`/`CANON_TRIGGER`/`TABLE_HIT`）+ codegraph 影响面 + 增量自测 |
+| 编码 | `idev-coder` | `coding.md` 文首底线 + §0 三项交代（`CHANGE_KIND`/`CANON_TRIGGER`/`TABLE_HIT`）+ codegraph 影响面 + 增量自测 |
 | 测试 | `idev-verifier` | 维度表先铺满用例骨架 + 失败签名归一化（`scripts/failure_signature.py`） |
 | 根因 | `idev-ops` | 假设台账（`scripts/hypothesis.py`）+ 证据链 + 有界修复红线自动计数 |
 
@@ -83,6 +83,7 @@ python3 scripts/turn-budget.py [--max 8] <transcript.jsonl>
 |---|---|---|---|
 | `req-review` | 需求落到既有代码：落点 / 影响面 / 与存量冲突 / 边界 / 演进方向 + 竞品对比 | `req-ground.py --feature <f> --probe` | [附录](#需求要落到这个工程上密封前) |
 | `req-review` | 界面需求细到交互层，派生 json-render spec + 零依赖预览 | `ui-spec.py --feature <f>` | [附录](#需求细到交互层界面类需求) |
+| `arch` | 影响范围内先审既有问题。有则问人先修还是只标明。小于本需求改动的 1/5 或边界分得开时，建议只标明 | — | [deliver/SKILL.md](deliver/SKILL.md) |
 | 每一格 | 七视角专业拒过清单里可机检的那一半（`--list` 看各档查什么） | `stage-gate.py --feature <f> --all` | [experts.md](deliver/references/experts.md) |
 | `code` | 准确率护栏：SCOPE / READ / REVERT / RED_FIRST / ASSUMED | 回报字段，`delegation.py` 机检 | [agent-accuracy.md](references/agent-accuracy.md) |
 | `code` / `test` / `ops` | 自测、用例设计与执行、根因、审查深读：先评估再决定要不要多分片 | `fanout.py assess --feature <f> --activity selftest\|plan\|run\|rootcause\|report` | [agents.md](references/agents.md) |

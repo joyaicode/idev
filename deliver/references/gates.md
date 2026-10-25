@@ -39,6 +39,8 @@
 - [ ] `approach` 未改写 goal / non_goal
 - [ ] `semantic_gate.req-review` 与 `semantic_gate.req` 已记录
 - [ ] 方案整包已交出。有 `## arch` 轮时 `arch_frontier` 已空；没有未决问题就不要造一轮
+- [ ] `## 前置` 写了影响范围内的既有问题、需求行数、既有问题行数。有既有问题时人已选，`scope_debt.decision` 不是 `pending`。一条都没有时 `decision` 为 `mark`
+- [ ] `fix-first` 时子需求已 `done`，父票已按修完的代码重算影响面
 - [ ] 本阶段不要求 `verify/plan.yaml`
 
 ## 调用 verify
@@ -52,7 +54,7 @@
 
 - [ ] 只改 `arch.yaml` 里 `include: true` 的路径
 - [ ] 已写 `review.md`（少做 / 多做 / UNRELATED）
-- [ ] 已按 [coding.md](../../conventions/coding.md) §0 + [coding-tables.md](../../conventions/coding-tables.md) §1 匹配（或确认零命中）并运用；§2 气味已扫且命中已改
+- [ ] 已过 [coding.md](../../conventions/coding.md) 文首底线；已按 §0 + [coding-tables.md](../../conventions/coding-tables.md) §1 匹配（或确认零命中）并运用；§2 气味已扫且命中已改
 - [ ] [coding-tables.md](../../conventions/coding-tables.md) §2.4 量化阈值已扫；超线已改或 `review.md` 写清理由并落 `C#`
 - [ ] 若有结构调整：§3 R1–R6 满足；`review.md` 写了护栏 / R 条件
 - [ ] `review.md`「编码规范」用本页 `P#`/`C#`/`R#`（禁止另起表号）；场景命中 / 气味命中 / 纠正非占位符
@@ -60,7 +62,7 @@
 - [ ] 本轮废弃无用的代码 / 导入 / 方法 / 字段已删；注释与文档已对齐代码
 - [ ] 已按 [coding-tables.md](../../conventions/coding-tables.md) §3.8 增强扫描：`coding-scan.sh` + 五轴 + 栈指南；`review.md` 写了五轴 / 栈指南 / 增强扫描
 - [ ] `review.md` 的 `审查者` 是 `idev-reviewer`，`文件与行数` 有数字
-- [ ] 已跑该仓已有的规范扫描（有 super-linter 就跑那一套；否则 Java：Problems / Qodana；前端：`lint-fix`；Go：已安装的 golangci-lint；仓内若有 Checkstyle/PMD/SpotBugs 一并绿）。没有扫描器就在 `review.md` 写明，不新装一套
+- [ ] 已跑该仓已有的规范扫描（有 super-linter 就跑那一套；否则 Java：`problems-scan.sh`；Python / Go / Shell / JS / Vue：`lang-scan.sh`；前端：`lint-fix`；仓内若有 Checkstyle/PMD/SpotBugs 一并绿）。插件不在是 `UNPROVEN`，不是扫干净。不为这层新装 IntelliJ、JDK、ruff、golangci-lint、shellcheck、eslint 或 Node
 - [ ] 自测有跑证且独立审查已写入之后才请实现审核。确认写入 `semantic_gate.code` 并把 stage 改为 `test`
 - [ ] `by:` 不是 agent / AI（对话确认后代写时须是人名）
 

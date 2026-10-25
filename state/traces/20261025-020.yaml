@@ -1,0 +1,96 @@
+schema_version: 2
+at: "2026-10-25T14:55:00+08:00"
+feature: "-"
+intent: "把编码和 Review 的 Java 规范扫描经验收成可调起的本机 IntelliJ 检查，并确认能跑。"
+invoke:
+  trigger: "继续总结经验"
+  matched: "沉淀知识和工具集成到idev，并确认能正常运转"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "扫描入口要自己调起 Problems 门，不能只写在说明里"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: java
+  stage: code
+  why: "上一轮的 inspect 没有进 coding-scan，所以审查仍可能停在正则 0。"
+rejected:
+  - module: deliver
+    why: "不写 review.md"
+  - module: verify
+    why: "用脚本自测，不另开用例票"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "经验是 java_hygiene 只会上一张截图。coding-scan 现在会调 idea-inspect.sh：发现本机 IntelliJ，用 Project Default，不下载，不改插件路径。没有 IDE 时 UNPROVEN 退出码 2。framework-supports 实跑规范项 0，易受攻击的依赖项 50 条另计。"
+  signals:
+    - "test_idea_inspect 在缺失 IDEA_HOME 时 UNPROVEN"
+    - "print-bin 找到本机 inspect.sh"
+    - "idea-inspect joypaas-framework-supports 退出码 0，convention 0"
+  excluded:
+    - "把 IntelliJ 安装包放进仓库"
+    - "把易受攻击的依赖项算进这次失败"
+  uncertainty: "别的机器要自己装 IntelliJ。脚本只发现本机安装，不代下载。"
+  steps:
+    - n: 1
+      do: "加上 idea-inspect.sh，coding-scan 在 Java 仓末尾调它"
+      so: "编码和 Review 跑的那条扫描会真正调起 Problems 门"
+    - n: 2
+      do: "缺 IDE 的自测，以及 framework-supports 实跑"
+      so: "缺 IDE 退出码 2；有 IDE 时规范项 0"
+opened:
+  - "scripts/idea-inspect.sh"
+  - "scripts/coding-scan.sh"
+  - "conventions/java.md"
+  - "conventions/coding.md"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "把扫描经验收进内核并确认能跑"
+    result: "loaded"
+  - kind: script
+    name: test_idea_inspect.sh
+    from: conductor
+    to: script:test_idea_inspect.sh
+    result: "OK"
+  - kind: script
+    name: test_coding_scan_exec.sh
+    from: conductor
+    to: script:test_coding_scan_exec.sh
+    result: "OK"
+  - kind: script
+    name: idea-inspect.sh
+    from: conductor
+    to: script:idea-inspect.sh
+    args: "joypaas joypaas-framework-supports"
+    result: "exit 0, convention 0, vulnerable-libraries 50"
+  - kind: script
+    name: coding-scan.sh
+    from: conductor
+    to: script:coding-scan.sh
+    args: "empty java repo"
+    result: "idea inspect: no java diff"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "沉淀的是 java 扫描关口"
+  - kind: delegate
+    chose: none
+    why: "内核脚本和规约由导体改"
+  - kind: model
+    chose: inherit
+    why: "导体自己改"
+stop: ""
+next: "编码和 Review 跑 coding-scan.sh。看末尾 idea inspect。退出码 0 且规范项 0 才算这层扫完。"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

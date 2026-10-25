@@ -1,0 +1,89 @@
+schema_version: 2
+at: "2026-10-25T14:29:00+08:00"
+feature: "-"
+intent: "架构方案和编码补上码如文字、最小实现，并禁止哑对象。"
+invoke:
+  trigger: "补充：架构设计和编码阶段要体现思路清晰"
+  matched: "在已确认的 coding.md 底线上加第 4、5 条，方案节和 A1 要答"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "同一套编码与审查底线上的补充"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: coding
+  stage: arch
+  why: "用户点名架构设计和编码。定义仍只写 coding.md，方案出口用指针。"
+rejected:
+  - module: deliver
+    why: "没有票要起草方案"
+  - module: verify
+    why: "没有用例"
+  - module: ops
+    why: "没有现象"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "已确认的前三条不改。补码如文字和最小实现：顺着读能指出重点，注释只写为什么，文件数和行数说不出换来什么就是膨胀，只有 get/set 的类型是拒过，协议形状可以只有字段。性能无基线不优化，扩展仍不预埋钩子。不新编号，不新机检。"
+  signals:
+    - "用户点名架构设计和编码"
+    - "java.md 准则 3 已有禁止贫血"
+    - "domain-modeling 里的贫血跨聚合事务是另一件事"
+  excluded:
+    - "把哑对象写进那条跨聚合事务"
+    - "新机检"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "底线加第 4、5 条"
+      so: "前三条正文不动"
+    - n: 2
+      do: "design.md、A1、experts 的 arch 行只留指针"
+      so: "方案阶段看得到，不另写一份"
+opened:
+  - "conventions/coding.md"
+  - "conventions/canon.md"
+  - "conventions/java.md"
+  - "conventions/domain-modeling.md"
+  - "deliver/references/deliver-schema.md"
+  - "deliver/references/experts.md"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "补充架构和编码的可读性与最小实现"
+    result: "loaded"
+  - kind: script
+    name: console.py
+    from: conductor
+    to: script:console.py
+    args: "pending"
+    result: "pending: 0"
+  - kind: module
+    name: conventions/coding.md
+    from: conductor
+    to: module:conventions
+    result: "底线 4、5 写入"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "改的是架构和编码共用的尺"
+  - kind: delegate
+    chose: none
+    why: "内核规约由本轮直接改"
+  - kind: model
+    chose: inherit
+    why: "导体自己改真源"
+stop: ""
+next: "方案节和代码都按底线 4、5 写"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

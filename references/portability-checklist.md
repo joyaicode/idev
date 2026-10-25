@@ -6,6 +6,8 @@
 - 真源固定为 `$HOME/.cursor/skills/idev/`（实目录）；`healthcheck.sh` 会 FAIL 于其他物理路径。
 - 周审计 / 自进化用 macOS `launchctl` + `~/Library/LaunchAgents`，`healthcheck.sh` 用 `/usr/libexec/PlistBuddy`。Linux 需自行换 systemd/cron，本包**未提供**。
 - 需要 `python3` + PyYAML、`rg`（`refs-check.sh`）、`bash`。
+- Java 规范扫描走 `scripts/problems-scan.sh`，只依赖随 idev 带上的 `scripts/plugin/java_inspect.py`。不安装 IntelliJ，不安装 JDK，也不下载。换机器时插件跟着技能目录走。插件文件不在时输出 `UNPROVEN`（退出码 2），不是扫干净。
+- Python、Go、Shell、JS/Vue 规范扫描走 `scripts/lang-scan.sh`，只依赖同目录 `scripts/plugin/` 里的 `python_inspect.py`、`go_inspect.py`、`shell_inspect.py`、`js_inspect.py`。不安装 ruff、golangci-lint、shellcheck、eslint 或 Node，也不下载。插件文件不在时同样是 `UNPROVEN`（退出码 2）。
 
 ## 步骤
 1. **放真源**：把 idev 目录放到 `~/.cursor/skills/idev/`（不要是 symlink）。grilling 同理放 `~/.cursor/skills/grilling/`。`setup-agents-docs` 放到 `~/.cursor/skills/setup-agents-docs/`（可以是指向它自己真源的软链）。

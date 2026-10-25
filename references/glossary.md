@@ -19,6 +19,7 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | 试点例 | 核心页里若需要对照，必须带的标注。不是「某一个产品才是 pilot」 | `scripts/core-strip-check.sh` |
 | 票 / feature | 一次交付的单位。`<票目录>` 只认 `doc_home.py --key task`。已有规范文档时这一目录是 `docs/task/<feature>/`，否则是 `.idev/task/<feature>/`。状态在 `deliver.yaml` | `scripts/lib/doc_home.py` |
 | stage | 票所处阶段：`req-review → req → arch → code → test → done ⇄ ops` | [deliver/SKILL.md](../deliver/SKILL.md) |
+| 前置 | 架构方案 `design.md` 里、六节之前的一节。写影响范围内的既有问题、需求行数和既有问题行数。有既有问题就问人。小于本需求改动的 1/5 或边界分得开，只用来建议本次不修。判据只在 deliver 的架构阶段 | [deliver/SKILL.md](../deliver/SKILL.md) |
 | 密封基线 / seal / `sealed` | 人确认后的目标与验收基准（“尺”）；之后不得靠确认改 goal | `SKILL.md` 硬规则 3 |
 | 停问点 | 阶段机里必须由人回答/确认才能继续的位置；**没有当前停问点就不请签** | [invoke.md](invoke.md) |
 | 签字类状态 | `sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed`，只能人确认后代写 | `SKILL.md` 硬规则 3 |

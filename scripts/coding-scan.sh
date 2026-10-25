@@ -101,7 +101,10 @@ if [ "$has_java" = 1 ]; then
     echo "  secure: $CR/reference/security-review-guide.md"
   fi
   echo "  plinth: 124-java-secure-coding, 123-java-design-patterns (optional depth)"
-  echo "  tools:  IDE Problems / qodana.starter"
+  echo "  tools:  problems-scan.sh（插件 scripts/plugin/java_inspect.py，不安装 IntelliJ，不安装 JDK）"
+  echo "  hygiene: ${ROOT}/lib/java_hygiene.py  (正则子集，先于总则；0 不是 Problems 已空)"
+  python3 "${ROOT}/lib/java_hygiene.py" --repo "$REPO"
+  echo "  problems: ${ROOT}/problems-scan.sh"
   [ -f "$REPO/qodana.yaml" ] && echo "  found qodana.yaml"
   # 收进变量再判空：grep -l|head 管道在多匹配时会因 pipefail 的 SIGPIPE(141) 令 if 恒假。
   pom_tools="$(find "$REPO" -maxdepth 3 -name pom.xml -exec grep -l 'checkstyle\|spotbugs\|pmd\|spotless' {} + 2>/dev/null | head -1 || true)"
@@ -115,12 +118,13 @@ if [ "$has_vue" = 1 ] || [ "$has_ts" = 1 ]; then
   echo "  idev: ${IDEV}/conventions/coding.md"
   [ -n "$CR" ] && echo "  guide: $CR/reference/vue.md"
   [ -n "$CR" ] && [ "$has_ts" = 1 ] && echo "  guide: $CR/reference/typescript.md"
+  echo "  tools: lang-scan.sh (scripts/plugin/js_inspect.py；不安装 eslint，不安装 Node，不下载)"
 fi
 
 if [ "$has_go" = 1 ]; then
   echo "=== Go ==="
   [ -n "$CR" ] && echo "  guide: $CR/reference/go.md"
-  echo "  tools: go test ./... ; golangci-lint run (if installed)"
+  echo "  tools: lang-scan.sh (scripts/plugin 里的 python/go/shell/js 插件；不安装工具链，不下载)"
 fi
 
 echo "=== 架构范式 ==="
@@ -219,6 +223,24 @@ PY
 }
 run_configured_scanner
 
+problems_ran=0
+problems_rc=0
+if [ "$has_java" = 1 ]; then
+  echo "=== problems ==="
+  set +e
+  bash "${ROOT}/problems-scan.sh" "$REPO"
+  problems_rc=$?
+  set -e
+  problems_ran=1
+fi
+
+echo "=== lang ==="
+lang_rc=0
+set +e
+bash "${ROOT}/lang-scan.sh" "$REPO"
+lang_rc=$?
+set -e
+
 echo "=== review.md must record ==="
 echo "  - 审查者: idev-reviewer"
 echo "  - 文件与行数: 触及 N 个文件，新增 M，最长 L 行"
@@ -227,4 +249,24 @@ echo "  - 五轴: 正确性/可读性/架构/安全/性能 — 各写 过 或 �
 echo "  - 栈指南: java8|java|vue|go|… （本轮打开的 guide 名）"
 echo "  - 增强扫描: coding-scan + guides 已跑 / 未跑"
 echo "  - 扫描: 仓内已有规范扫描 — 干净 / 本仓无规范扫描器"
+echo "  - problems: 插件规范项 0 / 仍有发现 / UNPROVEN（插件文件不在）"
+echo "  - lang: python/go/shell/js 插件 convention 0 / 仍有发现 / UNPROVEN（插件文件不在）"
 echo "=== done ==="
+final=0
+if [ "$problems_ran" = 1 ] && [ "$problems_rc" -eq 1 ]; then
+  final=1
+fi
+if [ "$lang_rc" -eq 1 ]; then
+  final=1
+fi
+if [ "$final" -ne 1 ]; then
+  if [ "$problems_ran" = 1 ] && [ "$problems_rc" -eq 2 ]; then
+    final=2
+  fi
+  if [ "$lang_rc" -eq 2 ]; then
+    final=2
+  fi
+fi
+if [ "$final" -ne 0 ]; then
+  exit "$final"
+fi

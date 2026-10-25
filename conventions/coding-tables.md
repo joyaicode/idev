@@ -63,7 +63,7 @@
 ## 2.4 量化阈值（可测量硬线）
 
 §2 是气味判断（要读代码），本节是**可测量的粗筛线**：超线只是"停下来看"的信号，命中后仍按 §2 判定并译成 `C#` 记账，**不另起严重度码表**（守 §3.5）。粗筛线本身不是拒过理由——能说清为何这段必须长/深，就写进 `review.md`；说不清就是真命中。  
-前五行审**单个函数**，其后各行审**本轮 diff**（变更级，接 [coding.md](coding.md) 文首规范总则），测量与判定同一套。
+前五行审**单个函数**，其后各行审**本轮 diff**（变更级，接 [coding.md](coding.md) 文首底线与规范总则），测量与判定同一套。
 
 | 指标 | 硬线 | 测量方法 | 超线 → 落编号 |
 |------|------|----------|---------------|
@@ -138,7 +138,7 @@ Java 圈复杂度看 Qodana / IDE Problems 报告的方法复杂度；前端看 
 - [ ] 写明动机（预备哪次行为改动 / 哪条 §2 气味 / Rule of Three）
 - [ ] R1–R6 均满足；写了护栏是什么（测类名或 verify case）
 - [ ] 本轮未混加功能；若有行为变更，已拆开描述
-- [ ] 步步绿；最终 Problems / `qodana.starter` 或 `lint-fix` 无本轮黄条
+- [ ] 步步绿；最终 `problems-scan.sh` 与 `lang-scan.sh`（idev 自带插件）或 `lint-fix` 无本轮发现
 
 ---
 
@@ -166,7 +166,7 @@ Java 圈复杂度看 Qodana / IDE Problems 报告的方法复杂度；前端看 
 
 | 层 | 工具 | 挡住什么 | 与本页 |
 |----|------|----------|--------|
-| 必跑 | 仓内已有的规范扫描。配置了 super-linter（或同类多语言扫描）就跑那一套；否则 Java 跑 Problems / `qodana.starter`，前端跑 `lint-fix`，Go 有 golangci-lint 就跑。仓内已配的 Checkstyle / PMD / SpotBugs 一并跑 | 格式、坏味道、语言级告警 | 命中译成 `C#` 当轮改。不另起码表 |
+| 必跑 | 仓内已有的规范扫描。配置了 super-linter（或同类多语言扫描）就跑那一套；否则 Java 跑 `coding-scan.sh` 的 `problems`（只跑 idev 自带插件，不安装 IntelliJ，不安装 JDK），Python / Go / Shell / JS / Vue 跑同一次扫描的 `lang`（只跑 `scripts/plugin/` 里对应插件，不安装 ruff、golangci-lint、shellcheck、eslint 或 Node），前端跑 `lint-fix`。仓内已配的 Checkstyle / PMD / SpotBugs 一并跑 | 格式、坏味道、语言级告警 | 命中译成 `C#` 当轮改。不另起码表 |
 | 始终 | `coding-scan.sh` 打出的文件数与行数 | §2.4 的单文件、新增文件、触及文件 | 超线写理由或改。`review.md` 的 `文件与行数` 要有数字 |
 | 不要 | 为了本门禁新装一套扫描器，包括新装 super-linter；也不新起与 P/C 平行的码表 | — | 没有扫描器时写「本仓无规范扫描器」。文件数与行数仍要写。违反 §3.5 |
 
@@ -180,13 +180,13 @@ super-linter 是「仓内已有就跑」的例子，不是要新装的依赖。`
 
 ### 规程（`code` 阶段写完自测前）
 
-1. 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo根>`，按输出打开指南。
+1. 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo根>`，按输出打开指南。Java 先处理 `java hygiene` 和末尾 `problems` 的 `file:line`（进 `I*`），Python / Go / Shell / JS / Vue 先处理末尾 `lang` 的 `file:line`（同样进 `I*`），再写总则。`problems` 或 `lang` 退出码不是 0 就不算扫完。`UNPROVEN` 不是扫干净。
 2. **必开**：本页 §1/§2；（有结构调整再开 §3）。入口决策仍看 [coding.md](coding.md) §0。
 3. **必开**：`code-review-and-quality` 五轴（正确性 / 可读性 / 架构 / 安全 / 性能）。
 4. **按栈打开** `code-review-skill` 指南（compiler=8 Java → `reference/java8.md`；Vue → `vue.md`；Go → `go.md`）+ `common-bugs-checklist.md`。
 5. 触及身份 / 输入 / 出站 / 密钥 → 再开 `security-and-hardening`；Java 可叠 plinth `124-java-secure-coding`。
 6. 测试已绿、只想减复杂度 → `code-simplification`（行为不变；仍须满足 §3 R1–R6）。
-7. 跑仓内已有的规范扫描（§3.7）：有 super-linter 就跑那一套，否则 Problems / `qodana.starter`、前端 `lint-fix`、已安装的 golangci-lint；仓内若有 Checkstyle/PMD/SpotBugs 一并跑。不为这一步新装扫描器。
+7. 跑仓内已有的规范扫描（§3.7）：有 super-linter 就跑那一套，否则 Java 的 `problems-scan.sh`、Python / Go / Shell / JS / Vue 的 `lang-scan.sh`、前端 `lint-fix`；仓内若有 Checkstyle/PMD/SpotBugs 一并跑。这些层只跑 idev 自带插件，不安装 IntelliJ、JDK、ruff、golangci-lint、shellcheck、eslint 或 Node。不为 Checkstyle、PMD、SpotBugs、super-linter 新装。
 8. `review.md` 写清：五轴结果、栈指南名、增强扫描是否已跑、`审查者: idev-reviewer`、带数字的 `文件与行数`；气味/场景仍用本页编号。
 
 ### 严重度（外挂标注 → 本页动作）
@@ -228,7 +228,7 @@ super-linter 是「仓内已有就跑」的例子，不是要新装的依赖。`
 - [ ] `review.md` 用本页 `P#`/`C#`/`R#`（§3.5）；写了命中行与纠正；写了五轴 / 栈指南 / 增强扫描
 - [ ] `check-feature.sh <feature> code` 已 PASS（含编码规范弱门禁）
 - [ ] 废弃符号已删；注释/文档与代码一致
-- [ ] Java：Problems / `qodana.starter` 无本轮黄条；前端：扩展根 `commands.lint_fix` 干净，没有这个键就问人；仓内若有 Checkstyle/PMD/SpotBugs 一并绿（§3.7）
+- [ ] Java：`problems-scan.sh` 无本轮黄条（`UNPROVEN` 不算干净）；Python / Go / Shell / JS / Vue：`lang-scan.sh` 无本轮发现（插件不在是 `UNPROVEN`）；前端：扩展根 `commands.lint_fix` 干净，没有这个键就问人；仓内若有 Checkstyle/PMD/SpotBugs 一并绿（§3.7）
 
 违反本页 = `code` 拒过。  
 `review.report` 出门：`I*` / `O*` / UNPROVEN 已记即可，不要求本步已改，不跑 `check-feature code`。`review.fix` 用上表。

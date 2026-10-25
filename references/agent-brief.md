@@ -27,7 +27,7 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 1. **认票**：见 [invoke.md](invoke.md)「认票」五步。本页不复述步骤，不要用更短的清单顶替。
 2. **认场景**：按 `SKILL.md` 决策树选 S1–S8 之一（**路由以 `SKILL.md` 决策树为准**，其它页的路由表只是摘要）。
 3. **只开一个执行模块**（deliver / verify / ops 不同时加载）。
-4. **动手前**：涉及改代码先读 [conventions/coding.md](../conventions/coding.md) §0；涉及“加层/拆分/缓存/队列/重试/重写”先走 [conventions/canon.md](../conventions/canon.md) §1。
+4. **动手前**：写架构方案或改代码先读 [conventions/coding.md](../conventions/coding.md) 文首底线与 §0；涉及“加层/拆分/缓存/队列/重试/重写”先走 [conventions/canon.md](../conventions/canon.md) §1。
 5. **请签之前三道一起过**：`check-feature.sh`（结构）+ `stage-gate.py --feature <f> --all`
    （七视角拒过清单里可机检的那一半）+ 人按 [experts.md](../deliver/references/experts.md) 过清单。
    **前两道 PASS 不等于这一关过了** —— 两个工具都会在 PASS 时把这句话打出来。

@@ -1,0 +1,84 @@
+schema_version: 2
+at: "2026-10-25T13:40:00+08:00"
+feature: "-"
+intent: "验收不通过：TaskExecutor 的 Problems 仍在，审查不能报 blocking 0。"
+invoke:
+  trigger: "验收不通过，证据"
+  matched: "TaskExecutor.java 黄条：可以推断、Lombok @Getter、方法从未使用"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "上一轮验收被这张 Problems 推翻"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: java
+  stage: code
+  why: "关口把「可以推断」和手写 getter 放过去了。"
+rejected:
+  - module: deliver
+    why: "不改产品代码，先改审查关口并重列 I*"
+  - module: verify
+    why: "不是红绿"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "上一轮把 Collections.emptyMap 的显式类型实参记成 note，又没看 getter。TaskExecutor 现有 10 条 blocking，对得上面板。模块 main 一共 25 条。"
+  signals:
+    - "面板：可以推断 128 与 213，Lombok getter，getRegionId/getPin/getInstanceId/getBody/getIdempotencyKey 从未使用"
+    - "模块 pom 有 lombok"
+    - "getIdempotencyKey 只在测试里被调用"
+  excluded:
+    - "把 Collectors.toList 改成 blocking"
+    - "这一轮直接改 TaskExecutor.java"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "把可以推断的 Collections 工厂、未使用 getter、Lombok getter 放进 blocking"
+      so: "TaskExecutor 不再是 blocking 0"
+opened:
+  - "conventions/java.md"
+  - "scripts/lib/java_hygiene.py"
+  - "joypaas-framework-supports/src/main/java/com/jdt/joypaas/framework/task/TaskExecutor.java"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "验收证据"
+    result: "loaded"
+  - kind: script
+    name: test_java_hygiene.py
+    from: conductor
+    to: script:test_java_hygiene.py
+    result: "9 passed"
+  - kind: script
+    name: java_hygiene.py
+    from: conductor
+    to: script:java_hygiene.py
+    args: "TaskExecutor.java"
+    result: "10 blocking"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "推翻的是审查结论，不是去改产品仓"
+  - kind: delegate
+    chose: none
+    why: "重列 I*，不派执行者改代码"
+  - kind: model
+    chose: inherit
+    why: "导体自己改关口"
+  - kind: refuse
+    chose: "do not edit TaskExecutor this turn"
+    why: "人否决的是验收结论"
+stop: ""
+next: "这 10 条 I* 签收之后才改 TaskExecutor"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

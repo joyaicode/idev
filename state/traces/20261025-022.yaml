@@ -1,0 +1,88 @@
+schema_version: 2
+at: "2026-10-25T15:20:00+08:00"
+feature: "-"
+intent: "Java 规范扫描不安装 IntelliJ、不安装 JDK，只依赖随 idev 带走的插件。"
+invoke:
+  trigger: "不安装intellij和java"
+  matched: "只依赖插件"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "扫描入口要改成插件，不能再装 IDE 或 JDK"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: java
+  stage: code
+  why: "problems-scan 还在拉 Qodana 和本机 IntelliJ。"
+rejected:
+  - module: deliver
+    why: "不写 review.md"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "problems-scan.sh 现在只执行 scripts/plugin/java_inspect.py。插件看三件事：流没有放进 try、私有方法没有调用、私有形参至少两处调用都是同一字面量。不下载，不调用 java。framework-supports 上有一条发现，在 TaskJournal.writable。"
+  signals:
+    - "test_java_inspect.py 10 条通过"
+    - "test_problems_scan.sh 确认没有执行 java"
+    - "java_inspect.py joypaas-framework-supports 退出码 1，convention 1"
+  excluded:
+    - "安装 IntelliJ"
+    - "安装 JDK"
+    - "把易受攻击的依赖项算进这次失败"
+  uncertainty: "插件报 0 只说明这三条是静的，不是 Problems 面板被打开过。"
+  steps:
+    - n: 1
+      do: "problems-scan 改为只执行 java_inspect.py"
+      so: "编码和 Review 的这层扫描不再装 IDE 或 JDK"
+    - n: 2
+      do: "用夹具和 framework-supports 跑插件"
+      so: "夹具能红；产品模块上 writable 仍有一条"
+opened:
+  - "scripts/plugin/java_inspect.py"
+  - "scripts/problems-scan.sh"
+  - "conventions/java.md"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "把扫描收成随 idev 带走的插件"
+    result: "loaded"
+  - kind: script
+    name: test_java_inspect.py
+    from: conductor
+    to: script:test_java_inspect.py
+    result: "10 passed"
+  - kind: script
+    name: test_problems_scan.sh
+    from: conductor
+    to: script:test_problems_scan.sh
+    result: "OK"
+  - kind: script
+    name: java_inspect.py
+    from: conductor
+    to: script:java_inspect.py
+    args: "joypaas joypaas-framework-supports"
+    result: "exit 1, convention 1, TaskJournal.java:113"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "改的是 java 扫描关口"
+  - kind: delegate
+    chose: none
+    why: "内核插件由导体改"
+  - kind: model
+    chose: inherit
+    why: "导体自己改"
+stop: ""
+next: "编码和 Review 跑 coding-scan.sh。末尾 problems 的 convention 要是 0。framework-supports 上 TaskJournal.writable 还有一条。"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

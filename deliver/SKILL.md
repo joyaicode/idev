@@ -84,17 +84,24 @@ parent: idev
 
 需求签收后、请人评方案之前，先交方案，供人整体 Review。不要只留 `arch.yaml` 里的一行 `approach`。用例文件这阶段不写。
 
-1. **方案叙述** `<票目录>/design.md`（照 [design.example.md](references/design.example.md)）。六节都要有正文：目标、方案、契约、影响面、回退、用例。目标节照抄基线 `goal`。每条基线 item、每条 `case_intent` 都在文中点名。细到人能按节评审，不写实现代码。
+1. **方案叙述** `<票目录>/design.md`（照 [design.example.md](references/design.example.md)）。六节都要有正文：目标、方案、契约、影响面、回退、用例。目标节照抄基线 `goal`。每条基线 item、每条 `case_intent` 都在文中点名。细到人能按节评审，不写实现代码。方案节顺着读能指出重点；业务落在带行为的类型上，不计划一串只有 get/set 的对象（[coding.md](../conventions/coding.md) 底线 4、5）。
 2. **机读方案** `arch.yaml`。`approach` / `non_approach` 都要有。`case_intents` 挂 `baseline_item_id`。方案若「更好」但超出基线 → 拒过，不改基线。
-3. **先给整包，再等 Review。** 不要在交出方案之前先开一轮必答拷问，也不要为了过门造一个问句。人 Review 时若有未决分叉，再打开 grilling，问句写在 `grill.md` 的 `## arch` 轮，`arch_frontier` 回到 `empty` 才能请签。没有分叉就不要写这一轮。需求轮的 `frontier` 保持 `empty`。
-4. **架构范式自查**：按 [canon.md](../conventions/canon.md) §1 协议扫 §2 信号与 §4 念头，§5 必答 A1–A8，§7 模板记账；答不出的项标 `UNPROVEN` 并写进 `design.md` 的方案节。真有分叉就在 arch 轮里问完。
+3. **先审影响范围内已经存在的问题，再请人评方案。** 范围是 `impact_candidates` 里 hop ≤ 1、这次方案要碰到的路径，不是整仓，也不是当前分支 diff（本需求的代码还没写）。Java 对这些路径跑 `python3 scripts/lib/java_hygiene.py --repo <仓> <路径…>`。`problems-scan.sh` 和 `lang-scan.sh` 只看 diff，这一步覆盖不到；同一批规则直接读这些文件，把 `file:line` 记下来。读不到就写 `UNPROVEN`，不能当成没有问题。结果写在 `design.md` 的 `## 前置`，放在 `## 目标` 之前。六节仍都要有。
+   行数按文件加总，写进这一节。**需求行数**只计为基线 goal 必须新增或改写的行，原样留下的不算。**既有问题行数**只计把范围内的规范、质量问题改掉要动的行。比例是既有问题行数 / 需求行数；需求行数是 0 时不除，当作和本次改动分不开。小于 1/5 是既有问题行数 × 5 < 需求行数。
+   **重大缺陷**是行为与已有契约或调用方可见结果不符、会写错或丢掉数据、会让这次验收不可信，或有安全问题。不改变对外行为的规范、可读性、内聚、未使用、重复，不算重大。
+   每一条都写明位置、是规范还是缺陷、行数。分得开是指能指出哪些符号只属于需求、哪些只属于既有问题，不会落在同一处改动里。比例小于 1/5、又落在本需求必须改的同一处的，可以随本次改掉，方案里单独标明，不写成基线新义务。边界分得开的不放进 `include`。
+   前置节有既有问题时先问人，不自己写成已经标明或已经先修。这是 B 类决策，不是另一次架构签字。选项只有「先修」和「本次不修」，`继续` 不算。人还没选时 `scope_debt.decision` 写 `pending`，不写 `arch.accepted`，不进入本需求编码。建议写在 `scope_debt.recommend`：没有重大缺陷，并且（比例小于 1/5，或者和本次改动分得开），建议 `mark`（本次不修，只在方案里标明）。有重大缺陷，或比例达到 1/5 且边界分不开，建议 `fix-first`。人说本次不修则 `decision` 写 `mark`。人说先修则写 `fix-first`，并按下面的子需求另开一张票。一条都没有时不问，`decision` 写 `mark`。
+4. **先给整包，再等 Review。** 不要在交出方案之前先开一轮必答拷问，也不要为了过门造一个问句。人 Review 时若有未决分叉，再打开 grilling，问句写在 `grill.md` 的 `## arch` 轮，`arch_frontier` 回到 `empty` 才能请签。没有分叉就不要写这一轮。需求轮的 `frontier` 保持 `empty`。要不要先修既有问题，不是这种方案分叉，不写进 `## arch`。
+5. **架构范式自查**：按 [canon.md](../conventions/canon.md) §1 协议扫 §2 信号与 §4 念头，§5 必答 A1–A8，§7 模板记账；答不出的项标 `UNPROVEN` 并写进 `design.md` 的方案节。真有分叉就在 arch 轮里问完。
 4a. **领域建模透镜（涉及新概念时）**：本轮引入新领域概念 / 跨模块术语时，先过 [conventions/domain-modeling.md](../conventions/domain-modeling.md) 建通用语言；术语不一致先对齐再出方案，术语表随票走。无新概念可跳过。
-5. `check-feature.sh <feature> arch`。方案对齐、没有未决分叉后，人 `accepted` + `by` 才能 `code`。这次确认不包含用例计划。
+6. `check-feature.sh <feature> arch`。方案对齐、没有未决分叉、前置节已写明、`scope_debt.decision` 不是 `pending` 之后，人 `accepted` + `by` 才能 `code`。`decision` 是 `fix-first` 时，子需求还没 `done` 就不请这次签，也不进入本需求编码。这次确认不包含用例计划。
+
+人同意先修时，子需求另开一张票，走 S1，从 `req-review` 起，不走 `lite-change`。goal 只写前置节里要先修的那些条。non_goal 写明不做父需求要加的行为。有重大缺陷的是缺陷修复；只有规范和质量的是重构。这张票自己交详细方案。用例覆盖变动前和变动后：缺陷修复是变动前红、变动后绿；重构是变动前就绿（锁住不能变的行为）、变动后仍绿。可执行用例仍在它自己的架构通过之后写。父票 `scope_debt.child` 写这张票的 feature，`decision` 写 `fix-first`。子需求 `done` 之后，父票按修完的代码重算影响面和行数，再请人评父需求的方案。
 
 ### code
 
-1. 只改 `include: true` 的文件。写 `review.md`（[review.example.md](references/review.example.md)）。多做删掉；少做补；像基线写错 → `baseline-conflict`，**停**。
-2. **写前匹配、写中纠正。** 打开 [coding.md](../conventions/coding.md) §0；扫表时再开 [coding-tables.md](../conventions/coding-tables.md)。用本轮变化扫 §1，命中第一行就运用，禁止行当场拒绝。每新增函数扫 §2，命中当轮改掉。
+1. 只改 `include: true` 的文件。写 `review.md`（[review.example.md](references/review.example.md)）。多做删掉；少做补；像基线写错 → `baseline-conflict`，**停**。前置节写明不进本次的既有问题，不放进这次 diff。方案写明随本次改掉的，在 `review.md` 标明是既有问题，不写成基线新义务。
+2. **写前匹配、写中纠正。** 打开 [coding.md](../conventions/coding.md) 文首底线与 §0；扫表时再开 [coding-tables.md](../conventions/coding-tables.md)。用本轮变化扫 §1，命中第一行就运用，禁止行当场拒绝。每新增函数扫 §2，命中当轮改掉。底线：不把问题做复杂；关键路径当轮写异常处理与降级；无依据的代码不写；逻辑和注释顺着读能指出重点；不新开只有 get/set 的业务类型。
 3. **独立 Review。** 编码之后，与用例、自测、验收索引同一波委派 `idev-reviewer`，只写 `review.md` 的编码规范节（`审查者: idev-reviewer`，`文件与行数` 带数字）。按 [coding-tables.md](../conventions/coding-tables.md) §3.8 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo>`。这一波汇合后、请实现审核之前，`I*` 由 `review.fix` 改掉（`accept_all_findings`），没有 `I*` 则这一步 `SKIPPED`，证据指向 `review.md`。不另设人闸。
 4. **架构通过后连续做完这些事，中间不再请签：** 编码之后同一波做完四件：按 `case_intents` 起草 `verify/plan.yaml`（每条意图一条 case，`goal` 复制基线），自测只写 `verify/selftest.md`，审查只写 `review.md`，验收索引只写 `verify/accept.md`。要加一条 case，先补 `case_intent` 和 `design.md` 的用例节。计划无 `SIGNAL` 记 `AUTO`（每个档位）；有 `SIGNAL` 先记下，不要为此停下来。然后改掉 `I*`。`review.fix` 之后再跑一次 selftest：把 case `status` 回写 `verify/plan.yaml`，并重写 `verify/selftest.md` 和 `verify/accept.md`。这一步的跑证才算数。`check-feature.sh <feature> code` 通过、复跑有跑证、且审查者已写入之后，停一次实现审核。确认写入 `semantic_gate.code` 并把 `stage` 改为 `test`。不另问要不要提测。
 5. 实现/译法问题回退 `code`/`req`/`arch`，重跑向后。
@@ -123,5 +130,6 @@ parent: idev
 - 口头改需求继续向后做
 - 结构检查 FAIL 仍请人签字
 - 改 `include: false` / UNRELATED 文件
+- 前置节有既有问题，却不经人选择就写成标明或先修
 - Agent 代填 `by`
 - 把投产现象当成新需求改 baseline

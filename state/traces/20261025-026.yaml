@@ -1,0 +1,81 @@
+schema_version: 2
+at: "2026-10-25T15:55:35+08:00"
+feature: "-"
+intent: "用户以整句确认认可架构阶段的前置规矩。"
+invoke:
+  trigger: "确认"
+  matched: "确认文法"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "把这句确认记到变更记录"
+route:
+  module: deliver
+  scenario: S2
+  convention_class: docs
+  stage: arch
+  risk_tier: P1
+  why: "没有票。确认的是已经写进架构阶段的规矩。"
+rejected:
+  - module: verify
+    why: "没有用例要跑"
+  - module: conventions
+    why: "编码底线这轮不改"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "parse_confirm 对「确认」返回 ok。wangwei794 在白名单里。变更记录补上 by 和原话。无票，不写 sealed、accepted、aligned。"
+  signals:
+    - "原话是确认"
+    - "parse_confirm ok=true"
+  excluded:
+    - "代写 sealed 或 accepted"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "用 parse_confirm 收整句"
+      so: "确认通过"
+    - n: 2
+      do: "把 by 和 quote 写进变更记录"
+      so: "规矩带上这次确认"
+opened:
+  - "references/changelog.md"
+  - "scripts/lib/workflow_spec.py"
+  - "config/people.yaml"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "收这句确认"
+    result: "loaded"
+  - kind: script
+    name: parse_confirm
+    from: conductor
+    to: script:workflow_spec.py
+    args: "确认"
+    result: "ok=true reason=ok"
+decisions:
+  - kind: route
+    chose: deliver
+    why: "认的是架构阶段那条规矩"
+  - kind: delegate
+    chose: none
+    why: "确认只由导体收"
+  - kind: model
+    chose: inherit
+    why: "导体自己记"
+  - kind: gate
+    chose: changelog
+    why: "无票无 A 类闸，只在变更记录记 by 和原话"
+stop: ""
+next: "下一张进入 arch 的票先写前置节，再决定标明还是问人。"
+check_feature: skipped
+signoff:
+  status: recorded
+  marks: []
+  by: wangwei794
+  evidence: "references/changelog.md"

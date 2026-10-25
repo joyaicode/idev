@@ -2,6 +2,14 @@
 
 给人评审的叙述。机读影响面和用例意图在 `arch.yaml`，可执行用例在 `verify/plan.yaml`。三份对同一批条目。
 
+## 前置
+
+影响面是 `ApprovalMethodInterceptor` 与 `ApprovalAnnotationIT`。两个文件都读过。没有重大缺陷：开关为 true 时的拦截与建单仍与现有契约一致。
+
+本需求要改的是拦截器里 `approval.enabled=false` 的分支，以及锁住 enabled=true 的现有断言，合计 28 行。既有问题 1 条、2 行。2 × 5 < 28，小于 1/5。建议本次不修，只在方案里标明。人还没选。
+
+- `ApprovalMethodInterceptor` 构造处的显式类型参数（规范，2 行）。落在本次要改的同一类型里，随本次改掉，不写成基线新义务。
+
 ## 目标
 
 When approval.enabled is false, annotated methods run without creating a ticket.

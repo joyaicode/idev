@@ -41,6 +41,7 @@
 | `ARTIFACT: UNKNOWN` | idev-ops 回报 |
 | grill `frontier` 非空、`objections` 非空、baseline-conflict | `grill.md`、`baseline.yaml` |
 | 方案分叉未决 | `arch.yaml` |
+| 影响范围内的既有问题 | `design.md` 的 `## 前置` 列出了既有问题，且 `scope_debt.decision` 仍是 `pending`。选项只有先修、本次不修。建议：没有重大缺陷且（小于 1/5 或边界分得开）选本次不修；有重大缺陷，或达到 1/5 且分不开，选先修。先修另开子需求，父票停在 `arch`。一条都没有时不问 |
 | 残留 `UNPROVEN` 需人接受风险 | verify `report.md`；plan 阶段 `check-feature verify-plan` 打印 `SIGNAL` |
 | plan 有不从基线 1:1 派生的用例 | `check-feature verify-plan` 打印 `SIGNAL` |
 | 有界修复红线命中 | `hypothesis.py check` |

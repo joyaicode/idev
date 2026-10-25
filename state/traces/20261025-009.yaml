@@ -1,0 +1,110 @@
+schema_version: 2
+at: "2026-10-25T11:12:16+08:00"
+feature: "-"
+intent: "把当前内核发到 origin/v2。"
+invoke:
+  trigger: "发版"
+  matched: "真源是 git checkout，发布就是提交并推送 v2"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: explicit
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "用户要求发版"
+route:
+  module: conventions
+  scenario: S8
+  convention_class: docs
+  why: "发版走仓库提交并推送；本仓没有独立版本标签。"
+rejected:
+  - module: deliver
+    why: "没有产品票"
+  - module: verify
+    why: "验收已通过，本轮是发布"
+  - module: ops
+    why: "没有现象"
+  - module: handoff
+    why: "不是产线交出口"
+thinking:
+  summary: "工作区提交为 1a4b224，并推到 origin/v2（be01171..1a4b224）。发布前 agents-check、test_signals、test_fanout、test_console、syntax-check 和 go build 通过。本地 skill 符号链接已经指向这份 checkout。"
+  signals:
+    - "用户说发版"
+    - "分支 v2 领先 origin 两笔，工作区还有未提交改动"
+  excluded:
+    - "打一个新的版本标签：本仓没有标签序列"
+    - "idevd assets publish：设计稿里的命令还没有实现"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "跑发布前检查并提交工作区"
+      so: "1a4b224"
+    - n: 2
+      do: "git push origin HEAD"
+      so: "origin/v2 与本地对齐"
+opened:
+  - "README.md"
+  - "references/changelog.md"
+  - "workflows/repo-commit-push.yaml"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "发版"
+    result: "loaded"
+  - kind: script
+    name: console.py
+    from: conductor
+    to: script:console.py
+    args: "pending"
+    result: "pending: 0"
+  - kind: script
+    name: agents-check.py
+    from: conductor
+    to: script:agents-check.py
+    result: "PASS"
+  - kind: script
+    name: test_signals.py
+    from: conductor
+    to: script:test_signals.py
+    result: "9 tests OK"
+  - kind: script
+    name: test_fanout.py
+    from: conductor
+    to: script:test_fanout.py
+    result: "26 tests OK"
+  - kind: script
+    name: test_console.py
+    from: conductor
+    to: script:test_console.py
+    result: "7 tests OK"
+  - kind: script
+    name: syntax-check.sh
+    from: conductor
+    to: script:syntax-check.sh
+    result: "PASS"
+  - kind: repo
+    name: git
+    from: conductor
+    to: repo:origin/v2
+    args: "commit 1a4b224 && push"
+    result: "be01171..1a4b224 HEAD -> v2"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "发布的是内核真源"
+  - kind: delegate
+    chose: none
+    why: "导体自己提交并推送"
+  - kind: model
+    chose: inherit
+    why: "导体自己思考，不覆盖模型"
+stop: ""
+next: "origin/v2 已是 1a4b224"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: "https://github.com/joyaicode/idev/commit/1a4b224"

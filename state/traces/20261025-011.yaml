@@ -1,0 +1,85 @@
+schema_version: 2
+at: "2026-10-25T13:30:00+08:00"
+feature: "-"
+intent: "验收：按新顺序审 joypaas-framework-supports。"
+invoke:
+  trigger: "验收：Review joypaas-framework-supports"
+  matched: "先跑 java hygiene，再决定有没有 I*"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: explicit
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "验收上一轮的审查关口"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: java
+  stage: code
+  why: "没有产品票，不在 joypaas 里开 code-review 阶段机。这一轮只审该模块的黄条。"
+rejected:
+  - module: deliver
+    why: "joypaas 没有 .idev 票，不开交付"
+  - module: verify
+    why: "不是红绿"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "框架支持模块工作区 34 个 Java，blocking 为 0。截图里的 R2mTaskStore 五处已经是 <>。26 条方法类型实参记为 note，不进 I*。"
+  signals:
+    - "console pending 为 0"
+    - "模块内没有 new Foo<Bar>()、valueOf、List.of"
+    - "工作区相对 HEAD 有未提交的 Java，triple-dot 不含这个模块"
+  excluded:
+    - "把 Collectors.toList 的显式类型实参写成 I*"
+    - "在产品仓落 review.md"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "扫 joypaas-framework-supports 全部 Java"
+      so: "blocking 0，note 26"
+opened:
+  - "joypaas-framework-supports/src/main/java/com/jdt/joypaas/framework/task/R2mTaskStore.java"
+  - "joypaas-framework-supports/src/main/java/com/jdt/joypaas/framework/task/TaskAutoConfiguration.java"
+  - "joypaas-framework-supports/src/main/java/com/jdt/joypaas/framework/task/DefaultTaskOpenApi.java"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "验收审查关口"
+    result: "loaded"
+  - kind: script
+    name: console.py
+    from: conductor
+    to: script:console.py
+    args: "pending"
+    result: "pending: 0"
+  - kind: script
+    name: java_hygiene.py
+    from: conductor
+    to: script:java_hygiene.py
+    args: "joypaas-framework-supports"
+    result: "blocking 0 note 26"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "验收关口，不启产品配方"
+  - kind: delegate
+    chose: none
+    why: "没有票，审查结果直接交给人"
+  - kind: model
+    chose: inherit
+    why: "导体自己审这一模块"
+  - kind: refuse
+    chose: "no I* for notes"
+    why: "Java 8 方法类型实参不打回"
+stop: ""
+next: "这个模块没有待改的 blocking 黄条"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

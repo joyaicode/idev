@@ -1,0 +1,88 @@
+schema_version: 2
+at: "2026-10-25T15:56:40+08:00"
+feature: "-"
+intent: "用户再发一句确认。"
+invoke:
+  trigger: "确认"
+  matched: "无当前停问点"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "看这句确认还有没有可写的停问点"
+route:
+  module: deliver
+  scenario: S2
+  convention_class: docs
+  stage: arch
+  risk_tier: P1
+  why: "文法能过，但上一句确认已经记入变更记录，当前没有待签的闸。"
+rejected:
+  - module: verify
+    why: "没有用例要跑"
+  - module: conventions
+    why: "编码底线这轮不改"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "parse_confirm 对「确认」返回 ok。console pending 是 0。15:55 那句已经写入变更记录。没有票，没有未签的 A 类闸，这句不再代写任何字段。"
+  signals:
+    - "原话是确认"
+    - "pending 0"
+    - "changelog 已有 15:55 的 by 和 quote"
+  excluded:
+    - "再写一次 sealed 或 accepted"
+    - "把同一句确认记第二遍"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "查 pending 和上一轮停问"
+      so: "没有待签的点"
+    - n: 2
+      do: "不改签字字段"
+      so: "确认不落到空闸上"
+opened:
+  - "references/changelog.md"
+  - "references/chat-confirm-signoff.md"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "收这句确认"
+    result: "loaded"
+  - kind: script
+    name: console.py
+    from: conductor
+    to: script:console.py
+    args: "pending"
+    result: "pending 0"
+  - kind: script
+    name: parse_confirm
+    from: conductor
+    to: script:workflow_spec.py
+    args: "确认"
+    result: "ok=true reason=ok"
+decisions:
+  - kind: route
+    chose: deliver
+    why: "仍是架构阶段那条已确认的规矩"
+  - kind: delegate
+    chose: none
+    why: "没有可派的步骤"
+  - kind: model
+    chose: inherit
+    why: "导体自己核"
+  - kind: refuse
+    chose: second-signoff
+    why: "没有当前停问点，不代写字段"
+stop: ""
+next: "下一张进入 arch 的票先写前置节，再决定标明还是问人。"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

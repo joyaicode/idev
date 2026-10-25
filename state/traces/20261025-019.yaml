@@ -1,0 +1,85 @@
+schema_version: 2
+at: "2026-10-25T14:42:00+08:00"
+feature: "-"
+intent: "正则扫过就报干净，Problems 仍有下一批。改用 IntelliJ Project Default 的 inspect 扫到没有规范黄条。"
+invoke:
+  trigger: "反思"
+  matched: "为什么一直认为扫描并清理了所有语法问题，然后依然有存留"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "验收尺是 Problems，不是 java_hygiene.py 的 0"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: java
+  stage: code
+  why: "关口把正则子集当成了 IntelliJ Problems。"
+rejected:
+  - module: deliver
+    why: "不写 review.md"
+  - module: verify
+    why: "用模块已有测试"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "java_hygiene.py 只会上一张截图里的模式，所以每次 blocking 0 之后 Problems 还有下一类。验收改成 IDEA inspect.sh，profile 名 Project Default。joypaas-framework-supports 再扫，规范项为 0。易受攻击的依赖项另有 50 条，不在这次黄条里。"
+  signals:
+    - "第一次 inspect 297 条，main java 18 条，测试 214 条"
+    - "正则扫不到 try-with-resources、形参恒定、非 getter 未使用方法、拼写"
+    - "第四次 inspect 规范项 0，CVE 50"
+  excluded:
+    - "升级有漏洞的传递依赖"
+    - "删掉产品 SPI：serviceCode、steps(work)、type、bind、ExceptionHandler"
+  uncertainty: "项目词典在 .idea/dictionaries，.idea 被 gitignore。同事的 IDE 不会自动带上 joypaas、kafka 和 Redis 命令的拼写词。"
+  steps:
+    - n: 1
+      do: "用 inspect.sh 和 Project Default 扫 joypaas-framework-supports"
+      so: "得到和 Problems 同一套检查，而不是正则子集"
+    - n: 2
+      do: "按报告改 main 和测试，再扫"
+      so: "规范项从 297 收到 0。模块单测通过"
+opened:
+  - "conventions/java.md"
+  - "conventions/coding.md"
+  - "joypaas-framework-supports"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "反思为什么扫过仍有存留"
+    result: "loaded"
+  - kind: script
+    name: inspect.sh
+    from: conductor
+    to: script:inspect.sh
+    args: "Project Default -d joypaas-framework-supports"
+    result: "规范项 0，CVE 50"
+  - kind: script
+    name: mvn
+    from: conductor
+    to: script:mvn
+    args: "-pl joypaas-framework-supports test"
+    result: "exit 0"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "仍是 java 黄条，验收工具从正则换成 IDEA inspect"
+  - kind: delegate
+    chose: none
+    why: "这一轮直接改到 inspect 规范项为 0"
+  - kind: model
+    chose: inherit
+    why: "导体自己改"
+stop: ""
+next: "打开 joypaas-framework-supports 的 Problems。规范黄条应为空。易受攻击的依赖项是另一个页签，没有升级。"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

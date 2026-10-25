@@ -44,6 +44,7 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import java_hygiene  # noqa: E402
 import kind_agents  # noqa: E402
 import safeyaml  # noqa: E402
 import textwidth as tw  # noqa: E402
@@ -459,6 +460,77 @@ def check_facts(record: dict) -> dict[str, str]:
     return out
 
 
+def _hygiene_covers(rel: str, changed: set[str]) -> bool:
+    """True when a diff hit is one of the files this coder says they changed."""
+    hit = rel.replace("\\", "/")
+    base = hit.rsplit("/", 1)[-1]
+    for raw in changed:
+        path = raw.replace("\\", "/")
+        if path in (hit, base) or hit.endswith("/" + path) or path.endswith("/" + base):
+            return True
+    return False
+
+
+def check_java_hygiene(record: dict, repo: Path | None) -> dict[str, str]:
+    """java.md yellow bars the reviewer used to skip in favor of a principle essay.
+
+    The coder's code_pass / review.fix must already have cleared them in
+    CHANGED files. The reviewer's report must cite every remaining diff hit
+    as file:line before the cohesion writeup counts. Problems-only rows
+    (unused import, unused method) are not in this check.
+    """
+    agent = str(record.get("agent") or "")
+    kind = str(record.get("kind") or "")
+    reviewer = agent == "idev-reviewer" and kind == "review.report"
+    coder = agent == "idev-coder" and kind in ("deliver.code_pass", "review.fix")
+    if not reviewer and not coder:
+        return {}
+    if repo is None:
+        return {"java-hygiene": "WARN:no repo, diff not scanned"}
+    try:
+        hits, scope, _level = java_hygiene.scan(Path(repo))
+    except OSError as exc:
+        return {"java-hygiene": f"WARN:{exc}"}
+    if scope == "no git":
+        return {"java-hygiene": "WARN:不是 git 仓库，扫不到 diff"}
+    if coder:
+        raw = str((record.get("report") or {}).get("raw", ""))
+        changed = CHANGED_LINE.search(raw)
+        paths = _paths(changed.group(1)) if changed else set()
+        owed = [
+            hit
+            for hit in hits
+            if hit.rule in java_hygiene.BLOCKING_RULES and _hygiene_covers(hit.rel, paths)
+        ]
+        if not owed:
+            return {"java-hygiene": "PASS"}
+        shown = "; ".join(f"{hit.token()} {hit.rule}" for hit in owed[:8])
+        extra = f" (+{len(owed) - 8})" if len(owed) > 8 else ""
+        return {
+            "java-hygiene": (
+                "FAIL:本轮改过的 Java 仍有 java.md 黄条，先改掉再写总则: "
+                + shown
+                + extra
+            )
+        }
+    review = read_evidence(record, repo)
+    if review is None:
+        return {"java-hygiene": "WARN:review.md 打不开，对不上黄条"}
+    owed = java_hygiene.missing(hits, review, str(record.get("shard") or ""))
+    if not owed:
+        return {"java-hygiene": "PASS"}
+    shown = "; ".join(f"{hit.token()} {hit.rule}" for hit in owed[:8])
+    extra = f" (+{len(owed) - 8})" if len(owed) > 8 else ""
+    return {
+        "java-hygiene": (
+            f"FAIL:{scope} 有 {len(owed)} 条黄条没写进 review.md，"
+            "先把 file:line 写成 I*，再写内聚和设计模式: "
+            + shown
+            + extra
+        )
+    }
+
+
 def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     """The honesty checks from agents-evolve.md, plus the per-agent §0 checks."""
     checks: dict[str, str] = {}
@@ -533,6 +605,9 @@ def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     checks.update(check_facts(record))
     # Accuracy guards borrowed from Cursor / Claude Code.
     checks.update(check_accuracy(record))
+    hygiene = check_java_hygiene(record, repo)
+    if "java-hygiene" in hygiene:
+        checks["java-hygiene"] = hygiene["java-hygiene"]
     return checks
 
 

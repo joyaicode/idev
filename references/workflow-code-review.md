@@ -33,15 +33,15 @@ review.report → human.gate → verify.plan → human.gate → review.fix → v
 
 深度：先 `coding-scan.sh` 认语言并打开对应规约；机械扫描全仓；**只深读命中文件**。未打开的文件在报告写 **UNPROVEN**，不准写成已审。
 
-报告步**只读**：可跑只读 lint / Problems / `qodana.starter`；**不准**执行 `commands.lint_fix`（会改文件）。没有这个键就问人。
+报告步**只读**：可跑 `coding-scan.sh`（只跑随 idev 带上的插件，不安装工具链）；**不准**执行 `commands.lint_fix`（会改文件）。没有这个键就问人。`problems` 或 `lang` 退出码 2 是 `UNPROVEN`，不要写成已扫干净。
 
 再次跑：覆盖 `review.md`，`workflow/run.yaml` 开新一轮；旧 evidence 只留 git 历史。
 
 ## 1. `review.report`
 
-1. 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo根>`。`next` 若打出 `FANOUT_ASSESS report`，先跑那条 assess。`FANOUT` 时导体先跑扫描（`PREP`），再按模块各派一个审查者，每片只写 `review/shards/<模块>.md`，用 `### FINDING` / `### UNPROVEN`，不写 `review.md`、不编 `I*`。每片 `workflow.py delegate report --shard <id>`。全部回来后 `fanout.py merge`，再把这一步 `record` 一次。改动的源码模块少于两个时仍是一个审查者。写集已经钉成一份 `review.md` 的步骤不走这条分片。
+1. 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo根>`。输出里 `java hygiene` 的每一条 **blocking** `file:line`，以及同一次扫描末尾 `problems` 和 `lang` 插件的每一条 `file:line`，先写成 `I*`（分片则写进该模块的 `### FINDING`，位置含 `file:line`），再写总则、五轴、内聚。`note` 不打回。`problems` 或 `lang` 退出码不是 0，或输出 `UNPROVEN`，这一步不算扫完。这两层不安装 IntelliJ、JDK、ruff、golangci-lint、shellcheck、eslint 或 Node。漏记 blocking 时 `delegation.py` 的 `java-hygiene` 打回这份报告。范围是相对 merge-base 的 diff 加工作区，不是整仓存量；整仓另跑 `java_hygiene.py --all`。`next` 若打出 `FANOUT_ASSESS report`，先跑那条 assess。`FANOUT` 时导体先跑扫描（`PREP`），再按模块各派一个审查者，每片只写 `review/shards/<模块>.md`，用 `### FINDING` / `### UNPROVEN`，不写 `review.md`、不编 `I*`。每片 `workflow.py delegate report --shard <id>`。全部回来后 `fanout.py merge`，再把这一步 `record` 一次。改动的源码模块少于两个时仍是一个审查者。写集已经钉成一份 `review.md` 的步骤不走这条分片。
 2. 跑 `python3 ~/.cursor/skills/idev/scripts/session-context.py --repo <repo根> --feature <feature> --scenario S8 --stage code`。点了产品名就加 `--product`。打开每一行 `OPEN`，并把路径写入 trace 的 `extensions`（没有页就写 `extensions: []`）与 `opened`。没有 `OPEN` 就不打开产线 pack。
-3. 打开 [coding.md](../conventions/coding.md) §0 与文首**规范总则**、[coding-tables.md](../conventions/coding-tables.md) §1/§2/§3 与 §2.4（含变更级粗筛）；按栈打开 `java.md` 与 `code-review-skill` 指南。
+3. 打开 [coding.md](../conventions/coding.md) §0 与文首**底线**、**规范总则**、[coding-tables.md](../conventions/coding-tables.md) §1/§2/§3 与 §2.4（含变更级粗筛）；按栈打开 `java.md` 与 `code-review-skill` 指南。底线先判：把问题做复杂、关键路径没有异常处理或降级、无依据或绕路、平铺直叙、只有 get/set 的哑对象、说不出换来什么的文件和行，写成 `I*`，落既有 `T#`/`C#`/`F#`。
 4. 写票目录里的 `review.md`（`doc_home.py --key task`）：
    - **正式发现 `I1`…**：`P#` / `C#` / `R#`，或 `landing` / `identity` / `config` 已有条文。每条：位置（**file:方法名 锚点为主，行号只作辅助**——review 与 fix 之间同一文件可能被平行改动，行号会漂移）、根据、修复建议。进默认修复清单。
    - **意见 `O1`…**：五轴对不上编号的观感。入库，**不进**默认清单。

@@ -44,6 +44,7 @@ is_background: false
    - `CANON_TRIGGER`:是否涉及**新增一层 / 拆分 / 缓存 / 队列 / 重试 / 重写 / 新依赖**。非「无」则**先**走 `$IDEV/conventions/canon.md` §1 协议(扫 §2 信号 + §4 念头),命中即按 DO 做,并在 `review.md` 记 `T#`
    - `TABLE_HIT`:用那句话扫 `coding-tables.md` §1,**命中第一行就停**,按「运用」做、按「不要」拒绝。零命中就**显式写零命中**,然后写具体类型 —— 零命中还新增接口/抽象层是 §0 第 4 步明禁的
    - 若 `CHANGE_KIND` 含「结构」:先过 `coding-tables.md` §3「满足条件」;不满足就补测试或拆轮次,**不准硬改**
+   - **底线**:写第一行之前用那一句话过 `coding.md` 文首底线。关键路径(失败会让基线结果错或没有)当轮写上失败条件、怎么停或怎么降、日志。没有这条路径就不写 `catch`、默认值、重试、扩展点。说不出依据的段落不要写。逻辑要顺着读能指出重点。不新开只有 get/set 的业务类型。定义只在那一节
 
 3. **影响面(有 codegraph 就必须用)** —— `verify/SKILL.md` 硬规则 5 的原文要求:
    ```
@@ -103,13 +104,13 @@ mkdir -p <票目录>/workflow/logs
    ```bash
    bash $IDEV/scripts/coding-scan.sh <仓根>
    ```
-   blocking 译成 `P#`/`C#` **当轮**改。然后清废弃、对齐注释文档、跑该仓扫描(Java:Problems / `qodana.starter`;前端:lint-fix)。黄条视为未完成。
+   blocking 译成 `P#`/`C#` **当轮**改。`java hygiene` 打出的黄条若落在本轮 `CHANGED` 的 Java 上，**当轮改掉**（`new ArrayList<String>()` 改成 `new ArrayList<>()`），不要留到审查里写成一段内聚。同一次扫描末尾的 `problems` 或 `lang` 退出码不是 0 就没做完；`java_hygiene` 的 0 不够，`python3 -m compileall` 的 0 也不够。这两层只跑 idev 自带插件，不安装 IntelliJ、JDK、ruff、golangci-lint、shellcheck、eslint 或 Node。插件不在时是 `UNPROVEN`。然后清废弃、对齐注释文档。前端走 `lint-fix`。黄条视为未完成。
 
 不要 `trace.sh append` —— trace 由导体统一写。
 
 ## 硬规则
 
-1. **只改 `include: true` 的文件。** 其它脏文件写进 `review.md` 的 UNRELATED 段,**不准顺手改**。
+1. **只改 `include: true` 的文件。** 其它脏文件写进 `review.md` 的 UNRELATED 段,**不准顺手改**。方案前置节写明不进本次的既有问题,即使路径已经 `include: true`,也不要在这次 diff 里顺手改掉。写明随本次改掉的,在 `review.md` 标明是既有问题。
 2. **像基线写错就停。** 写 `baseline-conflict`,回报 `BLOCKED`,交回导体问人。**禁止**自己改 `baseline.yaml` 或 goal。
 3. **命中只记账未改 = 拒过。** 扫到的 blocking 项必须当轮改掉。
 4. **§0 三项必须交代,零命中也要显式写。** 不填的回报会被导体打回,不 record。
@@ -119,6 +120,7 @@ mkdir -p <票目录>/workflow/logs
 8. **有界修复红线命中必须停**,不叠补丁、不改签名归一化规则来让检查过。
 9. **编号只认一处**:`P`/`C`/`R` 认 `coding.md`;`T`/`A`/`F` 认 `canon.md`。不自造第二套。
 10. **裁决先于模式**:YAGNI + Rule of Three。第 1 次写具体,第 3 次才抽。会说过度设计就简化。
+10a. **底线先于模式。** 不把问题做复杂;关键路径当轮写失败与降级;每一段新代码都要有依据;顺着读能指出重点;不新开只有 get/set 的业务类型。定义在 `coding.md` 文首,不在本页展开。
 11. 边界不清、方案分叉、trade-off 未决 → **不要自己拍板**,回报里写成待拷问项交回导体。
 12. **`git.commit_push` 必须已过 `human.gate`。** 委派包里没有这个明示就 `BLOCKED(brief)` 拒跑 —— 你不能自己判断可不可以推。这是本 agent 唯一不可逆的动作。
 13. **构建与提交不编命令、不借机改代码。** 命令只有三个合法来源:配方 `with`、扩展根 `workflow-defaults.yaml` 的键、人本轮明确确认过的那一条。取不到确切命令就 `BLOCKED(env)`,**绝不自己编一条**。
@@ -145,6 +147,7 @@ mkdir -p <票目录>/workflow/logs
 | `read-before-change` | 改了没读过的文件 —— 盲改 |
 | `revert-anchor` | 有改动却没有 REVERT 锚点 —— 撤不回去 |
 | `red-first` | review.fix 没有 RED_FIRST —— 没见它红过就修 |
+| `java-hygiene` | `deliver.code_pass` / `review.fix` 改过的 Java 仍有 java.md 黄条（钻石 `<>`、显式方法类型实参、`valueOf`）。先改文件，再写总则 |
 | `s0-declared` | 缺 CHANGE_KIND / CANON_TRIGGER / TABLE_HIT |
 
 每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——

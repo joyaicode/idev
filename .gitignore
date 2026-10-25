@@ -12,6 +12,9 @@
 # outlives the process that held it, and it is always empty.
 state/*.lock
 
+# Optional offline Qodana CLI and linter. Drop a binary here; do not commit it.
+/offline/
+
 # Go build and test residue. bin/idev is built locally (workflow.py looks there).
 /bin/
 /cover.out

@@ -1,0 +1,86 @@
+schema_version: 2
+at: "2026-10-25T14:35:00+08:00"
+feature: "-"
+intent: "确认码如文字和最小实现这两条补充。"
+invoke:
+  trigger: "确认"
+  matched: "聊天确认用语，认的是 coding.md 底线 4、5，不是交付闸"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "同一轮补充上的确认"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: coding
+  stage: arch
+  why: "确认的是方案和编码共用的底线 4、5。没有票，没有 A 类停问点。"
+rejected:
+  - module: deliver
+    why: "没有 baseline 或 stage 可签"
+  - module: verify
+    why: "没有提测结果可签"
+  - module: ops
+    why: "没有现象"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "「确认」整句过确认文法，by 仍是 wangwei794。上一轮没有将代写列表，也没有四道交付闸。只把原话记在码如文字那条 changelog 上，不写 sealed、accepted、aligned。前三条的确认原样保留。"
+  signals:
+    - "用户原话是「确认」"
+    - "console pending 0"
+  excluded:
+    - "代写签字字段：无当前停问点"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "对照停问页：确认只签当前停问点"
+      so: "没有停问点，不写 YAML 签字字段"
+    - n: 2
+      do: "把 quote 记在底线 4、5 那条 changelog"
+      so: "补充有人名和原话"
+opened:
+  - "references/chat-confirm-signoff.md"
+  - "references/changelog.md"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "原话确认"
+    result: "loaded"
+  - kind: script
+    name: console.py
+    from: conductor
+    to: script:console.py
+    args: "pending"
+    result: "pending: 0"
+  - kind: module
+    name: references/chat-confirm-signoff.md
+    from: conductor
+    to: module:conventions
+    result: "无 A 类闸，不代写"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "确认的是编码规约补充，不是一张票"
+  - kind: delegate
+    chose: none
+    why: "只记确认，不派执行者"
+  - kind: call
+    chose: chat-confirm-signoff
+    why: "quote「确认」，by wangwei794；无将代写字段"
+  - kind: model
+    chose: inherit
+    why: "导体自己记"
+stop: ""
+next: "底线 1–5 按已确认的正文执行"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: wangwei794
+  evidence: "quote「确认」；无停问点，未写签字字段"

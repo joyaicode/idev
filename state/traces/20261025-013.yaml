@@ -1,0 +1,83 @@
+schema_version: 2
+at: "2026-10-25T13:46:00+08:00"
+feature: "-"
+intent: "审查并修复，直到 joypaas 这次 diff 上的 Java 卫生黄条为 0。"
+invoke:
+  trigger: "验收：审查并修复问题，直到所有代码规范问题全都扫清"
+  matched: "TaskExecutor 黄条与同模块同类问题，外加 diff 里 access-layer 的钻石和可以推断"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "上一轮列出的 I* 这次要改完并再扫"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: java
+  stage: code
+  why: "人要求把审查里的黄条改到扫干净，不另开 code-review 配方。"
+rejected:
+  - module: deliver
+    why: "没有新票，不写 review.md"
+  - module: verify
+    why: "用模块已有测试，不另起 plan"
+  - module: handoff
+    why: "不是交出口"
+thinking:
+  summary: "framework-supports 全树与仓库 diff 的 java_hygiene blocking 和 note 都是 0。手写 return field 改成字段 @Getter，显式类型实参去掉。framework-supports 单测 72 通过，access-layer test-compile 通过。"
+  signals:
+    - "改前 framework-supports 41 blocking、5 note"
+    - "改前 diff 另有 access-layer 38 blocking"
+    - "Collectors.toList 与 Arrays.asList 在 Java 8 上能推断，已去掉类型实参"
+  excluded:
+    - "删掉产品步骤还要调用的 getter"
+    - "启动 code-review 配方等人签收"
+  uncertainty: "没有打开 IntelliJ Problems，扫的是 java_hygiene 覆盖的那几类黄条。"
+  steps:
+    - n: 1
+      do: "字段 @Getter 替换手写 getter，去掉 Collections / Collectors / Arrays 的显式类型实参，钻石改成 <>"
+      so: "diff blocking 0、note 0"
+opened:
+  - "conventions/java.md"
+  - "conventions/coding.md"
+  - "joypaas-framework-supports/src/main/java/com/jdt/joypaas/framework/task/TaskExecutor.java"
+  - "joypaas-framework-supports/src/main/java/com/jdt/joypaas/framework/task/TaskRuntime.java"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "审查并修复"
+    result: "loaded"
+  - kind: script
+    name: java_hygiene.py
+    from: conductor
+    to: script:java_hygiene.py
+    args: "joypaas diff"
+    result: "blocking 0 note 0"
+  - kind: script
+    name: mvn
+    from: conductor
+    to: script:mvn
+    args: "-pl joypaas-framework-supports test"
+    result: "72 tests, 0 failures"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "改的是 java.md 黄条，不是新需求"
+  - kind: delegate
+    chose: none
+    why: "原话要求这一轮改到扫干净，没有配方 DELEGATE"
+  - kind: model
+    chose: inherit
+    why: "导体自己改"
+stop: ""
+next: "打开 TaskExecutor Problems，确认面板和扫描一致"
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+  by: ""
+  evidence: ""

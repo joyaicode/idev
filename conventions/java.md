@@ -13,7 +13,7 @@
 
 1. **收敛文件** — Query / Result / Exception / 小枚举嵌在公开接口或同文件；禁止 `model/` 下一文件一类。
 2. **语法糖减代码** — 接口 `default`、Lombok `@Value`/`@Builder`、静态工厂、包可见工具、lambda / 钻石 `<>` / 经典 `switch`。不要匿名 Consumer、不要 `new ArrayList<String>()`、不要 `Integer.valueOf` / `.intValue()`、不要 switch 表达式。覆盖 `@NonNullApi` 用 `javax.annotation.Nonnull`。无用 import / 无用方法当场删。
-3. **禁止贫血** — 校验、归一、派生状态跟类型走。`*Mappings` 只做协议形状，不做健康度 / 就绪 / 状态机。
+3. **禁止贫血** — 校验、归一、派生状态跟类型走。只有 get/set、没有业务信息的哑对象不要新开文件。`*Mappings` 只做协议形状，不做健康度 / 就绪 / 状态机。阶段判据见 [coding.md](coding.md) 底线 5。
 4. **接口 + SPI** — 调用方只依赖公开接口。整类替换用 MissingBean；追加用多例 SPI。层内适配器不泄漏给 Controller / 产品代码。
 
 YAGNI：单实现先写具体类型，不滥抽 `IXxx`。新能力：公开接口 + 默认实现 + `enabled` + enabled/disabled `*IT`。
@@ -33,6 +33,11 @@ YAGNI：单实现先写具体类型，不滥抽 `IXxx`。新能力：公开接�
 | 显式类型参数可以推断 | `Collections.emptySet()`，禁止 `Collections.<String>emptySet()` |
 | 可替换为 `Map.computeIfAbsent()` | `get` + null 再 `put` 改成 `computeIfAbsent(k, x -> new HashSet<>())` |
 | 可替换为集合工厂方法 | 只用 `Collections.empty*` / `singleton` / `unmodifiable*`。**禁止** `List.of` / `Set.of` / `Map.of` |
+| `Collections.sort()` 可被替换为 `List.sort()` | `due.sort(cmp)`。自然序用 `list.sort(Comparator.naturalOrder())` |
+| 可被替换为 `Comparator.comparing` | `(a, b) -> a.f.compareTo(b.f)` 写成 `Comparator.comparing(a -> a.f)` |
+| 在循环中调用 `Thread.sleep()` | 间隔等待用 `TimeUnit.MILLISECONDS.sleep`。停机仍靠中断醒来 |
+| 类似的日志消息 | 同一段里两句相同的日志改成能区分的句子 |
+| 方法的返回值从未被使用过 | 改成 `void`，删掉只为返回而数的计数 |
 | 无用 import | 当场删 |
 
 | 必做 | 不要 |
@@ -63,9 +68,9 @@ YAGNI：单实现先写具体类型，不滥抽 `IXxx`。新能力：公开接�
 
 ## 增强扫描（Java）
 
-`code` 阶段在 Problems / Qodana 之外，按 [coding-tables.md](coding-tables.md) §3.8：
+`code` 和 Review 的验收是 `coding-scan.sh` 调用的 `problems-scan.sh`。它只跑随 idev 带上的插件 `scripts/plugin/java_inspect.py`。不安装 IntelliJ，不安装 JDK，也不下载。插件不在时退出码 2，输出 `UNPROVEN`，不能当成扫干净。这只插件看三件事：赋值得到的流没有放进 `try (`、本文件里没有调用的私有方法、私有方法的形参在至少两处调用里都是同一个字面量。它报 0 只说明这三件事是静的，不是 IDE Problems 面板被打开过。`java_hygiene.py` 仍是另一段正则子集。按 [coding-tables.md](coding-tables.md) §3.8：
 
-1. `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo>`
+1. `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo>`。先看 `java hygiene` 的 blocking（钻石 `<>`、`Collections.<T>empty*()`、`valueOf`、compiler=8 的 `List.of`、`src/main` 里从未使用的简单 getter、模块已有 Lombok 时仍手写的 `return field`、`Collections.sort` → `List.sort`、`Comparator.comparing`、循环里的 `Thread.sleep`、40 行内相同的日志句子。`Collectors.<T>toList()` 只作 note）。再看 `problems`：插件的 `convention` 不是 0，或写着 `UNPROVEN`，就不算做完。单模块可再跑 `bash ~/.cursor/skills/idev/scripts/problems-scan.sh <repo> <模块目录>`。
 2. 按该仓 compiler 打开对应的 `code-review-skill` Java 指南。compiler=8 打开 `java8.md`。
 3. 五轴：`code-review-and-quality`；安全敏感再开 `security-and-hardening` 与 plinth `124-java-secure-coding`
 4. 命中回写 `review.md` 的 `P#`/`C#`，不要只留外挂严重度标签
