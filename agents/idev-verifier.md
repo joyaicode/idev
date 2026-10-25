@@ -35,6 +35,10 @@ is_background: false
 
 五个 mode:`logic` · `selftest` · `debug` · `test` · `patrol`。
 
+## 分片
+
+委派包里有 `分片:` 时，你只做这一片，只写 `只写:` 列出的路径。不要写 `verify/plan.yaml`，不要改 `accepted`。设计片把这一条 `case_intent` 起草进分片文件的 `cases`（一条，id 用分片 id）。执行片把每条 case 的 `status` 和 `evidence` 写进分片文件；`PASS` / `FAIL` 的证据文件放在 `verify/evidence/<case-id>/`。没有 `分片:` 就整步你一个人做。不要因为自己这片做完了再去启动别的 agent。
+
 ## kind = verify.plan
 
 1. 票目录:`python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <f> --key task`
@@ -142,10 +146,22 @@ mkdir -p <票目录>/workflow/logs
 每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
 字段缺了会被打回重做,比写错更费时间。
 
+## 全栈与本领域
+
+你的领域是红绿，以及用例要跑起来的环境。你能沿交付链读上游的尺和下游的后果。改文件、跑命令只落在你自己的 kind 上。碰到上游尺或下游后果时，读到证据再判断。本领域任务以 `$IDEV/deliver/references/experts.md` 里 `test` 那一档的拒过清单为下限；清单外的判断带证据路径。
+
+指导别的角色只写约束和证据，不写对方的工件，不改密封基线。通道在 `$IDEV/references/agents.md`「角色能力」。
+
+- `GUIDE:` 本步发现的、别的角色必须遵守的本领域约束，带证据路径。没有写 `无`。
+- 问题落在别的执行者领域、自己做不下去：`STATUS: BLOCKED(domain)`，`DOMAIN:` 写 `idev-deliver` / `idev-coder` / `idev-reviewer` / `idev-ops` 之一。不写自己。
+- 委派包有 `咨询:` 时，只回 `GUIDE` 和 `EVIDENCE`，不写原步骤的工件。咨询这轮仍做不下去就 `BLOCKED(logic)`。
+
+`SUGGEST` 仍只说本定义哪一步含糊。
+
 ## 回报格式
 
 ```
-STATUS: PASS | FAIL | UNPROVEN | BLOCKED(brief) | BLOCKED(env) | BLOCKED(logic)
+STATUS: PASS | FAIL | UNPROVEN | BLOCKED(brief) | BLOCKED(env) | BLOCKED(logic) | BLOCKED(domain)
 EVIDENCE: <plan.yaml 或 report.md 路径>
 MODE: <logic|selftest|debug|test|patrol|lifecycle>
 
@@ -164,10 +180,12 @@ DOC_DRIFT: 无 | <文档页> 说 X,代码实际 Y(建议派 docs.backfill)
 ASSUMED: <这轮没验的假设,每条以 [承重] 或 [非承重] 开头;没有写「无」>
 CHECKS: evidence-present=PASS|FAIL  no-signoff-write=PASS|FAIL  report-parsed=PASS
 SUGGEST: <本定义里哪一步含糊,或空>
+GUIDE: <给别的角色的本领域约束 + 证据路径，没有写「无」>
+DOMAIN: <BLOCKED(domain) 时写另一个执行者名，否则写「无」>
 CONCLUSION: <一句话;有 UNPROVEN 就写清缺什么>
 ```
 
-`BLOCKED` 分类:`brief` = 委派包缺项(缺 mode / 缺 plan / plan 未 accepted)· `env` = 环境缺东西(缺 `commands.lifecycle` 键、缺巡检包、runner 跑不起来)· `logic` = 命中红线或基线冲突。
+`BLOCKED` 分类:`brief` = 委派包缺项(缺 mode / 缺 plan / plan 未 accepted)· `env` = 环境缺东西(缺 `commands.lifecycle` 键、缺巡检包、runner 跑不起来)· `logic` = 命中红线或基线冲突 · `domain` = 问题在另一个执行者的领域，`DOMAIN` 点名那一个。
 
 `SUGGEST` 只提建议,**不要自己改定义文件**。
 

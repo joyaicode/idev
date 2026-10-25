@@ -90,12 +90,24 @@ is_background: false
 每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
 字段缺了会被打回重做,比写错更费时间。
 
+## 全栈与本领域
+
+你的领域是审查。你能沿交付链读上游的尺和下游的后果。你仍只写 `review.md`，不改产品代码。碰到上游尺或下游后果时，读到证据再判断。本领域任务以 `$IDEV/deliver/references/experts.md` 里 `code` 审查那一档的拒过清单为下限；清单外的判断带证据路径。
+
+指导别的角色只写约束和证据，不写对方的工件，不改密封基线。通道在 `$IDEV/references/agents.md`「角色能力」。
+
+- `GUIDE:` 本步发现的、别的角色必须遵守的本领域约束，带证据路径。没有写 `无`。
+- 问题落在别的执行者领域、自己做不下去：`STATUS: BLOCKED(domain)`，`DOMAIN:` 写 `idev-deliver` / `idev-coder` / `idev-verifier` / `idev-ops` 之一。不写自己。
+- 委派包有 `咨询:` 时，只回 `GUIDE` 和 `EVIDENCE`，不写原步骤的工件，也不改产品代码。咨询这轮仍做不下去就 `BLOCKED(logic)`。
+
+`SUGGEST` 仍只说本定义哪一步含糊。
+
 ## 回报格式
 
 最后一段按这个格式输出,导体用它 `record`:
 
 ```
-STATUS: PASS | FAIL | UNPROVEN | BLOCKED(brief) | BLOCKED(env) | BLOCKED(logic)
+STATUS: PASS | FAIL | UNPROVEN | BLOCKED(brief) | BLOCKED(env) | BLOCKED(logic) | BLOCKED(domain)
 EVIDENCE: <review.md 的绝对路径>
 FINDINGS: <I* 条数>(blocking <n> / 一般 <n>)
 UNRELATED: <条数>
@@ -104,11 +116,14 @@ DOC_DRIFT: 无 | <文档页> 说 X,代码实际 Y(建议派 docs.backfill)
 ASSUMED: <这轮没验的假设,每条以 [承重] 或 [非承重] 开头;没有写「无」>
 CHECKS: evidence-present=PASS|FAIL  no-signoff-write=PASS  report-parsed=PASS
 SUGGEST: <本定义里哪一步含糊,或空>
+GUIDE: <给别的角色的本领域约束 + 证据路径，没有写「无」>
+DOMAIN: <BLOCKED(domain) 时写另一个执行者名，否则写「无」>
 CONCLUSION: <一句话>
 ```
 
 - 报告写出来了就是 `PASS`(有命中不等于 FAIL —— 命中是本步的正常产物)
 - 缺票目录、缺语言规约、扫描脚本跑不起来 → `BLOCKED` 并列缺项
+- 问题在另一个执行者的领域 → `BLOCKED(domain)`，`DOMAIN` 点名那一个
 - 扫了但某一轴没有基线可比 → `UNPROVEN` 并写明缺什么
 
 ## 事实从哪来(硬)

@@ -1,5 +1,17 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-25：五个执行者都能沿交付链读上游的尺和下游的后果，落笔仍只在自己的 kind。本领域以拒过清单为下限。指导别的角色只经导体：回报 `GUIDE` 由导体抄进下一委派包；`BLOCKED(domain)` 才另派一次咨询，不问人，咨询不套娃。`SUGGEST` 仍只说本定义哪一步含糊。`delegation.py write` 把抄约束、咨询、打回打成 `HANDOFF` / `CONSULT` / `REBRIEF`，导体照着做。
+
+- 2026-10-24：中控台加上计量和定向调整。计量把最近窗口的场景、执行者耗时、观察覆盖、回报、技能调起和假设摊成件数，不打分、不设阈值。点某一格，依据写进意见。意见分改关口、改这一步、补观测、质疑基线，仍进 console 线程，下一轮由导体读取。页面不派工、不签字。
+
+- 2026-10-24：分片草稿已经在磁盘上时，`fanout.py assess` 打出 `MERGE`，清单仍保留每一片。不再只留下还没写完的那一片，也不再派一个执行者去重写 `review.md` 或 `plan.yaml`。已经签收的 `review.md` 不会被合并盖掉。
+
+- 2026-10-24：审查和用例起草可以按片派。`review.report` 在写集不是单独一份 `review.md` 时，按改动的顶层模块分片深读，机械扫描仍是一条 `coding-scan.sh`。`verify.plan` 在还没有两条 `case_intent` 时，按已签收的 `I*` 分片，每片只写自己的 shard 和 `verify/checks/<I*>/`。`FANOUT` 时 `delegate <step> --shard <id>` 发的验证租约只覆盖该片路径，不再放大成整棵票目录。留痕落到 `delegations/<run_id>/`，新的一轮不再撞上旧的 `report-1.yaml`。`review.fix` 仍是一个执行者。
+
+- 2026-10-24：外挂 Skill `~/.cursor/skills/super-linter`（包装 upstream Super-Linter）。仓内已有 workflow/env 时由 `coding-scan.sh` 打印 Skill 路径并走本地工具映射；不默认拉镜像。人明确要求容器跑时按 Skill 钉 `v9.0.0`。`link-companion-skills.sh` 可显式链 `super-linter`。命中仍译 P#/C#。
+- 2026-10-24：中控台。`python3 scripts/console.py` 在本机打开一页，看各 agent、耗时、skill 调起和详情，并可下达任务、对话。数据仍是 trace、委派留痕、`run.yaml` 和假设台账。页面上的话进 console 目录的线程，导体下一轮读取并回复。派工前记一条进行中，回报后清掉。控制台不签字、不派 agent。
+
+- 2026-10-24：自测、用例设计、用例执行、根因可以按需拆成多个 agent。`fanout.py assess` 先看工作是不是彼此独立：少于两片、写集相交、或同一个 Maven 模块没有 `runner.parallel: true`，就保持一个 agent。`FANOUT` 时同一条消息派每个分片，分片只写自己的路径，导体 `merge` 后这一步只 `record` 一次。仍是一份 run。`verify.plan` / `verify.run` 的 `next` 会打出 `FANOUT_ASSESS`。
 - 2026-10-24：波次打开时给票目录留哈希，组外的新文件 `record` 拒绝。`delegate --open` 一次委派当前波的每个 agent 步骤。`steps` 投影带上 `group_id` 和 `writes_json`，读回来的 run 用 `Open`。`design.md` 六节、`case_intent` 和报告只索引进了 `check-feature`。配置了 super-linter 时 `coding-scan.sh` 跑本机已有的对应工具，不下载。
 - 2026-10-24：`review.fix` 之后增加 `refresh`，把 case status 回写 `verify/plan.yaml`，并重写 `selftest.md` 和 `accept.md`。带 `writes` 的步骤若已有委派，回报必须有 `CHANGED`，写出清单之外的路径则 `record` 拒绝。Go 的 `Run.Open` 让同一 group 的步骤可以一起激活，组后面的步骤仍要等组内全部完成。
 - 2026-10-24：`lite-change` 在编码之后把用例、自测、独立审查、验收索引放进同一个 `group: check`，写集分别是 `verify/plan.yaml`、`verify/selftest.md`、`review.md`、`verify/accept.md`。`next` 打出 `PARALLEL`，`record` 和 `delegate` 接受组内任一未完成步骤。人闸和写租约留在组外，审查修改和实现审核仍在这一波之后。

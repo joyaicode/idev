@@ -643,10 +643,15 @@ func (a app) leaseAcquire(ctx context.Context, args []string) error {
 		Actor: ports.Principal{Handle: "workflow.py", Kind: "service"},
 	}
 	if *ticketDir != "" {
-		// I-2: the ticket directory fences a verify lease; grant the whole
-		// tree so the verifier may append evidence inside it.
+		// I-2: a verify lease stays inside the ticket. With no --write-path
+		// the holder gets the whole tree. A fanout shard passes its own
+		// paths and must not be widened to the rest of the ticket.
 		acq.TicketDir = *ticketDir
-		acq.WritePaths = append(append([]string{}, paths...), *ticketDir+"/**")
+		if len(paths) == 0 {
+			acq.WritePaths = []string{*ticketDir + "/**"}
+		} else {
+			acq.WritePaths = append([]string{}, paths...)
+		}
 	}
 	held, err := e.leases.Acquire(ctx, acq)
 	if err != nil {

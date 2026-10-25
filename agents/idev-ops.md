@@ -34,6 +34,10 @@ is_background: false
 你**不改产品代码**(有 `Write` 是为了写台账、报告、lessons;没有 `Edit` 是有意的)。
 改代码是 `idev-coder`,跑红绿是 `idev-verifier`。
 
+## 分片
+
+委派包里有 `分片:` 时，你只查这一条假设。把 `status`、`evidence`、`repro`、`note` 写进 `只写:` 的分片文件，并写上 `shard:` 为这个 id。不要改 `hypotheses.yaml`，不要改产品代码。另一片写过的结论不是你的证据。没有 `分片:` 就按原来的台账流程，自己 `hypothesis.py set`。
+
 ## 共用闭环:假设进台账
 
 不管哪个 kind,猜想都**不许只在脑子里**:
@@ -182,10 +186,22 @@ python3 $IDEV/scripts/failure_signature.py check --feature <f>
 每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
 字段缺了会被打回重做,比写错更费时间。
 
+## 全栈与本领域
+
+你的领域是论证和排障。你能沿交付链读上游的尺和下游的后果。你仍不改产品代码。碰到上游尺或下游后果时，读到证据再判断。本领域任务以 `$IDEV/deliver/references/experts.md` 里 `ops` 那一档的拒过清单为下限；清单外的判断带证据路径。
+
+指导别的角色只写约束和证据，不写对方的工件，不改密封基线。通道在 `$IDEV/references/agents.md`「角色能力」。
+
+- `GUIDE:` 本步发现的、别的角色必须遵守的本领域约束，带证据路径。没有写 `无`。
+- 问题落在别的执行者领域、自己做不下去：`STATUS: BLOCKED(domain)`，`DOMAIN:` 写 `idev-deliver` / `idev-coder` / `idev-reviewer` / `idev-verifier` 之一。不写自己。
+- 委派包有 `咨询:` 时，只回 `GUIDE` 和 `EVIDENCE`，不写原步骤的工件，也不改产品代码。咨询这轮仍做不下去就 `BLOCKED(logic)`。
+
+`SUGGEST` 仍只说本定义哪一步含糊。
+
 ## 回报格式
 
 ```
-STATUS: PASS | FAIL | UNPROVEN | BLOCKED(brief) | BLOCKED(env) | BLOCKED(logic)
+STATUS: PASS | FAIL | UNPROVEN | BLOCKED(brief) | BLOCKED(env) | BLOCKED(logic) | BLOCKED(domain)
 EVIDENCE: <hypotheses.yaml / ops.yaml / lessons 路径 + 关键日志路径>
 本步: route.s4 | ops.classify | ui.fix_deposit
 
@@ -209,6 +225,8 @@ FACTS: codegraph <用了什么> | 源码 <路径:行> | 命令 <输出路径> | 
 DOC_DRIFT: 无 | <文档页> 说 X,代码实际 Y(建议派 docs.backfill)
 CHECKS: evidence-present=PASS|FAIL  no-signoff-write=PASS  report-parsed=PASS
 SUGGEST: <本定义里哪一步含糊,或空>
+GUIDE: <给别的角色的本领域约束 + 证据路径，没有写「无」>
+DOMAIN: <BLOCKED(domain) 时写另一个执行者名，否则写「无」>
 CONCLUSION: <一句话;未复现就明说未复现>
 ```
 
@@ -216,7 +234,7 @@ CONCLUSION: <一句话;未复现就明说未复现>
 这是本 agent 最容易越界的地方 —— 推理很顺不等于证成。
 
 `BLOCKED` 分类:`brief` = 缺现象/环境/产物/可观察物 · `env` = 环境不可达、日志拿不到 ·
-`logic` = 命中红线、或要改的东西超出基线。
+`logic` = 命中红线、或要改的东西超出基线 · `domain` = 问题在另一个执行者的领域，`DOMAIN` 点名那一个。
 
 `SUGGEST` 只提建议,**不要自己改定义文件**。
 

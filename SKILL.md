@@ -31,12 +31,13 @@ description: >-
 
 五个执行者：`idev-deliver`（需求/架构/文档）· `idev-coder`（编码/构建/提交）·
 `idev-reviewer`（审查）· `idev-verifier`（红绿/环境）· `idev-ops`（排障/论证）。
-完整职责分离、四条硬依据、以及两者之间仅有的三样接口：[references/agents.md](references/agents.md)。
+每个执行者都能沿交付链读上游的尺和下游的后果；本领域以拒过清单为下限；指导别的角色只经导体转达。
+完整职责分离、四条硬依据、角色能力，以及两者之间仅有的三样接口：[references/agents.md](references/agents.md)。
 **怎么用**（何时走 `/idev`、何时直接点 agent、委派包最常漏什么、出问题按什么顺序查）：
 [references/agents-playbook.md](references/agents-playbook.md)。
 
 S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none` 表示这一步你自己做
-（`human.gate` 永远是 none）。`next` 打出 `PARALLEL` 时，先跑 `workflow.py delegate --open`，再把这一波里的每个 `DELEGATE` 派出去，每个回报只 `record` 自己的 step。委派后按 [references/agents-evolve.md](references/agents-evolve.md)
+（`human.gate` 永远是 none）。`next` 打出 `PARALLEL` 时，先跑 `workflow.py delegate --open`，再把这一波里的每个 `DELEGATE` 派出去，每个回报只 `record` 自己的 step。`verify.plan` / `verify.run`，以及写集不是单独一份 `review.md` 的 `review.report`，还会打出 `FANOUT_ASSESS`：先跑那条 `fanout.py assess`。`SERIAL` 仍一步一个 agent。`FANOUT` 时同一条消息派每个 `SHARD`，并对每片 `workflow.py delegate <step> --shard <id>`（验证租约只覆盖该片路径），各片只写自己的 `WRITES`。assess 若打出 `MERGE` 且没有 `SHARD`，分片草稿已经齐了，跑那条 merge，不要再派执行者去写总账。导体 `fanout.py merge` 后再把这一步 `record` 一次。根因定位看假设台账，用 `--activity rootcause`，不挂在定界用的 `route.s4` 上。委派后按 [references/agents-evolve.md](references/agents-evolve.md)
 落一份留痕，它是这一层可调试的全部前提。
 
 ## 提效三板斧
@@ -84,6 +85,7 @@ python3 scripts/turn-budget.py [--max 8] <transcript.jsonl>
 | `req-review` | 界面需求细到交互层，派生 json-render spec + 零依赖预览 | `ui-spec.py --feature <f>` | [附录](#需求细到交互层界面类需求) |
 | 每一格 | 七视角专业拒过清单里可机检的那一半（`--list` 看各档查什么） | `stage-gate.py --feature <f> --all` | [experts.md](deliver/references/experts.md) |
 | `code` | 准确率护栏：SCOPE / READ / REVERT / RED_FIRST / ASSUMED | 回报字段，`delegation.py` 机检 | [agent-accuracy.md](references/agent-accuracy.md) |
+| `code` / `test` / `ops` | 自测、用例设计与执行、根因、审查深读：先评估再决定要不要多分片 | `fanout.py assess --feature <f> --activity selftest\|plan\|run\|rootcause\|report` | [agents.md](references/agents.md) |
 | `test` | UI 剧本生命周期 create→read→change→restore→cleanup | `ui-playbook.py --repo <仓>` | [附录](#ui-剧本覆盖整个生命周期测试阶段) |
 | `test` | 写剧本时查状态冲突，提 branch / reorder | `ui-evolve.py --repo <仓>` | [附录](#ui-剧本覆盖整个生命周期测试阶段) |
 | `ops` | 根因六条强约束 + 报告三问 | `hypothesis.py check --feature <f>` | [rootcause-guards.md](references/rootcause-guards.md) |
@@ -133,7 +135,7 @@ S1 新票→deliver `req-review`（必开 `docs/SKILL.md` 与 grilling）· S2 �
 5. 签字前 `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>`；已 accepted 的 plan 再 `run` 不重跑 verify-plan。
 6. 巡检包 `verify/scripts/promote.sh <feature>`：人没提 promote / 巡检包则不问、不跑。
 7. **改本 Skill 只改真源** `~/.cursor/skills/idev/`（`~/.claude`、`~/.agents`、`~/.joycode` 是 symlink，勿复制第二份）；提案 + 拷问后再改。
-8. **每轮路由后写 trace（schema v2）**：`bash ~/.cursor/skills/idev/scripts/trace.sh append`。产品仓会话落 `<repo>/.idev/traces/`，不写进 idev 内核；只有导体自身会话才落内核 `state/traces/`。必写 `route.scenario`、`invoke.trigger`/`matched`、`thinking.summary`、真实 `calls[]`/`opened[]`，不准伪造调用，不为观测另停。技能怎么调起、委派给谁、模型与一行思考、组件从哪跳到哪，有就写进 `invoke.how` / `invoke.skills[]`、`decisions` 的 `delegate` / `model`、`calls` 的 `from` / `to` / `model` / `thinking`；缺了不挡本轮。对话给一行运行路径（`scripts/path-view.sh`）。[references/trace.md](references/trace.md) · [references/invoke.md](references/invoke.md)
+8. **每轮路由后写 trace（schema v2）**：`bash ~/.cursor/skills/idev/scripts/trace.sh append`。产品仓会话落 `<repo>/.idev/traces/`，不写进 idev 内核；只有导体自身会话才落内核 `state/traces/`。必写 `route.scenario`、`invoke.trigger`/`matched`、`thinking.summary`、真实 `calls[]`/`opened[]`，不准伪造调用，不为观测另停。技能怎么调起、委派给谁、模型与一行思考、组件从哪跳到哪，有就写进 `invoke.how` / `invoke.skills[]`、`decisions` 的 `delegate` / `model`、`calls` 的 `from` / `to` / `model` / `thinking`；缺了不挡本轮。对话给一行运行路径（`scripts/path-view.sh`）。运行中打开中控台：`python3 ~/.cursor/skills/idev/scripts/console.py`。路由前若 `python3 ~/.cursor/skills/idev/scripts/console.py pending` 有未读，当作本轮人话，处理完 `reply --text` 写回；派 agent 前 `live --add --feature --step --agent`，`record` 后 `live --clear`。停问和签字规则不变，控制台不写签字，不为观测另停。[references/trace.md](references/trace.md) · [references/invoke.md](references/invoke.md)
 
 ## 链接
 

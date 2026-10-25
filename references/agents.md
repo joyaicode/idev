@@ -46,7 +46,7 @@
 | 方向 | 东西 | 契约 |
 |---|---|---|
 | skill → agent | **委派包** | 固定 9 行,见下节。agent 看不到对话历史,这是它唯一的输入 |
-| agent → skill | **回报** | `STATUS` + `EVIDENCE` 必填,另有 `CHECKS` / `SUGGEST`,见各 agent 定义 |
+| agent → skill | **回报** | `STATUS` + `EVIDENCE` 必填,另有 `CHECKS` / `SUGGEST` / `GUIDE`,见各 agent 定义 |
 | 双向留痕 | **delegation record** | `brief` 与 `report` 都存**原文**,所以能照原样重放 |
 
 接口之外没有别的通道:agent 不读导体的对话,导体不进 agent 的上下文。**这正是它可调试的
@@ -67,11 +67,13 @@
 | 是 | 不是 |
 |---|---|
 | 每个 step 多一行「这步谁去做」 | 新的状态机(run 状态机一个字节没改) |
-| 专职 prompt + 按职责收紧的工具集 | 无界 fan-out。人闸和写租约一次一步；同一 `group` 且 `writes` 不相交的 verify 步骤同时开 |
+| 专职 prompt + 按职责收紧的工具集 | 无界 fan-out。人闸和写租约一次一步；同一 `group` 且 `writes` 不相交的 verify 步骤同时开。自测、用例设计、用例执行、根因在 `fanout.py` 打出 `FANOUT` 时，同一条消息派多个分片 |
 | 独立上下文,互不污染 | 新的签字权(人签字的规则完全不变) |
 | 强化「只开一个执行模块」 | 新的验收权威或分数门禁 |
 
 `find_run()` 仍拒绝第二份活跃 run。人闸和 `lease: write` 一次只开一步。配方里同一个 `group`、并且 `writes` 两两不相交的 verify 步骤，从第一个未完成成员到组尾同时开放：`next` 打出 `PARALLEL`，`record` 和 `delegate` 接受组内任一未完成步骤。这是先订死写集再并行，对应 `conventions/canon.md` 对「先订接口再并行」的要求。`references/hitl-risk-tiers.md` 说的不内置并行 PR 阶段机仍然成立：组不是一条并行的合并流水线。
+
+自测、用例设计、用例执行、根因，以及写集还没钉死成一份 `review.md` 的审查，可以在**同一步**里按需拆开。导体先跑 `scripts/fanout.py assess`。少于两片、写集相交、或同一个 Maven 模块没有 `runner.parallel: true`，输出 `SERIAL`，仍然只派一个 agent。用例起草在 `arch.yaml` 里还没有两条 `case_intent` 时，改看 `review.md` 里已签收的 `I*`：签收项就是分片，不必等这一步自己把 intent 写出来。审查按改动的顶层模块分片深读；`coding-scan.sh` 是 `PREP`，导体先跑完。输出 `FANOUT` 时，同一条消息把每个 `SHARD` 派出去（Cursor 用 Task，Claude Code 用 Agent 工具），并且对每一片执行 `workflow.py delegate <step> --shard <id>`。那张验证租约只覆盖该片的 `WRITES`，不覆盖整棵票目录。不要对一个 `FANOUT` 步骤再打一张整票租约。每个委派包多三行：`分片`、`只写`、`范围`。分片只写 `WRITES` 里的路径。`verify/plan.yaml`、`arch.yaml`、`review.md` 和 `hypotheses.yaml` 只由导体的 `fanout.py merge` 改。assess 打出 `MERGE` 且没有 `SHARD` 时，草稿已经齐了，跑 merge，不要再派一个执行者去写这些总账。合并之后这一步只 `record` 一次。每一片的留痕用 `shard:`，文件落在 `delegations/<run_id>/<step>-<shard>-<attempt>.yaml`。另一片的结论不是证据。默认一轮 4 片，最多 8 片，其余是 `QUEUED`，合并后再 assess。这仍然是一份 run。`review.fix` 不拆。
 
 `conventions/evidence.md:4` 已经为此留了口子:「复杂问题可并行多个 Agent,但不能用『另一个 Agent 猜过了』代替证据。」—— 所以每个 agent 的回报都必须带证据路径,**agent 说过不算证据**。
 
@@ -93,6 +95,27 @@
 
 这张表由 `scripts/gen-kinds.py` 从 `registry/kinds.yaml` 生成。加一个 kind 只改那一个文件。
 <!-- agents-table:end -->
+
+## 角色能力
+
+五个执行者都站在同一条端到端交付链上。每个角色做三件事：沿链读得懂、本领域按资深标准处理、能指导别的角色。落笔仍按上表的 kind。导体不成为第六个领域专家。产线子 agent 不在这张表里。
+
+**全栈。** 能读上游的尺和下游的后果：基线、方案、实现、红绿、排障结论。改文件和跑本阶段命令只落在自己的 kind 上。这是能力，不另加每步通读门禁。碰到上游尺或下游后果时，读到证据再判断。
+
+**本领域资深。** 处理本领域任务时，以 [experts.md](../deliver/references/experts.md) 该阶段的拒过清单为下限。清单没写到的判断带证据路径。稳定标准写进该角色定义和专家清单的对应行，人确认后才改。一张票里长出的经验进 lessons 候选，确认并复现之后才升成权威。
+
+| 领域 | 执行者 |
+|---|---|
+| 需求 / 架构 / 文档 | `idev-deliver` |
+| 实现 / 构建 / 提交 | `idev-coder` |
+| 审查 | `idev-reviewer` |
+| 红绿 / 用例所需环境 | `idev-verifier` |
+| 论证 / 排障 | `idev-ops` |
+
+**指导别的角色。** 只写本领域约束和证据路径，不写对方的工件，不改密封基线。角色之间不直接对话。`SUGGEST` 仍只说本定义哪一步含糊。
+
+1. **顺手约束。** 做本步时发现别的角色必须遵守的本领域约束，写回报 `GUIDE:`。没有写 `无`。非空时 `delegation.py write` 打出 `HANDOFF`，导体把原文抄进下一角色委派包的 `领域约束:` 行。
+2. **卡住再咨询。** 本步做不下去，是因为问题落在另一个执行者的领域：`STATUS: BLOCKED(domain)`，`DOMAIN:` 写上表五个名字之一，不写自己。这不是 `SIGNAL`，不问人。`delegation.py write` 打出 `CONSULT <执行者>`。导体另派该领域角色一次。委派包加 `咨询: <原 step>`，并附上对方回报原文。被咨询的角色只回 `GUIDE` 和 `EVIDENCE`，不写原步骤的工件。咨询回来后，导体把 `GUIDE` 抄进原角色的重派委派包。没有 `BLOCKED(domain)` 时不另开咨询。咨询这一轮若也做不下去，回报 `BLOCKED(logic)`；若仍写 `BLOCKED(domain)`，`write` 打出 `CONSULT none` 并带信号 `consult does not nest`，导体问人，不再套娃。`DOMAIN` 缺了、写了自己、或不是上表五个名字，`write` 打出 `REBRIEF`，导体不猜，按 `BLOCKED(brief)` 打回。
 
 **为什么这样分而不是更细:** 一个阶段里的动作天然同进同退 —— 写完代码就要构建和提交,
 跑用例就要先起环境,论证和排障都走 `evidence.md` 的同一套闭环。切得更碎只会让导体
@@ -117,7 +140,7 @@
 1. `python3 scripts/workflow.py next --feature <f>` → 读 `NEXT` / `OPEN` / `DELEGATE` 三行
 2. `DELEGATE none` → 导体自己做这一步;`DELEGATE <agent>` → 组委派包(见下)
 3. **记下 `started_at`**,然后委派:Claude Code 用 Agent 工具,Cursor 用 `/<agent-name>`。
-   **一步只派一个 agent**
+   没有 `FANOUT` 时一步只派一个 agent。`fanout.py assess` 打出 `FANOUT` 时,同一条消息派这一波的每个分片,不要等前一个回来再派下一个。`PREP` 由导体先跑完,再派分片。
 4. 收回报,**记下 `finished_at`**。核对 `STATUS` 与 `EVIDENCE`。**回报里没有证据路径的 PASS
    不作数**,打回重做
 5. **落委派留痕**(可调试的前提,见 [agents-evolve.md](agents-evolve.md)):
@@ -126,6 +149,7 @@
    ```
    它会算五项诚实性检查并写回,`duration_s` 由两个时间戳算出。
    `no-signoff-write` 或 `metrics-shape` 失败 → 退出码 2,**停下来**,不要 record。
+   `delegation.py write` 打出的 `HANDOFF` / `CONSULT` / `REBRIEF` 照着做：`HANDOFF` 把 `GUIDE` 原样抄进下一委派包的 `领域约束:`；`CONSULT <agent>` 另派该执行者咨询一次，不问人，不套娃；`REBRIEF` 按 `BLOCKED(brief)` 打回。咨询收回的 `GUIDE` 抄进原角色的重派委派包。
    打印 `SIGNAL …`(回报是 `BLOCKED(logic)`、有 `[承重]` 假设,或 `ARTIFACT: UNKNOWN`)→ **停下来问人**:
    一个问题、选项、你的推荐;人答了用 `workflow.py decide <step> --signal "<原样>"
    --question … --answer … --quote "<人的原话>"` 记进 `decisions.yaml`。
@@ -171,6 +195,11 @@ IDEV_ROOT: <idev 根,默认 ~/.cursor/skills/idev>
 artifact: <线上跑的那份产物路径;kind=ops.classify 必填>
 禁止: 写 sealed/accepted/aligned/resolved/reopen_baseline/semantic_gate.*;改密封基线正文
 回报: 按你定义里的回报格式,STATUS + EVIDENCE 必填
+领域约束: <上一角色 GUIDE 的原文；没有就不要这一行>
+咨询: <原 step 卡在本领域时才写，并附上对方回报原文；没有就不要这一行>
+分片: <fanout 的 SHARD id；没有分片就不要这一行>
+只写: <WRITES 里的路径>
+范围: <SCOPE 原文>
 ```
 
 `IDEV_ROOT` 对 `idev-coder` / `idev-verifier` / `idev-ops` 是**必填**:这三个要跑提效脚本

@@ -38,7 +38,7 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 ## 什么时候必须停下来问人（STOP）
 
 - 要写 `sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed` 之前，且本轮人没有明确确认用语（`继续` 不算）。P1/P2 的 plan / resolved 机检无信号时写 `auto:`，不停。
-- 执行者回报出现 `SIGNAL`（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）：按决策包问，答案用 `workflow.py decide` 记。
+- 执行者回报出现 `SIGNAL`（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）：按决策包问，答案用 `workflow.py decide` 记。`BLOCKED(domain)` 不是停问：按 [agents.md](agents.md)「角色能力」另派 `DOMAIN` 点名的执行者咨询一次。
 - 全表与档位：[chat-confirm-signoff.md](chat-confirm-signoff.md)。
 - 要改 goal（必须人说「解除密封」或 `reopen`）。
 - 要跑 `promote.sh`、写生产、回退 origin（人没提就不问，也不做；见 H2）。

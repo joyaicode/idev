@@ -164,6 +164,8 @@ bash ~/.cursor/skills/idev/scripts/path-view.sh stats 50
 字段来源：`invoke.trigger` → `invoke.how` / `skills` → `route.scenario/module/stage` → `decisions` 里的 `delegate` / `model` → `thinking.steps` → `calls[]`（`from`→`to`、`model`、一行 `thinking`）→ `opened[]` → `next`。
 S8 配方：`workflows/path-view.yaml`。
 
+同一份账也可以摊成页。`python3 scripts/console.py` 只绑 `127.0.0.1`，看各 agent、耗时、skill 调起和详情，并把最近窗口的场景、耗时、观察覆盖、回报、技能和假设摊成件数。点某一格可以把那一件数当作依据，写下改关口、改这一步、补观测或质疑基线。页面上的任务和对话写在 console 目录的 `thread.yaml`（导体自身会话是 `state/console/`，产品会话是 `<repo>/.idev/console/`），不是 verify inbox。导体下一轮用 `console.py pending` 读取，用 `reply --text` 写回。派工前 `live --add`，`record` 后 `live --clear`。控制台不签字、不派 agent，也不打分。
+
 ## 票据结果指标（事实，不打分）
 
 ```bash

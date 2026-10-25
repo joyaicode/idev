@@ -48,7 +48,7 @@ DEFAULT_AGENT_DIR = REPO / "agents"
 # The report contract delegation.py parses. A definition that drifts away
 # from these lines breaks the honesty checks silently, which is the failure
 # mode this whole layer exists to avoid.
-REPORT_MARKERS = ("STATUS:", "EVIDENCE:", "CHECKS:", "SUGGEST:")
+REPORT_MARKERS = ("STATUS:", "EVIDENCE:", "CHECKS:", "SUGGEST:", "GUIDE:", "DOMAIN:")
 
 # Tools an agent must NOT have, because its role forbids the action. Cursor
 # ignores `tools`, so each agent restates the boundary in its hard rules —

@@ -72,14 +72,14 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 1. 要齐：mode、feature；goal/non_goal 按规则 2（复制基线或人写）；`debug` 要环境/产物/可观察物。
 2. 列 `impact_candidates`（hop 0 = diff 文件，hop 1 = 扩一跳）。
 3. 按 mode 的维度表起草 `cases[]`（能挂上已有 `*Test`/`*IT` 就挂；没有则写人确认后的 `shell`，或生成到 `generatedverify/` 且 `accepted: false` 直到人勾）。
-4. 写下 `<票目录>/verify/plan.yaml`（照 [plan.example.yaml](references/plan.example.yaml)）。`accepted: false`。
+4. 写下 `<票目录>/verify/plan.yaml`（照 [plan.example.yaml](references/plan.example.yaml)）。`accepted: false`。`arch.yaml` 里还有两条以上没有 case 的 `case_intent` 时，先跑 `fanout.py assess --activity plan`。`FANOUT` 时每个分片只写 `verify/shards/plan-<id>.yaml`，不写 `plan.yaml`，不改 `accepted`。导体 `fanout.py merge` 再把草稿收进计划。`SERIAL` 就一个人起草。
 5. 起草后或之后改了 `cases[]` / goal：跑 `check-feature.sh <feature> verify-plan`。FAIL 不准请人 `accepted`。
 6. **P0，或 P1/P2 有 `SIGNAL`：停，等人改 plan**（勾选 / 删 case / `accepted: true`），或回复确认用语全签（见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)）。P1/P2 无 `SIGNAL`：把检查输出存成 `verify/plan-check.log`，写 `accepted: true` + `auto: verify/plan-check.log`，不停。已 `accepted` 且本轮未改用例，不要再走本步。
 
 ### 2. run
 
 1. 读 plan：`accepted != true` 则拒跑。**不跑 `check-feature verify-plan`，不把该项 FAIL 当运行门禁，不请人再签。**
-2. 只跑 `cases[].accepted == true` 且 runner 可执行的项。日志：`{module}/target/verify/<case-id>/`。
+2. 只跑 `cases[].accepted == true` 且 runner 可执行的项。日志：`{module}/target/verify/<case-id>/`。开跑前按 mode 跑 `fanout.py assess --activity selftest` 或 `--activity run`。`SERIAL` 就一个 verifier 跑完。`FANOUT` 时每个分片只写自己的 `verify/shards/<activity>-<id>.yaml` 和 `verify/evidence/<case-id>/`，不写 `plan.yaml`。同一 Maven 模块默认不拆；`runner.parallel: true` 才拆，导体先跑 `PREP`。分片如果撞上 `target/` 锁，把这条记成 `FAIL` 并留下日志，由导体单独重跑这一片，不要自己再拉起别的 agent。导体 `merge` 只回写 `status` 和 `evidence`。
 3. 回写每条 `status` + `evidence`。追加 `revisions[]`。
 4. 写同目录 `report.md`：索引过了什么、`UNPROVEN` 什么、`human_signoff` 仍 `PENDING` 什么。不准把人签项写成 PASS。不重写用例正文。体例见 [docs/SKILL.md](../docs/SKILL.md)。
 5. 写 `## conductor-eval` 计数（见 [evolve.md](references/evolve.md)）。诚实性检查失败必须写明，不得用「全面通过」盖住。

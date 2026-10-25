@@ -11,10 +11,10 @@
     "delegation_id": { "$ref": "common.schema.json#/$defs/ulid" },
 
     "status": {
-      "description": "BLOCKED carries whose fault it is: brief means the conductor must re-brief, env means the product checkout, logic means a person has to decide.",
+      "description": "BLOCKED carries whose fault it is: brief means the conductor must re-brief, env means the product checkout, logic means a person has to decide, domain means another executor's domain and the conductor consults that role once.",
       "oneOf": [
         { "$ref": "common.schema.json#/$defs/stepStatus" },
-        { "enum": ["BLOCKED(brief)", "BLOCKED(env)", "BLOCKED(logic)"] }
+        { "enum": ["BLOCKED(brief)", "BLOCKED(env)", "BLOCKED(logic)", "BLOCKED(domain)"] }
       ]
     },
     "evidence": { "$ref": "common.schema.json#/$defs/evidence" },
@@ -121,6 +121,14 @@
     "fencing_token": { "type": "integer", "minimum": 1 },
 
     "suggest": { "type": "string" },
+    "guide": {
+      "description": "A domain constraint another role must keep, plus an evidence path. Empty means none. The conductor copies it; it does not stop the run.",
+      "type": "string"
+    },
+    "domain": {
+      "description": "Set with BLOCKED(domain): which of the five executors owns the stuck question.",
+      "type": "string"
+    },
     "parsed_from": {
       "description": "Set to legacy-regex when this was recovered from free text, so the weekly audit can count how often the old path is still used.",
       "enum": ["json", "legacy-regex"]

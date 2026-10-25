@@ -47,6 +47,8 @@
 4. **核回报** —— `PASS` 而无证据路径不作数，打回重做
 5. **落留痕 + record** —— 留痕是出问题时唯一能回看的东西
 
+派 agent 之前 `python3 scripts/console.py live --add --feature <f> --step <step> --agent <agent>`，`record` 之后 `live --clear`。人在中控台里说的话，包括点件数之后写下的调整意见，下一轮 `pending` 读到就当作原话，`reply --text` 写回。控制台不派工、不签字。agent 与导体之间仍只有委派包、回报、留痕。
+
 ---
 
 ## 三、委派包：少一项就白跑一趟
@@ -83,8 +85,9 @@ python3 scripts/delegation.py replay --feature <f> --step <step>
 3. **`FACTS` 有第一手来源** —— 只写「文档」不算。文档会过时，这是
    [boost.md](boost.md) 第零节的全部要点
 
-另外两行值得扫一眼：`DOC_DRIFT` 非「无」时派一次 `docs.backfill` 去修那页文档；
-`SUGGEST` 攒够两次再走提案，不要一次就改定义。
+另外三行值得扫一眼：`DOC_DRIFT` 非「无」时派一次 `docs.backfill` 去修那页文档；
+`SUGGEST` 攒够两次再走提案，不要一次就改定义；`GUIDE` 非「无」时原样抄进下一角色委派包的 `领域约束:`。
+`delegation.py write` 若打出 `HANDOFF`、`CONSULT` 或 `REBRIEF`，照那一行做。`CONSULT` 不问人。
 
 ---
 
@@ -106,7 +109,7 @@ python3 scripts/delegation.py replay --feature <f> --step <step>
 
 | 不要 | 为什么 |
 |---|---|
-| 没有 `group` 就同一轮派两个 agent | 写集没订死。`next` 打出 `PARALLEL` 时，先 `workflow.py delegate --open`，再把这一波的每个 `DELEGATE` 都派出去；人闸和写租约不在这一波里 |
+| 没有 `PARALLEL`、也没有 `fanout.py` 的 `FANOUT`，就同一轮派两个 agent | 写集没订死。`next` 打出 `PARALLEL` 时，先 `workflow.py delegate --open`，再把这一波的每个 `DELEGATE` 都派出去。`FANOUT_ASSESS` 先跑 assess：`SERIAL` 仍是一个 agent；`FANOUT` 的每一片写集已经订死，同一条消息派完，并且 `delegate <step> --shard <id>` 给每片一张只锁该片路径的验证租约。人闸和产品代码写租约不在这一波里 |
 | 让 agent 去问人 | 它问不到。要停问就 `BLOCKED` 回报，由导体停 |
 | 跳过 `next` 直接派你觉得对的 agent | 配方改过 step 你就派错了；而且 trace 里对不上账 |
 | 替 agent 写 `FACTS` / `EVIDENCE` | 那是它的交代。你代写就等于没有交代 |

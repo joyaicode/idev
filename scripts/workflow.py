@@ -431,6 +431,20 @@ def feature_id(run: dict, run_path: Path) -> str:
     return str(run.get("feature") or "-")
 
 
+def _held_maps(step: dict) -> list[dict]:
+    """The wide lease, plus one map per fanout shard."""
+    found = []
+    wide = step.get("lease") or {}
+    if isinstance(wide, dict):
+        found.append(wide)
+    shards = step.get("shard_leases") or {}
+    if isinstance(shards, dict):
+        for item in shards.values():
+            if isinstance(item, dict):
+                found.append(item)
+    return found
+
+
 def live_tokens(run: dict) -> list[tuple[str, str]]:
     """Lease id and bearer token still stored on any step.
 
@@ -440,18 +454,18 @@ def live_tokens(run: dict) -> list[tuple[str, str]]:
     """
     out = []
     for step in run.get("steps") or []:
-        held = step.get("lease") or {}
-        if held.get("id") and held.get("token"):
-            out.append((str(held["id"]), str(held["token"])))
+        for held in _held_maps(step):
+            if held.get("id") and held.get("token"):
+                out.append((str(held["id"]), str(held["token"])))
     return out
 
 
 def drop_released(run: dict, released: set[str]) -> None:
     for step in run.get("steps") or []:
-        held = step.get("lease") or {}
-        if held.get("id") in released and held.get("token"):
-            held.pop("token", None)
-            held["released_at"] = now()
+        for held in _held_maps(step):
+            if held.get("id") in released and held.get("token"):
+                held.pop("token", None)
+                held["released_at"] = now()
 
 
 def release_kept(path: Path, pairs: list[tuple[str, str]]) -> list[str]:
@@ -699,6 +713,41 @@ def next_line(run: dict) -> list[str]:
     return lines
 
 
+def _fanout_activity(step: dict) -> str:
+    """Which on-demand split applies to this step, or empty when none does.
+
+    route.s4 is also the scope guard, so root-cause assess is not printed
+    for every ops step. The conductor runs `--activity rootcause` when it
+    is actually locating a cause.
+    """
+    kind = step.get("kind")
+    if kind == "verify.plan":
+        return "plan"
+    if kind == "verify.run":
+        mode = (step.get("with") or {}).get("mode")
+        return "selftest" if mode == "selftest" else "run"
+    if kind == "review.report":
+        # A step whose write set is already one review.md cannot also grow
+        # review/shards/. code-review leaves writes empty, so it can split.
+        writes = [str(w) for w in (step.get("writes") or []) if str(w).strip()]
+        if any(not item.startswith("review/shards/") for item in writes):
+            return ""
+        return "report"
+    return ""
+
+
+def fanout_shard_ids(run_path: Path, step: dict) -> list[str] | None:
+    """Shard ids when this step's manifest says FANOUT. None when it does not."""
+    activity = _fanout_activity(step)
+    if not activity:
+        return None
+    path = ticket_of(run_path) / "verify" / f"fanout-{activity}.yaml"
+    data = safeyaml.mapping(path) if path.is_file() else None
+    if not data or data.get("decision") != "FANOUT":
+        return None
+    return [str(item.get("id")) for item in (data.get("shards") or []) if isinstance(item, dict) and item.get("id")]
+
+
 def _step_lines(run: dict, step: dict) -> list[str]:
     kind = step["kind"]
     lines = [
@@ -706,6 +755,13 @@ def _step_lines(run: dict, step: dict) -> list[str]:
         f"OPEN {KINDS.get(kind, '-')}",
         kind_agents.delegate_line(kind),
     ]
+    activity = _fanout_activity(step)
+    if activity:
+        feature = str(run.get("feature") or "-")
+        lines.append(
+            "FANOUT_ASSESS "
+            f"{activity} python3 scripts/fanout.py assess --feature {feature} --activity {activity}"
+        )
     if step.get("label"):
         lines.append(f"LABEL {step['label']}")
     if step.get("group"):
@@ -876,6 +932,11 @@ def cmd_record(args: argparse.Namespace) -> int:
             return
         held = step.get("lease") or {}
         purpose = lease_purpose(run, step) if status == "PASS" else None
+        shard_ids = fanout_shard_ids(path, step) or []
+        shard_maps = step.get("shard_leases") or {}
+        shard_lease_ids = sorted(
+            str((shard_maps.get(sid) or {}).get("id") or "") for sid in shard_ids
+        )
         writes = [str(w) for w in (step.get("writes") or []) if str(w).strip()]
         has_report, has_line, write_changed = (False, False, [])
         if writes:
@@ -886,6 +947,8 @@ def cmd_record(args: argparse.Namespace) -> int:
             kind=step["kind"],
             gate_id=str((step.get("gate") or {}).get("id") or ""),
             lease_id=str(held.get("id") or ""),
+            shard_ids=shard_ids,
+            shard_lease_ids=shard_lease_ids,
             purpose=purpose,
             changed=changed_paths(path, step["id"]) if purpose else [],
             writes=writes,
@@ -1004,7 +1067,23 @@ def cmd_record(args: argparse.Namespace) -> int:
                 )
         held = step.get("lease") or {}
         purpose = lease_purpose(run, step) if status == "PASS" else None
-        if purpose:
+        shard_ids = fanout_shard_ids(path, step) or []
+        shard_maps = step.get("shard_leases") or {}
+        if purpose and shard_ids:
+            missing = [
+                sid for sid in shard_ids
+                if not str((shard_maps.get(sid) or {}).get("id") or "")
+            ]
+            if missing:
+                raise Blocked(
+                    f"{step['id']} is FANOUT; missing a verify lease for "
+                    + ", ".join(missing)
+                    + f"; workflow.py delegate {step['id']} --shard <id> for each"
+                )
+            now_ids = sorted(str((shard_maps.get(sid) or {}).get("id") or "") for sid in shard_ids)
+            if now_ids != list(pre.get("shard_lease_ids") or []):
+                raise Blocked(f"{step['id']} changed while it was being recorded; record again")
+        elif purpose:
             if not held.get("id"):
                 if purpose == "verify":
                     raise Blocked(
@@ -1023,10 +1102,15 @@ def cmd_record(args: argparse.Namespace) -> int:
             if refusal:
                 raise Blocked(refusal)
             step["verification"] = {"by": args.verified_by, "evidence": args.verify_evidence, "at": now()}
-        if held.get("token"):
+        pairs = [
+            (str(item["id"]), str(item["token"]))
+            for item in _held_maps(step)
+            if item.get("id") and item.get("token")
+        ]
+        if pairs:
             # Released after the record is durable. Popping here would throw
             # the token away before release is known to have succeeded.
-            done["release"] = [(held["id"], held["token"])]
+            done["release"] = pairs
         if status == "PASS":
             open_signals = unanswered(path, step["id"])
             if open_signals:
@@ -1115,7 +1199,8 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
                 + ", ".join(failed)
                 + "; its token is in run.yaml, release it before delegating again"
             )
-    sidecar = path.with_name(f"lease-{args.step}.token")
+    shard = str(getattr(args, "shard", "") or "").strip()
+    sidecar = path.with_name(f"lease-{args.step}{('-' + shard) if shard else ''}.token")
     if sidecar.is_file():
         lines = sidecar.read_text(encoding="utf-8").splitlines()
         if len(lines) >= 2:
@@ -1144,18 +1229,56 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
         if agent == "-":
             raise Blocked(f"{step['kind']} stays with the conductor; nothing to delegate")
         held = step.get("lease") or {}
-        if held.get("token"):
+        if shard:
+            ids = fanout_shard_ids(path, step) or []
+            if shard not in ids:
+                raise Blocked(
+                    f"{args.step} has no FANOUT shard {shard}; "
+                    "run fanout.py assess and pass one of its SHARD ids"
+                )
+            if held.get("token"):
+                raise Blocked(
+                    f"{args.step} already holds ticket-wide lease {held['id']}; "
+                    "record the step before taking shard leases"
+                )
+            own = (step.get("shard_leases") or {}).get(shard) or {}
+            if own.get("token"):
+                raise Blocked(f"{args.step} shard {shard} already holds lease {own['id']}")
+            activity = _fanout_activity(step)
+            manifest = safeyaml.mapping(ticket_of(path) / "verify" / f"fanout-{activity}.yaml") or {}
+            item = next((row for row in manifest.get("shards") or [] if row.get("id") == shard), None)
+            if not isinstance(item, dict):
+                raise Blocked(f"{args.step} shard {shard} disappeared from the manifest; assess again")
+            marked["writes"] = [str(w) for w in (item.get("writes") or [])]
+        elif fanout_shard_ids(path, step):
+            if getattr(args, "open", False):
+                print(
+                    f"SKIP {args.step} is FANOUT; "
+                    f"workflow.py delegate {args.step} --shard <id> for each shard"
+                )
+                marked["skip"] = True
+                return run
+            raise Blocked(
+                f"{args.step} is FANOUT; "
+                f"workflow.py delegate {args.step} --shard <id> for each shard"
+            )
+        elif held.get("token"):
             raise Blocked(f"{args.step} already holds lease {held['id']}; record the step to release it")
         step["delegated"] = {"agent": agent, "at": now()}
         stamp_open_group(run, ticket_of(path))
         marked.update(
             agent=agent, lease=lease_purpose(run, step), tier=risk_tier_of(run, path),
-            feature_id=feature_id(run, path),
+            feature_id=feature_id(run, path), shard=shard,
         )
         return run
 
     safeyaml.save_locked(path, mark)
-    print(f"DELEGATE {args.step} -> {marked['agent']}")
+    if marked.get("skip"):
+        return 0
+    who = f"DELEGATE {args.step} -> {marked['agent']}"
+    if shard:
+        who += f" shard {shard}"
+    print(who)
     if not marked["lease"]:
         print("LEASE none (this kind does not write product code)")
         return 0
@@ -1163,7 +1286,14 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
     ticket = None
     if purpose == "verify":
         ticket = ticket_dir_repo_relative(path, session_repo(args.repo))
-        paths = [f"{ticket}/**"]
+        if shard:
+            import fanout  # noqa: PLC0415 - shard globs only
+            try:
+                paths = fanout.lease_globs(ticket, marked.get("writes") or [])
+            except ValueError as exc:
+                raise Blocked(f"shard {shard} writes are not lease paths: {exc}") from exc
+        else:
+            paths = [f"{ticket}/**"]
     else:
         paths = arch_includes(path)
         if not paths:
@@ -1177,13 +1307,19 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
     ]
     if purpose == "verify":
         acquire += ["--purpose", "verify", "--ticket-dir", ticket]
+        if shard:
+            acquire += [a for p in paths for a in ("--write-path", p)]
     else:
         acquire += [a for p in paths for a in ("--write-path", p)]
     out = idev(*acquire)
 
     def hold(run: dict) -> dict:
         step = next(s for s in run["steps"] if s["id"] == args.step)
-        step["lease"] = {"id": out["lease_id"], "token": out["token"], "fencing": out["fencing"], "paths": paths}
+        entry = {"id": out["lease_id"], "token": out["token"], "fencing": out["fencing"], "paths": paths}
+        if shard:
+            step.setdefault("shard_leases", {})[shard] = entry
+        else:
+            step["lease"] = entry
         return run
 
     try:
@@ -1501,6 +1637,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("delegate")
     p.add_argument("step", nargs="?")
     p.add_argument("--open", action="store_true", help="delegate every open agent step in the current wave")
+    p.add_argument("--shard", default="", help="fanout shard id; the verify lease covers only that shard's writes")
     locate(p)
     p.set_defaults(func=cmd_delegate)
     p = sub.add_parser("record")

@@ -93,9 +93,11 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> <workflow_id> [--pr
 ```bash
 bash ~/.cursor/skills/idev/scripts/trace.sh append
 bash ~/.cursor/skills/idev/scripts/path-view.sh
+python3 ~/.cursor/skills/idev/scripts/console.py
+python3 ~/.cursor/skills/idev/scripts/console.py pending
 ```
 
-必填：`route.scenario`（缺省当 S1）、`invoke.trigger` / `matched`、真实 `calls[]` / `opened[]`。不准伪造调用。写完后在对话里给出一行运行路径。不为观测另停（H5）。
+必填：`route.scenario`（缺省当 S1）、`invoke.trigger` / `matched`、真实 `calls[]` / `opened[]`。不准伪造调用。写完后在对话里给出一行运行路径。中控台看各 agent、耗时、skill 调起和详情；计量是件数不是分数，点一件数可以把依据带进调整意见。`pending` 有未读就当作本轮人话。不为观测另停（H5）。
 
 ## 6. 命令
 

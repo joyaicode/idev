@@ -62,6 +62,16 @@ idev 是人机共驾的 AI 端到端交付导体，面向所有用 AI 做交付�
 
 命令与打开预算见 [operator-cheatsheet.md](operator-cheatsheet.md)。
 
+## 中控台
+
+idev 跑着的时候可以打开本机页面，看当前任务、架构、各 agent 的过程、耗时、skill 怎么被调起，以及一轮的详情。计量把最近窗口里的场景、耗时、观察覆盖、回报、技能和假设摊成件数。点某一格，依据会填进定向调整。
+
+```bash
+python3 ~/.cursor/skills/idev/scripts/console.py
+```
+
+调整分四类：改关口、改这一步、补观测、质疑基线。这些话写进 console 目录，下一轮由导体读取并回复。件数不是分数，没有阈值。签字和派工仍只走导体。页面只绑本机。
+
 ## 后续会话怎么接上
 
 下一次在同一产线工程里使用 idev：
@@ -84,3 +94,4 @@ idev 是人机共驾的 AI 端到端交付导体，面向所有用 AI 做交付�
 | 产线文档目录与未决问题 | [docs/SKILL.md](../docs/SKILL.md)；目录认 setup-agents-docs，问句认 grilling |
 | 术语 | [glossary.md](glossary.md) |
 | 命令 | [operator-cheatsheet.md](operator-cheatsheet.md) |
+| 运行中看 agent、耗时、件数，并写下调整 | `python3 scripts/console.py`，说明见上文「中控台」 |

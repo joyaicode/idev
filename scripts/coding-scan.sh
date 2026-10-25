@@ -166,6 +166,12 @@ run_configured_scanner() {
     return
   fi
   echo "  scanner: super-linter config ${wf#"$REPO"/}"
+  SL="$(skill super-linter)"
+  if [ -n "$SL" ]; then
+    echo "  skill: $SL/SKILL.md"
+  else
+    echo "  skill: MISSING ~/.cursor/skills/super-linter (install companion)"
+  fi
   flags="$(WF="$wf" python3 - <<'PY'
 import os, re
 text = open(os.environ["WF"], encoding="utf-8", errors="replace").read()

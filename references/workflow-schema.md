@@ -41,6 +41,8 @@
 
 组里多于一步未完成时，`next` 先打 `PARALLEL <group>`，再按配方顺序列出每个未完成成员。`record` 和 `delegate` 接受其中任一步。组后面的步骤要等组内全部记完。这一步已经有委派时，回报要有 `CHANGED`；列出 `writes` 之外的路径，`record` 拒绝。没改文件写 `CHANGED: 无`。波次打开时给票目录留一份哈希。之后票里多出来的、且不在这一波任一 `writes` 里的文件，`record` 也拒绝。`workflow.py delegate --open` 一次委派当前波里每一个 agent 步骤。
 
+`verify.plan`、`verify.run`，以及写集不是单独一份 `review.md` 的 `review.report`，`next` 多打一行 `FANOUT_ASSESS`。这是提醒先跑 `scripts/fanout.py assess`，不是新步骤。`SERIAL` 时这一步仍只派一个 agent。`FANOUT` 时同一条消息派每个分片，并对每片 `delegate <step> --shard <id>`；那张验证租约只覆盖该片路径。分片只写 assess 给出的路径。assess 打出 `MERGE` 且没有 `SHARD` 时草稿已经齐了，只跑 `fanout.py merge`，不要再派执行者。合并之后这一步只 `record` 一次。根因用 `--activity rootcause`，不从 `route.s4` 自动打出来。写集已经是 `review.md` 的审查步骤不打这一行。
+
 ## kind 登记表（加行，不新开 Skill）
 
 <!-- kinds:begin -->

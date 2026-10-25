@@ -32,11 +32,15 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | promote | 把快照 plan 提升为巡检包，人触发，另一刀，不随 aligned 自动发生 | 同上 |
 | trial / ga | verify 的成熟度阶段；H3 只在 trial 且入口直达 verify 时才问 feedback tag | [invoke.md](invoke.md) |
 | trace / v2 | 每轮把 scenario/trigger/route/stop/next 写入的运行记录。技能调起、委派、模型与组件跳是可选细节；`scripts/trace.sh append` | [trace.md](trace.md) |
+| `GUIDE` | 执行者回报里给别的角色的本领域约束和证据路径。没有写「无」。导体原样抄进下一委派包的 `领域约束:`。这个字段不承担 `SUGGEST` 的含义 | [agents.md](agents.md) |
+| `BLOCKED(domain)` | 本步做不下去，因为问题在另一个执行者的领域。`DOMAIN` 点名那一个。导体咨询一次，不问人 | [agents.md](agents.md) |
+| 中控台 | 本机页面。看当前任务、架构、agent、耗时、skill 调起，并把窗口内的件数摊开。点一件数可带上依据，写下改关口、改这一步、补观测或质疑基线。下一轮由导体读取。不签字、不派工、不打分 | `scripts/console.py` |
 | S1–S8 | 场景码，见 `SKILL.md` 决策树 | `SKILL.md` |
 | H1–H6 | 非门禁不停规则（旧称 C1–C6） | [invoke.md](invoke.md) |
 | P/C/R | 编码模式/气味/重构条件（P1–P17、C1–C15、R1–R6） | [coding-tables.md](../conventions/coding-tables.md) |
 | T/A/F | 架构范式/出门问题/AI 失败模式 | [canon.md](../conventions/canon.md) |
 | S8 配方 | 一条可被 AI 识别的流水线。产品构建的在 `<repo>/.idev/workflows/<id>.yaml`；idev `workflows/` 只留编排能力 | [workflow-schema.md](workflow-schema.md) |
+| 分片 | 同一步里按需拆开的独立工作。`fanout.py assess` 打出 `FANOUT` 才同时派多个 agent；每片只写自己的路径，导体 `merge` 后这一步只记一次。`SERIAL` 仍是一个 agent。第二份 run、人闸并行、产品代码写租约并行不做。验证租约可以按片发，每片只锁自己的路径 | `scripts/fanout.py` |
 | 交出口 / handoff | 产品专属、集群、脚手架类问题，交给对应产品 Skill | `SKILL.md` S7 |
 | UNPROVEN | 在 canon 自问里答不出时的标记，表示“未被证据证明”，须写进 RECORD | [canon.md](../conventions/canon.md) §5 |
 | `IDEV_ROOT` | 内核 checkout（`~/.cursor/skills/idev` 指向的这份）。Python 脚本用它整个挪走内核，agent 委派包里必填 | `scripts/lib/roots.py` |

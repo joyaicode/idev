@@ -43,6 +43,51 @@ class Signals(unittest.TestCase):
         raw = "STATUS: PASS\nASSUMED: 无\nARTIFACT: AHEAD(源码新 3 个提交)\n"
         self.assertEqual(delegation.signals_of(record(raw)), [])
 
+    def test_domain_block_does_not_stop_for_a_person(self):
+        raw = "STATUS: BLOCKED(domain)\nDOMAIN: idev-ops\nGUIDE: 无\nASSUMED: 无\n"
+        self.assertEqual(delegation.signals_of(record(raw)), [])
+
+    def test_domain_directive(self):
+        blocked = {
+            "agent": "idev-coder",
+            "step": "code-pass",
+            "domain": "idev-ops",
+            "guide": "断言必须挂 baseline item (plan.yaml:12)",
+            "brief": {},
+            "report": {"raw": "STATUS: BLOCKED(domain)\n"},
+        }
+        lines = delegation.domain_directive(blocked)
+        self.assertTrue(any(line.startswith("HANDOFF guide: 断言必须挂") for line in lines))
+        self.assertTrue(any(line.startswith("CONSULT idev-ops") for line in lines))
+        self.assertEqual(delegation.signals_of(blocked), [])
+
+        nested = dict(blocked, brief={"咨询": "code-pass"}, guide="")
+        self.assertTrue(any(line.startswith("CONSULT none") for line in delegation.domain_directive(nested)))
+        self.assertEqual(delegation.signals_of(nested), ["consult does not nest"])
+
+        missing = dict(blocked, domain="", guide="")
+        self.assertTrue(any(line.startswith("REBRIEF domain missing") for line in delegation.domain_directive(missing)))
+        self.assertTrue(any(
+            line.startswith("REBRIEF domain self")
+            for line in delegation.domain_directive(dict(blocked, domain="idev-coder", guide=""))
+        ))
+        self.assertEqual(
+            delegation.domain_directive({
+                "agent": "idev-coder",
+                "guide": "",
+                "report": {"raw": "STATUS: PASS\n"},
+            }),
+            [],
+        )
+
+    def test_guide_lifts_and_none_domain_stays_empty(self):
+        raw = "GUIDE: 断言必须挂 baseline item (plan.yaml:12)\nDOMAIN: 无\n"
+        self.assertEqual(
+            delegation.optional_line(raw, delegation.GUIDE_LINE),
+            "断言必须挂 baseline item (plan.yaml:12)",
+        )
+        self.assertEqual(delegation.optional_line(raw, delegation.DOMAIN_LINE), "")
+
     def test_untagged_assumption_fails_the_check(self):
         checks = delegation.check_accuracy(record("STATUS: PASS\nASSUMED: 测试库是空的\n"))
         self.assertTrue(checks["assumption-tagged"].startswith("FAIL"))

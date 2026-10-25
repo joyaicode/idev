@@ -67,10 +67,10 @@
 | `slice_id` | 端到端交付时必填，对齐 `req.yaml` 的 slices；无 `deliver.yaml` 可空 |
 | `baseline_item_id` | 有密封 `baseline.yaml` 时必填；验收尺是基线 item，不是后来发挥的句子 |
 | `dimension` | 维度表 |
-| `runner` | `{ kind, module?, selector?, command? }` |
+| `runner` | `{ kind, module?, selector?, command?, env? }`。`parallel: true` 只对 `maven-*`：这些 selector 不共享该模块的 `target/`，`fanout.py` 才把同一模块拆开。缺省不拆 |
 | `accepted` | 人改 YAML 或确认用语全签；plan 走 `auto` 时随之全部 `true`。`false` 则 `run` 跳过并 `UNPROVEN` |
 | `status` | 只许 `PASS` \| `FAIL` \| `UNPROVEN` |
-| `evidence` | 日志相对路径（`target/verify/...`）或未跑原因 |
+| `evidence` | 日志相对路径，或未跑原因。分片执行的 `PASS`/`FAIL` 写在票内 `verify/evidence/<case-id>/`。单 agent 执行仍可用 `{module}/target/verify/<case-id>/` |
 
 AI 不得把未执行写成 `PASS`。生成测试的 `selector` 落在 `generatedverify` 包。
 

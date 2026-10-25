@@ -3,8 +3,9 @@
 # grilling true source: ~/.cursor/skills/grilling (real directory).
 # setup-agents-docs: ~/.cursor/skills/setup-agents-docs must resolve to SKILL.md
 # (a symlink to that skill's own tree is accepted).
+# super-linter: ~/.cursor/skills/super-linter (optional; coding-scan points here when repo has config).
 # Soft-link ~/.agents and ~/.joycode at the same names.
-# Usage: link-companion-skills.sh [grilling|setup-agents-docs ...]
+# Usage: link-companion-skills.sh [grilling|setup-agents-docs|super-linter ...]
 # No args links both.
 set -euo pipefail
 
@@ -63,6 +64,7 @@ for name in "${targets[@]}"; do
   case "$name" in
     grilling) link_named grilling real || fail=1 ;;
     setup-agents-docs) link_named setup-agents-docs any || fail=1 ;;
+    super-linter) link_named super-linter any || fail=1 ;;
     *)
       echo "FAIL unknown companion: $name" >&2
       fail=1

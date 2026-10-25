@@ -39,7 +39,7 @@ review.report → human.gate → verify.plan → human.gate → review.fix → v
 
 ## 1. `review.report`
 
-1. 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo根>`。
+1. 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo根>`。`next` 若打出 `FANOUT_ASSESS report`，先跑那条 assess。`FANOUT` 时导体先跑扫描（`PREP`），再按模块各派一个审查者，每片只写 `review/shards/<模块>.md`，用 `### FINDING` / `### UNPROVEN`，不写 `review.md`、不编 `I*`。每片 `workflow.py delegate report --shard <id>`。全部回来后 `fanout.py merge`，再把这一步 `record` 一次。改动的源码模块少于两个时仍是一个审查者。写集已经钉成一份 `review.md` 的步骤不走这条分片。
 2. 跑 `python3 ~/.cursor/skills/idev/scripts/session-context.py --repo <repo根> --feature <feature> --scenario S8 --stage code`。点了产品名就加 `--product`。打开每一行 `OPEN`，并把路径写入 trace 的 `extensions`（没有页就写 `extensions: []`）与 `opened`。没有 `OPEN` 就不打开产线 pack。
 3. 打开 [coding.md](../conventions/coding.md) §0 与文首**规范总则**、[coding-tables.md](../conventions/coding-tables.md) §1/§2/§3 与 §2.4（含变更级粗筛）；按栈打开 `java.md` 与 `code-review-skill` 指南。
 4. 写票目录里的 `review.md`（`doc_home.py --key task`）：
@@ -57,7 +57,7 @@ review.report → human.gate → verify.plan → human.gate → review.fix → v
 
 ## 3. `verify.plan`（`mode=selftest`）
 
-只为已签收项起草 `doc_home.py --key plan` 给出的 `plan.yaml`。  
+只为已签收项起草 `doc_home.py --key plan` 给出的 `plan.yaml`。`FANOUT_ASSESS plan` 在还没有两条 `case_intent` 时按已签收的 `I*` 分片：每片只写 `verify/shards/plan-<I*>.yaml` 和 `verify/checks/<I*>/`，`delegate plan --shard <I*>`。导体 `merge` 后才有一份 `plan.yaml` 和 `arch.yaml` 的 include。少于两条已签收项时仍是一个验证者。  
 无 `deliver.yaml`：`goal` / `non_goal` 人写或从已签收 `I*` 复述；case 不挂 `slice_id` / `baseline_item_id`。  
 起草或改了 `cases[]` 后跑 `check-feature.sh <feature> verify-plan`。没有 `baseline.yaml`、且当前 `workflow/run.yaml` 指向的配方 `needs_ticket: false` 时，这道门禁不要求 `sealed`，`stage-gate --stage test` 也不要求 case 挂 `baseline_item_id`。已有 `baseline.yaml` 时仍要求密封。FAIL 不准请签。
 

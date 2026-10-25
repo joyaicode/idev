@@ -207,6 +207,7 @@ super-linter 是「仓内已有就跑」的例子，不是要新装的依赖。`
 | 多栈指南 | `~/.cursor/skills/code-review-skill/reference/` |
 | 安全加固 | `~/.cursor/skills/security-and-hardening/SKILL.md` |
 | 简化 | `~/.cursor/skills/code-simplification/SKILL.md` |
+| Super-Linter 执行 | `~/.cursor/skills/super-linter/SKILL.md`（仓内已有配置才跑；不新装镜像） |
 | Java 深挖 | `~/.cursor/skills/124-java-secure-coding` 等 plinth |
 
 ---

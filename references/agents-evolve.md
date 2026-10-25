@@ -20,8 +20,10 @@
 **所以每次委派落一份留痕**,落点与 `run.yaml` 同目录:
 
 ```
-<票目录>/workflow/delegations/<step-id>-<attempt>.yaml
+<票目录>/workflow/delegations/<run_id>/<step-id>-<attempt>.yaml
 ```
+
+没有 `run_id` 时仍写在 `delegations/` 根下。同一 feature 的上一轮留在自己的 `run_id` 目录里，新的一轮从 attempt 1 写起。
 
 `<票目录>` 只认 `doc_home.py --key task`。该目录在 `docs/task/` 或 `.idev/task/` 下,
 `execution-clean` 不碰票目录,所以留痕不会被清理脚本删掉。

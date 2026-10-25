@@ -133,7 +133,7 @@ Claude Code 的做法:**独立的工具调用放在一条消息里并发**。五
 
 codegraph 的 MCP 说明里原话就是:`codegraph_context` 是 PRIMARY,一次调用顶四次链式调用。
 
-一次读多个文件没有合并成本。同一 `group` 且 `writes` 不相交的委派是先订死写集再并行，可以同一轮派出去。没有这份写集的多开 agent 仍然不做。
+一次读多个文件没有合并成本。同一 `group` 且 `writes` 不相交的委派是先订死写集再并行，可以同一轮派出去。`fanout.py assess` 对自测、用例设计、用例执行、根因再做一次按需拆分：少于两片、写集相交、或同一 Maven 模块没有 `runner.parallel: true`，就保持一个 agent。没有这份写集的多开 run 仍然不做。
 
 批量仍不是门禁。`scripts/turn-budget.py` 判的是无正文回合、未先开口的长命令、`claude -p` / `agent -p`，以及把 selfcheck、golden、gate-channel、lease-channel、healthcheck、agent-smoke 的等待设到 30 秒以上。默认连续超过 8 个无正文回合即失败。
 
@@ -160,7 +160,7 @@ codegraph 的 MCP 说明里原话就是:`codegraph_context` 是 PRIMARY,一次�
 
 | 它们有的 | 为什么不借 |
 |---|---|
-| 并行 agent / worktree 隔离 | `canon.md:181` 的反模式;串行委派是本层的既定选择,见 [agents-todo.md](agents-todo.md) P3 |
+| 并行 agent / worktree 隔离 | 无界多开 run 和 worktree 仍不做。自测、用例设计与执行、根因只在 `fanout.py` 判定写集不相交后，同一轮派多个分片 |
 | 自动 apply diff(Cursor 的 apply 模型) | 我们不插在编辑器里;agent 直接用 `Write`/`Edit` |
 | 浏览器看 UI | 产品专有,属 `ui.lifecycle_run` 的 e2e;真要看页面是产线的事 |
 | LLM 评分 / rubric | `evolve.md:4` 明文禁止,见 [external-tools.md](external-tools.md) |

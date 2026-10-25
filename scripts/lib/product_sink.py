@@ -2,9 +2,11 @@
 """Resolve where a session's intermediate files go.
 
 When a product uses idev, the kernel's intermediates for that product
-(traces, proposals, reviews, inbox, ticketless workflow runs) go to <repo>/.idev/. Product
-characteristics stay in the same directory. The kernel state/ directory
-is only for a conductor session that has no current product.
+(traces, proposals, reviews, inbox, console, ticketless workflow runs)
+go to <repo>/.idev/. Product characteristics stay in the same directory.
+The kernel state/ directory is only for a conductor session that has no
+current product. The console directory holds the control-page thread and
+the live agent list. It is not the verify inbox.
 """
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ KINDS = {
     "proposals": ("state/proposals", ".idev/proposals"),
     "reviews": ("state/reviews", ".idev/reviews"),
     "inbox": ("verify/state/inbox", ".idev/inbox"),
+    "console": ("state/console", ".idev/console"),
     "workflow-runs": ("state/workflow-runs", ".idev/workflow-runs"),
 }
 

@@ -8,7 +8,12 @@ to retry and hope.
 
 So every delegation lands a record next to run.yaml:
 
-    <ticket home>/workflow/delegations/<step>-<attempt>.yaml
+    <ticket home>/workflow/delegations/<run_id>/<step>-<attempt>.yaml
+    A fanout shard uses <step>-<shard>-<attempt>.yaml so one step can keep
+    every shard's brief. The step is still recorded once, after merge.
+    Records from another run of the same feature stay in their own directory,
+    so a new review does not collide with report-1.yaml from last time.
+    A run without run_id still writes the flat delegations/ directory.
 
     delegation.py write    --feature F [--file -]   # yaml on stdin
     delegation.py check    --feature F [--step S]   # the five honesty checks
@@ -57,6 +62,10 @@ SIGNOFF_FIELDS = ("sealed", "accepted", "aligned", "resolved", "reopen_baseline"
 # top-level `suggest` key that nothing ever set. This is the channel agents
 # use to say "your definition is unclear here" — the input to improving it.
 SUGGEST_LINE = re.compile(r"(?mi)^\s*SUGGEST:\s*(.+?)\s*$")
+# GUIDE is a domain constraint for another role. DOMAIN names who to consult
+# when this step is BLOCKED(domain). Empty and 「无」 stay empty: neither is a gate.
+GUIDE_LINE = re.compile(r"(?mi)^\s*GUIDE:\s*(.+?)\s*$")
+DOMAIN_LINE = re.compile(r"(?mi)^\s*DOMAIN:\s*(.+?)\s*$")
 
 STATUS_LINE = re.compile(r"(?mi)^\s*STATUS:\s*(\S+)")
 EVIDENCE_LINE = re.compile(r"(?mi)^\s*EVIDENCE:\s*(.+?)\s*$")
@@ -99,6 +108,16 @@ def home(feature: str, repo: Path | None) -> Path:
 
 def dir_for(feature: str, repo: Path | None) -> Path:
     return home(feature, repo) / "workflow" / "delegations"
+
+
+def record_dir(feature: str, repo: Path | None) -> Path:
+    """Where this run's records go. A run_id gets its own directory."""
+    base = dir_for(feature, repo)
+    run = load_run(feature, repo)
+    rid = str((run or {}).get("run_id") or "").strip()
+    if rid and _SHARD.fullmatch(rid) and ".." not in rid:
+        return base / rid
+    return base
 
 
 def now() -> str:
@@ -174,6 +193,19 @@ SOURCED = re.compile(
     r"git\s|配置|\.ya?ml\b|artifact-match")
 # A declaration of "nothing", which is a valid answer for every one of these.
 NONE_VALUE = re.compile(r"(?i)^\s*(?:无|none|-|n/?a|不适用|0)\s*(?:[(（].*)?$")
+
+
+def optional_line(raw: str, pattern: re.Pattern[str]) -> str:
+    """A report line's value, or empty when the line is missing or explicitly none."""
+    hit = pattern.search(raw)
+    if not hit:
+        return ""
+    value = hit.group(1).strip()
+    if not value or NONE_VALUE.match(value):
+        return ""
+    return value
+
+
 # file.ext:symbol — the anchor granularity. "changed service.py" carries no
 # information; "service.py:resolve_token" lets the conductor check.
 ANCHOR = re.compile(r"[\w./-]+\.\w+:[\w.$<>-]+")
@@ -492,7 +524,7 @@ def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     checks["report-parsed"] = (
         "PASS" if STATUS_LINE.search(raw)
         else "FAIL:回报里找不到 STATUS 行 —— 第一行写 "
-             "`STATUS: PASS|FAIL|UNPROVEN|BLOCKED(brief|env|logic)`。"
+             "`STATUS: PASS|FAIL|UNPROVEN|BLOCKED(brief|env|logic|domain)`。"
              "没有它,导体无法机读这次委派的结果")
 
     # Per-agent §0 declarations (idev-coder only; empty for the rest).
@@ -504,12 +536,68 @@ def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     return checks
 
 
+def _consult_brief(record: dict) -> bool:
+    brief = record.get("brief") or {}
+    if not isinstance(brief, dict):
+        return False
+    if str(brief.get("咨询") or "").strip():
+        return True
+    return bool(re.search(r"(?m)^咨询\s*:", str(brief.get("raw") or "")))
+
+
+def domain_directive(record: dict) -> list[str]:
+    """Conductor follow-ups for GUIDE and BLOCKED(domain).
+
+    These are not person signals. A valid domain block names another executor
+    and prints CONSULT. A consult that is itself blocked does not nest. A
+    missing or self domain is sent back as a rebrief. A non-empty GUIDE is
+    copied verbatim into the next brief.
+    """
+    lines: list[str] = []
+    guide = str(record.get("guide") or "").strip()
+    if guide:
+        lines.append(
+            "HANDOFF guide: "
+            + guide
+            + "  (copy verbatim into the next brief as 领域约束:; do not rewrite)"
+        )
+    if report_status(record) != "BLOCKED(DOMAIN)":
+        return lines
+    if _consult_brief(record):
+        lines.append(
+            "CONSULT none  (this brief is already 咨询; do not delegate again; "
+            "ask the person, same as BLOCKED(logic))"
+        )
+        return lines
+    domain = str(record.get("domain") or "").strip()
+    agent = str(record.get("agent") or "").strip()
+    if domain in kind_agents.AGENTS and domain != agent:
+        lines.append(
+            f"CONSULT {domain}  (delegate once with 咨询: {record.get('step')}; "
+            "they return GUIDE and EVIDENCE only; do not ask the person; do not nest)"
+        )
+        return lines
+    if not domain:
+        why = "missing"
+    elif domain == agent:
+        why = "self"
+    else:
+        why = "not an executor"
+    lines.append(
+        f"REBRIEF domain {why}  (send this step back as BLOCKED(brief); "
+        "do not consult; do not ask the person)"
+    )
+    return lines
+
+
 def signals_of(record: dict) -> list[str]:
     """What in this report needs a person's decision before the step passes."""
     raw = str((record.get("report") or {}).get("raw", ""))
     out = []
     if report_status(record) == "BLOCKED(LOGIC)":
         out.append("BLOCKED(logic)")
+    if report_status(record) == "BLOCKED(DOMAIN)" and _consult_brief(record):
+        out.append("consult does not nest")
     out += [v for v in ASSUMED_LINE.findall(raw) if v.startswith(LOAD_BEARING)]
     # AHEAD has a fixed next move (read the artifact's commit); UNKNOWN means
     # nobody can say which code is running until a person supplies it.
@@ -545,7 +633,10 @@ def load_all(feature: str, repo: Path | None) -> list[tuple[Path, dict]]:
     target = dir_for(feature, repo)
     if not target.is_dir():
         return out
-    for path in sorted(target.glob("*.yaml")):
+    files = list(target.glob("*.yaml"))
+    for sub in sorted(path for path in target.iterdir() if path.is_dir()):
+        files.extend(sub.glob("*.yaml"))
+    for path in sorted(files):
         if path.name.endswith(".example.yaml"):
             continue
         data = safeyaml.mapping(path)
@@ -565,6 +656,18 @@ def load_run(feature: str, repo: Path | None) -> dict | None:
         print(f"WARN unreadable run.yaml, ignored: {path}", file=sys.stderr)
         return None
     return data
+
+
+_SHARD = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$")
+
+
+def record_name(step: str, attempt: int, shard: str = "") -> str:
+    """One file per step attempt. A shard adds its id so siblings do not collide."""
+    if shard:
+        if _SHARD.fullmatch(shard) is None or ".." in shard:
+            raise ValueError(shard)
+        return f"{step}-{shard}-{attempt}.yaml"
+    return f"{step}-{attempt}.yaml"
 
 
 def cmd_write(args: argparse.Namespace) -> int:
@@ -613,9 +716,17 @@ def cmd_write(args: argparse.Namespace) -> int:
     if lifted and not NONE_VALUE.match(lifted):
         record["suggest"] = lifted
     record.setdefault("suggest", "")
+    record["guide"] = optional_line(raw_report, GUIDE_LINE)
+    record["domain"] = optional_line(raw_report, DOMAIN_LINE)
 
     attempt = safeyaml.as_int(record.get("attempt"), 1)
     record["attempt"] = attempt
+    shard = str(record.get("shard") or "").strip()
+    try:
+        name = record_name(str(record["step"]), attempt, shard)
+    except ValueError:
+        print(f"BLOCKED shard {shard!r} is not a slug", file=sys.stderr)
+        return 2
     if attempt > 1 and not str((record.get("brief") or {}).get("prior_failure", "")).strip():
         print("BLOCKED attempt > 1 needs brief.prior_failure (the agent must read it)", file=sys.stderr)
         return 2
@@ -630,9 +741,9 @@ def cmd_write(args: argparse.Namespace) -> int:
     record["checks"] = run_checks(record, args.repo)
     record["signals"] = signals_of(record)
 
-    target = dir_for(args.feature, args.repo)
+    target = record_dir(args.feature, args.repo)
     target.mkdir(parents=True, exist_ok=True)
-    path = target / f"{record['step']}-{attempt}.yaml"
+    path = target / name
     # The filename is the only key a record has, and `attempt` defaults to 1.
     # So writing a second record for the same step silently replaced the
     # first: the failure that caused the retry disappeared, taking the reason
@@ -659,6 +770,8 @@ def cmd_write(args: argparse.Namespace) -> int:
     print(f"OK   {path}" + (f"  ({human_secs(seconds)})" if seconds is not None else ""))
     for signal in record["signals"]:
         print(f"SIGNAL {signal}  (ask the person; record the answer with workflow.py decide)")
+    for line in domain_directive(record):
+        print(line)
     if seconds is None:
         print("HINT no timing: pass started_at + finished_at to make duration observable")
 
@@ -686,7 +799,10 @@ def cmd_check(args: argparse.Namespace) -> int:
         shape = check_metrics(record)
         if shape:
             flags["metrics-shape"] = "FAIL:" + "; ".join(shape)
+        shard = str(record.get("shard") or "").strip()
         label = f"{record.get('step')}-{record.get('attempt', 1)} {record.get('agent')}"
+        if shard:
+            label = f"{record.get('step')}/{shard}-{record.get('attempt', 1)} {record.get('agent')}"
         if not flags:
             print(f"OK   {label}")
             continue
@@ -743,6 +859,13 @@ def cmd_replay(args: argparse.Namespace) -> int:
     else:
         print(f"prior_failure: {prior} — "
               f"{(record.get('report') or {}).get('evidence', '') or '见上次留痕'}")
+    for line in domain_directive(record):
+        if line.startswith("CONSULT ") and not line.startswith("CONSULT none"):
+            target = line.split()[1]
+            print(f"# 重派本步之前先咨询 {target} 一次。将其 GUIDE 原样写进下一行。")
+            print("领域约束:")
+        elif line.startswith("REBRIEF"):
+            print(f"# {line}")
     print("禁止: 写 sealed/accepted/aligned/resolved/reopen_baseline/semantic_gate.*;改密封基线正文")
     print("回报: 按你定义里的回报格式,STATUS + EVIDENCE 必填")
     print()
@@ -758,7 +881,7 @@ def cmd_timeline(args: argparse.Namespace) -> int:
     for record in records:
         by_step.setdefault(str(record.get("step")), []).append(record)
     for items in by_step.values():
-        items.sort(key=lambda r: safeyaml.as_int(r.get("attempt"), 1))
+        items.sort(key=lambda r: (safeyaml.as_int(r.get("attempt"), 1), str(r.get("shard") or "")))
 
     # run.yaml gives the authoritative order; records alone are the fallback,
     # so a missing or stepless run.yaml still shows everything that happened.
@@ -807,7 +930,10 @@ def cmd_timeline(args: argparse.Namespace) -> int:
 
         for record in attempts:
             attempt = safeyaml.as_int(record.get("attempt"), 1)
+            shard = str(record.get("shard") or "").strip()
             label = step if attempt == 1 else f"{step} #{attempt}"
+            if shard:
+                label = f"{label}/{shard}"
             if orphan:
                 label = f"{label} *"
             status = report_status(record) or "?"
@@ -824,6 +950,10 @@ def cmd_timeline(args: argparse.Namespace) -> int:
                 print(f"{indent}↳ check_fail: {', '.join(flags)}")
             if str(record.get("suggest", "")).strip():
                 print(f"{indent}↳ suggest: {record['suggest']}")
+            if str(record.get("guide", "")).strip():
+                print(f"{indent}↳ guide: {record['guide']}")
+            if str(record.get("domain", "")).strip():
+                print(f"{indent}↳ domain: {record['domain']}")
 
     for step in steps:
         render(step)
