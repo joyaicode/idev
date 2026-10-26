@@ -94,6 +94,17 @@ func TestRecipeContractRefusesWhatThePythonCheckerRefuses(t *testing.T) {
 	}
 }
 
+func TestReactJointPassesAndAGateCannotDeclareOne(t *testing.T) {
+	ok := "schema_version: 1\nid: ok\nsummary: x\nsteps:\n  - {id: a, kind: route.s4, react: {candidates: [stage-gate], max_hops: 4, on_exhaust: stop}}\n"
+	if err := schemas.ValidateBytes("recipe.schema.json", toJSON(t, []byte(ok))); err != nil {
+		t.Errorf("a react joint was refused:\n%v", err)
+	}
+	bad := "schema_version: 1\nid: bad\nsummary: x\nsteps:\n  - {id: g, kind: human.gate, label: \"将代写: deliver.aligned\", react: {candidates: [stage-gate]}}\n"
+	if err := schemas.ValidateBytes("recipe.schema.json", toJSON(t, []byte(bad))); err == nil {
+		t.Error("a gate was allowed to declare react")
+	}
+}
+
 func TestGateWithWillWriteOrTheOldLabelBothPass(t *testing.T) {
 	// The old rule let a gate declare its fields in the label text. Recipes
 	// written either way still exist, so both have to validate.

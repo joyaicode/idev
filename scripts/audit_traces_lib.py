@@ -31,6 +31,23 @@ def _kernel_traces(trace_dir: Path) -> bool:
         return False
 
 
+def _open_joint_fails(trace_dir: Path) -> int:
+    inbox = trace_dir.parent / "inbox"
+    if not inbox.is_dir():
+        return 0
+    closed = {"consumed", "archived", "resolved"}
+    count = 0
+    for path in sorted(inbox.glob("*.yaml")):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if "react-tool-fail" not in text and "react-exhausted" not in text:
+            continue
+        match = re.search(r"(?m)^status:\s*(\S+)", text)
+        status = (match.group(1) if match else "pending").strip().strip("\"'").lower()
+        if status not in closed:
+            count += 1
+    return count
+
+
 def main() -> int:
     if len(sys.argv) < 3:
         print("usage: audit_traces_lib.py <trace_dir> <n>", file=sys.stderr)
@@ -74,6 +91,7 @@ def main() -> int:
         "obs_delegate": 0,
         "obs_model": 0,
         "obs_hop": 0,
+        "obs_tool_hop": 0,
     }
     weak_files: list[str] = []
     unbound_files: list[str] = []
@@ -174,6 +192,8 @@ def main() -> int:
             stats["obs_model"] += 1
         if re.search(r"(?m)^[ \t]+from:\s*\S", text) and re.search(r"(?m)^[ \t]+to:\s*\S", text):
             stats["obs_hop"] += 1
+        if re.search(r"(?m)^[ \t]+from:\s*react:", text) and re.search(r"(?m)^[ \t]+to:\s*tool:", text):
+            stats["obs_tool_hop"] += 1
 
         # Soft: S1 must open grilling; missing is MUST_ZERO, not HARD.
         if scenario == "S1" and not re.search(
@@ -277,6 +297,11 @@ def main() -> int:
         f"| 写了组件跳 | {stats['obs_hop']} | {pct(stats['obs_hop'])}% | "
         "`calls.from` 与 `calls.to` |"
     )
+    print(
+        f"| 写了工具跳 | {stats['obs_tool_hop']} | {pct(stats['obs_tool_hop'])}% | "
+        "`from: react:` 且 `to: tool:` |"
+    )
+    print(f"未消费关节失败={_open_joint_fails(trace_dir)}（inbox，不计清零、不进 HARD_COUNT）")
     print()
     print("## 硬报警样本（最多 15）")
     if not flagged:

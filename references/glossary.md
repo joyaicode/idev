@@ -20,6 +20,8 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | 票 / feature | 一次交付的单位。`<票目录>` 只认 `doc_home.py --key task`。已有规范文档时这一目录是 `docs/task/<feature>/`，否则是 `.idev/task/<feature>/`。状态在 `deliver.yaml` | `scripts/lib/doc_home.py` |
 | stage | 票所处阶段：`req-review → req → arch → code → test → done ⇄ ops` | [deliver/SKILL.md](../deliver/SKILL.md) |
 | 前置 | 架构方案 `design.md` 里、六节之前的一节。写影响范围内的既有问题、需求行数和既有问题行数。有既有问题就问人。小于本需求改动的 1/5 或边界分得开，只用来建议本次不修。判据只在 deliver 的架构阶段 | [deliver/SKILL.md](../deliver/SKILL.md) |
+| ReAct 关节 | 配方步骤上可选的 `react`。动作只能来自该步候选，且候选必须已在 `references/tools.yaml` 登记；用尽或工具失败走 `human` 或 `stop`。没声明的步骤不进循环 | [workflow-schema.md](workflow-schema.md) |
+| 流水线引用 | 步骤写 `use: <配方 id>` 引用另一条配方。`tool` / `tool_group` 把已登记工具当成步骤。`adjust` 只改这一次的成员、顺序和 `label`/`with`/`react` | [workflow-schema.md](workflow-schema.md) |
 | 密封基线 / seal / `sealed` | 人确认后的目标与验收基准（“尺”）；之后不得靠确认改 goal | `SKILL.md` 硬规则 3 |
 | 停问点 | 阶段机里必须由人回答/确认才能继续的位置；**没有当前停问点就不请签** | [invoke.md](invoke.md) |
 | 签字类状态 | `sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed`，只能人确认后代写 | `SKILL.md` 硬规则 3 |

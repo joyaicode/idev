@@ -752,7 +752,7 @@ mkbad() {   # mkbad <slug> <filename>; file body on stdin; sets BAD
   cat > "${BAD}/$2"
 }
 
-BODY='正文需要含这些标记:STATUS: EVIDENCE: CHECKS: SUGGEST: FACTS: DOC_DRIFT: ASSUMED: BLOCKED('
+BODY='正文需要含这些标记:STATUS: EVIDENCE: CHECKS: SUGGEST: GUIDE: DOMAIN: FACTS: DOC_DRIFT: ASSUMED: BLOCKED('
 
 mkbad noname idev-reviewer.md <<MD
 ---

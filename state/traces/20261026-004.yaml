@@ -1,0 +1,76 @@
+schema_version: 2
+at: "2026-10-26T13:30:00+08:00"
+feature: "-"
+intent: "继续把工具登记接上 ReAct 候选。"
+invoke:
+  trigger: "继续"
+  matched: "关节已落地，下一刀是工具必须先登记"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "把候选收成工具目录"
+route:
+  module: deliver
+  scenario: S1
+  convention_class: docs
+  stage: req-review
+  risk_tier: P1
+  why: "继续不是签字。候选此前可以是任意 slug，现在必须出现在 tools.yaml。"
+rejected:
+  - module: verify
+    why: "没有新的红绿用例"
+  - module: ops
+    why: "不是线上现象"
+thinking:
+  summary: "上一轮循环只检查步骤自己的候选名单。继续把名单收成 references/tools.yaml。workflow-check 和 open 都拒绝未登记的名字。act 打出 TOOL 命令，命令本身不执行。"
+  signals:
+    - "人说继续"
+    - "五个既有脚本登记为工具"
+  excluded:
+    - "另起工具运行时"
+    - "open 时直接执行 command"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "登记工具并让检查与 open 共用这份目录"
+      so: "6 个关节测试和 workflow-check PASS"
+opened:
+  - "references/tools.yaml"
+  - "references/workflow-schema.md"
+  - "scripts/react_loop.py"
+  - "scripts/workflow-check.py"
+calls:
+  - kind: script
+    name: test_react_loop.py
+    from: conductor
+    to: script:test_react_loop.py
+    why: "未登记的名字在写文件之前被拒"
+    result: "6 OK"
+  - kind: script
+    name: workflow-check.py
+    from: conductor
+    to: script:workflow-check.py
+    why: "现有配方仍过，因为没有步骤引用未登记工具"
+    result: "PASS"
+decisions:
+  - kind: route
+    chose: deliver
+    why: "继续的是已确认落点上的工具登记"
+  - kind: delegate
+    chose: none
+    why: "导体自己接上目录"
+  - kind: model
+    chose: inherit
+    why: "导体自己改"
+  - kind: stop
+    chose: none
+    why: "继续不是停问"
+stop: ""
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+next: "新工具先写入 references/tools.yaml，再出现在步骤的 candidates 里。"

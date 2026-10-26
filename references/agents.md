@@ -89,9 +89,9 @@
 | `idev-reviewer` | 评审 | 审查(**独立于开发**) | `review.report` |
 | `idev-verifier` | verify 模块 + 用例所需环境 | 测试 | `verify.plan` · `verify.run` · `localdev.start` · `localdev.stop` · `localdev.approval_off` · `ui.lifecycle_run` · `ui.surface_scan` · `ui.coverage_lock` |
 | `idev-ops` | ops 模块 + S4 论证 | 排障 / 诊断 | `route.s4` · `ops.classify` · `ui.fix_deposit` |
-| **导体** | — | 持签字权 | `preflight.inputs` · `human.gate` · `shell.confirmed` · `ui.clean_pass_loop` · `ui.product_batch` |
+| **导体** | — | 持签字权 | `preflight.inputs` · `human.gate` · `shell.confirmed` · `tool.step` · `ui.clean_pass_loop` · `ui.product_batch` |
 
-29 个 kind:24 个委派,5 个导体保留。每个 kind 的**落点页**见 `registry/kinds.yaml` 的 `page`,本页不复制那一列。
+30 个 kind:24 个委派,6 个导体保留。每个 kind 的**落点页**见 `registry/kinds.yaml` 的 `page`,本页不复制那一列。
 
 这张表由 `scripts/gen-kinds.py` 从 `registry/kinds.yaml` 生成。加一个 kind 只改那一个文件。
 <!-- agents-table:end -->
@@ -125,13 +125,14 @@
 而 `idev-coder` 的硬规则是命中必须当轮改掉。同一个 agent 不能既是实现者又是审查者 ——
 这是制度性的分离,不是粒度选择。
 
-## 导体保留的五步(为什么不委派)
+## 导体保留的步骤(为什么不委派)
 
 | kind | 原因 |
 |---|---|
 | `human.gate` | **制度性,不是选择。** `workflow_spec.is_human()` 按词表拒绝 agent / 模型 / 角色名 —— subagent 用自己的名字签字在代码层就被拒。签字权不可下放。 |
 | `preflight.inputs` | 纯可读性探针,导体自跑一条命令即可,委派反而多一跳 |
 | `shell.confirmed` | 就一条人已确认的命令,组委派包比直接跑更贵 |
+| `tool.step` | 已登记工具的一步。`next` 只打出命令，不执行，也不另起运行时 |
 | `ui.clean_pass_loop` | 外层整轮循环控制(`policy.max_clean_attempts`),跨多个 step,不属于单步执行 |
 | `ui.product_batch` | 历史 kind,新配方不用 |
 

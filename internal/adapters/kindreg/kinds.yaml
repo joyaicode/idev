@@ -101,6 +101,13 @@ kinds:
     executor: conductor
     lease: none
     why_kept: "就一条人已确认的命令,组委派包比直接跑更贵"
+  tool.step:
+    page: references/workflow-schema.md
+    lands: "—"
+    note: "已登记工具的一步。next 打出 TOOL 命令，不执行"
+    executor: conductor
+    lease: none
+    why_kept: "工具按步骤协议登记后，任何配方都能编排；命令只打印，不另起运行时"
   ui.clean_pass_loop:
     page: "-"
     lands: "—"

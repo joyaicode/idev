@@ -2,7 +2,7 @@
 """Resolve where a session's intermediate files go.
 
 When a product uses idev, the kernel's intermediates for that product
-(traces, proposals, reviews, inbox, console, ticketless workflow runs)
+(traces, proposals, reviews, inbox, console, ticketless workflow runs, react loops)
 go to <repo>/.idev/. Product characteristics stay in the same directory.
 The kernel state/ directory is only for a conductor session that has no
 current product. The console directory holds the control-page thread and
@@ -23,6 +23,7 @@ KINDS = {
     "inbox": ("verify/state/inbox", ".idev/inbox"),
     "console": ("state/console", ".idev/console"),
     "workflow-runs": ("state/workflow-runs", ".idev/workflow-runs"),
+    "react": ("state/react", ".idev/react"),
 }
 
 

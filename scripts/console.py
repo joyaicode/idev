@@ -172,6 +172,8 @@ PAGE = """<!DOCTYPE html>
   .muted { color: var(--muted); font-size: 12px; }
   .group { padding: 8px 12px 0; color: var(--violet); font-size: 11px; letter-spacing: 0.14em; }
   .item.skill { box-shadow: inset 2px 0 0 var(--violet); }
+  .item.hop { box-shadow: inset 2px 0 0 var(--cyan); }
+  .hop-arrow { padding: 0 12px; color: var(--cyan); font-size: 12px; line-height: 1; }
   .thread { margin: 0 12px 12px; padding-bottom: 12px; }
   .msg { margin: 8px 12px; padding: 8px 10px 8px 42px; border: 1px solid rgba(94, 240, 255, 0.18); background: rgba(94, 240, 255, 0.05); white-space: pre-wrap; position: relative; }
   .msg::before { content: "AI"; position: absolute; left: 8px; top: 8px; font-size: 10px; letter-spacing: 0.08em; color: var(--violet); border: 1px solid rgba(165, 148, 255, 0.5); padding: 1px 4px; }
@@ -616,6 +618,28 @@ function renderTimeline() {
       el("div", {class: "muted"}, [tx([hop, c.thinking, spent(c.duration_s)].filter(Boolean).join("  "))]),
     ]));
   });
+  const tools = (tr.calls || []).filter(c => c.from && c.to && (c.kind === "tool" || String(c.from).indexOf("react:") === 0));
+  appendHops(root, "工具跳", tools);
+}
+
+function hopCalls(tr) {
+  return ((tr && tr.calls) || []).filter(c => c.from && c.to);
+}
+
+function appendHops(root, title, calls) {
+  root.append(el("h3", {}, [tx(title)]));
+  if (!calls.length) {
+    root.append(el("p", {class: "muted"}, [tx("没有记下")]));
+    return;
+  }
+  calls.forEach((c, i) => {
+    if (i) root.append(el("div", {class: "hop-arrow"}, [tx("↓")]));
+    const bits = [c.why || c.thinking, c.result, c.duration_s ? spent(c.duration_s) : ""].filter(Boolean);
+    root.append(el("div", {class: "item hop"}, [
+      el("div", {class: "name"}, [tx(c.from + " → " + c.to)]),
+      el("div", {class: "muted"}, [tx(bits.join("  "))]),
+    ]));
+  });
 }
 
 function field(root, label, value) {
@@ -637,6 +661,7 @@ function renderDetail() {
     field(dl, "为什么", tr.why);
     field(dl, "调起", tr.how);
     field(dl, "技能", tr.skills_line);
+    field(dl, "循环", tr.react);
     field(dl, "跳转", tr.hops);
     field(dl, "打开", (tr.opened || []).join(" · "));
     field(dl, "思考", tr.thinking);
@@ -662,6 +687,7 @@ function renderDetail() {
     field(dl, "建议", deleg.suggest);
   }
   root.append(dl);
+  if (tr) appendHops(root, "追踪", hopCalls(tr));
   if (deleg) {
     const brief = el("details", {}, [el("summary", {}, [tx("委派包")]), el("pre", {}, [tx(JSON.stringify(deleg.brief || {}, null, 2))])]);
     const report = el("details", {}, [el("summary", {}, [tx("回报")]), el("pre", {}, [tx(JSON.stringify(deleg.report || {}, null, 2))])]);
@@ -1456,6 +1482,7 @@ def _trace_view(path: Path) -> dict | None:
         "why": seg.get("why") or "",
         "skills_line": seg.get("skills") or "",
         "hops": seg.get("hops") or "",
+        "react": seg.get("react") or "",
         "opened_line": seg.get("opened") or "",
         "stop": str(data.get("stop") or seg.get("stop") or ""),
         "next": str(data.get("next") or seg.get("next") or ""),

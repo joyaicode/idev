@@ -245,7 +245,7 @@ class Board(unittest.TestCase):
         self.assertEqual(console.read_thread(self.folder)[0]["status"], "read")
 
     def test_page_names_the_panels(self) -> None:
-        for word in ("各轮", "时间线", "详情", "任务与对话", "技能调起", "系统架构", "当前任务", "阶段", "正在工作", "写入范围", "刚写下", "sealed", "计量", "定向调整", "改关口", "补观测", "质疑基线", "不是分数"):
+        for word in ("各轮", "时间线", "详情", "任务与对话", "技能调起", "工具跳", "追踪", "item hop", "系统架构", "当前任务", "阶段", "正在工作", "写入范围", "刚写下", "sealed", "计量", "定向调整", "改关口", "补观测", "质疑基线", "不是分数"):
             self.assertIn(word, console.PAGE)
 
 
@@ -272,6 +272,8 @@ class Http(unittest.TestCase):
         self.assertEqual(self.httpd.server_address[0], "127.0.0.1")
         page = urllib.request.urlopen(self.base + "/", timeout=2).read().decode("utf-8")
         self.assertIn("时间线", page)
+        self.assertIn("item hop", page)
+        self.assertIn("工具跳", page)
         body = json.dumps({"text": "从页面下达任务"}).encode("utf-8")
         req = urllib.request.Request(
             self.base + "/api/thread",

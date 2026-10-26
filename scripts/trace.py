@@ -342,14 +342,47 @@ def hops_line(calls: list[dict[str, str]]) -> str:
         model = item.get("model") or (item.get("name") if item.get("kind") == "model" else "")
         if model:
             bit += " model=%s" % model[:40]
-        if item.get("thinking"):
-            bit += " 「%s」" % item["thinking"][:50]
+        note = item.get("thinking") or item.get("why") or ""
+        if note:
+            bit += " 「%s」" % str(note)[:50]
         if item.get("duration_s"):
             bit += " %ss" % item["duration_s"]
         if item.get("result"):
             bit += " → %s" % item["result"][:40]
         parts.append("%d.%s" % (n, bit))
     return " → ".join(parts)
+
+
+def hop_rows(calls: list[dict[str, str]]) -> list[str]:
+    """One block per hop so Thought and Observation stay readable."""
+    rows = []
+    n = 0
+    for item in calls:
+        if not (item.get("from") and item.get("to")):
+            continue
+        n += 1
+        rows.extend(_one_hop(n, item))
+    return rows
+
+
+def _one_hop(n: int, item: dict[str, str]) -> list[str]:
+    rows = ["%d. %s → %s" % (n, item["from"], item["to"])]
+    note = " ".join(str(item.get("thinking") or item.get("why") or "").split())
+    result = " ".join(str(item.get("result") or "").split())
+    if note:
+        rows.append("   why: %s" % note[:160])
+    if result:
+        rows.append("   result: %s" % result[:160])
+    if item.get("duration_s"):
+        rows.append("   %ss" % item["duration_s"])
+    return rows
+
+
+def _top(text: str, key: str) -> str:
+    found = re.search(r"^" + re.escape(key) + r":\s*(.*)$", text, re.M)
+    if not found:
+        return ""
+    return found.group(1).strip().strip('"').strip("'")
 
 
 def path_segments(text: str) -> dict[str, str]:
@@ -398,6 +431,7 @@ def path_segments(text: str) -> dict[str, str]:
         "skills": skills_line(invoke),
         "choices": choices_line(text),
         "hops": hops_line(calls),
+        "react": _top(text, "react"),
         "opened": " · ".join(opened[:8]) if opened else "(none)",
         "rejected": rej or "(none)",
         "next": field(text, "next") or "",
@@ -444,6 +478,12 @@ def render_path(text: str, *, name: str = "") -> str:
     lines.append("skills:   %s" % (seg["skills"] or "(none)"))
     lines.append("choices:  %s" % (seg["choices"] or "(none)"))
     lines.append("hops:     %s" % (seg["hops"] or "(none)"))
+    if seg.get("react"):
+        lines.append("react:    %s" % seg["react"])
+    traced = hop_rows(dash_maps(text, "calls"))
+    if traced:
+        lines.append("追踪:")
+        lines.extend("  " + row for row in traced)
     if seg["steps"]:
         lines.append("steps:    %s" % seg["steps"])
     lines.append("calls:    %s" % seg["calls"])
@@ -509,6 +549,7 @@ def cmd_path_stats(limit: int) -> int:
     deleg = Counter()
     models = Counter()
     handoff = Counter()
+    tools = Counter()
     for path in files:
         text = path.read_text(encoding="utf-8")
         seg = path_segments(text)
@@ -530,6 +571,8 @@ def cmd_path_stats(limit: int) -> int:
                 models[item.get("model") or item.get("name") or "?"] += 1
             if item.get("from") and item.get("to"):
                 handoff["%s→%s" % (item["from"], item["to"])] += 1
+                if str(item.get("from")).startswith("react:"):
+                    tools[str(item.get("to") or "?")] += 1
     print("## path-stats (last %d)" % len(files))
     print("### route skeleton")
     for k, n in skel.most_common():
@@ -545,6 +588,8 @@ def cmd_path_stats(limit: int) -> int:
     _print_counts(models)
     print("### handoff")
     _print_counts(handoff, limit=15)
+    print("### tool hop")
+    _print_counts(tools, limit=15)
     print("")
     print("用途: 看哪条场景/模块/首调用最热，以及技能入口、委派、模型与组件跳有没有被记下来。无分数。")
     return 0
@@ -666,10 +711,59 @@ def cmd_render(path: str) -> int:
     return 0
 
 
+def _quote(value: str) -> str:
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+    return '"%s"' % escaped
+
+
+def _format_calls(items: list[dict[str, str]]) -> str:
+    lines = ["calls:"]
+    for item in items:
+        lines.append("  - kind: %s" % (item.get("kind") or "tool"))
+        for key in ITEM_KEYS:
+            if key != "kind" and item.get(key):
+                lines.append("    %s: %s" % (key, _quote(item[key])))
+    return "\n".join(lines) + "\n"
+
+
+def _replace_calls(text: str, block: str) -> str:
+    pattern = re.compile(r"^calls:\s*(?:\[\]\s*)?\n(?:[ \t].*\n)*", re.M)
+    if pattern.search(text):
+        return pattern.sub(block, text, count=1)
+    if not text.endswith("\n"):
+        text += "\n"
+    return text + block
+
+
+def merge_react(text: str) -> tuple[str, str]:
+    """Copy hops from a loop file named by a top-level `react:` path into calls."""
+    found = re.search(r"^react:\s*(.+)$", text, re.M)
+    if not found:
+        return text, ""
+    raw = found.group(1).strip().strip('"').strip("'")
+    path = Path(raw)
+    if not path.is_file():
+        return text, "react file missing: %s" % raw
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from react_loop import calls_from_file
+
+    fresh = calls_from_file(path)
+    have = {(item.get("name"), item.get("why"), item.get("result")) for item in dash_maps(text, "calls")}
+    added = [item for item in fresh if (item.get("name"), item.get("why"), item.get("result")) not in have]
+    if not added:
+        return text, ""
+    merged = list(dash_maps(text, "calls")) + added
+    return _replace_calls(text, _format_calls(merged)), ""
+
+
 def cmd_append(path: str) -> int:
     text = read_text(path)
     if not text.endswith("\n"):
         text += "\n"
+    text, react_error = merge_react(text)
+    if react_error:
+        print("FAIL  " + react_error, file=sys.stderr)
+        return 1
     errors = validate(text, for_append=True)
     if errors:
         for e in errors:

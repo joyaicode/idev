@@ -72,12 +72,65 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "kind"],
+        "anyOf": [
+          { "required": ["id", "kind"] },
+          { "required": ["id", "tool"] },
+          { "required": ["id", "tool_group"] },
+          { "required": ["id", "use"] }
+        ],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
           "kind": { "$ref": "kinds.schema.json#/$defs/kind" },
+          "tool": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "tool_group": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "use": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
           "label": { "type": "string" },
-          "with": { "type": "object" }
+          "with": { "type": "object" },
+          "adjust": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "skip": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } },
+              "order": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } },
+              "replace": { "type": "object" },
+              "extend": { "type": "array", "items": { "type": "object" } }
+            }
+          },
+          "group": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "writes": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "react": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["candidates"],
+            "properties": {
+              "candidates": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+              },
+              "max_hops": { "type": "integer", "minimum": 1, "maximum": 16 },
+              "on_exhaust": { "enum": ["human", "stop"] },
+              "on_fail": { "enum": ["human", "stop", "skip"] }
+            }
+          },
+          "slots": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+          },
+          "branch": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "pass": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+              "fail": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+            }
+          }
         },
         "allOf": [
           {
@@ -111,7 +164,17 @@
               "required": ["with"],
               "properties": { "with": { "required": ["mode"] } }
             }
-          }
+          },
+          {
+            "description": "A gate is a stop, not a loop. A grouped step stays one wave, not a joint.",
+            "if": {
+              "properties": { "kind": { "const": "human.gate" } },
+              "required": ["kind"]
+            },
+            "then": { "not": { "required": ["react"] } }
+          },
+          { "not": { "required": ["react", "group"] } },
+          { "not": { "required": ["branch", "group"] } }
         ]
       }
     }

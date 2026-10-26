@@ -34,6 +34,8 @@ propose 草稿（脚本或人手）→ grill → 人确认 → land 真源
 curator：过期未落地提案 → archived（不硬删）
 ```
 
+ReAct 关节用尽（`react-exhausted`）或工具失败（`react-tool-fail`）各写一条 inbox，note 带 step、工具名和观察摘要。热标签规则与上面相同：同类非 ok ≥ 2 才问要不要写提案。不改权重，不改配方。
+
 ### Nudge（硬）
 
 在以下**任一**成立时，Agent **一句话**问要不要写成提案（不自动写 Skill）：

@@ -1,0 +1,83 @@
+schema_version: 2
+at: "2026-10-26T16:56:00+08:00"
+feature: "-"
+intent: "发版前把内核检查跑完，不提交、不推送。"
+invoke:
+  trigger: "发版验证"
+  matched: "syntax-check、agents-check、agent-smoke、healthcheck，加上这次改动的测试和 go build"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: explicit
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "发版验证沿用内核自检链，不走提交推送"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: docs
+  stage: req-review
+  risk_tier: P1
+  why: "人要的是发版前的检查结果。检查红了先看是不是检查自己过时，不把工作区推上去。"
+rejected:
+  - module: deliver
+    why: "没有产品票"
+  - module: verify
+    why: "没有新的提测包"
+  - module: ops
+    why: "不是线上现象"
+thinking:
+  summary: "syntax-check、agents-check、配方检查、schema 测试、go build、关节相关测试和 healthcheck 都过。healthcheck 有 1 条 WARN，是本机日志和设置里的绝对路径。agent-smoke 第一次 481 过 1 败，败在正向用例正文没有 GUIDE 和 DOMAIN。补上后重跑 482 过 0 败。没有提交，没有推送。"
+  signals:
+    - "人说发版验证"
+    - "smoke 报 idev-reviewer.md 没有 GUIDE 和 DOMAIN"
+  excluded:
+    - "这次就提交并推送"
+    - "把本机路径 WARN 当成核心失败"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "跑发布前检查，并重跑修好夹具后的 agent-smoke"
+      so: "自检链通过，工作区仍未提交"
+opened:
+  - "scripts/agent-smoke.sh"
+  - "scripts/healthcheck.sh"
+  - "scripts/syntax-check.sh"
+calls:
+  - kind: script
+    name: syntax-check.sh
+    from: conductor
+    to: script:syntax-check.sh
+    why: "发版前先确认脚本能解析"
+    result: "syntax-check PASS"
+  - kind: script
+    name: healthcheck.sh
+    from: conductor
+    to: script:healthcheck.sh
+    why: "内核自检要包含别名、配方、冒烟和审计"
+    result: "healthcheck PASS warns=1"
+  - kind: script
+    name: agent-smoke.sh
+    from: conductor
+    to: script:agent-smoke.sh
+    why: "正向用例要能单独证明工具列表被认出来"
+    result: "pass 482 fail 0"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "验证的是内核真源，不是产品票"
+  - kind: delegate
+    chose: none
+    why: "导体自己跑检查"
+  - kind: model
+    chose: inherit
+    why: "导体自己跑"
+  - kind: stop
+    chose: none
+    why: "检查结果已经出来，推送要另说"
+stop: ""
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+next: "要发版再说提交并推送。这次工作区还没提交。"

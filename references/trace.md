@@ -79,7 +79,7 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 | `module` | `deliver/SKILL.md`、`verify/SKILL.md` |
 | `skill` | 交出口 Skill 名，取当前产品 `.idev/handoff.yaml` |
 | `repo` | `<票目录>/deliver.yaml`（`doc_home.py --key deliver`） |
-| `tool` | 外部 runner / Playwright / gh（点到为止） |
+| `tool` | 外部 runner / Playwright / gh，以及 ReAct 关节选中的已登记工具。`from` 写 `react:<step>`，`to` 写 `tool:<id>` |
 | `agent` | 五个执行者之一。`target` 写 agent 名。不要记成 `module` |
 | `model` | 这一跳调用的模型。`name` 是模型名或 `inherit` |
 
@@ -91,7 +91,8 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 | `model` | 这一跳用的模型，通常 `inherit` |
 | `thinking` | 这一跳的思考，**一行**。过程放 `thinking.steps`，不要把整段推理贴进来 |
 | `duration_s` | 秒，非负数字。没有计时就空着，不要填 0 充数 |
-| `why` | 为什么有这一跳 |
+| `why` | 为什么有这一跳。ReAct 关节里这是 Thought |
+| `result` | 这一跳的结果。ReAct 关节里这是 Observation。本轮 trace 写 `react: <循环文件>` 时，`append` 把文件里还没出现的跳抄进 `calls`，并把登记的命令抄进 `args` |
 | `target` | `kind: agent` 时写 agent 名 |
 
 ### 四层观察写在哪
@@ -101,7 +102,7 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 | 技能调起 | `invoke.how` + `invoke.skills[]`。这一下要出现在跳转里，再加一条 `kind: skill` 的 call（`from: user`，`to: skill:<name>`） | `skills` |
 | agent 决策 | `decisions` 一条 `kind: delegate`。真的派了，再加 `kind: agent` 的 call | `choices` |
 | 模型与思考 | `decisions` 一条 `kind: model`，以及 `kind: model` 的 call。`thinking` 只留一行 | `choices` 与 `hops` 上的 `model=` / 「」 |
-| 组件交互 | 每一跳的 `from` / `to` | `hops` |
+| 组件交互 | 每一跳的 `from` / `to`。ReAct 的 Thought 写 `why`，Observation 写 `result` | `hops` 一行，另有「追踪」逐跳 |
 
 缺了这四层**不算失败**，周审计只计数、不报警。不准编造没发生的技能、委派或模型调用。
 
@@ -161,8 +162,10 @@ bash ~/.cursor/skills/idev/scripts/path-view.sh paths 20
 bash ~/.cursor/skills/idev/scripts/path-view.sh stats 50
 ```
 
-字段来源：`invoke.trigger` → `invoke.how` / `skills` → `route.scenario/module/stage` → `decisions` 里的 `delegate` / `model` → `thinking.steps` → `calls[]`（`from`→`to`、`model`、一行 `thinking`）→ `opened[]` → `next`。
+字段来源：`invoke.trigger` → `invoke.how` / `skills` → `route.scenario/module/stage` → `decisions` 里的 `delegate` / `model` → `thinking.steps` → `calls[]`（`from`→`to`、`why` 或一行 `thinking`、`result`、耗时）→ `opened[]` → `next`。顶层 `react:` 指向这一轮的循环文件。`path` 在 hops 一行下面按跳列出「追踪」。
 S8 配方：`workflows/path-view.yaml`。
+
+控制台详情把同一条链从上到下画出来（Thought / Observation / 耗时）。时间线另列 `kind: tool` 或 `from` 以 `react:` 开头的跳。仍不打分，不为观测另停。
 
 同一份账也可以摊成页。`python3 scripts/console.py` 只绑 `127.0.0.1`，看各 agent、耗时、skill 调起和详情，并把最近窗口的场景、耗时、观察覆盖、回报、技能和假设摊成件数。点某一格可以把那一件数当作依据，写下改关口、改这一步、补观测或质疑基线。页面上的任务和对话写在 console 目录的 `thread.yaml`（导体自身会话是 `state/console/`，产品会话是 `<repo>/.idev/console/`），不是 verify inbox。导体下一轮用 `console.py pending` 读取，用 `reply --text` 写回。派工前 `live --add`，`record` 后 `live --clear`。控制台不签字、不派 agent，也不打分。
 

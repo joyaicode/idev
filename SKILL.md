@@ -94,6 +94,8 @@ python3 scripts/turn-budget.py [--max 8] <transcript.jsonl>
 | `ops` | 经验台账：六问必答，候选→人确认+复现→权威 | `lessons.py recall --scope <域>` | [rootcause-guards.md](references/rootcause-guards.md) |
 | 需求订正后 | 全线重新对准，七类漂移 + 重做顺序 | `realign.py --feature <f>` | [feedback-loop.md](references/feedback-loop.md) |
 | 交付后 | reopen 次数 / 签字后被推翻次数 → 改**关口**而非单张票 | `ticket-metrics.sh --repo <仓>` | [feedback-loop.md](references/feedback-loop.md) |
+| 动态关节 | 声明了 `react` 的步骤，`next` 打出 `REACT_OPEN` 到 `REACT_SHOW`；用尽走 `on_exhaust`，失败走 `on_fail`；缺槽位先 `ASK`，用 `param` 写回；`next` 打 `DIGEST` 和 `LOOP`，都不挡步骤 | `react_loop.py` | [workflow-schema.md](references/workflow-schema.md) |
+| 流水线 | 步骤可写 `tool` / `tool_group` / `use`，并用 `adjust` 跳过、排序、替换、追加。工具命令只打印 | `workflow.py` | [workflow-schema.md](references/workflow-schema.md) |
 | 外部工具 | Langfuse 只导出 · promptfoo 只断言不打分 · **不装 DSPy** | — | [external-tools.md](references/external-tools.md) |
 
 **一条贯穿所有阶段的规矩：** 这些工具的 PASS 都只说明「没撞上已知的硬错」，

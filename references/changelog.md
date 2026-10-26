@@ -1,5 +1,23 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-26：`agent-smoke` 里认工具列表的正向用例补上 `GUIDE:` 和 `DOMAIN:`。检查器已经要求这两行，缺了会把格式问题报成工具列表没认出来。
+
+- 2026-10-26：缺的槽位用 `workflow.py param` 写回当前开放步骤。工具登记的 `inputs` 缺了也先 `ASK`。`next` 对照 `recipe_digest` 打出 `DIGEST match|drift|missing`，文件变了不改已展开的步骤。声明了 `react` 的步骤打出 `LOOP` 状态，不挡这一步。分支不能落进一组的中间，也不能跳到已经记完的步骤。
+
+- 2026-10-26：步骤可以声明 `slots` 和向前的 `branch`。缺槽位时 `next` 先 `ASK`，不委派。工具失败走 `on_fail`（`human` / `stop` / `skip`），跳数用尽仍走 `on_exhaust`。`skip` 保持循环开着，不写 inbox。工具可以登记 `inputs` / `outputs`，`next` 打出 `IN` / `OUT`。`show` 回放这一跳的 Thought、Observation 和 `TOOL` 命令。`start` 把配方摘要写入 `recipe_digest`。周审计多计工具跳，并点数未消费的关节失败，不进 `HARD_COUNT`。
+
+- 2026-10-26：运行路径在 hops 一行下面按跳列出「追踪」，带上 `why`、`result` 和耗时，并写出顶层 `react:`。控制台把这条链画出来，时间线单独列出工具跳。不打分。
+
+- 2026-10-26：配方步骤可以写 `tool`、`tool_group` 或 `use`。工具和工具组按 `references/tools.yaml` 的步骤协议展开，一条配方可以引用另一条。`adjust` 能跳过、排序、替换 `label`/`with`/`react`，或追加步骤。`next` 对工具步骤只打出 `TOOL` 命令。
+
+- 2026-10-26：声明了 `react` 的步骤，`next` 打出 `REACT_LOG` 绝对路径和 `REACT_OPEN` 到 `REACT_SHOW`。这些行只打印。本轮 trace 的 `react:` 抄 `REACT_LOG`。同类失败标签满两次，`evolve-review` 算热标签并起草提案，不改 Skill。
+
+- 2026-10-26：ReAct 失败的 inbox note 带上 step、工具名和观察摘要。`next` 打出 `REACT_LOG`。`react_loop.py show --feature` 列出该 feature 的每一跳、成败和耗时。
+
+- 2026-10-26：ReAct 候选必须先登记在 `references/tools.yaml`（`id`、`summary`、`command`）。`workflow-check` 和 `react_loop.py open` 拒绝未登记的名字。`act` 打出该工具的 `TOOL` 命令。登记本身不执行命令。
+
+- 2026-10-26：配方步骤可以声明 `react` 关节。循环只在候选工具里走，用尽或工具失败走 `human` 或 `stop`，并把每一跳写入当轮 trace。反馈进 inbox，不自动改配方。没声明的步骤行为不变。人确认：by wangwei794，quote「确认」，2026-10-26T11:28+08:00。无票、无 A 类闸，不写 `sealed` / `accepted` / `aligned`。
+
 - 2026-10-25：规范插件不再把正确写法报成违规。`===` / `!==` 不算 `==` / `!=`。`try (` 里后面的资源不算漏收的流。Shell 只报会分词的未加引号变量，引号、命令替换里的引号、heredoc、`[[ ]]`、`$(( ))` 不算。Go 不再用正则猜被丢掉的返回值。闸门读标准输入失败时把错误返回去，不再当成空回答。人确认：by wangwei794，quote「确认」，2026-10-25T20:28+08:00。无票、无 A 类闸，不写 `sealed` / `accepted` / `aligned`。
 
 - 2026-10-25：前置节只要列出既有问题就问人，选项是先修或本次不修。小于本需求改动的 1/5 或边界分得开，只写进 `scope_debt.recommend: mark`，不代替人的选择。一条都没有才直接 `mark`。仍是 B 类决策，不增加第五次签字。人确认：by wangwei794，quote「确认」，2026-10-25T16:09+08:00。无票、无 A 类闸，不写 `sealed` / `accepted` / `aligned`。

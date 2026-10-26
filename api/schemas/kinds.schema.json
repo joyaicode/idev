@@ -11,6 +11,7 @@
         "preflight.inputs",
         "human.gate",
         "shell.confirmed",
+        "tool.step",
         "ui.clean_pass_loop",
         "ui.product_batch",
         "route.s4",

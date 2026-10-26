@@ -1,0 +1,75 @@
+schema_version: 2
+at: "2026-10-26T14:50:00+08:00"
+feature: "-"
+intent: "把每一跳的追踪和可视化接到现有运行路径和控制台上。"
+invoke:
+  trigger: "Trace追踪和可视化增强"
+  matched: "运行路径和中控台已经有 hops，缺逐跳展开"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: explicit
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "观测仍走 trace 和 console，不另开一套"
+route:
+  module: deliver
+  scenario: S1
+  convention_class: docs
+  stage: req-review
+  risk_tier: P1
+  why: "人要看见每一跳的 Thought、Observation 和耗时。现有 hops 一行会把 why 丢掉，控制台也没有把工具跳画出来。"
+rejected:
+  - module: verify
+    why: "没有新的提测包"
+  - module: ops
+    why: "不是线上现象"
+thinking:
+  summary: "path 在 hops 一行下面按跳列出追踪，why 和 thinking 都能出现，顶层 react 指向循环文件。控制台详情把链从上到下画出来，时间线单独列出工具跳。path-stats 计工具跳。不打分。"
+  signals:
+    - "人说 Trace 追踪和可视化增强"
+    - "ReAct 的 Thought 写在 why，原来的一行只读 thinking"
+  excluded:
+    - "另起追踪系统"
+    - "把观测做成门禁或另停一次"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "逐跳展开路径，并在控制台画出链"
+      so: "1 个路径测试和 7 个控制台测试通过"
+opened:
+  - "scripts/trace.py"
+  - "scripts/console.py"
+  - "references/trace.md"
+calls:
+  - kind: script
+    name: test_trace_view.py
+    from: conductor
+    to: script:test_trace_view.py
+    why: "每一跳要留下 why、result 和循环文件"
+    result: "1 OK"
+  - kind: script
+    name: test_console.py
+    from: conductor
+    to: script:test_console.py
+    why: "页面要带上追踪链和工具跳"
+    result: "7 OK"
+decisions:
+  - kind: route
+    chose: deliver
+    why: "这是现有 trace 契约的展示，不是新模块"
+  - kind: delegate
+    chose: none
+    why: "导体自己改路径和控制台"
+  - kind: model
+    chose: inherit
+    why: "导体自己改"
+  - kind: stop
+    chose: none
+    why: "展示方式沿用 path 和 console，没有待选落点"
+stop: ""
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+next: "看一轮用 trace.sh path。控制台详情是同一条链。"

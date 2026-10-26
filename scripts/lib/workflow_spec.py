@@ -33,7 +33,12 @@ TOP_FIELDS = {
 }
 PARAM_FIELDS = {"name", "required", "from", "default", "product_key"}
 PARAM_FROM = {"user", "deliver.yaml", "default", "product"}
-STEP_FIELDS = {"id", "kind", "label", "with", "group", "writes"}
+STEP_FIELDS = {"id", "kind", "label", "with", "group", "writes", "react", "tool", "tool_group", "use", "adjust", "slots", "branch"}
+ADJUST_FIELDS = {"skip", "order", "replace", "extend"}
+OVERLAY_FIELDS = {"label", "with", "react"}
+REACT_FIELDS = {"candidates", "max_hops", "on_exhaust", "on_fail"}
+REACT_EXITS = {"human", "stop"}
+FAIL_EXITS = {"human", "stop", "skip"}
 RISK_TIERS = {"P0", "P1", "P2"}
 POLICY: dict[str, Any] = {
     "on_fail": {"stop", "ask"},
@@ -168,30 +173,341 @@ def check_recipe(data: Any, path: Path, errors: list[str]) -> None:
     if not isinstance(steps, list) or not steps:
         errors.append(f"{path}: steps must be non-empty list")
         return
+    _check_steps(steps, path, errors)
+    _check_slots(data.get("params"), steps, path, errors)
+    _check_branches(steps, path, errors)
+
+
+def _check_steps(steps: list, path: Path, errors: list[str]) -> None:
     seen: set[str] = set()
     for i, step in enumerate(steps):
+        where = f"{path}: steps[{i}]"
         if not isinstance(step, dict):
-            errors.append(f"{path}: steps[{i}] not a mapping")
+            errors.append(f"{where} not a mapping")
             continue
-        for key in sorted(set(step) - STEP_FIELDS):
-            errors.append(f"{path}: steps[{i}] unknown field {key!r}")
-        sid = step.get("id")
-        kind = step.get("kind")
-        if not sid:
-            errors.append(f"{path}: steps[{i}] missing id")
-        elif sid in seen:
-            errors.append(f"{path}: duplicate step id {sid}")
-        else:
-            seen.add(sid)
-        if kind in FORBIDDEN:
-            errors.append(f"{path}: forbidden kind {kind}")
-        elif kind not in KINDS:
-            errors.append(f"{path}: unknown kind {kind}")
-        if "with" in step and not isinstance(step["with"], dict):
-            errors.append(f"{path}: steps[{i}].with must be a mapping")
-        elif kind == "human.gate":
-            _check_gate(step, f"{path}: steps[{i}]", errors)
+        _check_step(step, where, errors, seen)
     _check_parallel(steps, path, errors)
+
+
+def _check_step(step: dict, where: str, errors: list[str], seen: set[str]) -> None:
+    for key in sorted(set(step) - _allowed(step)):
+        errors.append(f"{where} unknown field {key!r}")
+    _remember(step.get("id"), where, seen, errors)
+    drivers = [name for name in ("kind", "tool", "tool_group", "use") if step.get(name)]
+    if len(drivers) != 1:
+        errors.append(f"{where} needs exactly one of kind, tool, tool_group, use")
+        return
+    _check_driver(step, drivers[0], where, errors)
+    if "with" in step and not isinstance(step["with"], dict):
+        errors.append(f"{where} with must be a mapping")
+    elif step.get("kind") == "human.gate":
+        _check_gate(step, where, errors)
+    _check_react(step, where, errors)
+    _check_adjust(step, drivers[0], where, errors)
+
+
+def _allowed(step: dict) -> set[str]:
+    if step.get("use"):
+        return {"id", "use", "label", "adjust"}
+    if step.get("tool_group"):
+        return {"id", "tool_group", "label", "adjust"}
+    if step.get("tool"):
+        return {"id", "tool", "label", "with", "group", "writes", "react", "slots", "branch"}
+    return STEP_FIELDS
+
+
+def _remember(sid: Any, where: str, seen: set[str], errors: list[str]) -> None:
+    if not sid:
+        errors.append(f"{where} missing id")
+    elif sid in seen:
+        errors.append(f"{where} duplicate step id {sid}")
+    else:
+        seen.add(str(sid))
+
+
+def _check_driver(step: dict, driver: str, where: str, errors: list[str]) -> None:
+    if driver != "kind":
+        _check_slug(step.get(driver), f"{where} {driver}", errors)
+        return
+    kind = step.get("kind")
+    if kind == "tool.step":
+        errors.append(f"{where} name the tool, not kind tool.step")
+    elif kind in FORBIDDEN:
+        errors.append(f"{where} forbidden kind {kind}")
+    elif kind not in KINDS:
+        errors.append(f"{where} unknown kind {kind}")
+
+
+def _check_slug(value: Any, where: str, errors: list[str]) -> None:
+    if not isinstance(value, str) or re.fullmatch(r"[a-z][a-z0-9-]*", value) is None:
+        errors.append(f"{where} must be a slug")
+
+
+def _check_adjust(step: dict, driver: str, where: str, errors: list[str]) -> None:
+    raw = step.get("adjust")
+    if raw is None:
+        return
+    if driver not in ("use", "tool_group"):
+        errors.append(f"{where} adjust is only for use or tool_group")
+        return
+    if not isinstance(raw, dict):
+        errors.append(f"{where} adjust must be a mapping")
+        return
+    for key in sorted(set(raw) - ADJUST_FIELDS):
+        errors.append(f"{where} adjust unknown field {key!r}")
+    _check_id_list(raw.get("skip"), f"{where} skip", errors)
+    _check_id_list(raw.get("order"), f"{where} order", errors)
+    _check_replace(raw.get("replace"), where, errors)
+    _check_extend(raw.get("extend"), where, errors)
+
+
+def _check_id_list(raw: Any, where: str, errors: list[str]) -> None:
+    if raw is None:
+        return
+    if not isinstance(raw, list):
+        errors.append(f"{where} must be a list of slugs")
+        return
+    for name in raw:
+        _check_slug(name, f"{where} {name!r}", errors)
+
+
+def _check_replace(raw: Any, where: str, errors: list[str]) -> None:
+    if raw is None:
+        return
+    if not isinstance(raw, dict):
+        errors.append(f"{where} replace must be a mapping")
+        return
+    for name, patch in raw.items():
+        _check_slug(name, f"{where} replace {name!r}", errors)
+        if not isinstance(patch, dict):
+            errors.append(f"{where} replace {name} must be a mapping")
+            continue
+        for key in sorted(set(patch) - OVERLAY_FIELDS):
+            errors.append(f"{where} replace {name} cannot change {key!r}")
+
+
+def _check_extend(raw: Any, where: str, errors: list[str]) -> None:
+    if raw is None:
+        return
+    if not isinstance(raw, list):
+        errors.append(f"{where} extend must be a list")
+        return
+    seen: set[str] = set()
+    for i, step in enumerate(raw):
+        if not isinstance(step, dict):
+            errors.append(f"{where} extend[{i}] not a mapping")
+            continue
+        _check_step(step, f"{where} extend[{i}]", errors, seen)
+
+
+def _check_react(step: dict, where: str, errors: list[str]) -> None:
+    raw = step.get("react")
+    if raw is None:
+        return
+    if step.get("use") or step.get("tool_group"):
+        errors.append(f"{where} adjust a member instead of putting react here")
+        return
+    if step.get("kind") == "human.gate":
+        errors.append(f"{where} human.gate cannot declare react")
+    if step.get("group"):
+        errors.append(f"{where} a grouped step cannot declare react")
+    if not isinstance(raw, dict):
+        errors.append(f"{where} react must be a mapping")
+        return
+    for key in sorted(set(raw) - REACT_FIELDS):
+        errors.append(f"{where} react unknown field {key!r}")
+    _check_candidates(raw.get("candidates"), where, errors)
+    _check_bounds(raw, where, errors)
+
+
+def _check_candidates(names: Any, where: str, errors: list[str]) -> None:
+    if not isinstance(names, list) or not names:
+        errors.append(f"{where} react.candidates must be a non-empty list")
+        return
+    seen: set[str] = set()
+    for name in names:
+        if not isinstance(name, str) or re.fullmatch(r"[a-z][a-z0-9-]*", name) is None:
+            errors.append(f"{where} react candidate {name!r} must be a slug")
+        elif name in seen:
+            errors.append(f"{where} duplicate react candidate {name}")
+        else:
+            seen.add(name)
+
+
+def check_catalog(data: Any, path: Path, errors: list[str]) -> dict[str, str]:
+    """id -> command. A react candidate must be one of these ids."""
+    commands: dict[str, str] = {}
+    if not isinstance(data, dict) or data.get("schema_version") != SCHEMA_VERSION:
+        errors.append(f"{path}: tool catalog schema_version must be {SCHEMA_VERSION}")
+        return commands
+    tools = data.get("tools")
+    if not isinstance(tools, list) or not tools:
+        errors.append(f"{path}: tools must be a non-empty list")
+        return commands
+    for i, tool in enumerate(tools):
+        _one_tool(tool, f"{path}: tools[{i}]", commands, errors)
+    _check_groups(data.get("groups"), commands, path, errors)
+    return commands
+
+
+def _one_tool(tool: Any, where: str, commands: dict[str, str], errors: list[str]) -> None:
+    if not isinstance(tool, dict):
+        errors.append(f"{where} not a mapping")
+        return
+    for key in sorted(set(tool) - {"id", "summary", "command", "inputs", "outputs"}):
+        errors.append(f"{where} unknown field {key!r}")
+    tid = tool.get("id")
+    if not isinstance(tid, str) or re.fullmatch(r"[a-z][a-z0-9-]*", tid) is None:
+        errors.append(f"{where} id must be a slug")
+        return
+    if tid in commands:
+        errors.append(f"{where} duplicate tool {tid}")
+        return
+    summary, command = tool.get("summary"), tool.get("command")
+    if not isinstance(summary, str) or not summary.strip():
+        errors.append(f"{where} summary is required")
+    if not isinstance(command, str) or not command.strip():
+        errors.append(f"{where} command is required")
+    commands[tid] = command if isinstance(command, str) else ""
+    _check_ports(tool, where, errors)
+
+
+def _check_ports(tool: dict, where: str, errors: list[str]) -> None:
+    _check_name_list(tool.get("inputs"), f"{where} inputs", errors)
+    _check_name_list(tool.get("outputs"), f"{where} outputs", errors)
+
+
+def _check_groups(raw: Any, commands: dict[str, str], path: Path, errors: list[str]) -> None:
+    if raw is None:
+        return
+    if not isinstance(raw, list):
+        errors.append(f"{path}: groups must be a list")
+        return
+    seen: set[str] = set()
+    for i, group in enumerate(raw):
+        _one_group(group, f"{path}: groups[{i}]", commands, seen, errors)
+
+
+def _one_group(group: Any, where: str, commands: dict[str, str], seen: set[str], errors: list[str]) -> None:
+    if not isinstance(group, dict):
+        errors.append(f"{where} not a mapping")
+        return
+    for key in sorted(set(group) - {"id", "summary", "tools"}):
+        errors.append(f"{where} unknown field {key!r}")
+    gid = group.get("id")
+    _check_slug(gid, f"{where} id", errors)
+    if not isinstance(gid, str) or gid in seen:
+        if isinstance(gid, str) and gid in seen:
+            errors.append(f"{where} duplicate group {gid}")
+        return
+    seen.add(gid)
+    if not isinstance(group.get("summary"), str) or not str(group.get("summary")).strip():
+        errors.append(f"{where} summary is required")
+    _group_tools(group.get("tools"), commands, where, errors)
+
+
+def _group_tools(tools: Any, commands: dict[str, str], where: str, errors: list[str]) -> None:
+    if not isinstance(tools, list) or not tools:
+        errors.append(f"{where} tools must be a non-empty list")
+        return
+    seen: set[str] = set()
+    for name in tools:
+        if name not in commands:
+            errors.append(f"{where} unknown tool {name}")
+        elif name in seen:
+            errors.append(f"{where} duplicate tool {name}")
+        else:
+            seen.add(name)
+
+
+def check_tool_refs(data: Any, known: set[str], path: Path, errors: list[str]) -> None:
+    if not isinstance(data, dict):
+        return
+    for i, step in enumerate(data.get("steps") or []):
+        raw = step.get("react") if isinstance(step, dict) else None
+        if not isinstance(raw, dict):
+            continue
+        for name in raw.get("candidates") or []:
+            if name not in known:
+                errors.append(f"{path}: steps[{i}] unknown tool {name}")
+
+
+def _check_bounds(raw: dict, where: str, errors: list[str]) -> None:
+    hops = raw.get("max_hops", 8)
+    if type(hops) is not int or not 1 <= hops <= 16:
+        errors.append(f"{where} react.max_hops must be an integer from 1 to 16")
+    if raw.get("on_exhaust", "human") not in REACT_EXITS:
+        errors.append(f"{where} react.on_exhaust must be human or stop")
+    if raw.get("on_fail", "human") not in FAIL_EXITS:
+        errors.append(f"{where} react.on_fail must be human, stop, or skip")
+
+
+def _check_name_list(raw: Any, where: str, errors: list[str]) -> None:
+    if raw is None:
+        return
+    if not isinstance(raw, list) or not raw:
+        errors.append(f"{where} must be a non-empty list of slugs")
+        return
+    for name in raw:
+        _check_slug(name, f"{where} {name!r}", errors)
+
+
+def _check_slots(params: Any, steps: list, path: Path, errors: list[str]) -> None:
+    known = {item.get("name") for item in params or [] if isinstance(item, dict)}
+    for i, step in enumerate(steps):
+        raw = step.get("slots") if isinstance(step, dict) else None
+        if raw is None:
+            continue
+        where = f"{path}: steps[{i}] slots"
+        _check_name_list(raw, where, errors)
+        if not isinstance(raw, list):
+            continue
+        for name in raw:
+            if known and name not in known:
+                errors.append(f"{where} {name} is not a recipe param")
+
+
+def _check_branches(steps: list, path: Path, errors: list[str]) -> None:
+    for i, step in enumerate(steps):
+        if not isinstance(step, dict) or "branch" not in step:
+            continue
+        _one_branch(step, steps, i, f"{path}: steps[{i}]", errors)
+
+
+def _one_branch(step: dict, steps: list, index: int, where: str, errors: list[str]) -> None:
+    raw = step.get("branch")
+    ids = [item.get("id") for item in steps if isinstance(item, dict)]
+    if not isinstance(raw, dict) or not raw:
+        errors.append(f"{where} branch needs pass or fail")
+        return
+    for key in sorted(set(raw) - {"pass", "fail"}):
+        errors.append(f"{where} branch unknown field {key!r}")
+    if step.get("group"):
+        errors.append(f"{where} a grouped step cannot branch")
+    for key in ("pass", "fail"):
+        if key not in raw:
+            continue
+        _later(raw.get(key), ids, index, f"{where} branch.{key}", errors)
+        _lands_on_head(steps, raw.get(key), f"{where} branch.{key}", errors)
+
+
+def _later(target: Any, ids: list, index: int, where: str, errors: list[str]) -> None:
+    _check_slug(target, where, errors)
+    if target not in ids or ids.index(target) <= index:
+        errors.append(f"{where} must name a later step")
+
+
+def _lands_on_head(steps: list, target: Any, where: str, errors: list[str]) -> None:
+    if not isinstance(target, str):
+        return
+    for i, step in enumerate(steps):
+        if not isinstance(step, dict) or step.get("id") != target:
+            continue
+        group = step.get("group")
+        prev = steps[i - 1] if i else {}
+        if group and isinstance(prev, dict) and prev.get("group") == group:
+            errors.append(f"{where} must land on the first step of group {group}")
+        return
 
 
 def _writes_overlap(a: str, b: str) -> bool:

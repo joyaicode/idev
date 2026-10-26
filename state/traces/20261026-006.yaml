@@ -1,0 +1,77 @@
+schema_version: 2
+at: "2026-10-26T13:36:00+08:00"
+feature: "-"
+intent: "把 ReAct 关节收成 next 可照抄的步骤，并证明失败能点热自进化。"
+invoke:
+  trigger: "继续完成所有任务"
+  matched: "四项里编排命令和热标签还没接上"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "把已确认的关节收成可执行步骤"
+route:
+  module: deliver
+  scenario: S1
+  convention_class: docs
+  stage: req-review
+  risk_tier: P1
+  why: "继续不是签字。next 此前只报候选，evolve-review 还没有用这两条失败标签证明过热信号。"
+rejected:
+  - module: verify
+    why: "没有新的提测包"
+  - module: ops
+    why: "不是线上现象"
+thinking:
+  summary: "next 打出 REACT_LOG 绝对路径和 REACT_OPEN 到 REACT_SHOW，只打印不执行。本轮 trace 的 react 字段抄 REACT_LOG。两条未消费的 react-tool-fail 让 evolve-review 打出热标签，提案不落盘。"
+  signals:
+    - "人说继续完成所有任务"
+    - "关节、工具目录、失败 note 已经在"
+  excluded:
+    - "执行 TOOL 命令"
+    - "自动改 Skill 或权重"
+    - "给既有线性配方加关节"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "让 next 打出循环命令，并用两条失败证明热标签"
+      so: "7 个关节测试 OK，workflow-check PASS"
+opened:
+  - "scripts/workflow.py"
+  - "scripts/test_react_loop.py"
+  - "references/workflow-schema.md"
+  - "SKILL.md"
+calls:
+  - kind: script
+    name: test_react_loop.py
+    from: conductor
+    to: script:test_react_loop.py
+    why: "两条工具失败要让 evolve-review 打出热标签，且不写提案"
+    result: "7 OK"
+  - kind: script
+    name: workflow-check.py
+    from: conductor
+    to: script:workflow-check.py
+    why: "现有配方没有新增关节"
+    result: "PASS"
+decisions:
+  - kind: route
+    chose: deliver
+    why: "继续的是已确认落点上的编排和反馈"
+  - kind: delegate
+    chose: none
+    why: "导体自己改 next 和文档"
+  - kind: model
+    chose: inherit
+    why: "导体自己改"
+  - kind: stop
+    chose: none
+    why: "继续不是停问"
+stop: ""
+check_feature: skipped
+signoff:
+  status: none
+  marks: []
+next: "声明了 react 的步骤按 next 的 REACT_OPEN 到 REACT_SHOW 走。本轮 trace 的 react 字段抄 REACT_LOG。"

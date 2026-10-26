@@ -9,6 +9,7 @@ the module the step lands on.
   workflow.py resolve <id>
   workflow.py start <id> [--feature F] [--param k=v ...]
   workflow.py next    [--feature F | --run PATH]
+  workflow.py param   k=v [--feature F | --run PATH]
   workflow.py delegate <step>
   workflow.py delegate --open
   workflow.py ask     <step>
@@ -47,6 +48,7 @@ import kind_agents  # noqa: E402
 import safeyaml  # noqa: E402
 import workflow_defaults  # noqa: E402
 from product_marker import resolve_extension_repo  # noqa: E402
+import workflow_compose  # noqa: E402
 from product_sink import kernel_root, product_repo, sink_dir  # noqa: E402
 from workflow_spec import (  # noqa: E402
     KINDS,
@@ -171,6 +173,10 @@ def bind_params(recipe: dict, given: dict[str, str], repo: Path | None, deliver:
     if missing:
         raise Blocked("missing params: " + "; ".join(missing))
     return bound
+
+
+def recipe_digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()[:16]
 
 
 def run_path_for(recipe: dict, feature: str, repo: Path | None) -> Path:
@@ -659,9 +665,15 @@ def risk_tier_of(run: dict, run_path: Path) -> str:
     return "P1"
 
 
+def _settled(step: dict) -> bool:
+    if step.get("status") in STEP_DONE:
+        return True
+    return step.get("status") == "FAIL" and bool(step.get("branch_to"))
+
+
 def current_step(run: dict) -> dict | None:
     for step in run["steps"]:
-        if step.get("status") not in STEP_DONE:
+        if not _settled(step):
             return step
     return None
 
@@ -674,7 +686,7 @@ def open_steps(run: dict) -> list[dict]:
     after the group stay closed until every member is done.
     """
     steps = run.get("steps") or []
-    start = next((i for i, step in enumerate(steps) if step.get("status") not in STEP_DONE), None)
+    start = next((i for i, step in enumerate(steps) if not _settled(step)), None)
     if start is None:
         return []
     group = steps[start].get("group")
@@ -684,7 +696,7 @@ def open_steps(run: dict) -> list[dict]:
     for step in steps[start:]:
         if step.get("group") != group:
             break
-        if step.get("status") not in STEP_DONE:
+        if not _settled(step):
             opened.append(step)
     return opened
 
@@ -693,12 +705,25 @@ def _step_open(run: dict, step: dict) -> bool:
     return any(item is step for item in open_steps(run))
 
 
+def digest_line(run: dict) -> str:
+    stored = str(run.get("recipe_digest") or "")
+    if not stored:
+        return ""
+    path = Path(str(run.get("recipe") or ""))
+    if not path.is_file():
+        return "DIGEST missing %s" % stored
+    mark = "match" if recipe_digest(path) == stored else "drift"
+    return "DIGEST %s %s" % (mark, stored)
+
+
 def next_line(run: dict) -> list[str]:
+    digest = digest_line(run)
+    head = [digest] if digest else []
     if run["status"] in ("done", "aborted"):
-        return [f"RUN {run['status'].upper()}"]
+        return head + [f"RUN {run['status'].upper()}"]
     opened = open_steps(run)
     if not opened:
-        return ["RUN DONE"]
+        return head + ["RUN DONE"]
     blocks = [_step_lines(run, step) for step in opened]
     if len(blocks) == 1:
         lines = blocks[0]
@@ -710,7 +735,7 @@ def next_line(run: dict) -> list[str]:
             lines.extend(block)
     if run["status"] == "blocked":
         lines.insert(0, "RUN BLOCKED; fix this step, then record it again")
-    return lines
+    return head + lines
 
 
 def _fanout_activity(step: dict) -> str:
@@ -748,7 +773,140 @@ def fanout_shard_ids(run_path: Path, step: dict) -> list[str] | None:
     return [str(item.get("id")) for item in (data.get("shards") or []) if isinstance(item, dict) and item.get("id")]
 
 
+def step_snapshot(step: dict) -> dict:
+    """Recipe fields copied onto the run. Runtime keys (status, signoff) stay off."""
+    keys = ("id", "kind", "label", "with", "group", "writes", "react", "tool", "slots", "branch")
+    return {key: step[key] for key in keys if key in step}
+
+
+def _loop_line(run: dict, step: dict) -> str:
+    if not isinstance(step.get("react"), dict):
+        return ""
+    feature = str(run.get("feature") or "")
+    sid = str(step.get("id") or "")
+    if not feature or feature == "-" or not sid:
+        return ""
+    path = sink_dir("react") / ("%s--%s.yaml" % (feature, sid))
+    if not path.is_file():
+        return "LOOP absent"
+    data = safeyaml.mapping(path) or {}
+    return "LOOP %s" % (data.get("status") or "absent")
+
+
+def _tool_line(step: dict) -> str:
+    if step.get("kind") != "tool.step":
+        return ""
+    command = workflow_compose.tool_command(str(step.get("tool") or ""))
+    return "TOOL %s" % (command or step.get("tool") or "")
+
+
+def _tool_lines(step: dict) -> list[str]:
+    line = _tool_line(step)
+    if not line:
+        return []
+    inputs, outputs = workflow_compose.tool_contract(str(step.get("tool") or ""))
+    lines = [line]
+    if inputs:
+        lines.append("IN " + ",".join(inputs))
+    if outputs:
+        lines.append("OUT " + ",".join(outputs))
+    return lines
+
+
+def _react_line(step: dict, feature: str = "") -> str:
+    return "\n".join(_react_lines(step, feature))
+
+
+def _react_lines(step: dict, feature: str) -> list[str]:
+    raw = step.get("react")
+    if not isinstance(raw, dict) or not raw.get("candidates"):
+        return []
+    names = [str(name) for name in raw["candidates"]]
+    hops = raw.get("max_hops", 8)
+    exit_to = raw.get("on_exhaust", "human")
+    fail_to = raw.get("on_fail", "human")
+    head = "REACT candidates=%s max_hops=%s on_exhaust=%s on_fail=%s" % (",".join(names), hops, exit_to, fail_to)
+    sid = str(step.get("id") or "")
+    if not feature or feature == "-" or not sid:
+        return [head]
+    return [head, *_react_script(feature, sid, names, hops, exit_to, fail_to)]
+
+
+def _react_script(feature: str, sid: str, names: list[str], hops: object, exit_to: str, fail_to: str) -> list[str]:
+    flags = " ".join("--candidate %s" % name for name in names)
+    base = "python3 scripts/react_loop.py"
+    where = "--feature %s --step %s" % (feature, sid)
+    log = sink_dir("react") / ("%s--%s.yaml" % (feature, sid))
+    return [
+        "REACT_LOG %s" % log,
+        "REACT_OPEN %s open %s %s --max-hops %s --on-exhaust %s --on-fail %s" % (base, where, flags, hops, exit_to, fail_to),
+        "REACT_ACT %s act %s --thought TEXT --action ID" % (base, where),
+        "REACT_OBSERVE %s observe %s --text TEXT" % (base, where),
+        "REACT_FINISH %s finish %s" % (base, where),
+        "REACT_SHOW %s show %s" % (base, where),
+    ]
+
+
+def _asked_names(step: dict) -> list[str]:
+    names = [str(name) for name in (step.get("slots") or [])]
+    if step.get("kind") != "tool.step":
+        return names
+    inputs, _outputs = workflow_compose.tool_contract(str(step.get("tool") or ""))
+    for name in inputs:
+        if name not in names:
+            names.append(name)
+    return names
+
+
+def _missing_slots(run: dict, step: dict) -> list[str]:
+    params = run.get("params") or {}
+    missing = []
+    for name in _asked_names(step):
+        value = params.get(name)
+        if value is None or (isinstance(value, str) and not str(value).strip()):
+            missing.append(name)
+    return missing
+
+
+def _ask_lines(step: dict, missing: list[str]) -> list[str]:
+    return [
+        f"NEXT {step['id']}  kind={step['kind']}  status={step.get('status', 'pending')}",
+        f"OPEN {KINDS.get(step['kind'], '-')}",
+        "ASK slot " + ",".join(missing),
+    ]
+
+
+def _take_branch(run: dict, step: dict, status: str) -> str:
+    branch = step.get("branch") if isinstance(step.get("branch"), dict) else {}
+    key = "pass" if status == "PASS" else "fail" if status == "FAIL" else ""
+    target = str(branch.get(key) or "")
+    if not target:
+        return ""
+    ids = [item.get("id") for item in run.get("steps") or []]
+    here = ids.index(step.get("id"))
+    if target not in ids or ids.index(target) <= here:
+        raise Blocked(f"{step.get('id')} branch {key} {target} is not a later step")
+    dest = ids.index(target)
+    if _settled(run["steps"][dest]):
+        raise Blocked("%s branch %s %s is already settled" % (step.get("id"), key, target))
+    _skip_between(run, here, dest, str(step.get("id") or ""), target)
+    if status == "FAIL":
+        step["branch_to"] = target
+    return target
+
+
+def _skip_between(run: dict, here: int, dest: int, source: str, target: str) -> None:
+    for item in run["steps"][here + 1:dest]:
+        if _settled(item):
+            continue
+        item["status"] = "SKIPPED"
+        item["note"] = "branch %s -> %s" % (source, target)
+
+
 def _step_lines(run: dict, step: dict) -> list[str]:
+    missing = _missing_slots(run, step)
+    if missing:
+        return _ask_lines(step, missing)
     kind = step["kind"]
     lines = [
         f"NEXT {step['id']}  kind={kind}  status={step.get('status', 'pending')}",
@@ -768,6 +926,13 @@ def _step_lines(run: dict, step: dict) -> list[str]:
         lines.append(f"GROUP {step['group']}")
     if step.get("writes"):
         lines.append("WRITES " + ", ".join(step["writes"]))
+    react_line = _react_line(step, str(run.get("feature") or ""))
+    if react_line:
+        lines.append(react_line)
+    loop_line = _loop_line(run, step)
+    if loop_line:
+        lines.append(loop_line)
+    lines.extend(_tool_lines(step))
     if step.get("with"):
         lines.append(f"WITH {step['with']}")
     key = workflow_defaults.KIND_COMMANDS.get(kind)
@@ -820,6 +985,10 @@ def cmd_start(args: argparse.Namespace) -> int:
     recipe = load_yaml(recipe_path)
     errors: list[str] = []
     check_recipe(recipe, recipe_path, errors)
+    steps = []
+    if isinstance(recipe, dict):
+        steps, compose_errors = workflow_compose.composed_steps(recipe, workflow_compose.recipes_under(recipe_path))
+        errors.extend(compose_errors)
     if errors:
         for err in errors:
             print("FAIL " + err, file=sys.stderr)
@@ -863,11 +1032,9 @@ def cmd_start(args: argparse.Namespace) -> int:
         "started_at": now(),
         "params": params,
         "policy": recipe.get("policy") or {},
-        "steps": [
-            {k: step[k] for k in ("id", "kind", "label", "with", "group", "writes") if k in step}
-            for step in recipe["steps"]
-        ],
+        "steps": [step_snapshot(step) for step in steps],
         "revisions": [],
+        "recipe_digest": recipe_digest(recipe_path),
         "feedback": {"status": "pending"},
     }
     stamp_open_group(run, ticket_of(run_path))
@@ -876,6 +1043,45 @@ def cmd_start(args: argparse.Namespace) -> int:
     print(f"RUN {run_path}")
     print("\n".join(next_line(run)))
     return 0
+
+
+def cmd_param(args: argparse.Namespace) -> int:
+    if "=" not in args.item:
+        raise SystemExit("param wants k=v, got %r" % args.item)
+    key, value = args.item.split("=", 1)
+    key, value = key.strip(), value.strip()
+    if not key or not value:
+        raise Blocked("param wants a name and a non-empty value")
+    path = find_run(args)
+    done: dict = {}
+
+    def mutate(run: dict) -> dict:
+        _set_slot(run, key, value)
+        done["run"] = run
+        return run
+
+    safeyaml.save_locked(path, mutate)
+    write_report(path, done["run"])
+    print("PARAM %s" % key)
+    print("\n".join(next_line(done["run"])))
+    return 0
+
+
+def _set_slot(run: dict, key: str, value: str) -> None:
+    if run.get("status") in ("done", "aborted"):
+        raise Blocked("run is %s" % run.get("status"))
+    allowed = []
+    for step in open_steps(run):
+        for name in _asked_names(step):
+            if name not in allowed:
+                allowed.append(name)
+    if key not in allowed:
+        raise Blocked("%s is not a slot on the open step" % key)
+    params = run.setdefault("params", {})
+    if not isinstance(params, dict):
+        raise Blocked("params is not a mapping")
+    params[key] = value
+    run.setdefault("revisions", []).append({"at": now(), "note": "param %s" % key})
 
 
 def cmd_next(args: argparse.Namespace) -> int:
@@ -1130,7 +1336,9 @@ def cmd_record(args: argparse.Namespace) -> int:
         step["at"] = now()
         if args.evidence:
             step["evidence"] = args.evidence
-        if any(s.get("status") in STEP_STOP for s in run["steps"]):
+        branched = _take_branch(run, step, status)
+        done["branch"] = branched
+        if any(s.get("status") in STEP_STOP and not s.get("branch_to") for s in run["steps"]):
             run["status"] = "blocked"
         elif current_step(run) is None:
             run["status"] = "done"
@@ -1151,7 +1359,10 @@ def cmd_record(args: argparse.Namespace) -> int:
     # new bytes, so a failed save cannot leave the report ahead of the run.
     write_report(path, run)
     release_kept(path, done.get("release") or [])
-    if status in STEP_STOP:
+    if done.get("branch"):
+        which = "fail" if status == "FAIL" else "pass"
+        print("BRANCH %s %s -> %s" % (step["id"], which, done["branch"]))
+    elif status in STEP_STOP:
         ask = (run.get("policy") or {}).get("on_fail") == "ask"
         print(f"BLOCKED {step['id']} {status}; " + ("ask the person how to go on" if ask else "stop; fix and record again"))
     print("\n".join(next_line(run)))
@@ -1630,6 +1841,10 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(name)
         locate(p)
         p.set_defaults(func=func)
+    p = sub.add_parser("param")
+    p.add_argument("item")
+    locate(p)
+    p.set_defaults(func=cmd_param)
     p = sub.add_parser("ask")
     p.add_argument("step")
     locate(p)

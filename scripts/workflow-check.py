@@ -19,7 +19,8 @@ except ImportError:
     yaml = None
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-from workflow_spec import check_recipe, check_run  # noqa: E402
+import workflow_compose  # noqa: E402
+from workflow_spec import check_catalog, check_recipe, check_run, check_tool_refs  # noqa: E402
 
 
 def load(path: Path):
@@ -150,7 +151,9 @@ def check_run_follows_recipe(run: dict, path: Path, errors: list[str]) -> None:
         return
     if run.get("workflow_id") != recipe.get("id"):
         errors.append(f"{path}: workflow_id {run.get('workflow_id')!r} != recipe id {recipe.get('id')!r}")
-    want = [(s.get("id"), s.get("kind")) for s in recipe.get("steps") or [] if isinstance(s, dict)]
+    steps, compose_errors = workflow_compose.composed_steps(recipe, workflow_compose.recipes_under(recipe_file))
+    errors.extend(f"{path}: {err}" for err in compose_errors)
+    want = [(s.get("id"), s.get("kind")) for s in steps if isinstance(s, dict)]
     got = [(s.get("id"), s.get("kind")) for s in run.get("steps") or [] if isinstance(s, dict)]
     if got != want:
         errors.append(f"{path}: steps {got} differ from recipe {recipe_file} {want}")
@@ -180,6 +183,15 @@ def check_product_token_rule(errors: list[str]) -> None:
             errors.append(f"utterance {utter!r} matched {got!r} want {want!r}")
 
 
+def _tool_ids(recipes_dir: Path | None, errors: list[str]) -> set[str]:
+    root = recipes_dir.parent if recipes_dir else Path(__file__).resolve().parent.parent
+    path = root / "references" / "tools.yaml"
+    if not path.is_file():
+        errors.append(f"{path}: missing tool catalog")
+        return set()
+    return set(check_catalog(load(path), path, errors))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--recipes-dir", type=Path, help="validate capability recipes (idev/workflows)")
@@ -193,6 +205,7 @@ def main() -> int:
     files: list[Path] = list(args.paths) + kernel_files + product_files
     if not files and not args.run:
         ap.error("give --recipes-dir, --run, or recipe paths")
+    known = _tool_ids(args.recipes_dir, errors)
     catalog: dict[str, dict] = {}
     kernel_ids: list[str] = []
     kernel_names: set[str] = set()
@@ -200,6 +213,10 @@ def main() -> int:
     for f in files:
         data = load(f)
         check_recipe(data, f, errors)
+        check_tool_refs(data, known, f, errors)
+        if isinstance(data, dict):
+            _, compose_errors = workflow_compose.composed_steps(data, workflow_compose.recipes_under(f))
+            errors.extend(compose_errors)
         wid = data.get("id") if isinstance(data, dict) else None
         if isinstance(wid, str) and wid:
             if wid in catalog and f not in product_files:
