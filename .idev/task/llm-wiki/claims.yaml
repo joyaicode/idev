@@ -1,0 +1,39 @@
+feature: llm-wiki
+records:
+- id: c1
+  subject: B1
+  text: 内核提供 schema 和操作，规定摄取、查询、校准怎么做。
+  source: .idev/task/llm-wiki/baseline.yaml
+- id: c2
+  subject: B2
+  text: 不安装第三方 wiki 引擎，不建向量库，不做健康分，不编译第二份内核文档，不收录个人笔记，不改产品控制台知识库，不把耗时写成通过条件，不把校准加进
+    check-feature。
+  source: .idev/task/llm-wiki/baseline.yaml
+- id: c3
+  subject: B3
+  text: 索引中每条记录都有非空来源路径。来源中不存在的句子不能写入记录。查询输出该来源路径。
+  source: .idev/task/llm-wiki/baseline.yaml
+- id: c4
+  subject: B4
+  text: 索引文件只出现在当前票目录。仓根和内核里不新增跨票索引。
+  source: .idev/task/llm-wiki/baseline.yaml
+- id: c5
+  subject: B5
+  text: 索引只收录已经写进该票方案、拆解或用例的主张。只出现在聊天里的句子不产生记录。来源路径指向这些工件，或它们点名的基线条目、代码、已晋升经验和规约。
+  source: .idev/task/llm-wiki/baseline.yaml
+- id: c6
+  subject: B6
+  text: 一条记录与其来源不一致，或同一事项的两条记录互相矛盾时，校准退出码非 0，并打印所涉来源路径。
+  source: .idev/task/llm-wiki/baseline.yaml
+- id: c7
+  subject: B7
+  text: 方案、拆解、用例相对基线的漂移仍由 realign 报告。经验的新增、升级和召回仍只走 lessons。索引不复制这两套的正文，也不作为它们的查询入口。
+  source: .idev/task/llm-wiki/baseline.yaml
+- id: c8
+  subject: B8
+  text: 写该票的方案、拆解或用例之前跑校准。退出码非 0 时不写这一份。
+  source: .idev/task/llm-wiki/baseline.yaml
+- id: c9
+  subject: B9
+  text: 改索引记录所点名的代码之前跑校准。退出码非 0 时不改这些文件。
+  source: .idev/task/llm-wiki/baseline.yaml

@@ -17,13 +17,13 @@ from __future__ import annotations
 import argparse
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import idev_bin  # noqa: E402
 from doc_home import homes, layout_for, reconcile_spec  # noqa: E402
 from ticketless import skips_baseline  # noqa: E402
 from ticket_yaml import (
@@ -948,13 +948,7 @@ def load_ticket(path: Path, errors: list[str]) -> dict:
 
 
 def _idev_bin() -> str | None:
-    exe = (os.environ.get("IDEV_BIN") or "").strip()
-    if exe and Path(exe).is_file():
-        return exe
-    built = Path(__file__).resolve().parent.parent / "bin" / "idev"
-    if built.is_file():
-        return str(built)
-    return shutil.which("idev")
+    return idev_bin.path()
 
 
 def check_sealed_projection(
@@ -979,7 +973,8 @@ def check_sealed_projection(
     if sealed.returncode != 0:
         fail(
             "baseline.sealed is true in YAML but no sealed row in the store "
-            "(hand-edited projection; seal via idev baseline seal)",
+            "(hand-edited projection; seal via idev baseline seal — a ticket "
+            "whose seal was committed before the store existed: idev baseline adopt)",
             errors,
         )
         return

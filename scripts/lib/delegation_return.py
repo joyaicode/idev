@@ -142,10 +142,18 @@ def apply_as_main(raw: str, structured: dict) -> str:
     return text
 
 
-# Local mirrors of the line anchors in delegation.py — keep the JSON→prose
-# bridge free of a circular import.
-STATUS_LINE = re.compile(r"(?mi)^\s*STATUS:\s*.*$")
-EVIDENCE_LINE = re.compile(r"(?mi)^\s*EVIDENCE:\s*.*$")
-CHANGED_LINE = re.compile(r"(?mi)^\s*CHANGED:\s*.*$")
-CONCLUSION_LINE = re.compile(r"(?mi)^\s*CONCLUSION:\s*.*$")
-ASSUMED_LINE = re.compile(r"(?mi)^\s*ASSUMED:\s*.*$")
+def line_field(name: str, value: str = r"(.+?)[^\S\n]*$") -> re.Pattern[str]:
+    """`NAME: value` on a line of its own, for every reader of a report.
+
+    Only horizontal space may follow the colon. With `\\s*` an empty field
+    took the next line as its value: `ASSUMED:` above `SUGGEST:` read as a
+    declared assumption, and rewriting `STATUS:` deleted the line under it.
+    """
+    return re.compile(rf"(?mi)^[^\S\n]*{name}:[^\S\n]*{value}")
+
+
+STATUS_LINE = line_field("STATUS", r".*$")
+EVIDENCE_LINE = line_field("EVIDENCE", r".*$")
+CHANGED_LINE = line_field("CHANGED", r".*$")
+CONCLUSION_LINE = line_field("CONCLUSION", r".*$")
+ASSUMED_LINE = line_field("ASSUMED", r".*$")

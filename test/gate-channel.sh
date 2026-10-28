@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# The gate channel: a chat reply of 确认 is the signoff. The terminal
-# `idev gate approve` path still works and is not required. Each case is
-# red first (the refusal) and then green.
+# The gate channel: a chat reply of 确认 is the signoff. That sentence
+# approves an open gate. A terminal and a short code are not required.
+# Each case is red first (the refusal) and then green.
 #
 #   bash test/gate-channel.sh
 set -uo pipefail
@@ -26,15 +26,6 @@ printf 'people:\n  - tester\n' > "$T/config/people.yaml"
 printf 'handle: tester\ntoken: idv_h_test\n' > "$T/data/secrets/human.yaml"
 chmod 600 "$T/data/secrets/human.yaml"
 
-# in_pty CMD... runs CMD on a pseudo-terminal, feeding it this script's stdin.
-in_pty() {
-  if script -q /dev/null true >/dev/null 2>&1 </dev/null; then
-    script -q /dev/null "$@"
-  else
-    script -qec "$(printf '%q ' "$@")" /dev/null
-  fi
-}
-
 P="$T/product"
 mkdir -p "$P/.idev/task/demo/verify" "$P/.idev/workflows"
 cd "$P" && git init -q
@@ -52,13 +43,13 @@ out="$("$W" start demo-gate --feature demo 2>&1)"
 [[ "$out" == *'--quote "<their words>"'* ]] && ok "next names the chat reply as the signoff" || bad "next line: $out"
 
 out="$("$W" record g PASS --feature demo --by tester --quote 继续 2>&1)" \
-  && bad "继续 signed the gate" || { [[ "$out" == *"confirm words"* ]] && ok "继续 is not a signoff" || bad "继续: $out"; }
+  && bad "继续 signed the gate" || { [[ "$out" == *"have to show agreement"* ]] && ok "继续 is not a signoff" || bad "继续: $out"; }
 
 out="$("$W" record g PASS --feature demo --by idev-coder --quote 确认 2>&1)" \
   && bad "an agent signed the gate" || { [[ "$out" == *"person's name"* ]] && ok "agent name refused" || bad "agent: $out"; }
 
 out="$("$W" record g PASS --feature demo 2>&1)" \
-  && bad "PASS with no reply" || { [[ "$out" == *"confirm words"* ]] && ok "PASS with no reply refused" || bad "unquoted: $out"; }
+  && bad "PASS with no reply" || { [[ "$out" == *"words showing they share this step"* ]] && ok "PASS with no reply refused" || bad "unquoted: $out"; }
 
 out="$(IDEV_BIN="$T/nope" "$W" ask g --feature demo 2>&1)" \
   && bad "asked with no binary" || { [[ "$out" == *"IDEV_ENGINE=python"* ]] && ok "missing binary names the fallback" || bad "no binary: $out"; }
@@ -66,7 +57,6 @@ out="$(IDEV_BIN="$T/nope" "$W" ask g --feature demo 2>&1)" \
 out="$("$W" ask g --feature demo 2>&1)" || bad "ask: $out"
 GID="$(printf '%s\n' "$out" | sed -n 's/^GATE \([0-9A-Z]\{26\}\) asked.*/\1/p')"
 [ -n "$GID" ] && ok "ask opened gate $GID" || bad "ask printed: $out"
-SHORT="${GID: -4}"
 
 # The question is in sqlite. Dropping it from the run must not open a second
 # one, and must not hold the yaml lock across the request.
@@ -106,15 +96,11 @@ again="$(printf '%s\n' "$out" | sed -n 's/^GATE \([0-9A-Z]\{26\}\) asked.*/\1/p'
 "$W" ask g --feature demo >/dev/null 2>&1 && bad "a second pending question on one step" || ok "one pending question per step"
 
 out="$("$W" record g PASS --feature demo 2>&1)" \
-  && bad "PASS while unanswered" || { [[ "$out" == *"waiting for the person"* ]] && ok "PASS while pending refused" || bad "pending: $out"; }
+  && bad "PASS while unanswered" || { [[ "$out" == *"waiting for a reply"* ]] && ok "PASS while pending refused" || bad "pending: $out"; }
 
-out="$(printf '%s\n' "$SHORT" | "$IDEV_BIN" gate approve "$GID" --quote 确认 2>&1)" \
-  && bad "approved without a terminal" || { [[ "$out" == *"TTY"* ]] && ok "approve without a terminal refused" || bad "no tty: $out"; }
-
-# The pause lets the prompt start reading before the line arrives, and keeps
-# script's end-of-input ^D from landing in the middle of it.
-out="$({ sleep 1; printf '%s\n' "$SHORT"; sleep 1; } | in_pty "$IDEV_BIN" gate approve "$GID" --quote 确认 2>&1)"
-[[ "$out" == *"approved $GID by tester"* ]] && ok "the person approved from a terminal" || bad "approve: $out"
+out="$("$IDEV_BIN" gate approve "$GID" --quote 确认 2>&1)"
+[[ "$out" == *'"status":"approved"'* && "$out" == *'"channel":"chat"'* ]] \
+  && ok "a chat quote approves the open gate" || bad "approve: $out"
 
 printf 'cases: [late-edit]\n' > .idev/task/demo/verify/plan.yaml
 out="$("$W" record g PASS --feature demo 2>&1)" \
@@ -143,6 +129,18 @@ run = yaml.safe_load(open(sys.argv[1]))
 s = next(step for step in run["steps"] if step["id"] == "g")["signoff"]
 assert s["by"] == "tester" and s["quote"] == "确认" and s["assurance"] == "chat", s
 assert "approval_id" not in s, s
+PY
+
+"$W" abort --feature demo --note "chat without a gate" >/dev/null || bad "abort before settle"
+out="$("$W" start demo-gate --feature demo 2>&1)" || bad "restart for settle: $out"
+out="$("$W" ask g --feature demo 2>&1)" || bad "ask for settle: $out"
+out="$("$W" record g PASS --feature demo --by tester --quote 确认 2>&1)"
+[[ "$out" == *"NEXT r "* ]] && ok "record approves the pending gate from the quote" || bad "settle: $out"
+python3 - "$RUN" <<'PY' && ok "the quote is the stored approval" || bad "settled signoff"
+import sys, yaml
+run = yaml.safe_load(open(sys.argv[1]))
+s = next(step for step in run["steps"] if step["id"] == "g")["signoff"]
+assert s["by"] == "tester" and s["quote"] == "确认" and s["approval_id"] and s["assurance"] == "low", s
 PY
 
 out="$(IDEV_ENGINE=python "$W" ask g --feature demo 2>&1)" \

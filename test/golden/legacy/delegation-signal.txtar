@@ -7,3 +7,4 @@
 OK   $WORK/.idev/task/demo/workflow/delegations/<ULID>/run-1.yaml
 SIGNAL [承重] 测试库开跑前是空的  (ask the person; record the answer with workflow.py decide)
 HINT no timing: pass started_at + finished_at to make duration observable
+HINT $WORK/idev-data/subagent-stops.jsonl has no rows: install the hooks (bash $IDEV/scripts/install-idev-hooks.sh) so records carry duration and tool calls

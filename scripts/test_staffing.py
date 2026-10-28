@@ -13,6 +13,8 @@ import textwrap
 import unittest
 from pathlib import Path
 
+import yaml
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
 import staffing  # noqa: E402
@@ -169,8 +171,9 @@ class RecordGate(unittest.TestCase):
             staffing.write_map(repo, roles)
 
             def run(*args: str) -> subprocess.CompletedProcess:
-                env = {**os.environ, "IDEV_ENGINE": "python", "IDEV_PROMPT_LOG_CHECK": "0"}
+                env = {**os.environ, "IDEV_PROMPT_LOG_CHECK": "0"}
                 env.pop("IDEV_PRODUCT_REPO", None)
+                env.pop("IDEV_ENGINE", None)
                 return subprocess.run(
                     [sys.executable, str(HERE / "workflow.py"), "--repo", str(repo), *args],
                     capture_output=True, text=True, env=env, cwd=repo,
@@ -178,8 +181,13 @@ class RecordGate(unittest.TestCase):
 
             started = run("start", "dev-logic", "--feature", "staff-demo")
             self.assertEqual(started.returncode, 0, started.stdout + started.stderr)
-            planned = run("record", "plan", "PASS", "--evidence", "verify/plan.yaml", "--feature", "staff-demo")
-            self.assertEqual(planned.returncode, 0, planned.stdout + planned.stderr)
+            run_path = ticket / "workflow" / "run.yaml"
+            data = yaml.safe_load(run_path.read_text(encoding="utf-8"))
+            for step in data["steps"]:
+                if step["id"] == "plan":
+                    step["status"] = "PASS"
+                    step["at"] = "2026-10-28T00:00:00+08:00"
+            run_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
             denied = run(
                 "record", "gate-plan", "PASS", "--by", "alice", "--quote", "确认", "--feature", "staff-demo"
             )

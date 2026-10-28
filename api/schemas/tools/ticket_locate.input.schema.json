@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/ticket_locate.input.schema.json",
+  "title": "idev MCP ticket_locate input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "repo_root",
+    "feature"
+  ],
+  "properties": {
+    "repo_root": {
+      "type": "string",
+      "minLength": 1
+    },
+    "feature": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(-|[a-z0-9][a-z0-9-]*)$"
+    },
+    "key": {
+      "type": "string",
+      "enum": [
+        "layout",
+        "task",
+        "deliver",
+        "plan",
+        "prd",
+        "spec",
+        "test-case",
+        "patrol"
+      ],
+      "default": "task"
+    }
+  }
+}

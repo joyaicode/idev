@@ -6,3 +6,4 @@
 -- output --
 OK   $WORK/.idev/task/demo/workflow/delegations/<ULID>/code-pass-1.yaml
 HINT no timing: pass started_at + finished_at to make duration observable
+HINT $WORK/idev-data/subagent-stops.jsonl has no rows: install the hooks (bash $IDEV/scripts/install-idev-hooks.sh) so records carry duration and tool calls

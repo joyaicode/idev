@@ -19,10 +19,10 @@ the module the step lands on.
   workflow.py status  [--feature F | --run PATH]
   workflow.py abort   --note TEXT [--feature F | --run PATH]
 
-A human.gate is signed by the person's chat reply. `record <gate> PASS
---by <name> --quote "确认"` is the signoff (确认 / 全签 / 同意 / LGTM).
-`ask` plus `idev gate approve` in their terminal still works, and is not
-required.
+A human.gate is recorded from the person's chat reply when that reply
+shows they share this step. `record <gate> PASS --by <name> --quote "<their words>"`.
+That same sentence approves an open gate. Do not ask them to type a password,
+a keyword, a short code, or the gate id.
 
 Exit codes: 0 ok, 1 usage or invalid recipe, 2 BLOCKED (missing inputs or a
 rule refused the write).
@@ -34,7 +34,6 @@ import datetime as dt
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -45,6 +44,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import doc_home  # noqa: E402
 import ids  # noqa: E402
 import break_glass
+import delegation_return  # noqa: E402
+import idev_bin as idev_exe  # noqa: E402
 import kind_agents  # noqa: E402
 import record_paths  # noqa: E402
 import safeyaml  # noqa: E402
@@ -86,12 +87,12 @@ class Blocked(Exception):
 # the reason; saying only "needs confirm words" sends them to re-type the
 # same sentence.
 WHY = {
-    "no-verb": "it does not start with one of those words",
+    "no-verb": "it does not show agreement with this step",
     "question": "it reads as a question, not a decision",
     "negation": "it contains a refusal",
     "hesitation": "it reads as hesitation, not a decision",
-    "unparsed-tail": "there is more in it than a confirmation",
-    "keyword-mismatch": "this gate needs its keyword (origin=… / 解除密封)",
+    "unparsed-tail": "the rest does not agree with this step",
+    "keyword-mismatch": "a rollback or unseal has to name that action in the reply",
 }
 
 
@@ -232,13 +233,16 @@ def run_records(run_path: Path) -> list[Path]:
 
 
 def latest_delegation(run_path: Path, step_id: str) -> dict | None:
-    """The newest delegation record for a step of a ticket run, if any."""
+    """The newest writer record for a step of a ticket run, if any.
+
+    A verifier's record answers for the writer's attempt; it is not one.
+    """
     best: tuple[int, dict] | None = None
     for path in run_records(run_path):
         if not path.name.startswith(f"{step_id}-"):
             continue
         data = safeyaml.mapping(path) or {}
-        if str(data.get("step")) != step_id:
+        if str(data.get("step")) != step_id or str(data.get("role") or "").lower() == "verifier":
             continue
         attempt = safeyaml.as_int(data.get("attempt"), 1)
         if best is None or attempt > best[0]:
@@ -406,14 +410,7 @@ def ensure_python_engine_allowed() -> None:
 
 
 def _idev_bin_path() -> str | None:
-    exe = (os.environ.get("IDEV_BIN") or "").strip()
-    if exe and Path(exe).is_file():
-        return exe
-    built = kernel_root() / "bin" / "idev"
-    if built.is_file():
-        return str(built)
-    found = shutil.which("idev")
-    return found if found else None
+    return idev_exe.path()
 
 
 def run_writer_go() -> bool:
@@ -481,11 +478,8 @@ def save_run(path: Path, mutate) -> dict:
 
 def idev(*argv: str) -> dict:
     """Run the gate channel and parse its JSON; a refusal becomes Blocked."""
-    exe = os.environ.get("IDEV_BIN", "").strip() or None
-    if exe is None:
-        built = kernel_root() / "bin" / "idev"
-        exe = str(built) if built.is_file() else shutil.which("idev")
-    if not exe or not Path(exe).is_file():
+    exe = idev_exe.path()
+    if not exe:
         raise Blocked(
             "human.gate needs the idev binary: go build -o bin/idev ./cmd/idev in the kernel "
             "(or set IDEV_BIN); IDEV_ENGINE=python falls back to --by / --quote"
@@ -552,8 +546,9 @@ def signed_answer(step: dict) -> dict:
     status = state.get("status")
     if status == "pending":
         raise Blocked(
-            "waiting for the person: record PASS --by <name> --quote \"<their 确认>\", "
-            f"or they answer in their own terminal with `idev gate approve {gid}`"
+            "waiting for a reply that shows they share this step: "
+            "record PASS --by <name> --quote \"<their words>\". "
+            f"id {gid} is internal; do not ask the person to type it"
         )
     if status == "expired":
         raise Blocked(f"gate {gid} expired unanswered; ask again: workflow.py ask {step['id']}")
@@ -573,6 +568,32 @@ def signed_answer(step: dict) -> dict:
         "assurance": approval["assurance"],
         **({"assurance_downgraded": True} if approval.get("downgraded") else {}),
     }
+
+
+def settle_open_gate(gate_id: str, quote: str) -> None:
+    """Approve a pending gate with the person's words, or accept the same words already recorded.
+
+    The quote is the signature. A terminal and a short code are not.
+    """
+    state = idev("gate", "status", gate_id)
+    status = state.get("status")
+    if status == "approved":
+        if not state.get("digest_match"):
+            raise Blocked(
+                f"what gate {gate_id} approved has changed since; ask again: workflow.py ask"
+            )
+        got = str((state.get("approval") or {}).get("quote") or "")
+        if got != quote:
+            raise Blocked(
+                f"gate {gate_id} was already answered with other words; "
+                "record PASS without a second quote"
+            )
+        return
+    if status == "expired":
+        raise Blocked(f"gate {gate_id} expired unanswered; ask again")
+    if status != "pending":
+        raise Blocked(f"gate {gate_id} is {status}; nothing was recorded")
+    idev("gate", "approve", gate_id, "--quote", quote)
 
 
 def feature_id(run: dict, run_path: Path) -> str:
@@ -728,6 +749,30 @@ def delegation_changed(run_path: Path, step_id: str) -> tuple[bool, bool, list[s
     if delegation.NONE_VALUE.match(hit.group(1)):
         return True, True, []
     return True, True, sorted(delegation._paths(hit.group(1)))
+
+
+def delegation_findings(run_path: Path, step_id: str, repo: Path | None) -> tuple[list[str], dict | None]:
+    """The machine checks the latest writer record fails, rerun with today's checker.
+
+    brief-complete is the conductor's miss, not the agent's, and does not count here.
+    """
+    import delegation  # noqa: PLC0415 - scripts/, imported only when a report is read
+
+    record = latest_delegation(run_path, step_id)
+    if not record:
+        return [], None
+    checks = delegation.run_checks(record, repo)
+    failed = sorted(k for k, v in checks.items() if str(v).startswith("FAIL") and k != "brief-complete")
+    return failed, record
+
+
+def accept_findings(record: dict | None, findings: list[str], reason: str) -> None:
+    """Put a PASS over failed checks into the audit chain, against that delegation."""
+    delegation_id = str((record or {}).get("delegation_id") or "").strip()
+    if not delegation_id or not go_engine() or not _idev_bin_path():
+        return
+    idev("delegation", "accept", "--id", delegation_id, "--reason", reason,
+         *[a for f in findings for a in ("--finding", f)])
 
 
 def ticket_tree(ticket: Path) -> dict[str, str]:
@@ -1122,8 +1167,15 @@ def _step_lines(run: dict, step: dict) -> list[str]:
             )
         lines.append(f"GATE stop here; post this line and the proof: {will_write_line(step)}")
         lines.append(
-            "GATE the person's reply of 确认 / 同意 / 全签 / LGTM is the signoff; "
-            "record PASS --by <name> --quote \"<their words>\""
+            "GATE their reply is agreement when it shows they share this proposal; "
+            "record PASS --by <name> --quote \"<their words>\". "
+            "Do not ask them to type a password, a keyword or the gate id"
+        )
+    feature = str(run.get("feature") or "-")
+    if force_leases() and feature != "-" and kind_agents.KIND_AGENTS.get(kind, "-") != "-":
+        lines.append(
+            f"STEP workflow.py step {step['id']} --feature {feature} hands it over and prints the brief; "
+            f"workflow.py land {step['id']} --feature {feature} --report - takes each report"
         )
     purpose = lease_purpose(run, step)
     if purpose == "write":
@@ -1132,6 +1184,11 @@ def _step_lines(run: dict, step: dict) -> list[str]:
         lines.append(f"LEASE workflow.py delegate {step['id']} before the verifier starts; it writes only inside the ticket")
     verifier = kind_agents.KIND_VERIFIER.get(kind)
     if verifier:
+        if force_leases():
+            lines.append(
+                f"VERIFY workflow.py delegate {step['id']} --verify once the writer returns; "
+                f"{verifier} records its report with role: verifier"
+            )
         lines.append(f"VERIFY {verifier} confirms before PASS: --verified-by {verifier} --verify-evidence <report>")
     return lines
 
@@ -1400,7 +1457,7 @@ def prompt_log_check_enabled() -> bool:
     return prompts_log_active_for_cwd()
 
 
-def chat_signoff(by: str, quote: str) -> dict:
+def chat_signoff(by: str, quote: str, gate_type: str = "", origin: str = "") -> dict:
     """The signoff a person's chat reply is. Their words, recorded as they said them."""
     if not people_whitelist():
         raise Blocked(
@@ -1410,11 +1467,11 @@ def chat_signoff(by: str, quote: str) -> dict:
     refusal = signoff_by_refusal(by or "")
     if refusal:
         raise Blocked(refusal)
-    parsed = parse_confirm(quote or "")
+    parsed = parse_confirm(quote or "", gate_type, origin)
     if not parsed.ok:
         raise Blocked(
-            f"human.gate PASS needs --quote with the person's confirm words "
-            f"(确认 / 全签 / 同意 / LGTM); {WHY[parsed.reason]}"
+            "human.gate PASS needs --quote with the person's own words, "
+            f"and those words have to show agreement; {WHY[parsed.reason]}"
         )
     # IDEV_PROMPT_LOG_CHECK=1 forces the check; =0 disables it. Unset → auto
     # when prompts.log already has a recent entry for this cwd (hooks installed).
@@ -1477,6 +1534,8 @@ def cmd_record(args: argparse.Namespace) -> int:
             feature=str(run.get("feature") or ""),
             verify_lease_id=str((step.get("verify_lease") or {}).get("id") or ""),
             verify_lease_agent=str((step.get("verify_lease") or {}).get("agent") or ""),
+            gate_type=gate_type(step) if step.get("kind") == "human.gate" else "",
+            origin=str((step.get("with") or {}).get("origin") or ""),
         )
         if (status == "AUTO" and step["kind"] == "human.gate"
                 and (_step_open(run, step) or args.note)
@@ -1492,8 +1551,12 @@ def cmd_record(args: argparse.Namespace) -> int:
     )
     signed = None
     if (pre.get("seen") and not flags_missing and pre.get("kind") == "human.gate"
-            and status == "PASS" and go_engine() and not (args.by or args.quote)
-            and pre.get("gate_id")):
+            and status == "PASS" and go_engine() and pre.get("gate_id")):
+        if args.by or args.quote:
+            agreed = chat_signoff(
+                args.by or "", args.quote or "", str(pre.get("gate_type") or ""), str(pre.get("origin") or "")
+            )
+            settle_open_gate(str(pre["gate_id"]), agreed["quote"])
         signed = signed_answer({"id": args.step, "gate": {"id": pre["gate_id"]}})
     check = pre.get("auto")
     if check and args.evidence in ("", check.log):
@@ -1534,6 +1597,29 @@ def cmd_record(args: argparse.Namespace) -> int:
                 + ", ".join(outside_disk)
                 + " — revert them; this wave writes only those paths"
             )
+    reason = (args.accept_with_findings or "").strip()
+    if reason and status != "PASS":
+        raise Blocked("--accept-with-findings goes with PASS")
+    if (pre.get("seen") and status == "PASS"
+            and kind_agents.KIND_AGENTS.get(str(pre.get("kind")), "-") != "-"):
+        findings, accepted = delegation_findings(path, args.step, session_repo(args.repo))
+        if findings and not reason:
+            raise Blocked(
+                f"{args.step}'s delegation fails machine checks: {', '.join(findings)} — "
+                f"send it back (delegation.py check --feature {pre['feature']} --step {args.step} shows why), "
+                "or record PASS --accept-with-findings \"<why it passes anyway>\""
+            )
+        if reason and not findings:
+            raise Blocked(
+                f"{args.step}'s latest delegation fails no machine check; drop --accept-with-findings"
+            )
+        if findings:
+            accept_findings(accepted, findings, reason)
+            pre["accepted_findings"] = {
+                "checks": findings,
+                "reason": reason,
+                "attempt": safeyaml.as_int((accepted or {}).get("attempt"), 1),
+            }
 
     def mutate(run: dict) -> dict:
         if not run or "steps" not in run:
@@ -1552,8 +1638,21 @@ def cmd_record(args: argparse.Namespace) -> int:
             if not args.note:
                 raise Blocked(f"{step['id']} is already {step['status']}; changing it needs --note")
         if step["kind"] == "human.gate":
-            if status == "PASS" and (args.by or args.quote or not go_engine()):
-                signoff = chat_signoff(args.by or "", args.quote or "")
+            if status == "PASS" and go_engine() and str((step.get("gate") or {}).get("id") or ""):
+                gid = str((step.get("gate") or {}).get("id") or "")
+                if signed is None or gid != str(pre.get("gate_id") or ""):
+                    raise Blocked(f"{step['id']} changed while it was being recorded; record again")
+                blocked_signer = staffing.signer_refusal(
+                    session_repo(args.repo), signed["by"], gate_type(step), deliver_stage(path)
+                )
+                if blocked_signer:
+                    raise Blocked(blocked_signer)
+                step["signoff"] = signed
+            elif status == "PASS" and (args.by or args.quote or not go_engine()):
+                payload = step.get("with") or {}
+                signoff = chat_signoff(
+                    args.by or "", args.quote or "", gate_type(step), str(payload.get("origin") or "")
+                )
                 blocked_signer = staffing.signer_refusal(
                     session_repo(args.repo), signoff["by"], gate_type(step), deliver_stage(path)
                 )
@@ -1564,8 +1663,8 @@ def cmd_record(args: argparse.Namespace) -> int:
                 gid = str((step.get("gate") or {}).get("id") or "")
                 if not gid:
                     raise Blocked(
-                        f"{step['id']} needs the person's confirm words: "
-                        "record PASS --by <name> --quote \"确认\""
+                        f"{step['id']} needs the person's words showing they share this step: "
+                        "record PASS --by <name> --quote \"<their words>\""
                     )
                 if signed is None or gid != str(pre.get("gate_id") or ""):
                     raise Blocked(f"{step['id']} changed while it was being recorded; record again")
@@ -1703,6 +1802,8 @@ def cmd_record(args: argparse.Namespace) -> int:
         step["at"] = now()
         if args.evidence:
             step["evidence"] = args.evidence
+        if pre.get("accepted_findings"):
+            step["accepted_findings"] = dict(pre["accepted_findings"], at=now())
         branched = _take_branch(run, step, status)
         done["branch"] = branched
         if any(s.get("status") in STEP_STOP and not s.get("branch_to") for s in run["steps"]):
@@ -1962,6 +2063,292 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
     return 0
 
 
+REPORT_STATUS = delegation_return.line_field("STATUS", r"(\S+)")
+REPORT_EVIDENCE = delegation_return.line_field("EVIDENCE")
+NO_GUIDE = ("", "无", "none", "-")
+
+
+def _report_status(raw: str) -> str:
+    hit = REPORT_STATUS.search(raw)
+    return hit.group(1).split("(")[0].upper() if hit else ""
+
+
+def _report_evidence(raw: str) -> str:
+    hit = REPORT_EVIDENCE.search(raw)
+    return hit.group(1).strip() if hit else ""
+
+
+def _raw(record: dict | None) -> str:
+    return str(((record or {}).get("report") or {}).get("raw") or "").strip()
+
+
+def brief_path(run_path: Path, run: dict, step_id: str, verify: bool = False) -> Path:
+    """Where step leaves the brief that land reads: beside the run, apart from the records."""
+    return run_path.parent / "briefs" / f"{run.get('run_id') or 'run'}--{step_id}{'.verify' if verify else ''}.yaml"
+
+
+def handed_guide(run_path: Path, step_id: str) -> str:
+    """The GUIDE the last other role left for whoever works next."""
+    found = ("", "")
+    for path in run_records(run_path):
+        data = safeyaml.mapping(path) or {}
+        guide = str(data.get("guide") or "").strip()
+        if guide not in NO_GUIDE and str(data.get("step")) != step_id and str(data.get("at") or "") >= found[0]:
+            found = (str(data.get("at") or ""), guide)
+    return found[1]
+
+
+def attempt_record(run_path: Path, step_id: str, attempt: int, verifier: bool) -> tuple[Path, dict] | None:
+    """This run's writer record of one attempt, or the verification beside it."""
+    for path in run_records(run_path):
+        data = safeyaml.mapping(path) or {}
+        if (str(data.get("step")) == step_id and (str(data.get("role") or "").lower() == "verifier") == verifier
+                and safeyaml.as_int(data.get("attempt"), 1) == attempt):
+            return path, data
+    return None
+
+
+def verification_of(run_path: Path, step_id: str, attempt: int) -> dict | None:
+    found = attempt_record(run_path, step_id, attempt, verifier=True)
+    return found[1] if found else None
+
+
+def saved_brief(path: Path) -> dict:
+    return (safeyaml.mapping(path) or {}) if path.is_file() else {}
+
+
+def prior_failure(run_path: Path, record: dict) -> str:
+    """Why the last attempt did not pass, for the agent that goes again."""
+    status = _report_status(_raw(record)) or str((record.get("report") or {}).get("status") or "?")
+    failed = [f"{k}={v}" for k, v in sorted((record.get("checks") or {}).items())
+              if isinstance(v, str) and v.startswith("FAIL")]
+    said = f"上次 STATUS={status}"
+    if failed:
+        said += f",但有 {len(failed)} 项检查未过,这些是本次必须修掉的: " + "; ".join(failed)
+    evidence = _report_evidence(_raw(record))
+    if evidence:
+        said += f"。上次证据: {evidence}"
+    check = verification_of(run_path, str(record.get("step")), safeyaml.as_int(record.get("attempt"), 1))
+    if check and _report_status(_raw(check)) != "PASS":
+        said += (f"。复核 {check.get('agent')} STATUS={_report_status(_raw(check)) or '?'},"
+                 f"证据 {_report_evidence(_raw(check)) or '见复核留痕'}")
+    return said
+
+
+def compose_brief(run_path: Path, run: dict, step: dict, repo: Path | None, **extra: str) -> dict:
+    """The brief of references/agents.md, from what the run, the ticket and the registry already say."""
+    page = KINDS.get(step["kind"], "")
+    root = repo or next((p for p in ticket_of(run_path).parents if (p / ".git").is_dir()), None)
+    brief = {
+        "ticket_home": ticket_dir_repo_relative(run_path, repo),
+        "repo": str(root or ""),
+        "stage": deliver_stage(run_path),
+        "risk_tier": risk_tier_of(run, run_path),
+        "must_read": str(kernel_root() / page) if page and page != "-" else "",
+        "idev_root": str(kernel_root()),
+        "with": dict(step.get("with") or {}),
+    }
+    if (step.get("with") or {}).get("artifact"):
+        brief["artifact"] = str(step["with"]["artifact"])
+    if step.get("label"):
+        brief["label"] = str(step["label"])
+    if step.get("writes"):
+        brief["writes"] = [str(w) for w in step["writes"]]
+    guide = handed_guide(run_path, step["id"])
+    if guide:
+        brief["guide"] = guide
+    brief.update({k: v for k, v in extra.items() if v})
+    return brief
+
+
+def print_brief(run: dict, step: dict, agent: str, attempt: int, brief: dict, role: str = "") -> None:
+    print(f"BRIEF {step['id']} -> {agent}{' verify' if role else ''} attempt {attempt}")
+    print(f"票目录: {brief['ticket_home']}")
+    print(f"仓根: {brief['repo']}")
+    print(f"feature / stage / risk_tier: {run.get('feature')} / {brief['stage'] or '-'} / {brief['risk_tier'] or '-'}")
+    print(f"本步: {step['id']}  kind={step['kind']}  label={brief.get('label', '')}  with={brief['with']}")
+    print(f"attempt: {attempt}")
+    if brief.get("prior_failure"):
+        print(f"prior_failure: {brief['prior_failure']}")
+    print(f"必读: {brief['must_read']}")
+    print(f"IDEV_ROOT: {brief['idev_root']}")
+    if brief.get("artifact"):
+        print(f"artifact: {brief['artifact']}")
+    print("禁止: 写 sealed/accepted/aligned/resolved/reopen_baseline/semantic_gate.*;改密封基线正文")
+    print("回报: 按你定义里的回报格式,STATUS + EVIDENCE 必填")
+    if brief.get("guide"):
+        print(f"领域约束: {brief['guide']}")
+    if brief.get("writes"):
+        print("只写: " + ", ".join(brief["writes"]))
+    if brief.get("verifies"):
+        print(f"复核对象: {brief['verifies']}(写手这次的回报与改动,独立判断,不改写手的代码)")
+    print("END BRIEF")
+
+
+def save_brief(path: Path, run: dict, step: dict, agent: str, attempt: int, brief: dict, **extra: str) -> None:
+    payload = {"run_id": str(run.get("run_id") or ""), "step": step["id"], "kind": step["kind"],
+               "agent": agent, "attempt": attempt, "started_at": now(), "brief": brief}
+    payload.update({k: v for k, v in extra.items() if v})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _atomic_write(path, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+
+
+def _ticket_run(args: argparse.Namespace) -> tuple[Path, dict, dict]:
+    path = find_run(args)
+    if path.name != "run.yaml":
+        raise Blocked("step and land keep delegation records, which need a ticket run: start it with --feature")
+    run = load_yaml(path) or {}
+    step = next((s for s in run.get("steps") or [] if s["id"] == args.step), None)
+    if step is None:
+        raise Blocked(f"no step {args.step} in this run")
+    if kind_agents.KIND_AGENTS.get(step["kind"], "-") == "-":
+        raise Blocked(f"{step['kind']} stays with the conductor; nothing to delegate")
+    return path, run, step
+
+
+def _locate(args: argparse.Namespace, **extra: Any) -> argparse.Namespace:
+    return argparse.Namespace(repo=args.repo, feature=args.feature, run=args.run, step=args.step, **extra)
+
+
+def cmd_step(args: argparse.Namespace) -> int:
+    """Hand a step to its agent and print the brief, filled from the run, the ticket and the registry."""
+    path, run, step = _ticket_run(args)
+    block = agent_feedback_block(run, path)
+    if block:
+        print(block, file=sys.stderr)
+        raise Blocked(block)
+    agent = kind_agents.KIND_AGENTS[step["kind"]]
+    if (step.get("delegated") or {}).get("agent"):
+        print(f"DELEGATE {step['id']} -> {agent} (already delegated; its lease stands)")
+    else:
+        delegate_one(_locate(args, shard="", verify=False, open=False), path)
+        run = load_yaml(path) or {}
+        step = next(s for s in run["steps"] if s["id"] == args.step)
+    last = latest_delegation(path, step["id"])
+    attempt = safeyaml.as_int((last or {}).get("attempt"), 0) + 1
+    repo = session_repo(args.repo)
+    brief = compose_brief(path, run, step, repo, prior_failure=prior_failure(path, last) if last else "")
+    save_brief(brief_path(path, run, step["id"]), run, step, agent, attempt, brief)
+    print_brief(run, step, agent, attempt, brief)
+    feature = run.get("feature")
+    print(f"LAND send the brief to {agent}; with its report: workflow.py land {step['id']} --feature {feature} --report -")
+    return 0
+
+
+def write_record(record: dict, feature: str, repo: str) -> int:
+    """delegation.py write, as the conductor runs it: same checks, same lines, same exit codes."""
+    command = [sys.executable, str(Path(__file__).resolve().parent / "delegation.py")]
+    if repo:
+        command += ["--repo", repo]
+    done = subprocess.run(command + ["write", "--feature", feature, "--file", "-"],
+                          input=json.dumps(record, ensure_ascii=False), capture_output=True, text=True)
+    sys.stdout.write(done.stdout)
+    sys.stderr.write(done.stderr)
+    return done.returncode
+
+
+def cmd_land(args: argparse.Namespace) -> int:
+    """Take an agent's report for a step: its record, then the verifier's turn or the step's record."""
+    path, run, step = _ticket_run(args)
+    raw = (sys.stdin.read() if args.report in ("", "-") else Path(args.report).read_text(encoding="utf-8")).strip()
+    if not raw:
+        raise Blocked("land needs the agent's report: --report - with the text on stdin, or a file")
+    sid, kind, feature = step["id"], step["kind"], str(run.get("feature") or "")
+    agent, verifier = kind_agents.KIND_AGENTS[kind], kind_agents.KIND_VERIFIER.get(kind)
+    last = latest_delegation(path, sid)
+    if verifier and (step.get("verify_lease") or {}).get("id") and last is not None and raw != _raw(last):
+        return land_verification(args, path, run, step, last, raw)
+
+    if last is None or raw != _raw(last):
+        saved = saved_brief(brief_path(path, run, sid))
+        if not saved or str(saved.get("run_id")) != str(run.get("run_id") or ""):
+            raise Blocked(f"no brief for {sid} from this run: workflow.py step {sid} first, and send its brief")
+        attempt = safeyaml.as_int(saved.get("attempt"), 1)
+        if last is not None and attempt <= safeyaml.as_int(last.get("attempt"), 1):
+            raise Blocked(
+                f"{sid} attempt {last.get('attempt')} is already recorded from that brief; "
+                f"workflow.py step {sid} prints the retry brief (with prior_failure) before the agent goes again"
+            )
+        code = write_record({
+            "step": sid, "kind": kind, "agent": agent, "attempt": attempt,
+            "started_at": saved.get("started_at"), "finished_at": now(), "brief": saved.get("brief") or {},
+            "report": {"status": _report_status(raw), "evidence": _report_evidence(raw), "raw": raw},
+        }, feature, args.repo)
+        if code == 2:
+            return 2
+        last = latest_delegation(path, sid) or {}
+    findings = sorted(k for k, v in (last.get("checks") or {}).items()
+                      if str(v).startswith("FAIL") and k != "brief-complete")
+    if findings and not args.accept_with_findings:
+        print(f"SEND BACK {sid}: the report fails {', '.join(findings)}; "
+              f"workflow.py step {sid} prints the retry brief with them as prior_failure, "
+              "or land it again with --accept-with-findings \"<why it passes anyway>\"")
+        return 1
+    status = _report_status(raw)
+    if status == "BLOCKED":
+        print(f"STOP {sid} came back BLOCKED: follow the HANDOFF / CONSULT / REBRIEF / SIGNAL lines above, "
+              f"then workflow.py step {sid} for the next attempt")
+        return 1
+    asked = unanswered(path, sid)
+    if asked:
+        print(f"STOP {sid} has signals for a person: {'; '.join(asked)} — ask, "
+              f"workflow.py decide {sid} --signal ..., then land the same report again")
+        return 1
+    if status == "PASS" and verifier:
+        if not (step.get("verify_lease") or {}).get("id"):
+            delegate_one(_locate(args, shard="", verify=True, open=False), path)
+            run = load_yaml(path) or {}
+            step = next(s for s in run["steps"] if s["id"] == sid)
+        attempt = safeyaml.as_int(last.get("attempt"), 1)
+        written = attempt_record(path, sid, attempt, verifier=False)
+        target = written[0].relative_to(ticket_of(path)).as_posix() if written else ""
+        home = ticket_dir_repo_relative(path, session_repo(args.repo))
+        brief = compose_brief(path, run, step, session_repo(args.repo),
+                              verifies=f"{home}/{target}" if target else "")
+        save_brief(brief_path(path, run, sid, verify=True), run, step, verifier, attempt, brief,
+                   accept_with_findings=args.accept_with_findings)
+        print_brief(run, step, verifier, attempt, brief, role="verifier")
+        print(f"LAND send the brief to {verifier}; with its report: "
+              f"workflow.py land {sid} --feature {feature} --report -")
+        return 0
+    code = cmd_record(_locate(args, status=status or "UNPROVEN", evidence=_report_evidence(raw), by="", quote="",
+                              note="", verified_by="", verify_evidence="",
+                              accept_with_findings=args.accept_with_findings))
+    brief_path(path, run, sid).unlink(missing_ok=True)
+    return code
+
+
+def land_verification(args: argparse.Namespace, path: Path, run: dict, step: dict, writer: dict, raw: str) -> int:
+    sid, kind, feature = step["id"], step["kind"], str(run.get("feature") or "")
+    verifier = kind_agents.KIND_VERIFIER[kind]
+    attempt = safeyaml.as_int(writer.get("attempt"), 1)
+    saved = saved_brief(brief_path(path, run, sid, verify=True))
+    if not saved or str(saved.get("run_id")) != str(run.get("run_id") or "") \
+            or safeyaml.as_int(saved.get("attempt"), 0) != attempt:
+        raise Blocked(f"no verifier brief for {sid} attempt {attempt}: land the writer's report first")
+    if raw != _raw(verification_of(path, sid, attempt)):
+        code = write_record({
+            "step": sid, "kind": kind, "agent": verifier, "role": "verifier",
+            "started_at": saved.get("started_at"), "finished_at": now(), "brief": saved.get("brief") or {},
+            "report": {"status": _report_status(raw), "evidence": _report_evidence(raw), "raw": raw},
+        }, feature, args.repo)
+        if code == 2:
+            return 2
+    status, evidence = _report_status(raw), _report_evidence(raw)
+    if status != "PASS":
+        print(f"SEND BACK {sid}: {verifier} came back {status or 'without a STATUS'} ({evidence or 'no evidence'}); "
+              f"workflow.py step {sid} prints the retry brief for {kind_agents.KIND_AGENTS[kind]}")
+        return 1
+    code = cmd_record(_locate(
+        args, status="PASS", evidence=_report_evidence(_raw(writer)), by="", quote="", note="",
+        verified_by=verifier, verify_evidence=evidence,
+        accept_with_findings=args.accept_with_findings or str(saved.get("accept_with_findings") or ""),
+    ))
+    for done in (brief_path(path, run, sid), brief_path(path, run, sid, verify=True)):
+        done.unlink(missing_ok=True)
+    return code
+
+
 def gate_view(state: dict) -> dict:
     """The fields ask stores, from either a request or a status response."""
     return {
@@ -1978,10 +2365,10 @@ def print_asked(step_id: str, asked: dict, recovered: bool) -> None:
     if recovered:
         print("GATE already open; recorded the existing id")
     print(
-        f"GATE the person's reply of 确认 is enough: "
+        "GATE their reply shows shared understanding, then "
         f"workflow.py record {step_id} PASS --by <name> --quote \"<their words>\""
     )
-    print(f"GATE optional terminal: idev gate approve {asked['gate_id']}")
+    print("GATE do not ask the person to type a password, a keyword or this gate id")
 
 
 def remember_gate(path: Path, step_id: str, asked: dict) -> None:
@@ -1998,7 +2385,10 @@ def remember_gate(path: Path, step_id: str, asked: dict) -> None:
             )
         existing = str((step.get("gate") or {}).get("id") or "")
         if existing and existing != asked["gate_id"]:
-            raise Blocked(f"gate {existing} is still waiting: idev gate approve {existing}")
+            raise Blocked(
+                f"gate {existing} is still waiting for the person's words: "
+                f"workflow.py record {step_id} PASS --by <name> --quote \"<their words>\""
+            )
         step["gate"] = {
             "id": asked["gate_id"],
             "type": asked.get("type") or "",
@@ -2039,7 +2429,10 @@ def cmd_ask(args: argparse.Namespace) -> int:
         state = idev("gate", "status", prior)
         got = state.get("status")
         if got == "pending":
-            raise Blocked(f"gate {prior} is still waiting: idev gate approve {prior}")
+            raise Blocked(
+                f"gate {prior} is still waiting for the person's words: "
+                f"workflow.py record {args.step} PASS --by <name> --quote \"<their words>\""
+            )
         if got == "approved" and state.get("digest_match"):
             raise Blocked(f"gate {prior} is already approved; workflow.py record {args.step} PASS")
 
@@ -2276,8 +2669,25 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--note", default="")
     p.add_argument("--verified-by", default="")
     p.add_argument("--verify-evidence", default="")
+    p.add_argument(
+        "--accept-with-findings", default="",
+        help="PASS although the delegation fails machine checks; the reason goes to the audit chain",
+    )
     locate(p)
     p.set_defaults(func=cmd_record)
+    p = sub.add_parser("step", help="delegate a step and print the brief the machine filled")
+    p.add_argument("step")
+    locate(p)
+    p.set_defaults(func=cmd_step)
+    p = sub.add_parser("land", help="take an agent's report: record it, then the verifier's turn or the step's record")
+    p.add_argument("step")
+    p.add_argument("--report", default="-", help="the agent's report: - for stdin (default) or a file")
+    p.add_argument(
+        "--accept-with-findings", default="",
+        help="go on although the writer's report fails machine checks; the reason goes to the audit chain",
+    )
+    locate(p)
+    p.set_defaults(func=cmd_land)
     p = sub.add_parser("decide")
     p.add_argument("step")
     p.add_argument("--signal", default="")

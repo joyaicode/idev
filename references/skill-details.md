@@ -50,7 +50,7 @@
 1. **先守公共规约。** 按场景对类后执行（S2/S3/S5 不强制先读 conventions 长文）。通用闭环打架改 [conventions/evidence.md](../conventions/evidence.md)。产品专有摘要留在该仓。**从产品沉淀到 idev 核心之前，先剔除该产品专有逻辑**；剥不干净只留在该产品仓。
 2. **分析 / 论证 / 推测须辅助证据。** 见 [conventions/evidence.md](../conventions/evidence.md)：AI 反馈与文档**不可信**；代码逻辑可信，仍须用例证明。每一步先设计用例证明，再推下一步，直到根因。
 2a. **边界未订死必须自动唤起 grilling**（`~/.cursor/skills/grilling/SKILL.md`；S1 未清异议、`open_questions`/边界含糊、请签前有分叉、架构真有分叉、`code` 疑基线错）。不准自拷问顶替。需求把本轮问题一次问完；frontier 空之前禁止写 sealed。答问不是另一次确认。触发细则：[cheatsheet §7.2](operator-cheatsheet.md)。
-3. 尺是密封基线。签字按 [references/chat-confirm-signoff.md](chat-confirm-signoff.md)：无本轮确认用语不得写 `sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed`；有确认用语则只代写**当前停问点**（含对应 `semantic_gate`）并立刻下一步。`继续` 不算。不准用确认改 goal。
+3. 尺是密封基线。交互只为把当前这一步看成同一幅图，细则 [references/chat-confirm-signoff.md](chat-confirm-signoff.md)。人的原话已经对齐，才代写当前停问点的 `sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed`，并立刻下一步。没对齐不得写。单独的 `继续` 不算。不要人再输口令、短码或关键字。不准用确认改 goal。
 4. 红绿只走 verify。不准第二套测试框架或分数门禁。
 5. 签字前：`bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>`。`verify-plan` 只在起草或调整用例、请人 `accepted` 时跑；已 accepted 的 plan 再 `run` 不重跑、不请签。
 6. 巡检包：`bash ~/.cursor/skills/idev/verify/scripts/promote.sh <feature>`。人没提提升 / 巡检包 / promote 则不问、不跑。

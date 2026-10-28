@@ -100,7 +100,7 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 | 想看的 | 写在 | 路径视图 |
 |--------|------|----------|
 | 技能调起 | `invoke.how` + `invoke.skills[]`。这一下要出现在跳转里，再加一条 `kind: skill` 的 call（`from: user`，`to: skill:<name>`） | `skills` |
-| agent 决策 | `decisions` 一条 `kind: delegate`。真的派了，再加 `kind: agent` 的 call | `choices` |
+| agent 决策 | `decisions` 一条 `kind: delegate` 写为什么派。派了谁、哪一步、第几次、是不是复核，由 `append` 从留痕生成 `delegations`，不用手记 | `choices` 与 `delegated` |
 | 模型与思考 | `decisions` 一条 `kind: model`，以及 `kind: model` 的 call。`thinking` 只留一行 | `choices` 与 `hops` 上的 `model=` / 「」 |
 | 组件交互 | 每一跳的 `from` / `to`。ReAct 的 Thought 写 `why`，Observation 写 `result` | `hops` 一行，另有「追踪」逐跳 |
 
@@ -120,7 +120,19 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 短表不展开这四层。运行路径始终多三行：`skills`（技能调起）、`choices`（委派 / 模型决定）、`hops`（组件跳）。空着写 `(none)`，用来看见哪一轮没记。
 
 
-| `signoff` | **本轮若写入** `sealed` / `accepted` / `aligned` / `resolved` **则必填**；否则写 `status: none` 或整段省略 |
+| `signoff` | **本轮若写入** `sealed` / `accepted` / `aligned` / `resolved`，或记了 `chose: chat-confirm-signoff`，**则必填**；否则写 `status: none` 或整段省略 |
+
+### `append` 生成的三段
+
+导体只写意图、理由和思考。下面三段由 `append` 从记录生成，手写的同名段会被覆盖：
+
+| 段 | 来源 |
+|----|------|
+| `round` | 本轮窗口：`since` 是上一条 trace 的 `round.until`（旧 trace 用 `at`），`until` 是落盘时刻。一份留痕只进一条 trace |
+| `delegations[]` | 窗口里落下的委派留痕，每份一条：`agent` / `feature` / `step` / `attempt` / `role`（`writer` 或复核的 `verifier`）/ `status` / `record`。平铺副本和 run 目录里的同一份只算一次。条数就是留痕份数 |
+| `recorded[]` | 窗口里 `run.yaml` 记下的步：`feature` / `step` / `kind` / `status` / `by`（签字人，否则执行者，否则 `conductor`）/ `run`。人签门 PASS 另带 `mark`（`accepted_req` / `accepted_arch` / `accepted_plan` 记 `accepted`；`aligned`、`resolved` 记同名标记） |
+
+`recorded` 里有带 `mark` 的门、而 trace 没写 `signoff` 或写的是 `status: none` 时，`append` 按门补上 `signoff`：`status: recorded`、`marks`、`by` 是签字人、`evidence` 是 `<run.yaml>#<step>.signoff`。不在产品仓里跑（内核会话）时不生成这三段。
 
 ### `signoff` 块（v2 增补）
 
@@ -134,10 +146,11 @@ signoff:
 
 规则：
 
-1. 对话确认代写签收字段前，必须先有本轮确认用语（见 [chat-confirm-signoff.md](chat-confirm-signoff.md)）。
+1. 对话确认代写签收字段前，必须先有本轮确认用语（见 [chat-confirm-signoff.md](chat-confirm-signoff.md)）。记了 `chose: chat-confirm-signoff` 就要有这一块：`by` 是确认的人，`evidence` 是原话；最后没写任何字段就 `status: none`、`marks: []`。
 2. `decisions` 里若出现「不写 sealed/aligned」等拒绝项，**不要**填 `marks`；`status: none`。
-3. 仅复述「他票仍 sealed」不算本轮写入，`status: none`。
-4. `bash scripts/audit-traces.sh` 会抽检「疑似写入签收但无 signoff」。
+3. 仅复述「他票仍 sealed」或读回 `aligned=true` 不算本轮写入，`status: none`。
+4. 算「本轮写了」的只有三处：`signoff.marks` 非空、`repo` 调用的 `result` 写明写入（`写入 sealed`、`set aligned` 这类）、`recorded` 里带 `mark` 的门。这时 `status` 必须是 `recorded` 或 `pending`。检查只看这些字段，trace 别处出现「禁止」「不写」之类的词不会放行，也不会触发。
+5. `trace.py append` 与 `trace.py check` 按上面拦；`bash scripts/audit-traces.sh` 用同一个判断计硬报警。
 
 
 

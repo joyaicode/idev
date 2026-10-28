@@ -74,7 +74,7 @@ grilling 不是可选追问，而是**订死边界与不清楚处**的默认动�
 | H5 | 写 trace 不为观测再停 |
 | H6 | 自测跑完后停在实现审核，不另问「要不要提测」。审核确认后才把 `plan.mode` 改成 `test` |
 
-停问请签时必须回显一行 `将代写: <字段>`（见 [chat-confirm-signoff.md](chat-confirm-signoff.md)）。
+停问时对人摆方案和证据。`将代写` 是导体的落笔清单，不念给人（见 [chat-confirm-signoff.md](chat-confirm-signoff.md)）。
 
 `done` 后不改 goal → S4；要改 goal 必须人说「解除密封」或 `reopen`。
 

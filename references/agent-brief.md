@@ -33,11 +33,12 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
    **前两道 PASS 不等于这一关过了** —— 两个工具都会在 PASS 时把这句话打出来。
    这一格该用哪个工具，看 `SKILL.md` 的「分阶段的能力」索引表，不要凭印象找。
 6. **有不清楚处先 grilling**（`~/.cursor/skills/grilling/SKILL.md`），不要拿含糊摘要请人签。
-7. **收尾**：`scripts/trace.sh append` 写 trace（产品仓进 `.idev/traces/`，导体自身会话才进内核）。技能调起、委派决定、模型与一行思考、组件从哪跳到哪，按 [trace.md](trace.md) 的可选字段写上；缺了不挡本轮，不准编造。请签时回显一行 `将代写: <字段>`。
+7. **收尾**：`scripts/trace.sh append` 写 trace（产品仓进 `.idev/traces/`，导体自身会话才进内核）。技能调起、委派决定、模型与一行思考、组件从哪跳到哪，按 [trace.md](trace.md) 的可选字段写上；缺了不挡本轮，不准编造。对人摆方案和证据；`将代写` 只留在导体落笔，不念给人。见 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
 
 ## 什么时候必须停下来问人（STOP）
 
 - 要写 `sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed` 之前，且本轮人没有明确确认用语（`继续` 不算）。P1/P2 的 plan / resolved 机检无信号时写 `auto:`，不停。
+- 进入阶段先看 `STAFFING` 行。一个人兼任全部岗位就一次问全。多人只问当前这个人持有的岗位，别人的列成待。岗位还没写明时只问一次岗位表。做法见 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
 - 执行者回报出现 `SIGNAL`（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）：按决策包问，答案用 `workflow.py decide` 记。`BLOCKED(domain)` 不是停问：按 [agents.md](agents.md)「角色能力」另派 `DOMAIN` 点名的执行者咨询一次。
 - 全表与档位：[chat-confirm-signoff.md](chat-confirm-signoff.md)。
 - 要改 goal（必须人说「解除密封」或 `reopen`）。

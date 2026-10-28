@@ -64,7 +64,7 @@ func TestToolsListCoversSurfaceAndOmitsGateApprove(t *testing.T) {
 			t.Errorf("missing tool %q in %v", want, got)
 		}
 	}
-	for _, prefix := range []string{"run_", "step_", "delegation_", "lease_", "baseline_"} {
+	for _, prefix := range []string{"run_", "step_", "delegation_", "lease_", "baseline_", "ticket_", "workspace_", "audit_"} {
 		found := false
 		for _, name := range got {
 			if len(name) >= len(prefix) && name[:len(prefix)] == prefix {

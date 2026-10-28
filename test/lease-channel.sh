@@ -46,10 +46,14 @@ reviewed() {
     '  raw: "STATUS: PASS\nEVIDENCE: review.md\n"' > "$(records)/review-1.yaml"
 }
 
-# report STEP CHANGED: a delegation record whose report names what it changed.
+# report CHANGED: a coder record that passes its machine checks and names
+# what it changed, so record PASS gets as far as the lease.
 report() {
+  local raw="STATUS: PASS\\nEVIDENCE: r.md\\nFACTS: codegraph src/app.py:main and git diff\\nDOC_DRIFT: none\\nASSUMED: none"
+  raw+="\\nSCOPE: $1\\nREAD: $1\\nCHANGED: $1\\nREVERT: git checkout -- $1"
+  raw+="\\nCHANGE_KIND: local\\nCANON_TRIGGER: none\\nTABLE_HIT: none\\n"
   printf '%s\n' 'step: c' 'attempt: 1' 'kind: deliver.code_pass' 'agent: idev-coder' 'report:' \
-    "  raw: \"STATUS: PASS\\nCHANGED: $1\\n\"" > "$(records)/c-1.yaml"
+    "  raw: \"$raw\"" > "$(records)/c-1.yaml"
 }
 
 P="$T/one"
@@ -120,8 +124,10 @@ PY
 # The verifier step r writes only ticket artifacts: it needs a verify lease
 # fenced to the ticket directory, not a write lease over product code.
 vreport() {
+  local raw="STATUS: PASS\\nEVIDENCE: v.md\\nFACTS: ran the cases, output in verify/run.log\\nDOC_DRIFT: none"
+  raw+="\\nASSUMED: none\\nCHANGED: $1\\n"
   printf '%s\n' 'step: r' 'attempt: 1' 'kind: verify.run' 'agent: idev-verifier' 'report:' \
-    "  raw: \"STATUS: PASS\\nCHANGED: $1\\n\"" > "$(records)/r-1.yaml"
+    "  raw: \"$raw\"" > "$(records)/r-1.yaml"
 }
 
 vreport "src/app.py"

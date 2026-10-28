@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """preToolUse / PreToolUse / beforeShellExecution: refuse the four oversteps.
 
-1. Editing signoff fields with Write/Edit (must go through the CLI).
+1. Writing signoff fields into ticket or run YAML with Write/Edit (must go through the CLI).
 2. `git push` that is not clearly preceded by a green gate (best-effort).
 3. Writing outside a held lease when IDEV_LEASE_ID is set (calls idev lease check).
-4. Setting IDEV_ENGINE=python in a shell command.
+4. Setting IDEV_ENGINE=python or IDEV_BIN=off in a shell command.
 
 Not a security boundary: a person can still run the same commands outside the
 agent. The record-side checks stay.
@@ -14,7 +14,6 @@ from __future__ import annotations
 import argparse
 import os
 import re
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -23,9 +22,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import lib  # noqa: E402
 
 SIGNOFF_IN_CONTENT = re.compile(lib.SIGNOFF_FIELD_RE)
+# Signoff fields are read only from ticket and run YAML. Source, tests and docs
+# quote them, and the client sends the whole file with an edit.
+SIGNOFF_FILE = re.compile(
+    r"(?:^|/)(?:docs|\.idev)/task/[^/]+/.+\.ya?ml$"
+    r"|(?:^|/)(?:state|\.idev)/workflow-runs/.+\.ya?ml$",
+    re.IGNORECASE,
+)
 ENGINE_PYTHON = re.compile(
     r"(?:^|[\s;|&])(?:export\s+)?IDEV_ENGINE\s*=\s*python\b"
     r"|(?:^|[\s;|&])env\s+[^\n]*\bIDEV_ENGINE=python\b",
+    re.IGNORECASE,
+)
+BIN_OFF = re.compile(
+    r"(?:^|[\s;|&])(?:export\s+)?IDEV_BIN\s*=\s*['\"]?(?:off|none|0)['\"]?(?:\s|$|;|&|\|)"
+    r"|(?:^|[\s;|&])env\s+[^\n]*\bIDEV_BIN=['\"]?(?:off|none|0)['\"]?(?:\s|$)",
     re.IGNORECASE,
 )
 GIT_PUSH = re.compile(r"(?:^|[;&|\s])git\s+push\b", re.IGNORECASE)
@@ -73,6 +84,8 @@ def write_content(tin: dict) -> str:
 
 
 def refuse_signoff_edit(path: str, content: str) -> str:
+    if path and not SIGNOFF_FILE.search(path.replace("\\", "/")):
+        return ""
     if not content or not SIGNOFF_IN_CONTENT.search(content):
         return ""
     where = path or "a file"
@@ -85,6 +98,8 @@ def refuse_signoff_edit(path: str, content: str) -> str:
 def refuse_engine_python(command: str) -> str:
     if command and ENGINE_PYTHON.search(command):
         return "refusing IDEV_ENGINE=python in the agent shell; use the Go engine"
+    if command and BIN_OFF.search(command):
+        return "refusing IDEV_BIN=off in the agent shell; it skips the store checks"
     return ""
 
 
@@ -100,10 +115,10 @@ def refuse_lease(path: str) -> str:
     lease_id = (os.environ.get("IDEV_LEASE_ID") or "").strip()
     if not lease_id or not path:
         return ""
-    idev = (os.environ.get("IDEV_BIN") or "").strip() or shutil.which("idev")
-    if not idev:
-        built = Path(__file__).resolve().parents[1] / "bin" / "idev"
-        idev = str(built) if built.is_file() else ""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "lib"))
+    import idev_bin
+
+    idev = idev_bin.path(rebuild=False)
     if not idev:
         return ""
     proc = subprocess.run(

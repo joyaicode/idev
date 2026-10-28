@@ -24,6 +24,8 @@
 ```
 
 没有 `run_id` 时仍写在 `delegations/` 根下。同一 feature 的上一轮留在自己的 `run_id` 目录里，新的一轮从 attempt 1 写起。
+复核者(`KIND_VERIFIER`)的留痕带 `role: verifier`,落成同目录的 `<step-id>-<attempt>.verify.yaml`,
+attempt 取它复核的那份写手留痕,不另占一号。
 
 `<票目录>` 只认 `doc_home.py --key task`。该目录在 `docs/task/` 或 `.idev/task/` 下,
 `execution-clean` 不碰票目录,所以留痕不会被清理脚本删掉。
@@ -64,14 +66,26 @@ checks:                # 五项可机检(见第二节),由脚本写回
   no-signoff-write: PASS
   brief-complete: PASS
   report-parsed: PASS
+checker: 7e1ade222e4c  # 算这组 checks 的检查器版本(检查器源码摘要),由脚本写回
 outcome: recorded      # recorded | rejected | retried
-suggest: ""            # agent 提的改进建议,只记不执行
+suggest: ""            # 回报 SUGGEST 行原文:对这一层(内核脚本、agent 定义、委派包)的建议,只记不执行
+conclusion: ""         # 回报 CONCLUSION 行原文:这一步的结论。和 suggest 分开,周审只读 suggest
+stop_id: 3f9c…         # 对上的 subagentStop 行;下面三项从那一行抄,不手填
+duration_ms: 185000
+tool_call_count: 12
+message_count: 9
 ```
 
 **时序是可选的,但缺了就没有耗时视图。** 导体委派前记 `started_at`、收到回报后记
 `finished_at`,`duration_s` 由 `delegation.py` 算出写回。不设为必填是故意的:**可观测性不该
 变成门禁** —— 少一个时间戳不该挡住一次正常的委派。但 `timeline` 和 `agent-eval` 会明说有多少
 次委派没有计时,免得你以为耗时数据是全的。
+
+**工具调用数来自 `subagentStop` 钩子,同样可选。** 装了钩子(`install-idev-hooks.sh`,只对五个
+idev agent 生效),每个 agent 结束时 `$IDEV_DATA/subagent-stops.jsonl` 记一行。`write` 只认
+同一个 agent、同一个工作区、落在 `started_at`..`finished_at`(没给就是最近 6 小时)里、
+还没被别的留痕占用的那一行;对不上就不抄,并在输出里说是没装钩子还是没对上 ——
+宁可空着,也不把别人的耗时记到这一步头上。
 
 **`metrics` 是扁平的件数 map**,字段名各 agent 自定(reviewer 记 `findings`,coder 记
 `files_changed`,verifier 记 `cases_run`),由导体从回报里摘。嵌套结构会被 `metrics-shape`
@@ -103,6 +117,8 @@ python3 scripts/delegation.py replay --feature <f> --step <step>   # 打印可�
 
 `write` 时 `metrics-shape` 直接拒收(退出码 2),不落盘 —— 形状错了的计量落下去就会污染
 `agent-eval` 的求和。其余四项写回留痕,`no-signoff-write` 同样退出码 2。
+写手最新一份留痕里归 agent 的 FAIL 会挡住这一步的 `record PASS`,
+放行要带理由并进审计(规则在 [workflow-schema.md](workflow-schema.md) 的 `record` 一段)。
 
 **另有一组只对 `idev-coder` 生效的检查** —— `s0-declared` / `canon-walked` /
 `struct-gated` / `hit-applied`,查的是 `coding.md` §0 的三项交代有没有真做。契约在
@@ -126,15 +142,19 @@ python3 scripts/delegation.py check --feature <f> --step report
 
 | 计数 | 从哪来 |
 |------|--------|
-| `delegated` | delegations 文件数 |
+| `delegated` | 留痕份数;同一份留痕在扁平目录和 run 目录各有一份,只算一次 |
 | `by_agent` | 每个 agent 各几次 |
 | `conductor_kept` | run.yaml 里 `DELEGATE none` 的步骤数(委派比例的分母) |
 | `blocked` | 回报 `BLOCKED` 的次数,按 `brief` / `env` / `logic` 分列 |
-| `retried` | `attempt > 1` 的次数 |
-| `rejected` | 导体打回(`outcome: rejected`)的次数 |
-| `check_fail` | 五项检查各失败几次 |
-| `suggest` | agent 提出建议的条数 |
+| `retried` | 同一个 run 目录里,同一步在最低 attempt 之后的留痕数 |
+| `verifications` | 复核留痕数(`role: verifier`,或复核者名下写手 kind 的旧留痕);不算重试 |
+| `unscoped` | 旧的扁平目录里 `attempt > 1` 的留痕:编号跨 run 累加,分不出重试还是新一轮,逐条列出 `prior_failure` 给人判 |
+| `rejected` | 检查有 FAIL 的留痕数 |
+| `check_fail` | 各项检查失败几次。回报按当前检查器重算;读检出目录的五项(`evidence-present` / `canon-walked` / `struct-gated` / `hit-applied` / `java-hygiene`)用写入时存下的结论,不拿今天的仓库评当时的留痕 |
+| `checker` | 当前检查器版本,以及重算后 FAIL 与存值不同的留痕数 |
+| `suggest` | agent 提出建议的条数。按回报里 `SUGGEST` 行原文重读,旧留痕存进去的下一行(`CONCLUSION: …`)不算 |
 | `duration_s` | 有计时的次数 n / 总计 / p50 / max |
+| `telemetry` | 同时带 `duration_ms` 和 `tool_call_count` 的留痕数 / 总数;偏低说明钩子没装或没对上 |
 | `produced` | `metrics` 按字段名求和(findings、files_changed、cases_run…) |
 
 ```bash
@@ -198,19 +218,21 @@ verify 层已有 8 个 tag(`missed-impact` / `false-green` / … / `ok`),管的�
 
 ## 六、nudge(并入内核现有四条)
 
-内核 `self-evolution.md` 的 nudge 已有四条触发条件。本层再加两条,**话术一样:一句话问要不要
+内核 `self-evolution.md` 的 nudge 已有四条触发条件。本层再加三条,**话术一样:一句话问要不要
 写提案,人说要才写**:
 
 5. 同一 agent 的 `check_fail` 累计 ≥ 2,且尚无对应提案
 6. 同一 kind 连续 2 次 `retried` 或 `rejected`
+7. 同一个内核脚本、agent 或 kind 被 ≥ 2 条留痕的 `SUGGEST` 点名(带连字符的脚本名不写扩展名也算)
 
 **不算 nudge:** 单次 BLOCKED、单次重派、已 landed 的重复话题、纯 banter。
 
-硬信号口径与内核一致 —— 只有上面两条、或 `no-signoff-write` 命中,才算信号。
-单看留痕里的软提示**不单独抬 signal**。
+硬信号口径与内核一致 —— 只有上面三条、或 `no-signoff-write` 命中,才算信号。
+单条 `SUGGEST` 只列进复盘收据,**不单独抬 signal**;同一对象被点名两次,才说明不是一次性的抱怨。
 
 ```bash
-python3 scripts/agent-metrics.py --signal    # 打印 signal=yes|no 与命中的条目
+python3 scripts/agent-metrics.py --signal        # 打印 signal=yes|no 与命中的条目
+python3 scripts/agent-metrics.py --suggestions   # 列出窗口内全部 SUGGEST 原文,按点名的对象归组
 ```
 
 **定期复盘**(镜像内核 `evolve-review.sh`,但不改内核):
@@ -224,12 +246,12 @@ bash scripts/agent-review.sh --repo <产品仓> --dry-run           # 先看不�
 
 | 产物 | 内容 |
 |---|---|
-| `state/reviews/agent-review-latest.md` | 信号 + 指标快照 |
+| `state/reviews/agent-review-latest.md` | 信号 + agent 的建议原文 + 指标快照 |
 | `state/reviews/agent-review-status.env` | `signal=yes|no`,供定时任务判断要不要出声 |
 | `state/proposals/<NN>-agent-<日期>.md` | **仅在有硬信号时**,一份 `status: draft` 的草稿 |
 
 草稿里「要改什么 / 不改什么 / 依据哪些留痕 / 是否动登记表」**全部留空给人填** ——
-脚本提供证据和骨架,**不决定改什么**。那是人和 grill 的事。
+脚本提供证据(含 agent 的建议原文)和骨架,**不决定改什么**。那是人和 grill 的事。
 
 超龄未 grill 的 draft 也算硬信号(和内核一样):永远不被拷问的提案本身就是个问题。
 

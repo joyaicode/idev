@@ -33,6 +33,47 @@ confirm:
   - { quote: "LGTM but wait", ok: false, reason: unparsed-tail, source: design-10.3, regression: true }
   - { quote: "确认？", ok: false, reason: question, source: design-10.3, regression: true }
   - { quote: "继续", ok: false, reason: no-verb, source: design-10.3 }
+  - { quote: "通过", ok: true, reason: ok }
+  - { quote: "通过了", ok: true, reason: ok }
+  - { quote: "通过。", ok: true, reason: ok }
+  - { quote: "架构通过", ok: true, reason: ok }
+  - { quote: "需求通过", ok: true, reason: ok }
+  - { quote: "实现通过", ok: true, reason: ok }
+  - { quote: "提测通过", ok: true, reason: ok }
+  - { quote: "审核通过", ok: true, reason: ok }
+  - { quote: "通过不了", ok: false, reason: unparsed-tail }
+  - { quote: "通过吗", ok: false, reason: question }
+  - { quote: "通过", gate_type: reopen_baseline, ok: false, reason: keyword-mismatch }
+  - { quote: "可以", ok: true, reason: ok }
+  - { quote: "就这样", ok: true, reason: ok }
+  - { quote: "按这个方案", ok: true, reason: ok }
+  - { quote: "没问题", ok: true, reason: ok }
+  - { quote: "无异议", ok: true, reason: ok }
+  - { quote: "行", ok: true, reason: ok }
+  - { quote: "确认，继续", ok: true, reason: ok }
+  - { quote: "确认，不用一直询问", ok: true, reason: ok }
+  - { quote: "可以", gate_type: reopen_baseline, ok: false, reason: keyword-mismatch }
+  - { quote: "回退到实现", gate_type: defect_origin, origin: code, ok: true, reason: ok }
+  - { quote: "回退到实现", gate_type: defect_origin, origin: req, ok: false, reason: keyword-mismatch }
+  - { quote: "回退到实现", gate_type: accepted_arch, ok: false, reason: keyword-mismatch }
+  - { quote: "打开基线", gate_type: reopen_baseline, ok: true, reason: ok }
+  - { quote: "打开基线", ok: false, reason: no-verb }
+  - { quote: "按建议", ok: true, reason: ok }
+  - { quote: "就按建议", ok: true, reason: ok }
+  - { quote: "听你的", ok: true, reason: ok }
+  - { quote: "选a", ok: true, reason: ok }
+  - { quote: "选 a", ok: true, reason: ok }
+  - { quote: "a", ok: true, reason: ok }
+  - { quote: "1", ok: true, reason: ok }
+  - { quote: "按建议", gate_type: reopen_baseline, ok: false, reason: keyword-mismatch }
+  - { quote: "a", gate_type: defect_origin, origin: code, ok: false, reason: keyword-mismatch }
+  # Naming the rollback or the unseal is not agreeing to it.
+  - { quote: "不要解除密封", gate_type: reopen_baseline, ok: false, reason: negation }
+  - { quote: "先别解除密封，再想想", gate_type: reopen_baseline, ok: false, reason: negation }
+  - { quote: "等等再打开基线", gate_type: reopen_baseline, ok: false, reason: hesitation }
+  - { quote: "不要回退到需求", gate_type: defect_origin, origin: req, ok: false, reason: negation }
+  - { quote: "没必要回退到实现", gate_type: defect_origin, origin: code, ok: false, reason: negation }
+  - { quote: "回退到实现也许更好", gate_type: defect_origin, origin: code, ok: false, reason: hesitation }
 
   # --- verbs alone ---------------------------------------------------------
   - { quote: "全签", ok: true, reason: ok }
@@ -98,7 +139,7 @@ confirm:
   - { quote: "没确认", ok: false, reason: no-verb }
   - { quote: "别确认", ok: false, reason: no-verb }
   - { quote: "确认一下", ok: false, reason: unparsed-tail }
-  - { quote: "同意了", ok: false, reason: unparsed-tail }
+  - { quote: "同意了", ok: true, reason: ok }
   - { quote: "确认吧", ok: false, reason: unparsed-tail }
   - { quote: "确认 待定", ok: false, reason: unparsed-tail }
   - { quote: "确认，但是", ok: false, reason: unparsed-tail }

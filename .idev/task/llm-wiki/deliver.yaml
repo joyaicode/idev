@@ -1,12 +1,12 @@
 schema_version: 2
 feature: llm-wiki
-stage: arch
+stage: done
 risk_tier: P1
-aligned: false
-by: ""
+aligned: true
+by: wangwei794
 baseline_revision: 1
 req_revision: 1
-arch_revision: 0
+arch_revision: 1
 reopen_baseline: false
 semantic_gate:
   req-review:
@@ -20,11 +20,15 @@ semantic_gate:
     at: "2026-10-28T13:31:00+08:00"
     quote: "确认"
   arch:
-    passed: false
-    by: ""
+    passed: true
+    by: wangwei794
+    at: "2026-10-28T14:31:10+08:00"
+    quote: "确认"
   code:
-    passed: false
-    by: ""
+    passed: true
+    by: wangwei794
+    at: "2026-10-28T14:40:44+08:00"
+    quote: "确认"
 last_rewind:
   origin: ""
   note: ""

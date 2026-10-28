@@ -2,9 +2,18 @@
 """Audit idev traces. Print markdown report; print HARD_COUNT=<n> on last line."""
 from __future__ import annotations
 
+import importlib.util
 import re
 import sys
 from pathlib import Path
+
+
+def _trace_module():
+    """scripts/trace.py, loaded by path: `import trace` can reach the stdlib's."""
+    spec = importlib.util.spec_from_file_location("idev_trace", Path(__file__).resolve().parent / "trace.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _marked_product_traces(trace_dir: Path) -> bool:
@@ -55,24 +64,7 @@ def main() -> int:
     trace_dir = Path(sys.argv[1])
     n = int(sys.argv[2])
     files = sorted(trace_dir.glob("*.yaml"), key=lambda p: p.stat().st_mtime, reverse=True)[:n]
-
-    write_seal = re.compile(
-        r"(?<![A-Za-z])(写入|写上|填入|(?<!re)write|set|mark|签入).{0,16}"
-        r"(sealed|accepted|aligned|resolved)"
-        r"|(sealed|accepted|aligned|resolved)\s*:\s*true"
-        r"|(status|stage_status)\s*:\s*(sealed|accepted|aligned)",
-        re.I,
-    )
-    neg_seal = re.compile(
-        r"(不写|勿写|禁止|不要|未写|do\s*not|don't|refuse|伪造|forge|aligned\s*=\s*false|"
-        r"sealed\s*=\s*false|accepted\s*=\s*false|仍\s*sealed|already\s+sealed|"
-        r"rewrite\s+sealed|重写\s*sealed|不改\s*sealed|keep\s+sealed|sealed\s+baseline)",
-        re.I,
-    )
-    confirm = re.compile(
-        r"(确认原话|本轮确认|签字|human\.gate|chat-confirm|accepted by|sealed by|signoff:)",
-        re.I,
-    )
+    trace = _trace_module()
     exec_mods = ("deliver", "verify", "ops")
 
     stats = {
@@ -82,13 +74,13 @@ def main() -> int:
         "multi_exec_calls": 0,
         "weak_calls": 0,
         "seal_write_no_signoff": 0,
-        "seal_fp_negation": 0,
         "unbound_feature": 0,
         "extensions_not_opened": 0,
         "extensions_missing": 0,
         "grill_not_opened": 0,
         "obs_skill": 0,
         "obs_delegate": 0,
+        "obs_delegations": 0,
         "obs_model": 0,
         "obs_hop": 0,
         "obs_tool_hop": 0,
@@ -168,23 +160,18 @@ def main() -> int:
                     flags.append("extensions-not-opened")
                     break
 
-        if write_seal.search(text):
-            if neg_seal.search(text) and not re.search(
-                r"(写入|写上|填入)\s*(sealed|accepted|aligned)", text
-            ):
-                stats["seal_fp_negation"] += 1
-            elif not confirm.search(text) and not re.search(r"(?m)^signoff:", text):
-                stats["seal_write_no_signoff"] += 1
-                flags.append("seal-write-without-signoff")
-        elif re.search(r"\b(sealed|accepted|aligned)\b", text, re.I) and neg_seal.search(text):
-            stats["seal_fp_negation"] += 1
+        if trace.signoff_errors(text):
+            stats["seal_write_no_signoff"] += 1
+            flags.append("seal-write-without-signoff")
 
         # Coverage only. Missing detail is not a finding and never enters HARD_COUNT.
         if re.search(r"(?m)^[ \t]+how:\s*(explicit|alias|implicit|continuation)\s*$", text) or re.search(
             r"(?m)^[ \t]+skills:\s*$", text
         ):
             stats["obs_skill"] += 1
-        if re.search(r"(?m)^[ \t]*(?:-[ \t]+)?kind:\s*delegate\s*$", text):
+        delegated = len(trace.machine_items(text, "delegations"))
+        stats["obs_delegations"] += delegated
+        if delegated or re.search(r"(?m)^[ \t]*(?:-[ \t]+)?kind:\s*delegate\s*$", text):
             stats["obs_delegate"] += 1
         if re.search(r"(?m)^[ \t]*(?:-[ \t]+)?kind:\s*model\s*$", text) or re.search(
             r"(?m)^[ \t]+model:\s*\S", text
@@ -237,7 +224,7 @@ def main() -> int:
         "软信号：补真实 calls |"
     )
     print(
-        f"| 疑似写入签收但无 signoff | {stats['seal_write_no_signoff']} | "
+        f"| 写了签收标记或对话确认代写，signoff 缺失或不全 | {stats['seal_write_no_signoff']} | "
         f"{pct(stats['seal_write_no_signoff'])}% | 硬报警：须补 signoff |"
     )
     print(
@@ -247,10 +234,6 @@ def main() -> int:
     print(
         f"| **有标记的产品 trace 缺 extensions** | {stats['extensions_missing']} | "
         f"{pct(stats['extensions_missing'])}% | 硬报警：`.idev/traces` 必须写 extensions，空列表也可以 |"
-    )
-    print(
-        f"| 仅否定/描述签收词（已排除） | {stats['seal_fp_negation']} | "
-        f"{pct(stats['seal_fp_negation'])}% | 不算违规 |"
     )
     print()
     print("## 周报「必须清零项」（不计入 HARD_COUNT，不改硬报警口径）")
@@ -287,7 +270,11 @@ def main() -> int:
     )
     print(
         f"| 写了委派决定 | {stats['obs_delegate']} | {pct(stats['obs_delegate'])}% | "
-        "`decisions.kind: delegate` |"
+        "`decisions.kind: delegate`，或 append 从留痕生成的 `delegations` |"
+    )
+    print(
+        f"| 委派次数（由留痕生成） | {stats['obs_delegations']} | — | "
+        "`delegations` 条目合计；和留痕份数对得上，不靠手记 |"
     )
     print(
         f"| 写了模型 | {stats['obs_model']} | {pct(stats['obs_model'])}% | "

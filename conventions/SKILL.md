@@ -19,6 +19,7 @@ idev 不依赖任何一个产品。先走内核。进入阶段用 `scripts/sessi
 | 架构范式 | `arch` 阶段、任何“加一层 / 拆分 / 缓存 / 队列 / 重写”的念头 | [canon.md](canon.md) §1 协议 + §5（T1–T12 / A1–A8） | 只留指针，不抄原则表 |
 | 领域建模 | 涉及新领域概念 / 跨模块术语 / 通用语言 | [domain-modeling.md](domain-modeling.md)（arch 阶段调起的透镜） | 术语表随票走，不进核心 |
 | Java 领域 | 改 Java | [java.md](java.md) 按**该仓**语言级别 | 四准则在该仓。核心不默认某一语言级别 |
+| Vue | 改 `.vue` / Vue Router / Pinia / Vite+Vue | [vue.md](vue.md) 按阶段打开 vuejs-ai 技能 | 不抄技能正文。产品控制台规约仍在该仓扩展包 |
 | 文档治理 | 契约 / 回填 / 票 | [docs/SKILL.md](../docs/SKILL.md) | 目录认 setup-agents-docs，问句认 grilling。还没有这套文档时阶段状态在 `.idev/task/` |
 
 当前任务落在哪一类，只深读那一页。违反硬规则 = 拒过。

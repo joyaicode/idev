@@ -6,15 +6,19 @@
 package mcpface
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/idev/internal/adapters/kindreg"
 	"github.com/idev/internal/adapters/local"
 	"github.com/idev/internal/adapters/store/sqlite"
-	"github.com/idev/internal/adapters/ticketbaseline"
+	"github.com/idev/internal/adapters/workspace"
+	"github.com/idev/internal/app/auditsvc"
 	"github.com/idev/internal/app/baselinesvc"
 	"github.com/idev/internal/app/leasesvc"
 	"github.com/idev/internal/app/runsvc"
@@ -72,6 +76,7 @@ func ToolNames() []string {
 		"delegation_allocate", "delegation_get",
 		"lease_acquire", "lease_release", "lease_check",
 		"baseline_verify", "baseline_sealed",
+		"ticket_locate", "workspace_manifest", "audit_export",
 		"gate_request", "gate_status",
 	}
 }
@@ -277,7 +282,11 @@ func register(srv *mcp.Server, d Deps) {
 		OutputSchema: schemas.MustTool("baseline_verify.output"),
 		Description: "Recompute the ticket manifest against the sealed row", Annotations: &ro,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in baselineVerifyIn) (*mcp.CallToolResult, map[string]any, error) {
-		current, err := ticketbaseline.FromTicket(in.Feature, in.Ticket, 0, time.Now().UTC())
+		sealed, err := d.Base.Sealed(ctx, in.Feature)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
+		current, err := workspace.Recompute(sealed, in.Ticket, "", time.Now().UTC())
 		if err != nil {
 			return errResult(err), nil, nil
 		}
@@ -303,6 +312,91 @@ func register(srv *mcp.Server, d Deps) {
 		return nil, map[string]any{
 			"feature": in.Feature, "revision": m.Revision, "manifest_root": string(m.ManifestRoot),
 		}, nil
+	})
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "ticket_locate",
+		InputSchema: schemas.MustTool("ticket_locate.input"),
+		OutputSchema: schemas.MustTool("ticket_locate.output"),
+		Description: "Resolve a ticket path without creating directories", Annotations: &ro,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in ticketLocateIn) (*mcp.CallToolResult, map[string]any, error) {
+		key := in.Key
+		if key == "" {
+			key = "task"
+		}
+		path, err := workspace.Local{}.LocateTicket(ctx, in.RepoRoot, in.Feature, key)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
+		layout, _ := workspace.Local{}.LocateTicket(ctx, in.RepoRoot, in.Feature, "layout")
+		homeKind := "idev_task"
+		if layout == "product" {
+			homeKind = "docs_task"
+		}
+		if key == "layout" {
+			homeKind = path
+		}
+		return nil, map[string]any{"path": path, "home_kind": homeKind}, nil
+	})
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "workspace_manifest",
+		InputSchema: schemas.MustTool("workspace_manifest.input"),
+		OutputSchema: schemas.MustTool("workspace_manifest.output"),
+		Description: "Compute a baseline manifest without sealing it", Annotations: &ro,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in workspaceManifestIn) (*mcp.CallToolResult, map[string]any, error) {
+		at := time.Now().UTC()
+		var manOut map[string]any
+		if strings.TrimSpace(in.Ticket) != "" {
+			man, err := workspace.FromTicket(in.Feature, in.Ticket, in.RepoRoot, in.Revision, at)
+			if err != nil {
+				return errResult(err), nil, nil
+			}
+			manOut = map[string]any{
+				"feature": man.Feature, "revision": man.Revision,
+				"manifest_root": string(man.ManifestRoot), "raw_root": string(man.RawRoot),
+				"files": len(man.Files),
+			}
+		} else if in.RepoRoot == "" {
+			return errResult(fmt.Errorf("workspace_manifest needs repo_root or ticket")), nil, nil
+		} else {
+			man, err := workspace.Local{}.Manifest(ctx, in.RepoRoot, in.Feature, in.Revision)
+			if err != nil {
+				return errResult(err), nil, nil
+			}
+			manOut = map[string]any{
+				"feature": man.Feature, "revision": man.Revision,
+				"manifest_root": string(man.ManifestRoot), "raw_root": string(man.RawRoot),
+				"files": len(man.Files),
+			}
+		}
+		return nil, manOut, nil
+	})
+
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "audit_export",
+		InputSchema: schemas.MustTool("audit_export.input"),
+		OutputSchema: schemas.MustTool("audit_export.output"),
+		Description: "Export audit events as structured rows (read-only)", Annotations: &ro,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in auditExportIn) (*mcp.CallToolResult, map[string]any, error) {
+		var buf bytes.Buffer
+		svc := auditsvc.Service{Store: d.Store, Clock: local.Clock{}}
+		n, err := svc.Export(ctx, in.RunID, &buf)
+		if err != nil {
+			return errResult(err), nil, nil
+		}
+		events := make([]map[string]any, 0, n)
+		for _, line := range strings.Split(strings.TrimSpace(buf.String()), "\n") {
+			if line == "" {
+				continue
+			}
+			var row map[string]any
+			if err := json.Unmarshal([]byte(line), &row); err != nil {
+				continue
+			}
+			events = append(events, row)
+		}
+		return nil, map[string]any{"count": len(events), "events": events}, nil
 	})
 
 	mcp.AddTool(srv, &mcp.Tool{
@@ -399,4 +493,18 @@ type baselineVerifyIn struct {
 }
 type featureIn struct {
 	Feature string `json:"feature"`
+}
+type ticketLocateIn struct {
+	RepoRoot string `json:"repo_root"`
+	Feature  string `json:"feature"`
+	Key      string `json:"key"`
+}
+type workspaceManifestIn struct {
+	Feature  string `json:"feature"`
+	RepoRoot string `json:"repo_root"`
+	Ticket   string `json:"ticket"`
+	Revision int    `json:"revision"`
+}
+type auditExportIn struct {
+	RunID string `json:"run_id"`
 }

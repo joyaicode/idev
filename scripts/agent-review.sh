@@ -13,10 +13,13 @@
 # when a signal exists, but nothing was turning that into the proposal the
 # kernel's propose -> grill -> confirm -> land path expects.
 #
-# Hard signal (same two rules as references/agents-evolve.md section 6):
+# Hard signal (the rules in references/agents-evolve.md section 6):
 #   - one agent accumulated check_fail >= 2
 #   - one kind accumulated retried + rejected >= 2
+#   - one kernel script, agent or kind named by SUGGEST >= 2 times
 #   - any no-signoff-write failure (an agent claimed it signed)
+# Every SUGGEST in the window is listed, signal or not: it is the agents'
+# own word on what to change, and a draft without it starts from nothing.
 #
 # What it does NOT decide: what to change. That is for the person and the
 # grill. The draft carries evidence and an empty decision section on purpose.
@@ -66,6 +69,12 @@ if ! signal_out="$(python3 "${REPO}/scripts/agent-metrics.py" --repo "$TARGET" -
   exit 2
 fi
 
+if ! suggestions="$(python3 "${REPO}/scripts/agent-metrics.py" --repo "$TARGET" --days "$DAYS" --suggestions 2>&1)"; then
+  echo "FAIL agent-metrics --suggestions failed; refusing to report a verdict" >&2
+  printf '%s\n' "$suggestions" >&2
+  exit 2
+fi
+
 if printf '%s' "$signal_out" | grep -q '^signal=yes'; then
   SIGNAL=yes
 elif printf '%s' "$signal_out" | grep -q '^signal=no'; then
@@ -107,6 +116,8 @@ signal=${SIGNAL}
 
 $( [ -n "$hits" ] && printf '%s\n' "$hits" || printf '(无 nudge 命中)\n' )
 $( [ -n "$stale" ] && printf '\n超龄未 grill 的草稿:%b\n' "$stale" || true )
+
+${suggestions}
 
 ## 指标
 
@@ -185,6 +196,8 @@ $( [ -n "$hits" ] && printf '%s\n' "$hits" || printf '(无 nudge 命中)\n' )
 $( [ -n "$stale" ] && printf '\n超龄未 grill 的草稿:%b\n' "$stale" || true )
 
 ## 证据(脚本填)
+
+${suggestions}
 
 \`\`\`
 ${metrics}

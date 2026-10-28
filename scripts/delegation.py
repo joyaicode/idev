@@ -38,10 +38,10 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import re
-import shutil
 import statistics
 import subprocess
 import sys
@@ -50,6 +50,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import delegation_return  # noqa: E402
+import idev_bin  # noqa: E402
 import java_hygiene  # noqa: E402
 import kind_agents  # noqa: E402
 import record_paths  # noqa: E402
@@ -69,14 +70,17 @@ SIGNOFF_FIELDS = ("sealed", "accepted", "aligned", "resolved", "reopen_baseline"
 # The agent writes SUGGEST: in the report body; everything downstream read a
 # top-level `suggest` key that nothing ever set. This is the channel agents
 # use to say "your definition is unclear here" — the input to improving it.
-SUGGEST_LINE = re.compile(r"(?mi)^\s*SUGGEST:\s*(.+?)\s*$")
+SUGGEST_LINE = delegation_return.line_field("SUGGEST")
 # GUIDE is a domain constraint for another role. DOMAIN names who to consult
 # when this step is BLOCKED(domain). Empty and 「无」 stay empty: neither is a gate.
-GUIDE_LINE = re.compile(r"(?mi)^\s*GUIDE:\s*(.+?)\s*$")
-DOMAIN_LINE = re.compile(r"(?mi)^\s*DOMAIN:\s*(.+?)\s*$")
+GUIDE_LINE = delegation_return.line_field("GUIDE")
+DOMAIN_LINE = delegation_return.line_field("DOMAIN")
+# What the agent concluded. Kept apart from SUGGEST, which is advice about
+# the layer itself and the only one of the two a weekly review turns into a proposal.
+CONCLUSION_LINE = delegation_return.line_field("CONCLUSION")
 
-STATUS_LINE = re.compile(r"(?mi)^\s*STATUS:\s*(\S+)")
-EVIDENCE_LINE = re.compile(r"(?mi)^\s*EVIDENCE:\s*(.+?)\s*$")
+STATUS_LINE = delegation_return.line_field("STATUS", r"(\S+)")
+EVIDENCE_LINE = delegation_return.line_field("EVIDENCE")
 # A claim that a signoff field was written. Negations are excluded below.
 SIGNOFF_WRITE = re.compile(
     r"(?i)(?:"
@@ -89,9 +93,9 @@ SIGNOFF_NEG = re.compile(r"(?i)(?:不写|未写|不碰|没有写|不准写|禁�
 # The §0 declarations idev-coder must make, per references/boost.md. The
 # whole point of turning coding.md §0 from "read it" into "declare it" is
 # that the declaration can be checked — unchecked, it is just a suggestion.
-S0_CHANGE_KIND = re.compile(r"(?mi)^\s*CHANGE_KIND:\s*(.+?)\s*$")
-S0_CANON_TRIGGER = re.compile(r"(?mi)^\s*CANON_TRIGGER:\s*(.+?)\s*$")
-S0_TABLE_HIT = re.compile(r"(?mi)^\s*TABLE_HIT:\s*(.+?)\s*$")
+S0_CHANGE_KIND = delegation_return.line_field("CHANGE_KIND")
+S0_CANON_TRIGGER = delegation_return.line_field("CANON_TRIGGER")
+S0_TABLE_HIT = delegation_return.line_field("TABLE_HIT")
 T_NUMBER = re.compile(r"\bT\d+\b")
 # Anchored to the start of the value and allowing a parenthesised note, so
 # that a row name containing "none" ("§1 nonexistent-row") is not read as a
@@ -103,8 +107,8 @@ APPLIED = re.compile(r"运用|纠正|已改|当轮改")
 
 # references/boost.md 第零节: 本地事实优先。文档会过时而且过时的时候不会
 # 告诉你,所以凡是要下判断的步骤都得交代事实是从哪来的。
-FACTS_LINE = re.compile(r"(?mi)^\s*FACTS:\s*(.+?)\s*$")
-DRIFT_LINE = re.compile(r"(?mi)^\s*DOC_DRIFT:\s*(.+?)\s*$")
+FACTS_LINE = delegation_return.line_field("FACTS")
+DRIFT_LINE = delegation_return.line_field("DOC_DRIFT")
 # 至少有一个第一手来源。"文档"不算 —— 那正是它不可信的东西。
 FIRSTHAND = re.compile(r"(?i)codegraph|源码|源文件|src/|\.py|\.sh|\.java|\.ts|\.go|命令|输出|日志|log|git\b|readlink|realpath|ls -")
 
@@ -125,6 +129,19 @@ def record_dir(feature: str, repo: Path | None) -> Path:
 
 def now() -> str:
     return dt.datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def checker_version() -> str:
+    """The ruler a record's checks were measured with: a digest of the checker's source."""
+    lib = Path(__file__).resolve().parent / "lib"
+    files = [Path(__file__).resolve()]
+    files += [lib / name for name in ("kind_agents.py", "_generated_kinds.py", "delegation_return.py", "java_hygiene.py")]
+    files += sorted(delegation_return.SCHEMA_DIR.glob("*.schema.json"))
+    digest = hashlib.sha256()
+    for path in files:
+        if path.is_file():
+            digest.update(path.name.encode("utf-8") + b"\0" + path.read_bytes())
+    return digest.hexdigest()[:12]
 
 
 def report_status(record: dict) -> str:
@@ -174,19 +191,19 @@ def human_secs(seconds: int | None) -> str:
 # references/agent-accuracy.md — the guards borrowed from Cursor / Claude Code.
 # Each one translates a tool-level constraint those agents enforce into a
 # declaration this layer can machine-check.
-SCOPE_LINE = re.compile(r"(?mi)^\s*SCOPE:\s*(.+?)\s*$")
-READ_LINE = re.compile(r"(?mi)^\s*READ:\s*(.+?)\s*$")
-CHANGED_LINE = re.compile(r"(?mi)^\s*CHANGED:\s*(.+?)\s*$")
-REVERT_LINE = re.compile(r"(?mi)^\s*REVERT:\s*(.+?)\s*$")
-RED_FIRST_LINE = re.compile(r"(?mi)^\s*RED_FIRST:\s*(.+?)\s*$")
-ASSUMED_LINE = re.compile(r"(?mi)^\s*ASSUMED:\s*(.+?)\s*$")
+SCOPE_LINE = delegation_return.line_field("SCOPE")
+READ_LINE = delegation_return.line_field("READ")
+CHANGED_LINE = delegation_return.line_field("CHANGED")
+REVERT_LINE = delegation_return.line_field("REVERT")
+RED_FIRST_LINE = delegation_return.line_field("RED_FIRST")
+ASSUMED_LINE = delegation_return.line_field("ASSUMED")
 # One assumption per ASSUMED line, tagged by whether the conclusion rests on
 # it. Only a load-bearing one stops the run for a person's decision.
 LOAD_BEARING = "[承重]"
 NOT_LOAD_BEARING = "[非承重]"
 # ops: 认产物不能只是声明。A feature defect sends the ticket back to deliver,
 # and that is only sound if the symptom was confirmed against *that* build.
-ARTIFACT_LINE = re.compile(r"(?mi)^\s*ARTIFACT:\s*(MATCH|AHEAD|UNKNOWN)\b")
+ARTIFACT_LINE = delegation_return.line_field("ARTIFACT", r"(MATCH|AHEAD|UNKNOWN)\b")
 # 服务名必须有来源: from the topology, a tool result, or the user — never
 # from recall. A name produced from memory is the first link in a chain of
 # reasoning about a service that may not exist.
@@ -207,6 +224,39 @@ def optional_line(raw: str, pattern: re.Pattern[str]) -> str:
     if not value or NONE_VALUE.match(value):
         return ""
     return value
+
+
+def lift(raw: str) -> dict[str, str]:
+    """The one-line fields a report carries beside its checks, each from its own line."""
+    return {
+        "suggest": optional_line(raw, SUGGEST_LINE),
+        "guide": optional_line(raw, GUIDE_LINE),
+        "domain": optional_line(raw, DOMAIN_LINE),
+        "conclusion": optional_line(raw, CONCLUSION_LINE),
+    }
+
+
+SUGGEST_LABEL = delegation_return.line_field("SUGGEST", "")
+
+
+def suggestion_of(record: dict) -> str:
+    """SUGGEST as the current reader sees it.
+
+    The stored field is only trusted when the report has no SUGGEST line:
+    records written before the reader kept to its own line hold whatever
+    came next (often CONCLUSION) there.
+    """
+    raw = str((record.get("report") or {}).get("raw", ""))
+    if SUGGEST_LABEL.search(raw):
+        return lift(raw)["suggest"]
+    return str(record.get("suggest") or "").strip()
+
+
+def has_telemetry(record: dict) -> bool:
+    return all(
+        isinstance(record.get(key), (int, float)) and not isinstance(record.get(key), bool)
+        for key in ("duration_ms", "tool_call_count")
+    )
 
 
 # file.ext:symbol — the anchor granularity. "changed service.py" carries no
@@ -239,7 +289,7 @@ def check_accuracy(record: dict) -> dict[str, str]:
         # re-verifying the whole report. Writing 无 counts as declaring.
         out["assumption-declared"] = (
             "PASS" if ASSUMED_LINE.search(raw)
-            else "FAIL:没有 ASSUMED 行 —— 列出这轮没验、但结论依赖的前提;"
+            else "FAIL:ASSUMED 行缺失或为空 —— 列出这轮没验、但结论依赖的前提;"
                  "没有就写「无」。导体只需核那一条,比重验整份回报便宜")
         untagged = [
             value for value in ASSUMED_LINE.findall(raw)
@@ -358,23 +408,75 @@ def _subagent_stops_path() -> Path:
     return root / "subagent-stops.jsonl"
 
 
-def _latest_subagent_stop() -> dict | None:
-    """Newest parseable row from subagent-stops.jsonl, or None."""
+def _stop_rows() -> list[dict]:
+    """Every parseable row of subagent-stops.jsonl, oldest first."""
     path = _subagent_stops_path()
     if not path.is_file():
-        return None
+        return []
     try:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
-        return None
-    for line in reversed(lines):
-        if not line.strip():
-            continue
+        return []
+    rows = []
+    for line in lines:
         try:
             row = json.loads(line)
         except json.JSONDecodeError:
             continue
         if isinstance(row, dict):
+            rows.append(row)
+    return rows
+
+
+def _moment(value: object) -> dt.datetime | None:
+    try:
+        when = dt.datetime.fromisoformat(str(value))
+    except (TypeError, ValueError):
+        return None
+    return when if when.tzinfo else when.astimezone()
+
+
+def stop_id(row: dict) -> str:
+    """Rows from before the hook stamped an id are told apart by their time."""
+    return str(row.get("id") or row.get("at") or "")
+
+
+def _holds(roots: object, repo: Path) -> bool:
+    if not isinstance(roots, list) or not roots:
+        return True
+    for root in roots:
+        base = Path(str(root)).expanduser().resolve()
+        if repo == base or base in repo.parents or repo in base.parents:
+            return True
+    return False
+
+
+STOP_LOOKBACK = dt.timedelta(hours=6)
+
+
+def stop_for(record: dict, repo: Path, taken: set[str]) -> dict | None:
+    """This delegation's subagentStop row, or None.
+
+    The newest row is not enough: parallel delegations stop in any order, and
+    a retry recorded without a stop of its own would copy the first attempt's
+    time. A row counts when its subagent_type is the record's agent, its
+    workspace holds the repo, no other record took it, and it fell inside the
+    delegation: after started_at (the last six hours without one) and before
+    finished_at plus a minute.
+    """
+    agent = str(record.get("agent") or "")
+    now = dt.datetime.now().astimezone()
+    started, finished = _moment(record.get("started_at")), _moment(record.get("finished_at"))
+    earliest = started or now - STOP_LOOKBACK
+    latest = finished + dt.timedelta(minutes=1) if finished else now
+    for row in reversed(_stop_rows()):
+        when = _moment(row.get("at"))
+        if (
+            str(row.get("subagent_type") or "") == agent
+            and when is not None and earliest <= when <= latest
+            and stop_id(row) not in taken
+            and _holds(row.get("workspace_roots"), repo)
+        ):
             return row
     return None
 
@@ -597,6 +699,20 @@ def check_java_hygiene(record: dict, repo: Path | None) -> dict[str, str]:
             + extra
         )
     }
+
+
+# Checks that read the checkout: evidence on disk, review.md, the diff. Their
+# verdict belongs to the checkout as it was when the record was written, so a
+# later measurement keeps the stored one instead of reading today's tree.
+CHECKOUT_CHECKS = frozenset({"evidence-present", "canon-walked", "struct-gated", "hit-applied", "java-hygiene"})
+
+
+def remeasure(record: dict) -> dict[str, str]:
+    """The record's checks by the current checker; checkout checks as stored."""
+    stored = record.get("checks") or {}
+    measured = {k: v for k, v in run_checks(record, None).items() if k not in CHECKOUT_CHECKS}
+    measured.update({k: str(v) for k, v in stored.items() if k in CHECKOUT_CHECKS})
+    return measured
 
 
 def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
@@ -832,18 +948,57 @@ def record_name(step: str, attempt: int, shard: str = "") -> str:
     return f"{step}-{attempt}.yaml"
 
 
+def verify_record_name(step: str, attempt: int, shard: str = "") -> str:
+    """A verifier's record sits beside the writer's attempt it checked."""
+    return record_name(step, attempt, shard).removesuffix(".yaml") + ".verify.yaml"
+
+
+def is_verifier(record: dict) -> bool:
+    return str(record.get("role") or "").strip().lower() == "verifier"
+
+
+def writer_record(folder: Path, step: str, shard: str = "") -> dict | None:
+    """The newest writer record of a step in one run's directory."""
+    best: tuple[int, dict] | None = None
+    for path in record_paths.records(folder):
+        data = safeyaml.mapping(path) or {}
+        if str(data.get("step")) != step or is_verifier(data):
+            continue
+        if str(data.get("shard") or "").strip() != shard:
+            continue
+        attempt = safeyaml.as_int(data.get("attempt"), 1)
+        if best is None or attempt > best[0]:
+            best = (attempt, data)
+    return best[1] if best else None
+
+
+def _attach_verification(record: dict, writer: dict) -> None:
+    """Hand the verdict to the store against the writer's delegation (P1-5)."""
+    delegation_id = str(writer.get("delegation_id") or "").strip()
+    if not delegation_id or not _go_engine():
+        return
+    idev = _idev_bin()
+    if not idev:
+        return
+    cmd = [
+        idev, "delegation", "verify", "--id", delegation_id,
+        "--verifier", str(record["agent"]), "--verdict", report_status(record) or "UNKNOWN",
+    ]
+    evidence = report_evidence(record)
+    if evidence and evidence != "-":
+        cmd += ["--evidence", evidence]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        print(f"BLOCKED delegation verify failed: {(proc.stderr or proc.stdout or '').strip()}", file=sys.stderr)
+        raise SystemExit(2)
+
+
 def _go_engine() -> bool:
     return (os.environ.get("IDEV_ENGINE") or "go").strip().lower() != "python"
 
 
 def _idev_bin() -> str | None:
-    exe = (os.environ.get("IDEV_BIN") or "").strip()
-    if exe and Path(exe).is_file():
-        return exe
-    built = Path(__file__).resolve().parent.parent / "bin" / "idev"
-    if built.is_file():
-        return str(built)
-    return shutil.which("idev")
+    return idev_bin.path()
 
 
 def _allocate_attempt(record: dict, repo: Path | None) -> dict | None:
@@ -909,13 +1064,27 @@ def cmd_write(args: argparse.Namespace) -> int:
             print(f"BLOCKED record needs {key}", file=sys.stderr)
             return 2
     kind = str(record["kind"])
-    expected = kind_agents.agent_for(kind)
-    if expected == kind_agents.CONDUCTOR:
-        print(f"BLOCKED kind {kind} is kept by the conductor; it is not delegated", file=sys.stderr)
+    role = str(record.get("role") or "writer").strip().lower()
+    if role not in ("writer", "verifier"):
+        print(f"BLOCKED role is writer or verifier, not {role!r}", file=sys.stderr)
         return 2
-    if str(record["agent"]) != expected:
-        print(f"BLOCKED kind {kind} delegates to {expected}, not {record['agent']}", file=sys.stderr)
-        return 2
+    if role == "verifier":
+        expected = kind_agents.KIND_VERIFIER.get(kind)
+        if not expected:
+            print(f"BLOCKED kind {kind} has no independent verifier; drop role: verifier", file=sys.stderr)
+            return 2
+        if str(record["agent"]) != expected:
+            print(f"BLOCKED kind {kind} is verified by {expected}, not {record['agent']}", file=sys.stderr)
+            return 2
+        record["role"] = "verifier"
+    else:
+        expected = kind_agents.agent_for(kind)
+        if expected == kind_agents.CONDUCTOR:
+            print(f"BLOCKED kind {kind} is kept by the conductor; it is not delegated", file=sys.stderr)
+            return 2
+        if str(record["agent"]) != expected:
+            print(f"BLOCKED kind {kind} delegates to {expected}, not {record['agent']}", file=sys.stderr)
+            return 2
 
     bad_metrics = check_metrics(record)
     if bad_metrics:
@@ -929,52 +1098,72 @@ def cmd_write(args: argparse.Namespace) -> int:
     record.setdefault("attempt", 1)
     record.setdefault("outcome", "recorded")
     # Lift SUGGEST out of the report body so eval and timeline can see it.
-    raw_report = str((record.get("report") or {}).get("raw", ""))
-    sm = SUGGEST_LINE.search(raw_report)
-    lifted = sm.group(1).strip() if sm else ""
-    if lifted and not NONE_VALUE.match(lifted):
-        record["suggest"] = lifted
+    lifted = lift(str((record.get("report") or {}).get("raw", "")))
+    if lifted["suggest"]:
+        record["suggest"] = lifted["suggest"]
     record.setdefault("suggest", "")
-    record["guide"] = optional_line(raw_report, GUIDE_LINE)
-    record["domain"] = optional_line(raw_report, DOMAIN_LINE)
+    record["guide"] = lifted["guide"]
+    record["domain"] = lifted["domain"]
+    record["conclusion"] = lifted["conclusion"]
 
     # E3.3: when the Go engine owns truth, attempt comes from DelegationRepo
     # (server assigns). The YAML filename is a projection of that number, not
     # the primary key. Python golden keeps client-chosen attempt + exclusive create.
-    allocated = _allocate_attempt(record, args.repo)
-    if allocated is not None:
-        record["attempt"] = allocated["attempt"]
-        record["delegation_id"] = allocated["id"]
+    shard = str(record.get("shard") or "").strip()
+    writer = None
+    if role == "verifier":
+        # A verification is not another attempt at the step: it sits beside
+        # the writer's attempt it checked and takes no attempt number.
+        writer = writer_record(record_dir(args.feature, args.repo), str(record["step"]), shard)
+        if writer is None:
+            print(
+                f"BLOCKED no writer record for {record['step']} in this run; "
+                "the writer's delegation is recorded before its verification",
+                file=sys.stderr,
+            )
+            return 2
+        record["attempt"] = safeyaml.as_int(writer.get("attempt"), 1)
+        record["verifies"] = {
+            key: writer[key] for key in ("attempt", "agent", "delegation_id")
+            if str(writer.get(key) or "").strip()
+        }
+    else:
+        allocated = _allocate_attempt(record, args.repo)
+        if allocated is not None:
+            record["attempt"] = allocated["attempt"]
+            record["delegation_id"] = allocated["id"]
     attempt = safeyaml.as_int(record.get("attempt"), 1)
     record["attempt"] = attempt
-    shard = str(record.get("shard") or "").strip()
     try:
-        name = record_name(str(record["step"]), attempt, shard)
+        name = (verify_record_name if writer is not None else record_name)(str(record["step"]), attempt, shard)
     except ValueError:
         print(f"BLOCKED shard {shard!r} is not a slug", file=sys.stderr)
         return 2
-    if attempt > 1 and not str((record.get("brief") or {}).get("prior_failure", "")).strip():
+    if writer is None and attempt > 1 and not str((record.get("brief") or {}).get("prior_failure", "")).strip():
         print("BLOCKED attempt > 1 needs brief.prior_failure (the agent must read it)", file=sys.stderr)
         return 2
 
     # Timing is optional on purpose: observability must not become a gate.
     # When both ends are present, store the derived duration so views and
     # metrics never have to re-parse timestamps. The subagentStop hook also
-    # leaves duration_ms; copy it when the record has none yet (phase 1 §4).
+    # leaves duration_ms and tool_call_count; copy them from this
+    # delegation's own row when the record has none yet (phase 1 §4).
     seconds = duration_of(record)
     if seconds is not None:
         record["duration_s"] = seconds
-    stop = _latest_subagent_stop()
+    taken = {str(r["stop_id"]) for _, r in load_all(args.feature, args.repo) if r.get("stop_id")}
+    stop = stop_for(record, (args.repo or Path.cwd()).resolve(), taken)
     if stop is not None:
-        if "duration_ms" not in record and isinstance(stop.get("duration_ms"), (int, float)):
-            record["duration_ms"] = int(stop["duration_ms"])
-            if seconds is None and record["duration_ms"] >= 0:
-                record["duration_s"] = round(record["duration_ms"] / 1000, 3)
-                seconds = record["duration_s"]
-        if "tool_call_count" not in record and isinstance(stop.get("tool_call_count"), (int, float)):
-            record["tool_call_count"] = int(stop["tool_call_count"])
+        record["stop_id"] = stop_id(stop)
+        for key in ("duration_ms", "tool_call_count", "message_count"):
+            if key not in record and isinstance(stop.get(key), (int, float)):
+                record[key] = int(stop[key])
+        if seconds is None and isinstance(record.get("duration_ms"), int) and record["duration_ms"] >= 0:
+            record["duration_s"] = round(record["duration_ms"] / 1000, 3)
+            seconds = record["duration_s"]
 
     record["checks"] = run_checks(record, args.repo)
+    record["checker"] = checker_version()
     record["signals"] = signals_of(record)
 
     target = record_dir(args.feature, args.repo)
@@ -996,6 +1185,12 @@ def cmd_write(args: argparse.Namespace) -> int:
         record["report"] = dict(
             report, raw=yaml_representers.LiteralString(report["raw"])
         )
+    if writer is not None:
+        if path.exists():
+            print(f"BLOCKED {path} already records the verification of {record['step']} attempt {attempt}",
+                  file=sys.stderr)
+            return 2
+        _attach_verification(record, writer)
     try:
         with open(path, "x", encoding="utf-8") as fh:
             fh.write(yaml_representers.dump(record))
@@ -1010,6 +1205,13 @@ def cmd_write(args: argparse.Namespace) -> int:
         print(line)
     if seconds is None:
         print("HINT no timing: pass started_at + finished_at to make duration observable")
+    if stop is None and _stop_rows():
+        print(f"HINT no subagentStop row of {record['agent']} for this delegation (another record took it, "
+              "or it fell outside started_at..finished_at): tool calls stay unknown")
+    elif stop is None:
+        print(f"HINT {_subagent_stops_path()} has no rows: install the hooks "
+              f"(bash {kind_agents.kernel_root()}/scripts/install-idev-hooks.sh) so records carry "
+              "duration and tool calls")
 
     failed = {k: v for k, v in record["checks"].items() if v.startswith("FAIL")}
     for name, value in failed.items():
@@ -1184,8 +1386,9 @@ def cmd_timeline(args: argparse.Namespace) -> int:
             )
             if flags:
                 print(f"{indent}↳ check_fail: {', '.join(flags)}")
-            if str(record.get("suggest", "")).strip():
-                print(f"{indent}↳ suggest: {record['suggest']}")
+            suggest = suggestion_of(record)
+            if suggest:
+                print(f"{indent}↳ suggest: {suggest}")
             if str(record.get("guide", "")).strip():
                 print(f"{indent}↳ guide: {record['guide']}")
             if str(record.get("domain", "")).strip():
@@ -1213,35 +1416,43 @@ def cmd_timeline(args: argparse.Namespace) -> int:
 
 
 def cmd_eval(args: argparse.Namespace) -> int:
-    records = [r for _, r in load_all(args.feature, args.repo)]
+    loaded = load_all(args.feature, args.repo)
+    pairs = record_paths.distinct(loaded)
+    kinds = record_paths.attempt_kinds(pairs)
     by_agent: Counter[str] = Counter()
     blocked: Counter[str] = Counter()
     checks: Counter[str] = Counter()
     produced: Counter[str] = Counter()
-    retried = rejected = suggests = 0
+    rejected = suggests = remeasured = telemetry = 0
+    unscoped: list[tuple[Path, dict]] = []
     durations: list[int] = []
 
-    for record in records:
+    for path, record in pairs:
         by_agent[str(record.get("agent", "?"))] += 1
         status = report_status(record)
         if status.startswith("BLOCKED"):
             hit = re.search(r"BLOCKED\((\w+)\)", status)
             blocked[hit.group(1) if hit else "unclassified"] += 1
-        if safeyaml.as_int(record.get("attempt"), 1) > 1:
-            retried += 1
-        # Derived, not hand-labelled. `outcome: rejected` was read here but
-        # nothing ever wrote it, so this counter was permanently 0 — which
-        # reads as "never rejected" rather than "never measured". A record
-        # whose checks failed IS a rejected round, whatever the agent's
-        # self-reported STATUS said.
-        if any(isinstance(v, str) and v.startswith("FAIL")
-               for v in (record.get("checks") or {}).values()):
+        if kinds[path] == "unscoped":
+            unscoped.append((path, record))
+        # One ruler for every record: the report is measured again by the
+        # current checker, so an old record is not judged by a checker that
+        # has since been fixed. `outcome: rejected` was never written by
+        # anything; a record whose checks fail IS a rejected round, whatever
+        # the agent's self-reported STATUS said.
+        measured = remeasure(record)
+        stored = record.get("checks") or {}
+        if any(str(stored.get(k, "")).startswith("FAIL") != v.startswith("FAIL") for k, v in measured.items()):
+            remeasured += 1
+        failed = [k for k, v in measured.items() if str(v).startswith("FAIL")]
+        if failed:
             rejected += 1
-        if str(record.get("suggest", "")).strip():
+        for name in failed:
+            checks[name] += 1
+        if suggestion_of(record):
             suggests += 1
-        for name, value in (record.get("checks") or {}).items():
-            if str(value).startswith("FAIL"):
-                checks[name] += 1
+        if has_telemetry(record):
+            telemetry += 1
         seconds = duration_of(record)
         if seconds is not None:
             durations.append(seconds)
@@ -1251,7 +1462,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
 
     print("## agent-eval")
     print()
-    print(f"- delegated: {len(records)}")
+    copies = len(loaded) - len(pairs)
+    print(f"- delegated: {len(pairs)}" + (f" (duplicate files counted once: {copies})" if copies else ""))
     print(f"- by_agent: {dict(by_agent) or '{}'}")
 
     # How many steps the conductor kept, from run.yaml: the denominator for
@@ -1268,9 +1480,17 @@ def cmd_eval(args: argparse.Namespace) -> int:
         print("- conductor_kept: 无 run.yaml")
 
     print(f"- blocked: {sum(blocked.values())} {dict(blocked) or ''}".rstrip())
-    print(f"- retried: {retried}")
+    print(f"- retried: {sum(1 for kind in kinds.values() if kind == 'retry')}")
+    print(f"- verifications: {sum(1 for kind in kinds.values() if kind == 'verification')}")
+    if unscoped:
+        print(f"- unscoped: {len(unscoped)} flat records with attempt > 1 — a retry, or a later run's first try; "
+              "brief.prior_failure says which")
+        for path, record in unscoped:
+            why = " ".join(str((record.get("brief") or {}).get("prior_failure") or "-").split())
+            print(f"  - {path.name}: {why[:60]}")
     print(f"- rejected: {rejected}")
     print(f"- check_fail: {dict(checks) or '{}'}")
+    print(f"- checker: {checker_version()} (reports measured again; a FAIL differs from the stored checks on {remeasured})")
     print(f"- suggest: {suggests}")
     if durations:
         print(
@@ -1279,6 +1499,8 @@ def cmd_eval(args: argparse.Namespace) -> int:
         )
     else:
         print("- duration_s: 无计时")
+    print(f"- telemetry: {telemetry}/{len(pairs)} records carry duration_ms and tool_call_count "
+          "from the subagentStop hook")
     if produced:
         print(f"- produced: {dict(produced)}")
     print()

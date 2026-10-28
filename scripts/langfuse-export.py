@@ -42,13 +42,14 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import delegation_return  # noqa: E402
 import kind_agents  # noqa: E402
 import record_paths  # noqa: E402
 import safeyaml  # noqa: E402
 
 GLOBS = record_paths.REPO_GLOBS
-STATUS_LINE = re.compile(r"(?mi)^\s*STATUS:\s*(\S+)")
-EVIDENCE_LINE = re.compile(r"(?mi)^\s*EVIDENCE:\s*(.+?)\s*$")
+STATUS_LINE = delegation_return.line_field("STATUS", r"(\S+)")
+EVIDENCE_LINE = delegation_return.line_field("EVIDENCE")
 
 
 def status_of(record: dict) -> str:

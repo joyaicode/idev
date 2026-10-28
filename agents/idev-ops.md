@@ -106,6 +106,8 @@ codegraph_impact <symbol> --depth 1         # 改它会波及谁
 `--depth 1` 是规约(`one-hop-only` 以「候选 hop > 1」为失败)。查不到(动态分发 / 反射 /
 配置路由)就**明说查不到**。
 
+跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage ops`。有输出时，用打出的技能解释渲染、响应式、水合、路由、store 的机制。技能不能单独把猜想写成根因，证成仍走上面的台账。
+
 ## kind = route.s4(论证)
 
 深入研究前先 `bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> research`。按 `evidence.md` 闭环**按序**走,失败回第 1 步:

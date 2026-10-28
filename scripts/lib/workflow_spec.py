@@ -57,7 +57,21 @@ STEP_STOP = {"FAIL", "BLOCKED"}
 # the conductor asks again rather than recording it as the person's choice.
 NON_ANSWERS = frozenset({"继续", "continue", "ok", "okay", "好", "好的", "嗯", "收到", "go", "next"})
 
-CONFIRM_WORDS = ("确认", "全签", "同意", "lgtm")
+CONFIRM_WORDS = (
+    "就按建议", "按建议", "按推荐", "听你的",
+    "选a", "选b", "选c", "选d", "选1", "选2", "选3", "选4", "选5",
+    "按这个方案", "按这个", "没问题", "无异议", "就这样", "可以",
+    "架构通过", "需求通过", "实现通过", "提测通过", "审核通过",
+    "确认", "全签", "同意", "lgtm", "通过",
+)
+# The whole reply is one of these, and it is not also a verb prefix of a
+# longer word. 行 means the proposal in front of them stands.
+PLAIN_AGREE = frozenset({
+    "可以", "就这样", "按这个", "按这个方案", "没问题", "无异议", "行",
+    "就按建议", "按建议", "按推荐", "听你的",
+    "a", "b", "c", "d", "1", "2", "3", "4", "5",
+    "选a", "选b", "选c", "选d", "选1", "选2", "选3", "选4", "选5",
+})
 AGENT_NAMES = {"agent", "ai", "cursor", "assistant"}
 
 # --- signoff grammar -------------------------------------------------------
@@ -69,9 +83,26 @@ AGENT_NAMES = {"agent", "ai", "cursor", "assistant"}
 REJECT_WORDS = ("驳回",)
 
 # A confirmation may carry qualifiers, but only these. An unknown word means
-# the person wrote a sentence, not a signoff.
+# the person wrote a sentence, not agreement. Phrases that only acknowledge
+# ("继续") may follow an agreement word; alone they still answer nothing.
+# Rollback and unseal are named in ordinary words. A stray character, emoji
+# or zero-width mark is still not a qualifier.
 CONFIRM_SEPS = (" ", "，", ",", "：", ":")
 CONFIRM_TOKENS = (
+    "不用一直询问",
+    "不用再问",
+    "重新打开基线",
+    "打开基线",
+    "回退到需求",
+    "回退到架构",
+    "回退到实现",
+    "问题在需求",
+    "问题在架构",
+    "问题在编码",
+    "问题在代码",
+    "缺陷在需求",
+    "缺陷在架构",
+    "缺陷在实现",
     "origin=req",
     "origin=arch",
     "origin=code",
@@ -86,7 +117,25 @@ CONFIRM_TOKENS = (
     "拆解",
     "基线",
     "提测",
+    "continue",
+    "okay",
+    "继续",
+    "好的",
+    "收到",
+    "next",
+    "ok",
+    "go",
+    "嗯",
+    "好",
 )
+# These phrases contain a negation mark but are agreement, not a refusal.
+NEGATION_EXEMPT = ("没问题", "无异议", "不用一直询问", "不用再问")
+_ORIGIN_PHRASES = (
+    ("req", ("origin=req", "回退到需求", "问题在需求", "缺陷在需求")),
+    ("arch", ("origin=arch", "回退到架构", "问题在架构", "缺陷在架构")),
+    ("code", ("origin=code", "回退到实现", "问题在编码", "问题在代码", "缺陷在实现")),
+)
+_REOPEN_PHRASES = ("解除密封", "reopen", "重新打开基线", "打开基线", "解封")
 
 # Second line of defence. A hit is a refusal with a reason, so the conductor
 # can quote back why rather than just failing.
@@ -772,6 +821,8 @@ def _parse_grammar(text: str, verbs: tuple) -> tuple:
         if not text.startswith(verb):
             continue
         rest = text[len(verb) :]
+        if rest.startswith("了"):
+            rest = rest[len("了") :]
         tokens: list = []
         while rest:
             sep = next((s for s in CONFIRM_SEPS if rest.startswith(s)), None)
@@ -792,14 +843,78 @@ _NEGATION_RE = re.compile(
 )
 
 
-def parse_confirm(quote: str, gate_type: str = "", origin: str = "") -> Confirm:
-    """Parse a signoff quote as a whole sentence.
+def _scan_text(text: str) -> str:
+    """Drop agreement phrases that contain 不/没 before the refusal scan."""
+    scan = text
+    for phrase in NEGATION_EXEMPT:
+        scan = scan.replace(phrase, "")
+    return scan
 
-    `gate_type` and `origin` carry the destructive-gate keyword rules: a
-    defect_origin signoff must name the same origin the gate is asking about,
-    and reopening a sealed baseline must say so in words.
+
+def _refusal(text: str):
+    """The negation or hesitation in a reply, or None.
+
+    It applies to a reply that only names the action as much as to one with a verb.
+    """
+    scan = _scan_text(text)
+    if any(mark in scan for mark in NEGATION_CJK) or _NEGATION_RE.search(scan):
+        return Confirm(False, "negation", ())
+    if any(mark in scan for mark in HESITATION):
+        return Confirm(False, "hesitation", ())
+    return None
+
+
+def _named_action(text: str):
+    """('origin', req|arch|code) or ('reopen', '') when the reply names one."""
+    for origin, phrases in _ORIGIN_PHRASES:
+        if any(phrase in text for phrase in phrases):
+            return ("origin", origin)
+    if any(phrase in text for phrase in _REOPEN_PHRASES):
+        return ("reopen", "")
+    return None
+
+
+def _with_canonical(tokens, text: str) -> tuple:
+    """Add the keyword the gate domain compares, when ordinary words named it."""
+    out = list(tokens)
+    named = _named_action(text)
+    if named and named[0] == "origin":
+        key = f"origin={named[1]}"
+        if key not in out:
+            out.append(key)
+    elif named and named[0] == "reopen" and not ({"解除密封", "reopen"} & set(out)):
+        out.append("解除密封")
+    return tuple(out)
+
+
+def _finish_gate(gate_type: str, origin: str, tokens, text: str) -> Confirm:
+    """A named rollback or unseal only agrees with that action."""
+    named = _named_action(text)
+    canon = _with_canonical(tokens, text)
+    if gate_type == "defect_origin":
+        wanted = ("origin", str(origin or "").strip().lower())
+        if named != wanted:
+            return Confirm(False, "keyword-mismatch", canon)
+        return Confirm(True, "ok", canon)
+    if gate_type == "reopen_baseline":
+        if not named or named[0] != "reopen":
+            return Confirm(False, "keyword-mismatch", canon)
+        return Confirm(True, "ok", canon)
+    if gate_type and named:
+        return Confirm(False, "keyword-mismatch", canon)
+    return Confirm(True, "ok", canon)
+
+
+def parse_confirm(quote: str, gate_type: str = "", origin: str = "") -> Confirm:
+    """Whether the reply shows agreement with this step.
+
+    Agreement is the person's words making the same picture, not a password.
+    A question, a refusal, a hesitation, or a stray character still is not
+    agreement. `继续` / `好` / `ok` alone still answer nothing. A rollback or
+    an unseal has to name that action; the name may be ordinary words.
     """
     text = normalize_quote(quote)
+    text = re.sub(r"^选\s+([a-d1-5])$", r"选\1", text)
     if not text:
         return Confirm(False, "no-verb", ())
 
@@ -810,26 +925,18 @@ def parse_confirm(quote: str, gate_type: str = "", origin: str = "") -> Confirm:
 
     verb, tokens = _parse_grammar(text, CONFIRM_WORDS)
     if verb is None:
+        named = _named_action(text)
+        if named and gate_type:
+            return _refusal(text) or _finish_gate(gate_type, origin, (), text)
+        if text in PLAIN_AGREE:
+            if gate_type in ("defect_origin", "reopen_baseline"):
+                return Confirm(False, "keyword-mismatch", ())
+            return Confirm(True, "ok", ())
         return Confirm(False, "no-verb", ())
     if tokens is None:
         return Confirm(False, "unparsed-tail", ())
 
-    # Unreachable while every token above is free of these markers; kept so
-    # that adding a token cannot quietly open a hole.
-    if any(mark in text for mark in NEGATION_CJK) or _NEGATION_RE.search(text):
-        return Confirm(False, "negation", ())
-    if any(mark in text for mark in HESITATION):
-        return Confirm(False, "hesitation", ())
-
-    if gate_type == "defect_origin":
-        wanted = f"origin={str(origin or '').strip().lower()}"
-        if wanted not in tokens:
-            return Confirm(False, "keyword-mismatch", tokens)
-    elif gate_type == "reopen_baseline":
-        if not ({"解除密封", "reopen"} & set(tokens)):
-            return Confirm(False, "keyword-mismatch", tokens)
-
-    return Confirm(True, "ok", tokens)
+    return _refusal(text) or _finish_gate(gate_type, origin, tokens, text)
 
 
 def is_confirm(quote: str) -> bool:

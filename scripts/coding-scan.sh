@@ -113,10 +113,14 @@ if [ "$has_java" = 1 ]; then
   fi
 fi
 
+if [ "$has_vue" = 1 ]; then
+  echo "=== Vue (authority: idev/skills/vue) ==="
+  python3 "$ROOT/vue-skills.py" --repo "$REPO" --stage code
+fi
+
 if [ "$has_vue" = 1 ] || [ "$has_ts" = 1 ]; then
   echo "=== Frontend ==="
   echo "  idev: ${IDEV}/conventions/coding.md"
-  [ -n "$CR" ] && echo "  guide: $CR/reference/vue.md"
   [ -n "$CR" ] && [ "$has_ts" = 1 ] && echo "  guide: $CR/reference/typescript.md"
   echo "  tools: lang-scan.sh (scripts/plugin/js_inspect.py；不安装 eslint，不安装 Node，不下载)"
 fi

@@ -24,6 +24,7 @@ from doc_home import homes  # noqa: E402
 from product_marker import load_marker, resolve_extension_repo  # noqa: E402
 from product_sink import product_repo  # noqa: E402
 from roots import kernel_root as roots_kernel_root  # noqa: E402
+import vue_skills  # noqa: E402
 
 try:
     import yaml
@@ -305,6 +306,8 @@ def main(argv: list[str] | None = None) -> int:
         print("RECIPE NONE")
     defaults_path, defaults = load_defaults(pages)
     print_defaults(defaults, defaults_path, product if args.product.strip() else "")
+    for line in vue_skills.lines(repo, stage):
+        print(line)
     if pages is None:
         print("OK no idev marker")
         return 0

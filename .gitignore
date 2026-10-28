@@ -49,3 +49,18 @@ testdata/rapid/
 # Go fuzz corpora are cached in GOCACHE; a seed worth keeping goes in the
 # test as an f.Add.
 testdata/fuzz/
+# idev: execution residue stays untracked; durable product characteristics stay
+.idev/*
+!.idev/memory.md
+!.idev/marker.yaml
+!.idev/extensions.yaml
+!.idev/handoff.yaml
+!.idev/workflow-defaults.yaml
+!.idev/strip-tokens.txt
+!.idev/pack/
+!.idev/workflows/
+!.idev/checks/
+!.idev/task/
+!.idev/task/**
+!.idev/docs/
+!.idev/docs/**

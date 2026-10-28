@@ -53,7 +53,7 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
 | 认什么 | 打开 |
 |---|---|
 | 目录 | `~/.cursor/skills/setup-agents-docs/SKILL.md` 的 Rule 4(feature slug)与 Rule 10(`docs/` 目录表) |
-| 体例 | `$IDEV/docs/SKILL.md` 的「体例」:五份文档同一事实只写一处,人读与机读对同一批 id |
+| 体例 | `$IDEV/docs/SKILL.md` 的「体例」:审过的需求和规格是权威；面向人另交的文档先校准再生成；整理时拆过时人读产物再重做 |
 | 问句 | `~/.cursor/skills/grilling/SKILL.md` |
 
 两份都打不开时先跑 `bash $IDEV/scripts/link-companion-skills.sh`;仍打不开就**停并回报
@@ -81,12 +81,12 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
      python3 $IDEV/scripts/req-ground.py --feature <f>           # 校验落地
      ```
      产出 `<票目录>/ui/<f>.spec.json`(json-render flat 格式)与同名 `.html`
-     (零依赖预览,浏览器直接打开)
+     (零依赖预览,浏览器直接打开)。界面落在 Vue 上时,跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage req-review`，组件边界和数据流按打出的技能写
    - **`req`** — 只把密封 item 译成 slices,**不增不减**。译不清进 `open_questions`(只问理解);
      想加义务 → `baseline-conflict`,**停**
-   - **`arch`** — 需求签收后交整包方案,再请人签。`design.md` 六节(目标/方案/契约/影响面/回退/用例),目标节照抄基线 goal;每条 item、每条 `case_intent` 点名。`## 前置` 放在 `## 目标` 之前。`arch.yaml` 的 `approach` 与 `non_approach` 都要有,`case_intents` 挂 `baseline_item_id`。本阶段不写 `verify/plan.yaml`。方案"更好"但超基线 → 拒过。没有未决分叉就不要写 `grill.md` 的 `## arch` 轮。有分叉才回报,让导体把问句写进那一轮。需求轮的 `frontier` 保持 empty。影响范围内的既有问题按 deliver/SKILL.md 架构阶段写进前置节。有既有问题时 `scope_debt.decision` 写 `pending`,回报导体问人,不要请签。建议写 `recommend`:`mark`(没有重大缺陷,并且小于 1/5 或分得开)或 `fix-first`(有重大缺陷,或达到 1/5 且分不开)。一条都没有才直接 `mark`。人说先修才另开子需求。
+   - **`arch`** — 需求签收后交整包方案,再请人签。`design.md` 六节(目标/方案/契约/影响面/回退/用例),目标节照抄基线 goal;每条 item、每条 `case_intent` 点名。`## 前置` 放在 `## 目标` 之前。`arch.yaml` 的 `approach` 与 `non_approach` 都要有,`case_intents` 挂 `baseline_item_id`。本阶段不写 `verify/plan.yaml`。方案"更好"但超基线 → 拒过。没有未决分叉就不要写 `grill.md` 的 `## arch` 轮。有分叉才回报,让导体把问句写进那一轮。需求轮的 `frontier` 保持 empty。影响范围内的既有问题按 deliver/SKILL.md 架构阶段写进前置节。判据唯一就直接写 `scope_debt.decision` 为 `mark` 或 `fix-first`，不要回报问人。定不了才写 `pending`，让导体按 chat-confirm 并进当前这个人的一次决策包。`fix-first` 才另开子需求。
      按 `$IDEV/conventions/canon.md` §1 协议扫 §2 信号与 §4 念头,§5 必答 A1–A8;
-     答不出标 `UNPROVEN` 并写进方案节。方案节同时过 `$IDEV/conventions/coding.md` 底线 4、5:顺着读能指出重点;业务落在带行为的类型上,不计划一串只有 get/set 的对象。引入新领域概念时先过 `conventions/domain-modeling.md` 建通用语言
+     答不出标 `UNPROVEN` 并写进方案节。方案节同时过 `$IDEV/conventions/coding.md` 底线 4、5:顺着读能指出重点;业务落在带行为的类型上,不计划一串只有 get/set 的对象。引入新领域概念时先过 `conventions/domain-modeling.md` 建通用语言。方案碰到 Vue 组件边界时,跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage arch`，状态所有者和数据流按打出的技能写进方案节
    - **`test`** — 用例证明基线 item。疑问只拷问理解,**答案不得写成新 must**
 3. 请签前**必须**跑结构检查,FAIL 不准请签:
    ```bash

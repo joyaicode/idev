@@ -71,7 +71,7 @@ parent: idev
 
 1. 对照 CONTEXT / ADR / 现有契约起草规格与 `baseline.yaml`（[baseline.example.yaml](references/baseline.example.yaml)）。落盘前打开 [docs/SKILL.md](../docs/SKILL.md)。未决问题写该票的 `grill.md`（`convention: grilling`）。
 2. 正确性、合理性、边界、细节、非目标：全部写成 `grill.md` 里的问句。文件放哪认 [docs/SKILL.md](../docs/SKILL.md)。`review_questions` 保持空列表。冲突不得默许。
-3. **自动唤起 grilling（硬）：** 本阶段一进入「定边界 / 清异议」就打开并执行 `~/.cursor/skills/grilling/SKILL.md`。把本轮 frontier 上的问题一次问完，每题带推荐答案；人的回答打开新问题就再来一轮。回答不是确认用语。推迟项写进 `non_goal`。`objections` 保持空。缺 grilling 先跑 `scripts/link-companion-skills.sh`。**禁止**用「自己拷问」或跳过 grilling 直接请签。
+3. **自动唤起 grilling（硬）：** 本阶段一进入「定边界 / 清异议」就打开并执行 `~/.cursor/skills/grilling/SKILL.md`。按当前编制把能问的一次问完，每题带推荐答案，挂在选项上的后续写在同一轮。只有回答打开这轮没写到的新分叉才再来一轮。回答不是确认用语。推迟项写进 `non_goal`。`objections` 保持空。缺 grilling 先跑 `scripts/link-companion-skills.sh`。**禁止**用「自己拷问」或跳过 grilling 直接请签。问谁见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。
 4. frontier 空之后不停在本阶段。直接起草拆解。需求通过的那一次确认在 `req` 末。
 
 ### req（拆解）
@@ -90,13 +90,13 @@ parent: idev
    行数按文件加总，写进这一节。**需求行数**只计为基线 goal 必须新增或改写的行，原样留下的不算。**既有问题行数**只计把范围内的规范、质量问题改掉要动的行。比例是既有问题行数 / 需求行数；需求行数是 0 时不除，当作和本次改动分不开。小于 1/5 是既有问题行数 × 5 < 需求行数。
    **重大缺陷**是行为与已有契约或调用方可见结果不符、会写错或丢掉数据、会让这次验收不可信，或有安全问题。不改变对外行为的规范、可读性、内聚、未使用、重复，不算重大。
    每一条都写明位置、是规范还是缺陷、行数。分得开是指能指出哪些符号只属于需求、哪些只属于既有问题，不会落在同一处改动里。比例小于 1/5、又落在本需求必须改的同一处的，可以随本次改掉，方案里单独标明，不写成基线新义务。边界分得开的不放进 `include`。
-   前置节有既有问题时先问人，不自己写成已经标明或已经先修。这是 B 类决策，不是另一次架构签字。选项只有「先修」和「本次不修」，`继续` 不算。人还没选时 `scope_debt.decision` 写 `pending`，不写 `arch.accepted`，不进入本需求编码。建议写在 `scope_debt.recommend`：没有重大缺陷，并且（比例小于 1/5，或者和本次改动分得开），建议 `mark`（本次不修，只在方案里标明）。有重大缺陷，或比例达到 1/5 且边界分不开，建议 `fix-first`。人说本次不修则 `decision` 写 `mark`。人说先修则写 `fix-first`，并按下面的子需求另开一张票。一条都没有时不问，`decision` 写 `mark`。
+   前置节的既有问题按上面的判据决定，不另开一次架构签字。没有重大缺陷，并且（比例小于 1/5，或者和本次改动分得开）→ `scope_debt.decision=mark`，只在方案里标明。有重大缺陷，或比例达到 1/5 且边界分不开 → `decision=fix-first`，并按下面的子需求另开一张票。两条都能用证据判定时直接写 `decision`，不写 `pending`，不问人。行数是 `UNPROVEN`、分不开定不了、或重大缺陷定不了时，`decision` 写 `pending`，`recommend` 写倾向，作为 B 类信号并进当前编制的一次决策包（[chat-confirm-signoff.md](../references/chat-confirm-signoff.md)）。选项只有「先修」和「本次不修」。一条都没有时 `decision` 写 `mark`。`pending` 未决时不写 `arch.accepted`，不进入本需求编码。
 4. **先给整包，再等 Review。** 不要在交出方案之前先开一轮必答拷问，也不要为了过门造一个问句。人 Review 时若有未决分叉，再打开 grilling，问句写在 `grill.md` 的 `## arch` 轮，`arch_frontier` 回到 `empty` 才能请签。没有分叉就不要写这一轮。需求轮的 `frontier` 保持 `empty`。要不要先修既有问题，不是这种方案分叉，不写进 `## arch`。
 5. **架构范式自查**：按 [canon.md](../conventions/canon.md) §1 协议扫 §2 信号与 §4 念头，§5 必答 A1–A8，§7 模板记账；答不出的项标 `UNPROVEN` 并写进 `design.md` 的方案节。真有分叉就在 arch 轮里问完。
 4a. **领域建模透镜（涉及新概念时）**：本轮引入新领域概念 / 跨模块术语时，先过 [conventions/domain-modeling.md](../conventions/domain-modeling.md) 建通用语言；术语不一致先对齐再出方案，术语表随票走。无新概念可跳过。
 6. `check-feature.sh <feature> arch`。方案对齐、没有未决分叉、前置节已写明、`scope_debt.decision` 不是 `pending` 之后，人 `accepted` + `by` 才能 `code`。`decision` 是 `fix-first` 时，子需求还没 `done` 就不请这次签，也不进入本需求编码。这次确认不包含用例计划。
 
-人同意先修时，子需求另开一张票，走 S1，从 `req-review` 起，不走 `lite-change`。goal 只写前置节里要先修的那些条。non_goal 写明不做父需求要加的行为。有重大缺陷的是缺陷修复；只有规范和质量的是重构。这张票自己交详细方案。用例覆盖变动前和变动后：缺陷修复是变动前红、变动后绿；重构是变动前就绿（锁住不能变的行为）、变动后仍绿。可执行用例仍在它自己的架构通过之后写。父票 `scope_debt.child` 写这张票的 feature，`decision` 写 `fix-first`。子需求 `done` 之后，父票按修完的代码重算影响面和行数，再请人评父需求的方案。
+`decision` 写成 `fix-first` 时（判据唯一，或人在决策包里选了先修），子需求另开一张票，走 S1，从 `req-review` 起，不走 `lite-change`。goal 只写前置节里要先修的那些条。non_goal 写明不做父需求要加的行为。有重大缺陷的是缺陷修复；只有规范和质量的是重构。这张票自己交详细方案。用例覆盖变动前和变动后：缺陷修复是变动前红、变动后绿；重构是变动前就绿（锁住不能变的行为）、变动后仍绿。可执行用例仍在它自己的架构通过之后写。父票 `scope_debt.child` 写这张票的 feature，`decision` 写 `fix-first`。子需求 `done` 之后，父票按修完的代码重算影响面和行数，再请人评父需求的方案。
 
 ### code
 

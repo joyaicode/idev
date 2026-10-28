@@ -3,8 +3,8 @@ feature: llm-wiki
 revision: 1
 baseline_revision: 1
 req_revision: 1
-accepted: false
-by: ""
+accepted: true
+by: wangwei794
 approach: "一个 claims.py 在票目录维护 claims.yaml。摄取只读拆解、方案和已有用例里的显式主张；校准用来源子串和同一主题的文本冲突决定退出码。不改 lessons、realign、SKILL.md、check-feature。"
 non_approach: "不装向量库，不做健康分，不让模型判断矛盾，不把 lessons 或 realign 抄进索引，不把校准加进 check-feature，不改 SKILL.md。回退是停用 claims.py 并删除该票 claims.yaml。"
 impact_candidates:

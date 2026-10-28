@@ -1,7 +1,9 @@
 # 委派留痕的样例。契约见 references/agents-evolve.md 第一节。
 #
-# 落点:<票目录>/workflow/delegations/<step-id>-<attempt>.yaml
+# 落点:<票目录>/workflow/delegations/<run_id>/<step-id>-<attempt>.yaml
 # 写入:python3 scripts/delegation.py write --feature <f>   # 本文件内容走 stdin
+# 复核者的留痕另加 role: verifier(step / kind 与写手相同),落成
+# <step-id>-<attempt>.verify.yaml,attempt 取它复核的那份写手留痕。
 #
 # brief 与 report 都存原文,不存摘要 —— 留痕的全部价值在于能照原样再派一次。
 schema_version: 1
@@ -37,6 +39,9 @@ report:
   raw: |
     STATUS: PASS
     EVIDENCE: docs/task/example-change/review.md
+    FACTS: codegraph 查到 OrderService.java:cancel 的调用方;git diff master...HEAD 输出
+    DOC_DRIFT: 无
+    ASSUMED: 无
     FINDINGS: 3(blocking 1 / 一般 2)
     UNRELATED: 2
     CHECKS: evidence-present=PASS  no-signoff-write=PASS  report-parsed=PASS
@@ -52,13 +57,15 @@ metrics:
   blocking: 1
   unrelated: 2
 
-# 五项可机检由 delegation.py 自己算并写回,不要手填。
-# brief-complete 的失败指向导体,其余指向 agent。
+# 可机检由 delegation.py 自己算并写回,不要手填;checker 是算它们的检查器版本。
+# brief-complete 的失败指向导体,其余指向 agent;归 agent 的 FAIL 会挡这一步的 record PASS。
 checks:
   evidence-present: PASS
   no-signoff-write: PASS
   brief-complete: PASS
   report-parsed: PASS
+checker: 7e1ade222e4c
 
 outcome: recorded      # recorded | rejected | retried
-suggest: ""            # agent 提的改进建议,只记不执行;够 2 次才走提案
+suggest: ""            # 回报 SUGGEST 行原文,只记不执行;同一个脚本、agent 或 kind 被点名 2 次才走提案
+conclusion: 认出 Java,扫到 1 条 blocking(C7 catch 后返回空),已标待签收。  # 回报 CONCLUSION 行原文,由脚本写回

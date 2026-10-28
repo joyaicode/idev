@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/idev/internal/domain/run"
@@ -161,12 +162,14 @@ func Record(path, stepID, status, evidence, note string) error {
 	return atomicWrite(path, out)
 }
 
-// Doc is the subset of run.yaml needed to refresh the SQLite projection.
+// Doc is the subset of run.yaml needed to refresh the SQLite projection and
+// to say, in the audit chain, what a write did.
 type Doc struct {
 	ID         string
 	WorkflowID string
 	Feature    string
 	Risk       string
+	Status     string
 	Steps      []Step
 }
 
@@ -178,6 +181,71 @@ type Step struct {
 	Writer string
 	Group  string
 	Writes []string
+
+	// What a record put on the step. Status is the raw key: "" until the
+	// step is recorded, where State reads "pending".
+	Status     string
+	At         string
+	Evidence   string
+	Note       string
+	LeaseID    string
+	SignedBy   string
+	Assurance  string
+	VerifiedBy string
+	Auto       bool
+	Accepted   []string
+}
+
+// Verb is what a write did to one step's record.
+type Verb string
+
+const (
+	VerbRecorded Verb = "recorded"
+	VerbAmended  Verb = "amended"
+	VerbSkipped  Verb = "skipped"
+	VerbRetried  Verb = "retried"
+)
+
+// Change is one step whose record a write changed.
+type Change struct {
+	Step Step
+	From string // the status before the write; "" when it had none
+	Verb Verb
+}
+
+func (s Step) record() string {
+	return strings.Join([]string{
+		s.Status, s.At, s.Evidence, s.Note, s.SignedBy, s.Assurance, s.VerifiedBy,
+		fmt.Sprint(s.Auto), strings.Join(s.Accepted, ","),
+	}, "\x00")
+}
+
+// StepChanges lists, in step order, the steps whose record differs between
+// two versions of a run.yaml. A step that was only delegated or leased has
+// no record yet; the lease and delegation events already say that.
+func StepChanges(prev, next Doc) []Change {
+	before := make(map[string]Step, len(prev.Steps))
+	for _, s := range prev.Steps {
+		before[s.ID] = s
+	}
+	var out []Change
+	for _, s := range next.Steps {
+		old := before[s.ID]
+		if (s.Status == "" && old.Status == "") || s.record() == old.record() {
+			continue
+		}
+		c := Change{Step: s, From: old.Status, Verb: VerbRecorded}
+		switch {
+		case s.Status == "":
+			c.Verb = VerbRetried
+		case s.Status == old.Status:
+			c.Verb = VerbAmended
+		case s.Status == "SKIPPED":
+			c.Verb = VerbSkipped
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // ParseDoc reads the projection fields from YAML bytes.
@@ -191,6 +259,7 @@ func ParseDoc(raw []byte) (Doc, error) {
 		WorkflowID: str(m["workflow_id"]),
 		Feature:    str(m["feature"]),
 		Risk:       str(m["risk_tier"]),
+		Status:     str(m["status"]),
 	}
 	if d.Risk == "" {
 		d.Risk = "P1"
@@ -202,16 +271,36 @@ func ParseDoc(raw []byte) (Doc, error) {
 			continue
 		}
 		st := Step{
-			ID:     str(step["id"]),
-			Kind:   str(step["kind"]),
-			State:  str(step["status"]),
-			Group:  str(step["group"]),
+			ID:       str(step["id"]),
+			Kind:     str(step["kind"]),
+			State:    str(step["status"]),
+			Group:    str(step["group"]),
+			Status:   str(step["status"]),
+			At:       str(step["at"]),
+			Evidence: str(step["evidence"]),
+			Note:     str(step["note"]),
 		}
 		if st.State == "" {
 			st.State = "pending"
 		}
 		if del, ok := step["delegated"].(map[string]any); ok {
 			st.Writer = str(del["agent"])
+		}
+		if lease, ok := step["lease"].(map[string]any); ok {
+			st.LeaseID = str(lease["id"])
+		}
+		if signed, ok := step["signoff"].(map[string]any); ok {
+			st.SignedBy, st.Assurance = str(signed["by"]), str(signed["assurance"])
+		}
+		if verified, ok := step["verification"].(map[string]any); ok {
+			st.VerifiedBy = str(verified["by"])
+		}
+		_, st.Auto = step["auto"].(map[string]any)
+		if accepted, ok := step["accepted_findings"].(map[string]any); ok {
+			checks, _ := accepted["checks"].([]any)
+			for _, c := range checks {
+				st.Accepted = append(st.Accepted, str(c))
+			}
 		}
 		if writes, ok := step["writes"].([]any); ok {
 			for _, w := range writes {

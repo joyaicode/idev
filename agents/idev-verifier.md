@@ -52,7 +52,9 @@ is_background: false
    ```
    `--depth 1` 是规约:`conductor-eval` 的 `one-hop-only` 以「候选 hop > 1」为失败。
    **只提名,人 `include`。** runner 不算图。查不到就明说查不到。
-4. **维度表先铺满骨架,再逐个填** —— 这是本步最容易漏的地方:
+4. **Vue 测试尺** —— 跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage test`。没有输出就跳过。按打出的技能设计断言。`VUE MISSING` 就停。
+
+5. **维度表先铺满骨架,再逐个填** —— 这是本步最容易漏的地方:
    ```
    每一维 → {id, 断言目标, runner, slice_id, baseline_item_id, accepted: false}
              ↓ 填不出 runner,或无基线可比
@@ -61,7 +63,7 @@ is_background: false
    `mode=test` 的维表**六族每一维**至少一条 case 或显式 `UNPROVEN`。四类原因是 `conductor-eval` 的 `unproven_reasons` 既有取值,照用。
    票里有 `deliver.yaml` 时,每条 case **必须同时挂** `slice_id` 与 `baseline_item_id`。
    **selector 必须指向含该 case `assert` 语句的测试类** —— 配置绑定/冒烟类同名测试不算覆盖;起草前先找到断言落点再回填 runner。
-5. 写 `<票目录>/verify/plan.yaml`,**`accepted: false`**。然后跑门禁:
+6. 写 `<票目录>/verify/plan.yaml`,**`accepted: false`**。然后跑门禁:
    ```bash
    bash $IDEV/scripts/check-feature.sh <feature> verify-plan
    python3 $IDEV/scripts/stage-gate.py --feature <feature> --stage test
@@ -88,7 +90,7 @@ is_background: false
 
 ## kind = ui.lifecycle_run
 
-执行扩展根 `.idev/workflow-defaults.yaml` 的 `commands.lifecycle`。**没有该键 → `BLOCKED(env)`,不猜命令。首红即停**,回报失败点与签名。
+剧本生命周期仍走 `ui-playbook.py`。先跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage test`；有输出时，Playwright 与组件测试的分工按打出的技能。然后执行扩展根 `.idev/workflow-defaults.yaml` 的 `commands.lifecycle`。**没有该键 → `BLOCKED(env)`,不猜命令。首红即停**,回报失败点与签名。
 
 ## 环境与扫描
 

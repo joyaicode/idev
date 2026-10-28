@@ -27,8 +27,9 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | 签字类状态 | `sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed`，只能人确认后代写 | `SKILL.md` 硬规则 3 |
 | `risk_tier` | 人在 `deliver.yaml` 定的风险档：P0 鉴权/数据面/跨仓契约；P1 默认功能票；P2 文档/小修/低爆破。决定停问次数。注意：此处 P0–P2 与 coding 的模式 P1–P17 **无关** | [hitl-risk-tiers.md](hitl-risk-tiers.md) |
 | 产线文档技能 | 交付时归类和落盘文档的同伴技能。目录认 setup-agents-docs，问句认 grilling | [docs/SKILL.md](../docs/SKILL.md) |
-| grilling | 把边界、异议、分叉逐条问到没有为止的拷问；工具是 `~/.cursor/skills/grilling/` | [invoke.md](invoke.md) |
-| frontier | grilling 里“尚未回答的问题集合”。一轮把当前能问的都问完。frontier 为空后，需求通过那一次确认才写共享理解 | [invoke.md](invoke.md) |
+| grilling | 把边界、异议、分叉按当前编制一次问完的拷问；工具是 `~/.cursor/skills/grilling/` | [chat-confirm-signoff.md](chat-confirm-signoff.md) |
+| frontier | grilling 里“尚未回答的问题集合”。一轮按当前编制把能问的都问完，挂在选项上的后续写在同一轮。frontier 为空后，需求通过那一次确认才写共享理解 | [chat-confirm-signoff.md](chat-confirm-signoff.md) |
+| 编制 | 当前工程里岗位和人的对应。一个人兼任七岗，或多人各管一段。交互按它收束 | [chat-confirm-signoff.md](chat-confirm-signoff.md) |
 | plan / accepted | verify 的测试计划；人确认后为 `accepted` | [verify/SKILL.md](../verify/SKILL.md) |
 | selftest / test | plan 的两种 mode：selftest=开发自测（证明实现不漂基线）；test=提测。自测过后人没说「提测」不进 test | [operator-cheatsheet.md](operator-cheatsheet.md) §3 |
 | aligned | 人签的“与基线对齐”；**不会**由跑绿自动产生 | 同上 |

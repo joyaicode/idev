@@ -31,6 +31,7 @@ func newFixture(t *testing.T, handle string) fixture {
 	dir := t.TempDir()
 	f := fixture{t: t, data: filepath.Join(dir, "data"), ticket: filepath.Join(dir, "ticket"), people: filepath.Join(dir, "people.yaml")}
 	t.Setenv("IDEV_DATA", f.data)
+	t.Setenv("IDEV_PROMPT_LOG_CHECK", "0")
 	must(t, os.MkdirAll(filepath.Join(f.ticket, "verify"), 0o755))
 	must(t, os.WriteFile(filepath.Join(f.ticket, "verify", "plan.yaml"), []byte("cases: []\n"), 0o644))
 	must(t, os.WriteFile(filepath.Join(f.ticket, "baseline.yaml"), []byte("revision: 1\n"), 0o644))
@@ -92,15 +93,36 @@ func (f fixture) state(id string) statusOut {
 	return s
 }
 
-func TestAnAgentShellCannotAnswer(t *testing.T) {
+func TestAChatQuoteApprovesWithoutATerminal(t *testing.T) {
 	f := newFixture(t, "alice")
 	r := f.askPlan()
-	code, _, errs := f.do(false, r.Short+"\n", "gate", "approve", r.GateID, "--quote", "确认")
-	if code != exitRefused || !strings.Contains(errs, "TTY") {
-		t.Fatalf("approve without a terminal: exit %d, %q", code, errs)
+	code, out, errs := f.do(false, "", "gate", "approve", r.GateID, "--quote", "确认")
+	if code != exitOK {
+		t.Fatalf("approve exit %d: %s", code, errs)
 	}
-	if s := f.state(r.GateID); s.Status != "pending" || s.Approval != nil {
-		t.Fatalf("refused answer left %+v", s)
+	if !strings.Contains(out, `"channel":"chat"`) || !strings.Contains(out, `"status":"approved"`) {
+		t.Fatalf("approve said %q", out)
+	}
+	s := f.state(r.GateID)
+	if s.Status != "approved" || s.Approval == nil || s.Approval.Channel != "chat" || s.Approval.Quote != "确认" {
+		t.Fatalf("status %+v", s)
+	}
+}
+
+func TestAnInventedQuoteIsRefusedWhenTheSessionIsLogged(t *testing.T) {
+	f := newFixture(t, "alice")
+	t.Setenv("IDEV_PROMPT_LOG_CHECK", "1")
+	r := f.askPlan()
+	code, _, errs := f.do(false, "", "gate", "approve", r.GateID, "--quote", "确认")
+	if code != exitRefused || !strings.Contains(errs, "prompts.log") {
+		t.Fatalf("invented quote: exit %d, %q", code, errs)
+	}
+	if s := f.state(r.GateID); s.Status != "pending" {
+		t.Fatalf("status %s", s.Status)
+	}
+	must(t, os.WriteFile(filepath.Join(f.data, "prompts.log"), []byte("{\"text\":\"确认\"}\n"), 0o644))
+	if code, _, errs := f.do(false, "", "gate", "approve", r.GateID, "--quote", "确认"); code != exitOK {
+		t.Fatal(errs)
 	}
 }
 
@@ -119,7 +141,7 @@ func TestThePersonApprovesFromTheirTerminal(t *testing.T) {
 		t.Fatalf("status %+v", s)
 	}
 	ap := s.Approval
-	if ap.Handle != "alice" || ap.Quote != "确认" || ap.Assurance != "low" || !ap.SignatureOK || ap.Channel != "local_token_tty" {
+	if ap.Handle != "alice" || ap.Quote != "确认" || ap.Assurance != "low" || !ap.SignatureOK || ap.Channel != "chat" {
 		t.Fatalf("approval %+v", ap)
 	}
 	if ap.Downgraded {
@@ -152,11 +174,11 @@ func TestTheAuditChainHoldsAfterADecision(t *testing.T) {
 	}
 }
 
-func TestTheWrongShortCodeRecordsNothing(t *testing.T) {
+func TestWordsThatDoNotAgreeRecordNothing(t *testing.T) {
 	f := newFixture(t, "alice")
 	r := f.askPlan()
-	code, _, errs := f.do(true, "ZZZZ\n", "gate", "approve", r.GateID, "--quote", "确认")
-	if code != exitRefused || !strings.Contains(errs, "short code") {
+	code, _, errs := f.do(false, "", "gate", "approve", r.GateID, "--quote", "继续")
+	if code != exitRefused || !strings.Contains(errs, "not a confirmation") {
 		t.Fatalf("exit %d, %q", code, errs)
 	}
 	if s := f.state(r.GateID); s.Status != "pending" {
@@ -345,6 +367,68 @@ func TestOnePendingQuestionPerStep(t *testing.T) {
 		"--will-write", "verify/plan.yaml accepted", "--proof", "x")
 	if code != exitRefused || !strings.Contains(errs, "gate_pending") || !strings.Contains(errs, first.GateID+" already pending") {
 		t.Fatalf("second pending gate on a step: exit %d %q", code, errs)
+	}
+}
+
+func TestAuditExportListsRunStepDelegationInOrder(t *testing.T) {
+	f := newFixture(t, "alice")
+	ctx := context.Background()
+	st, err := sqlite.Open(ctx, filepath.Join(f.data, "idev.db"))
+	must(t, err)
+	actor := audit.Actor{Handle: "c", Kind: "conductor"}
+	seed := []audit.Event{
+		{At: time.Now().UTC(), Action: audit.ActionRunStarted, Actor: actor, RunID: "R-export", Feature: "demo"},
+		{At: time.Now().UTC(), Action: audit.ActionStepActivated, Actor: actor, RunID: "R-export", StepID: "code"},
+		{At: time.Now().UTC(), Action: audit.ActionDelegationIssued, Actor: actor, RunID: "R-export", StepID: "code"},
+		{At: time.Now().UTC(), Action: audit.ActionRunStarted, Actor: actor, RunID: "R-other", Feature: "demo"},
+	}
+	must(t, st.InTx(ctx, func(tx ports.Tx) error {
+		for _, ev := range seed {
+			if _, err := tx.Audit().Append(ctx, ev); err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
+	must(t, st.Close())
+
+	code, out, errs := f.do(false, "", "audit", "export", "--run", "R-export")
+	if code != exitOK {
+		t.Fatalf("audit export exit %d: %s", code, errs)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("want 3 jsonl lines, got %d\n%s", len(lines), out)
+	}
+	var actions []string
+	for _, line := range lines {
+		var row map[string]any
+		must(t, json.Unmarshal([]byte(line), &row))
+		actions = append(actions, fmt.Sprint(row["action"]))
+	}
+	want := "run.started step.activated delegation.issued"
+	if strings.Join(actions, " ") != want {
+		t.Fatalf("actions = %v", actions)
+	}
+}
+
+func TestWorkspaceLocateFindsNativeTicket(t *testing.T) {
+	f := newFixture(t, "")
+	repo := t.TempDir()
+	task := filepath.Join(repo, ".idev", "task", "demo")
+	must(t, os.MkdirAll(task, 0o755))
+	must(t, os.WriteFile(filepath.Join(task, "baseline.yaml"), []byte("revision: 1\n"), 0o644))
+	code, out, errs := f.do(false, "", "workspace", "locate", "--repo", repo, "--feature", "demo", "--key", "task")
+	if code != exitOK {
+		t.Fatalf("workspace locate exit %d: %s", code, errs)
+	}
+	got := strings.TrimSpace(out)
+	want, err := filepath.EvalSymlinks(task)
+	must(t, err)
+	got, err = filepath.EvalSymlinks(got)
+	must(t, err)
+	if got != want {
+		t.Fatalf("locate = %q, want %q", got, want)
 	}
 }
 

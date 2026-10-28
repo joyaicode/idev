@@ -1,0 +1,97 @@
+schema_version: 2
+at: "2026-10-28T13:37:25+08:00"
+feature: llm-wiki
+intent: "确认。按将代写写入需求通过，阶段进入架构。"
+invoke:
+  trigger: "确认"
+  matched: "req 末的需求通过；将代写已在上一轮列出"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "同一票 llm-wiki"
+    - name: deliver
+      path: "~/.cursor/skills/idev/deliver/SKILL.md"
+      why: "签完进入 arch，并交出方案"
+route:
+  module: deliver
+  scenario: S2
+  convention_class: docs
+  stage: arch
+  risk_tier: P1
+  why: "这句确认就是上一轮列出的需求通过。已写密封、拆解接受和语义门，阶段改为 arch。方案已起草。架构检查还差库里的 sealed 行，所以不请架构通过。"
+rejected:
+  - module: verify
+    why: "用例还是 UNPROVEN，计划未接受"
+  - module: ops
+    why: "不是线上现象"
+thinking:
+  summary: "人单独说确认。上一轮将代写已经列明。parse_confirm 为 ok，wangwei794 在白名单。YAML 写入密封、req.accepted、两道语义门、shared_understanding，阶段改为 arch。方案、arch.yaml 和未跑的用例骨架已写。check-feature arch 有 1 FAIL：bin/idev 查不到 sealed 行。代理不能自己 gate approve，所以不补库，也不请架构签字。"
+  signals:
+    - "原话是单独的确认"
+    - "上一轮将代写含 baseline.sealed 与 req.accepted"
+    - "check-feature arch 1 FAIL：no sealed row"
+  excluded:
+    - "代写 arch.accepted"
+    - "自己跑 idev gate approve"
+  uncertainty: ""
+  steps:
+    - n: 1
+      do: "按将代写写入 YAML"
+      so: "sealed、req.accepted、语义门、shared_understanding、stage=arch"
+    - n: 2
+      do: "起草 design.md 与 arch.yaml"
+      so: "九条用例意图，影响面是三个新文件"
+    - n: 3
+      do: "跑 check-feature arch"
+      so: "1 FAIL，不请架构通过"
+opened:
+  - ".idev/task/llm-wiki/baseline.yaml"
+  - ".idev/task/llm-wiki/deliver.yaml"
+  - ".idev/task/llm-wiki/design.md"
+  - ".idev/task/llm-wiki/arch.yaml"
+  - "cmd/idev/baseline_cli.go"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "需求通过的确认"
+    result: "continuation"
+  - kind: model
+    name: inherit
+    model: inherit
+    from: conductor
+    to: skill:idev
+    why: "这句对应上一轮将代写"
+    thinking: "单独的确认，文法通过，只写需求通过"
+    result: "YAML 密封，不写 arch.accepted"
+  - kind: script
+    name: check-feature.sh
+    from: conductor
+    to: script:check-feature.sh
+    args: "llm-wiki arch"
+    result: "1 FAIL no sealed row in the store"
+  - kind: repo
+    name: .idev/task/llm-wiki/baseline.yaml
+    from: conductor
+    to: repo:baseline.yaml
+    result: "sealed true by wangwei794"
+decisions:
+  - kind: call
+    chose: chat-confirm-signoff
+    why: "确认原话写入需求通过，by=wangwei794"
+  - kind: route
+    chose: deliver
+    why: "签完进入 arch"
+  - kind: delegate
+    chose: none
+    why: "方案由导体起草"
+  - kind: refuse
+    chose: arch.accepted
+    why: "check-feature arch 不是 0 FAIL，这次确认也不覆盖架构通过"
+check_feature: FAIL
+stop: "架构检查差一条 sealed 行。不请架构通过。"
+next: "人先看方案。库中的 sealed 行要等 bin/idev 能执行 baseline seal，且不由代理自己 approve。"

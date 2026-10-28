@@ -1,8 +1,9 @@
 // Package ticketbaseline builds a baseline.Manifest from a ticket directory.
 //
 // The sealed fields of baseline.yaml are the content fingerprint (I-4).
-// This is the thin adapter E4.2/E4.3 need before the fuller workspace
-// package lands in E5.5: same digests, one file, no IO beyond the ticket.
+// One file, no IO beyond the ticket. Full ticket+details hashing and
+// locate/diff live in adapters/workspace (E5.5); FromTicket there keeps
+// the same ManifestRoot when details[] adds no readable files.
 package ticketbaseline
 
 import (

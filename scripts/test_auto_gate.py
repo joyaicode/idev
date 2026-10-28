@@ -23,7 +23,10 @@ IDEV = HERE.parent
 sys.path.insert(0, str(HERE / "lib"))
 
 import safeyaml  # noqa: E402
+import testenv  # noqa: E402
 import workflow_spec as spec  # noqa: E402
+
+testenv.pin()
 
 FEATURE = "auto-demo"
 LOG = "verify/plan-check.log"
@@ -61,7 +64,8 @@ def assemble(repo: Path) -> Path:
 
 
 def cli(repo: Path, script: str, *args: str) -> subprocess.CompletedProcess:
-    env = {**os.environ, "IDEV_ENGINE": "python", "PYTHONUNBUFFERED": "1"}
+    """The Python lane on a machine with no Go build: what the golden files record."""
+    env = {**os.environ, "IDEV_ENGINE": "python", "IDEV_BIN": "off", "PYTHONUNBUFFERED": "1"}
     env.pop("IDEV_PRODUCT_REPO", None)
     return subprocess.run(
         [sys.executable, str(HERE / script), "--repo", str(repo), *args],
@@ -177,23 +181,25 @@ class GoWriterRecords(unittest.TestCase):
     """IDEV_RUN_WRITER=go: workflow computes, idev run write owns the bytes."""
 
     def test_a_plan_pass_goes_through_go(self) -> None:
-        idev = IDEV / "bin" / "idev"
-        if not idev.is_file():
-            self.skipTest("bin/idev not built")
+        idev = testenv.go_binary()
+        if idev is None:
+            self.skipTest("no idev binary for this run: the Go toolchain is missing")
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         repo = Path(tmp.name).resolve()
         assemble(repo)
         env = {
             **os.environ,
-            "IDEV_ENGINE": "python",
             "IDEV_RUN_WRITER": "go",
             "IDEV_BIN": str(idev),
+            "IDEV_DATA": str(repo / ".idev-data"),
             "PYTHONUNBUFFERED": "1",
         }
+        env.pop("IDEV_ENGINE", None)
         env.pop("IDEV_PRODUCT_REPO", None)
         for args in (
             ("start", "dev-logic", "--feature", FEATURE),
+            ("delegate", "plan", "--feature", FEATURE),
             ("record", "plan", "PASS", "--evidence", "verify/plan.yaml", "--feature", FEATURE),
         ):
             done = subprocess.run(

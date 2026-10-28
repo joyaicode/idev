@@ -519,15 +519,19 @@ func (s *Store) ProjectRun(ctx context.Context, r ProjectedRun) error {
 	})
 }
 
-// ProjectRunWithAudit projects the run and appends one audit event in the
-// same SQLite transaction (phase 1 §6). Either both land or neither does.
-func (s *Store) ProjectRunWithAudit(ctx context.Context, r ProjectedRun, e audit.Event) error {
+// ProjectRunWithAudit projects the run and appends its audit events in the
+// same SQLite transaction (phase 1 §6). Either all land or none does.
+func (s *Store) ProjectRunWithAudit(ctx context.Context, r ProjectedRun, events ...audit.Event) error {
 	return s.Tx(ctx, func(tx *sql.Tx) error {
 		if err := projectRunTx(ctx, tx, r); err != nil {
 			return err
 		}
-		_, err := auditRepo{tx: tx}.Append(ctx, e)
-		return err
+		for _, e := range events {
+			if _, err := (auditRepo{tx: tx}).Append(ctx, e); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

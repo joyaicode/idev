@@ -57,7 +57,9 @@ is_background: false
    `--depth 1` 是规约不是建议:`conductor-eval` 的 `one-hop-only` 检查以「候选 hop > 1」为失败。
    codegraph 索引滞后约一秒,**先查再改**。查不到(动态分发 / 反射 / 配置路由)就**明说查不到**,不要当成"没有影响面"。
 
-4. **按本步 kind 改**:
+4. **Vue 语言尺** —— 写代码前跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage code`。没有输出就跳过。打开每一行 `VUE open` 的技能并按其工作流做，包括它点名的必读参考。`VUE if` 只在本轮碰到该行主题时打开。`VUE MISSING` 就停。规范问题和不合理的组件、状态边界当轮改掉。
+
+5. **按本步 kind 改**:
    - `deliver.code_pass` — 实现本阶段代码。多做的删掉,少做的补上
    - `review.fix` — 委派包 `with.accept_all_findings: true`（交付主路径，实现审核前）时，改全部 `I*`。没有这个字段时，**只改已签收的 `I*`**（及人显式纳入的 `O*`），未签收的不动
    - `ui.playbook_sync` — 按 `e2e/inventory.json` 建设或进化 wave / helper,只打本轮资源。
@@ -93,9 +95,9 @@ mkdir -p <票目录>/workflow/logs
 **`git.commit_push` 是本 agent 唯一不可逆的动作。** 没有「human.gate 已过」的明示就不跑 ——
 你无法自己判断可不可以推。
 
-5. **每新增一个函数 / 导出,立刻扫** `coding-tables.md` §2 + §2.4 量化阈值,命中**当场**改。
+6. **每新增一个函数 / 导出,立刻扫** `coding-tables.md` §2 + §2.4 量化阈值,命中**当场**改。
 
-6. **增量自测闭环(改完立刻跑,不要攒)** —— 跑最小相关测试集,红了就记一轮:
+7. **增量自测闭环(改完立刻跑,不要攒)** —— 跑最小相关测试集,红了就记一轮:
    ```bash
    python3 $IDEV/scripts/failure_signature.py append --feature <f> --log <日志> --delta <改动行数>
    python3 $IDEV/scripts/failure_signature.py check --feature <f>
@@ -103,7 +105,7 @@ mkdir -p <票目录>/workflow/logs
    `check` 退出码 2 = 命中**有界修复红线**(同签名 3 次 / 连续 2 次无有效变化 / 单根因超 15 分钟)。
    命中就**立刻回报 `BLOCKED(env)` 或 `BLOCKED(logic)` 并写明是哪条红线,停止叠改**。这是 `conventions/evidence.md` 第 5 步的硬要求。
 
-7. **自扫不是 Review。** `code_pass` 写少做 / 多做，并按 §0 回扫 diff。编码规范节留给 `idev-reviewer`：`审查者` 不是你。`review.fix` 改完后更新纠正栏，不要改掉 `审查者: idev-reviewer`。按 §3.8 跑:
+8. **自扫不是 Review。** `code_pass` 写少做 / 多做，并按 §0 回扫 diff。编码规范节留给 `idev-reviewer`：`审查者` 不是你。`review.fix` 改完后更新纠正栏，不要改掉 `审查者: idev-reviewer`。按 §3.8 跑:
    ```bash
    bash $IDEV/scripts/coding-scan.sh <仓根>
    ```

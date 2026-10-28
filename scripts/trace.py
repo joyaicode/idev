@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kind_agents import AGENTS  # noqa: E402
-from product_sink import sink_dir  # noqa: E402
+from product_sink import product_repo, sink_dir  # noqa: E402
 
 
 MODULES = ("conventions", "deliver", "verify", "ops", "handoff")
@@ -269,35 +269,93 @@ def validate(text: str, *, for_append: bool = False) -> list[str]:
                     if not item.get("so"):
                         errors.append("thinking.steps item missing so")
 
-    # signoff required when this turn claims to write seal/accept marks
     if ver == "2" and for_append:
-        write_seal = re.search(
-            r"(写入|写上|填入|set|write|mark).{0,16}(sealed|accepted|aligned|resolved)"
-            r"|(sealed|accepted|aligned|resolved)\s*:\s*true"
-            r"|(status|stage_status)\s*:\s*(sealed|accepted|aligned)",
-            text,
-            re.I,
-        )
-        neg = re.search(
-            r"(不写|勿写|禁止|do\s*not|don't|refuse|伪造|forge|aligned\s*=\s*false)",
-            text,
-            re.I,
-        )
-        if write_seal and not neg:
-            so = block(text, "signoff")
-            if not so:
-                errors.append("signoff block required when writing sealed/accepted/aligned/resolved")
-            else:
-                st = field(so, "status")
-                if st not in ("recorded", "pending"):
-                    errors.append("signoff.status must be recorded|pending when writing marks")
-                by = field(so, "by")
-                if not by or by.lower() in ("agent", "ai", "idev", "bot"):
-                    errors.append("signoff.by must be a human id (not agent/ai)")
-                if not field(so, "evidence"):
-                    errors.append("signoff.evidence empty")
+        errors.extend(signoff_errors(text))
+    return errors
 
 
+MARKS = ("sealed", "accepted", "aligned", "resolved")
+# A repo call's result says what it read as often as what it wrote; only a write verb counts.
+WRITE_MARK = re.compile(
+    r"(?:写入|写上|填入|签入)\s*(?:sealed|accepted|aligned|resolved)\b"
+    r"|\b(?:set|wrote|write|writes)\s+(?:sealed|accepted|aligned|resolved)\b",
+    re.I,
+)
+GATE_MARK = {"accepted_req": "accepted", "accepted_arch": "accepted", "accepted_plan": "accepted",
+             "aligned": "aligned", "resolved": "resolved"}
+
+
+def machine_items(text: str, heading: str) -> list[dict[str, str]]:
+    """Items of a block trace.py writes itself, every `key: value` kept."""
+    out: list[dict[str, str]] = []
+    for chunk in re.split(r"(?m)^\s+-\s+", block(text, heading)):
+        item = {}
+        for key, value in re.findall(r"(?m)^\s*([A-Za-z_]+):\s*(.*)$", chunk):
+            item[key] = value.strip().strip('"').strip("'")
+        if item:
+            out.append(item)
+    return out
+
+
+def signoff_marks(text: str) -> list[str]:
+    so = block(text, "signoff")
+    if not so:
+        return []
+    listed = field(so, "marks") + " " + nested_block(so, "marks")
+    return [m for m in MARKS if re.search(r"\b%s\b" % m, listed, re.I)]
+
+
+def chat_confirmed(text: str) -> bool:
+    return any(item.get("kind") == "call" and item.get("chose") == "chat-confirm-signoff"
+               for item in dash_maps(text, "decisions"))
+
+
+def mark_writes(text: str) -> list[str]:
+    """Where the trace records that this round wrote a signoff mark.
+
+    Only the parts that say what the round did count: a repo call whose
+    result names a write of a mark, signoff.marks, and a gate the round
+    recorded. A refusal, an excluded option, a reason that names a mark or a
+    state read back is not a write, and no word elsewhere switches the check
+    off.
+    """
+    found = []
+    for item in dash_maps(text, "calls"):
+        if item.get("kind") == "repo" and WRITE_MARK.search(item.get("result") or ""):
+            found.append("calls: %s → %s" % (item.get("name") or "?", item["result"][:40]))
+    marks = signoff_marks(text)
+    if marks:
+        found.append("signoff.marks: " + ",".join(marks))
+    for item in machine_items(text, "recorded"):
+        if item.get("mark"):
+            found.append("recorded: %s %s" % (item.get("step") or "?", item["mark"]))
+    return found
+
+
+def signoff_errors(text: str) -> list[str]:
+    """A round that wrote a mark, or took a chat confirmation, says who and with what words.
+
+    A chat confirmation that ended up writing nothing keeps status none; the
+    block still names the person and their words.
+    """
+    writes = mark_writes(text)
+    asked = chat_confirmed(text)
+    if not writes and not asked:
+        return []
+    so = block(text, "signoff")
+    if not so and writes:
+        return ["signoff block required when writing sealed/accepted/aligned/resolved (%s)" % "; ".join(writes)]
+    if not so:
+        return ["signoff block required after chat-confirm-signoff: by is the person, evidence their words;"
+                " status: none if no field was written"]
+    errors = []
+    if writes and field(so, "status") not in ("recorded", "pending"):
+        errors.append("signoff.status must be recorded|pending when writing marks (%s)" % "; ".join(writes))
+    by = field(so, "by")
+    if not by or by.lower() in ("agent", "ai", "idev", "bot") or by in AGENTS:
+        errors.append("signoff.by must be a human id (not agent/ai)")
+    if not field(so, "evidence"):
+        errors.append("signoff.evidence empty")
     return errors
 
 
@@ -420,7 +478,13 @@ def path_segments(text: str) -> dict[str, str]:
     opened = list_scalars(text, "opened")
     rejected = dash_maps(text, "rejected")
     rej = ", ".join(i.get("module") or "?" for i in rejected)
+    delegated = " · ".join(
+        "%s %s#%s%s" % (d.get("agent") or "?", d.get("step") or "?", d.get("attempt") or "1",
+                        " verify" if d.get("role") == "verifier" else "")
+        for d in machine_items(text, "delegations")
+    )
     return {
+        "delegated": delegated,
         "feature": field(text, "feature") or "-",
         "trigger": field(invoke, "trigger") if invoke else "",
         "matched": field(invoke, "matched") if invoke else "",
@@ -487,6 +551,8 @@ def render_path(text: str, *, name: str = "") -> str:
     if seg["steps"]:
         lines.append("steps:    %s" % seg["steps"])
     lines.append("calls:    %s" % seg["calls"])
+    if seg["delegated"]:
+        lines.append("delegated: %s" % seg["delegated"])
     lines.append("opened:   %s" % seg["opened"])
     if seg["rejected"] and seg["rejected"] != "(none)":
         lines.append("rejected: %s" % seg["rejected"])
@@ -547,6 +613,7 @@ def cmd_path_stats(limit: int) -> int:
     call0 = Counter()
     hows = Counter()
     deleg = Counter()
+    issued = Counter()
     models = Counter()
     handoff = Counter()
     tools = Counter()
@@ -566,6 +633,8 @@ def cmd_path_stats(limit: int) -> int:
         for item in dash_maps(text, "decisions"):
             if item.get("kind") == "delegate":
                 deleg[item.get("chose") or "?"] += 1
+        for item in machine_items(text, "delegations"):
+            issued[item.get("agent") or "?"] += 1
         for item in calls:
             if item.get("kind") == "model":
                 models[item.get("model") or item.get("name") or "?"] += 1
@@ -584,6 +653,8 @@ def cmd_path_stats(limit: int) -> int:
     _print_counts(hows)
     print("### delegate")
     _print_counts(deleg)
+    print("### delegated (from records)")
+    _print_counts(issued)
     print("### model call")
     _print_counts(models)
     print("### handoff")
@@ -690,6 +761,8 @@ def next_path(folder: Path, when: dt.datetime, tries: int = 999) -> Path:
 def cmd_check(path: str) -> int:
     text = read_text(path)
     errors = validate(text)
+    if field(text, "schema_version") == "2":
+        errors += signoff_errors(text)
     if errors:
         for e in errors:
             print("FAIL  " + e)
@@ -756,7 +829,209 @@ def merge_react(text: str) -> tuple[str, str]:
     return _replace_calls(text, _format_calls(merged)), ""
 
 
+def _idev_bin() -> str:
+    import idev_bin
+
+    return idev_bin.path() or ""
+
+
+def merge_audit_export(text: str) -> tuple[str, str]:
+    """Attach run→step→delegation actions from the audit chain when IDEV_RUN_ID is set.
+
+    The audit row is the source of truth (written in the same TX as Apply).
+    This only annotates the YAML projection; failure is a warning, not a block.
+    """
+    run_id = (os.environ.get("IDEV_RUN_ID") or "").strip()
+    if not run_id:
+        return text, ""
+    idev = _idev_bin()
+    if not idev:
+        return text, "idev binary missing; skipped audit export merge"
+    import subprocess
+
+    try:
+        proc = subprocess.run(
+            [idev, "audit", "export", "--run", run_id, "--format", "jsonl"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return text, "audit export failed: %s" % exc
+    if proc.returncode != 0:
+        return text, "audit export exit %s: %s" % (
+            proc.returncode,
+            (proc.stderr or proc.stdout or "").strip()[:200],
+        )
+    actions: list[str] = []
+    for line in (proc.stdout or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            import json
+
+            row = json.loads(line)
+        except ValueError:
+            continue
+        act = str(row.get("action") or "")
+        step = str(row.get("step_id") or "")
+        if act:
+            actions.append("%s%s" % (act, ("@" + step) if step else ""))
+    if not actions:
+        return text, ""
+    note = "audit_export: " + " → ".join(actions)
+    if "audit_export:" in text:
+        return text, ""
+    if not text.endswith("\n"):
+        text += "\n"
+    text += "notes:\n  - %s\n" % note
+    return text, ""
+
+
+def _when(value) -> dt.datetime | None:
+    if isinstance(value, dt.datetime):
+        return value if value.tzinfo else value.astimezone()
+    try:
+        when = dt.datetime.fromisoformat(str(value or "").strip())
+    except ValueError:
+        return None
+    return when if when.tzinfo else when.astimezone()
+
+
+def previous_until(folder: Path) -> dt.datetime | None:
+    """Where the last stored trace's round ended, so no record lands in two traces."""
+    for path in reversed(listed_traces(folder)):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        when = _when(field(block(text, "round"), "until")) or _when(field(text, "at"))
+        if when is not None:
+            return when
+    return None
+
+
+def round_facts(repo: Path, since: dt.datetime | None, until: dt.datetime) -> tuple[list[dict], list[dict]]:
+    """The delegation records and step records that landed in (since, until]."""
+    import yaml  # noqa: PLC0415 - only append reads records
+    import record_paths  # noqa: PLC0415
+    from workflow_spec import gate_type  # noqa: PLC0415
+
+    def inside(when: dt.datetime | None) -> bool:
+        return when is not None and (since is None or when > since) and when <= until
+
+    def load(path: Path) -> dict | None:
+        try:
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            return None
+        return data if isinstance(data, dict) else None
+
+    pairs = []
+    for pattern in record_paths.REPO_GLOBS:
+        for path in repo.glob(pattern):
+            record = None if path.name.endswith(".example.yaml") else load(path)
+            if record is not None:
+                pairs.append((path, record))
+    delegations = []
+    for path, record in record_paths.distinct(pairs):
+        when = _when(record.get("at")) or dt.datetime.fromtimestamp(path.stat().st_mtime).astimezone()
+        if inside(when):
+            delegations.append((when, {
+                "agent": str(record.get("agent") or ""),
+                "feature": str(record.get("feature") or ""),
+                "step": str(record.get("step") or ""),
+                "attempt": str(record.get("attempt") or 1),
+                "role": "verifier" if record_paths.is_verification(record) else "writer",
+                "status": str((record.get("report") or {}).get("status") or ""),
+                "record": path.relative_to(repo).as_posix(),
+            }))
+    recorded = []
+    for run_path in sorted([*repo.glob("docs/task/*/workflow/run.yaml"), *repo.glob(".idev/task/*/workflow/run.yaml")]):
+        run = load(run_path) or {}
+        for step in run.get("steps") or []:
+            if not isinstance(step, dict) or not step.get("status") or not inside(_when(step.get("at"))):
+                continue
+            signed = step.get("signoff") if isinstance(step.get("signoff"), dict) else {}
+            delegated = step.get("delegated") if isinstance(step.get("delegated"), dict) else {}
+            gate = step.get("kind") == "human.gate" and step.get("status") == "PASS" and signed.get("by")
+            recorded.append((_when(step.get("at")), {
+                "feature": str(run.get("feature") or run_path.parent.parent.name),
+                "step": str(step.get("id") or ""),
+                "kind": str(step.get("kind") or ""),
+                "status": str(step["status"]),
+                "by": str(signed.get("by") or delegated.get("agent") or "conductor"),
+                "mark": GATE_MARK.get(gate_type(step), "") if gate else "",
+                "run": run_path.relative_to(repo).as_posix(),
+            }))
+    by_time = lambda pair: pair[0]  # noqa: E731
+    return [d for _, d in sorted(delegations, key=by_time)], [r for _, r in sorted(recorded, key=by_time)]
+
+
+def _scalar(value: str) -> str:
+    return value if re.fullmatch(r"[\w./@+-]+", value) else _quote(value)
+
+
+DELEGATION_KEYS = ("agent", "feature", "step", "attempt", "role", "status", "record")
+RECORDED_KEYS = ("feature", "step", "kind", "status", "by", "mark", "run")
+
+
+def _items_block(heading: str, items: list[dict], keys: tuple[str, ...]) -> str:
+    if not items:
+        return "%s: []\n" % heading
+    lines = ["%s:" % heading]
+    for item in items:
+        lead = "  - "
+        for key in keys:
+            if item.get(key):
+                lines.append("%s%s: %s" % (lead, key, _scalar(str(item[key]))))
+                lead = "    "
+    return "\n".join(lines) + "\n"
+
+
+def _replace_block(text: str, heading: str, body: str) -> str:
+    pattern = re.compile(r"^%s:.*\n(?:[ \t].*\n)*" % re.escape(heading), re.M)
+    if pattern.search(text):
+        return pattern.sub(lambda _: body, text, count=1)
+    return text + body
+
+
+def attach_round(text: str, folder: Path) -> tuple[str, str]:
+    """Write what the round delegated and recorded, from the records themselves.
+
+    The conductor writes intent, why and thinking. Delegations come from the
+    delegation records and recorded steps from run.yaml, over the time since
+    the last trace, so a round with no trace of its own is not lost: the next
+    trace carries it. A gate the round recorded fills an absent signoff.
+    """
+    repo = product_repo()
+    if repo is None:
+        return text, ""
+    since, until = previous_until(folder), dt.datetime.now().astimezone()
+    try:
+        delegations, recorded = round_facts(repo, since, until)
+    except ImportError as exc:
+        return text, "delegations and recorded steps not attached: %s" % exc
+    window = "round:\n%s  until: %s\n" % (
+        "  since: %s\n" % _quote(since.isoformat(timespec="seconds")) if since else "",
+        _quote(until.isoformat(timespec="seconds")),
+    )
+    text = _replace_block(text, "round", window)
+    text = _replace_block(text, "delegations", _items_block("delegations", delegations, DELEGATION_KEYS))
+    text = _replace_block(text, "recorded", _items_block("recorded", recorded, RECORDED_KEYS))
+    gates = [r for r in recorded if r.get("mark")]
+    if gates and field(block(text, "signoff"), "status") in ("", "none"):
+        text = _replace_block(text, "signoff", "signoff:\n  status: recorded\n  marks: [%s]\n  by: %s\n  evidence: %s\n" % (
+            ", ".join(sorted({g["mark"] for g in gates})),
+            _scalar(", ".join(sorted({g["by"] for g in gates}))),
+            _scalar("; ".join("%s#%s.signoff" % (g["run"], g["step"]) for g in gates)),
+        ))
+    return text, ""
+
+
 def cmd_append(path: str) -> int:
+    """Write a round YAML projection. Audit spans live in the DB; this file is
+    an export. A write miss prints WARN and exits 0 so it cannot unwind a
+    committed Apply (E5.4).
+    """
     text = read_text(path)
     if not text.endswith("\n"):
         text += "\n"
@@ -764,13 +1039,30 @@ def cmd_append(path: str) -> int:
     if react_error:
         print("FAIL  " + react_error, file=sys.stderr)
         return 1
+    text, audit_warn = merge_audit_export(text)
+    if audit_warn:
+        print("WARN  " + audit_warn, file=sys.stderr)
+    folder = default_dir()
+    text, round_warn = attach_round(text, folder)
+    if round_warn:
+        print("WARN  " + round_warn, file=sys.stderr)
     errors = validate(text, for_append=True)
     if errors:
         for e in errors:
             print("FAIL  " + e, file=sys.stderr)
         return 1
-    dest = next_path(default_dir(), dt.datetime.now())
-    dest.write_text(text, encoding="utf-8")
+    dest = next_path(folder, dt.datetime.now())
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(text, encoding="utf-8")
+    except OSError as exc:
+        print(
+            "WARN  trace export write failed: %s (audit chain is source of truth)"
+            % exc,
+            file=sys.stderr,
+        )
+        print(render(text))
+        return 0
     print("wrote %s" % dest)
     print(render(text))
     print(render_path(text, name=dest.name))

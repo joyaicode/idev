@@ -183,7 +183,7 @@ super-linter 是「仓内已有就跑」的例子，不是要新装的依赖。`
 1. 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo根>`，按输出打开指南。Java 先处理 `java hygiene` 和末尾 `problems` 的 `file:line`（进 `I*`），Python / Go / Shell / JS / Vue 先处理末尾 `lang` 的 `file:line`（同样进 `I*`），再写总则。`problems` 或 `lang` 退出码不是 0 就不算扫完。`UNPROVEN` 不是扫干净。
 2. **必开**：本页 §1/§2；（有结构调整再开 §3）。入口决策仍看 [coding.md](coding.md) §0。
 3. **必开**：`code-review-and-quality` 五轴（正确性 / 可读性 / 架构 / 安全 / 性能）。
-4. **按栈打开** `code-review-skill` 指南（compiler=8 Java → `reference/java8.md`；Vue → `vue.md`；Go → `go.md`）+ `common-bugs-checklist.md`。
+4. **按栈打开**指南。compiler=8 Java → `code-review-skill` 的 `reference/java8.md`；Go → `reference/go.md`；再加 `common-bugs-checklist.md`。Vue 打开 [vue.md](vue.md)，按阶段打开 vuejs-ai 技能。
 5. 触及身份 / 输入 / 出站 / 密钥 → 再开 `security-and-hardening`；Java 可叠 plinth `124-java-secure-coding`。
 6. 测试已绿、只想减复杂度 → `code-simplification`（行为不变；仍须满足 §3 R1–R6）。
 7. 跑仓内已有的规范扫描（§3.7）：有 super-linter 就跑那一套，否则 Java 的 `problems-scan.sh`、Python / Go / Shell / JS / Vue 的 `lang-scan.sh`、前端 `lint-fix`；仓内若有 Checkstyle/PMD/SpotBugs 一并跑。这些层只跑 idev 自带插件，不安装 IntelliJ、JDK、ruff、golangci-lint、shellcheck、eslint 或 Node。不为 Checkstyle、PMD、SpotBugs、super-linter 新装。
@@ -209,6 +209,7 @@ super-linter 是「仓内已有就跑」的例子，不是要新装的依赖。`
 | 简化 | `~/.cursor/skills/code-simplification/SKILL.md` |
 | Super-Linter 执行 | `~/.cursor/skills/super-linter/SKILL.md`（仓内已有配置才跑；不新装镜像） |
 | Java 深挖 | `~/.cursor/skills/124-java-secure-coding` 等 plinth |
+| Vue 语言尺 | `conventions/vue.md`；技能在 `skills/vue/`；`scripts/vue-skills.py` 按阶段列出 |
 
 ---
 

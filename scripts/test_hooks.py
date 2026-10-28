@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -13,10 +14,25 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 HERE = Path(__file__).resolve().parent
 IDEV = HERE.parent
 HOOKS = IDEV / "hooks"
+sys.path.insert(0, str(HERE / "lib"))
+
+import testenv  # noqa: E402
+
+testenv.pin()
+
+_spec = importlib.util.spec_from_file_location("idev_hooks_lib", HOOKS / "lib.py")
+HOOKS_LIB = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(HOOKS_LIB)
+
+
+def pinned_idev() -> Path | None:
+    exe = testenv.go_binary()
+    return Path(exe) if exe else None
 
 
 def run_hook(script: str, payload: dict, env: dict | None = None, client: str = "cursor") -> subprocess.CompletedProcess:
@@ -69,6 +85,43 @@ class PreTool(unittest.TestCase):
         self.assertEqual(json.loads(done.stdout)["permission"], "deny")
         self.assertIn("signoff", done.stdout)
 
+    def test_denies_signoff_fields_in_every_ticket_and_run_yaml(self) -> None:
+        for path, key, field in (
+            ("/repo/.idev/task/demo/deliver.yaml", "contents", "aligned: true\n"),
+            ("docs/task/demo/workflow/run.yaml", "new_string", "  by: wangwei794\n"),
+            (".idev/workflow-runs/r1/run.yaml", "content", "signoff:\n  quote: ok\n"),
+            ("/kernel/state/workflow-runs/r1/run.yml", "new_string", "accepted: true\n"),
+            ("C:\\repo\\docs\\task\\demo\\baseline.yaml", "contents", "sealed: true\n"),
+        ):
+            for path_key in ("path", "file_path"):
+                done = run_hook("pre_tool.py", {"tool_name": "Edit", "tool_input": {path_key: path, key: field}})
+                self.assertEqual(done.returncode, 2, f"{path} {path_key}: {done.stdout}")
+                self.assertIn("signoff", done.stdout)
+
+    def test_allows_source_and_docs_that_only_quote_signoff_words(self) -> None:
+        # Cursor sends the whole file with an edit, so every old line is in the content.
+        go = "func (a app) gate(args []string) {\n\tby := fs.String(\"by\", \"\", \"human handle\")\n}\n"
+        self.assertRegex(go, HOOKS_LIB.SIGNOFF_FIELD_RE)
+        for path, content in (
+            ("/work/idev/cmd/idev/app.go", go),
+            ("scripts/lib/staffing.py", "def assign(\n    by: str,\n) -> None:\n    pass\n"),
+            ("test/lease-channel.sh", "cat >run.yaml <<'EOF'\n  by: tester\nEOF\n"),
+            ("references/chat-confirm-signoff.md", "```yaml\nsealed: true\n```\n"),
+            ("docs/task/demo/grill.md", "accepted: the person said yes\n"),
+        ):
+            self.assertRegex(content, HOOKS_LIB.SIGNOFF_FIELD_RE, path)
+            done = run_hook("pre_tool.py", {
+                "tool_name": "StrReplace",
+                "tool_input": {"path": path, "content": content, "new_string": "x"},
+            })
+            self.assertEqual(done.returncode, 0, f"{path}: {done.stdout}")
+            self.assertEqual(json.loads(done.stdout)["permission"], "allow", path)
+
+    def test_a_write_without_a_path_is_still_checked(self) -> None:
+        done = run_hook("pre_tool.py", {"tool_name": "Write", "tool_input": {"contents": "sealed: true\n"}})
+        self.assertEqual(done.returncode, 2, done.stdout)
+        self.assertIn("signoff", done.stdout)
+
     def test_denies_idev_engine_python(self) -> None:
         done = run_hook("pre_tool.py", {
             "tool_name": "Shell",
@@ -76,6 +129,21 @@ class PreTool(unittest.TestCase):
         })
         self.assertEqual(done.returncode, 2)
         self.assertIn("IDEV_ENGINE=python", done.stdout)
+
+    def test_denies_switching_the_binary_off(self) -> None:
+        for command in (
+            "IDEV_BIN=off python3 scripts/check-feature.py --feature demo --stage req",
+            "export IDEV_BIN='none' && python3 scripts/workflow.py next",
+            "env FOO=1 IDEV_BIN=0 python3 scripts/workflow.py next",
+        ):
+            done = run_hook("pre_tool.py", {"tool_name": "Shell", "tool_input": {"command": command}})
+            self.assertEqual(done.returncode, 2, command)
+            self.assertIn("IDEV_BIN", done.stdout)
+        done = run_hook("pre_tool.py", {
+            "tool_name": "Shell",
+            "tool_input": {"command": "IDEV_BIN=/tmp/idev python3 scripts/workflow.py next"},
+        })
+        self.assertEqual(done.returncode, 0, done.stdout)
 
     def test_denies_git_push(self) -> None:
         done = run_hook("pre_tool.py", {
@@ -113,19 +181,46 @@ class InstallHooks(unittest.TestCase):
         # one idev entry per event, not duplicated
         self.assertEqual(len(cursor2["hooks"]["beforeSubmitPrompt"]), 1)
         claude = json.loads((self.repo / ".claude" / "settings.json").read_text(encoding="utf-8"))
-        self.assertIn("UserPromptSubmit", claude["hooks"])
+        self.assertEqual(len(claude["hooks"]["UserPromptSubmit"]), 1)
         removed = self.install("--uninstall")
         self.assertEqual(removed.returncode, 0, removed.stdout + removed.stderr)
         cursor3 = json.loads((self.repo / ".cursor" / "hooks.json").read_text(encoding="utf-8"))
         for event, entries in (cursor3.get("hooks") or {}).items():
             for e in entries:
-                self.assertNotIn("idev/hooks/", str(e.get("command", "")), event)
+                self.assertNotIn(f"{IDEV}/hooks/", str(e.get("command", "")), event)
+
+    def test_the_subagent_stop_hook_only_runs_for_idev_agents(self) -> None:
+        done = self.install()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        entry = json.loads((self.repo / ".cursor" / "hooks.json").read_text(encoding="utf-8"))["hooks"]["subagentStop"][0]
+        for agent in ("idev-coder", "idev-reviewer", "idev-verifier", "idev-deliver", "idev-ops"):
+            self.assertRegex(agent, entry["matcher"])
+        for other in ("explore", "generalPurpose", "idev-coder-old"):
+            self.assertNotRegex(other, entry["matcher"])
+
+    def test_an_entry_from_another_checkout_is_replaced_and_user_hooks_survive(self) -> None:
+        cursor_dir = self.repo / ".cursor"
+        cursor_dir.mkdir()
+        elsewhere = "python3 /opt/kernel-v2/hooks/pre_tool.py --client cursor"
+        (cursor_dir / "hooks.json").write_text(json.dumps({"version": 1, "hooks": {
+            "preToolUse": [{"command": elsewhere}, {"command": "bash ~/bin/lint-hook.sh"}],
+        }}), encoding="utf-8")
+        done = self.install()
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        commands = [e["command"] for e in json.loads(
+            (cursor_dir / "hooks.json").read_text(encoding="utf-8"))["hooks"]["preToolUse"]]
+        self.assertNotIn(elsewhere, commands)
+        self.assertIn("bash ~/bin/lint-hook.sh", commands)
+        self.assertEqual(len([c for c in commands if "/hooks/pre_tool.py" in c]), 1, commands)
 
 
 class QuoteCheck(unittest.TestCase):
     """chat_signoff checks prompts.log when forced on, or auto when cwd matches."""
 
     def setUp(self) -> None:
+        env = mock.patch.dict(os.environ)
+        env.start()
+        self.addCleanup(env.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.data = Path(self.tmp.name)
         sys.path.insert(0, str(HERE / "lib"))
@@ -211,17 +306,17 @@ class GoRunYamlWriter(unittest.TestCase):
         sys.path.insert(0, str(HERE))
         sys.path.insert(0, str(HERE / "lib"))
         import workflow  # noqa: E402
-        idev = IDEV / "bin" / "idev"
+        idev = pinned_idev()
         was = os.environ.pop("IDEV_RUN_WRITER", None), os.environ.get("IDEV_BIN")
         try:
             os.environ.pop("IDEV_RUN_WRITER", None)
-            if idev.is_file():
+            if idev:
                 os.environ["IDEV_BIN"] = str(idev)
                 self.assertTrue(workflow.run_writer_go())
             os.environ["IDEV_RUN_WRITER"] = "python"
             self.assertFalse(workflow.run_writer_go())
             os.environ["IDEV_RUN_WRITER"] = "go"
-            if idev.is_file():
+            if idev:
                 self.assertTrue(workflow.run_writer_go())
         finally:
             for key, val in zip(("IDEV_RUN_WRITER", "IDEV_BIN"), was):
@@ -231,9 +326,9 @@ class GoRunYamlWriter(unittest.TestCase):
                     os.environ[key] = val
 
     def test_idev_run_record_stamps_a_step(self) -> None:
-        idev = IDEV / "bin" / "idev"
-        if not idev.is_file():
-            self.skipTest("bin/idev not built")
+        idev = pinned_idev()
+        if idev is None:
+            self.skipTest("no idev binary for this run: the Go toolchain is missing")
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "run.yaml"
             path.write_text("steps:\n  - {id: plan}\n", encoding="utf-8")
@@ -248,9 +343,9 @@ class GoRunYamlWriter(unittest.TestCase):
             self.assertIn("evidence: verify/plan.yaml", body)
 
     def test_workflow_record_via_go_writer(self) -> None:
-        idev = IDEV / "bin" / "idev"
-        if not idev.is_file():
-            self.skipTest("bin/idev not built")
+        idev = pinned_idev()
+        if idev is None:
+            self.skipTest("no idev binary for this run: the Go toolchain is missing")
         sys.path.insert(0, str(HERE))
         sys.path.insert(0, str(HERE / "lib"))
         import workflow  # noqa: E402

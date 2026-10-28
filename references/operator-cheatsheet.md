@@ -71,7 +71,7 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> <workflow_id> [--pr
 
 ## 3.6 HITL 与自进化
 
-闸门在**不可逆之前**：seal / aligned / promote / 生产写。请签 = `将代写` + 证明上下文。档位：[hitl-risk-tiers.md](hitl-risk-tiers.md)。
+闸门在**不可逆之前**：seal / aligned / promote / 生产写。对人是方案加证据。档位：[hitl-risk-tiers.md](hitl-risk-tiers.md)。细则 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
 
 | 动作 | 怎么走 |
 |------|--------|
@@ -117,12 +117,12 @@ healthcheck：真源实目录、软链、配方、最近 50 条审计、outbound
 
 下列任一成立时，**本轮立刻**打开并执行 `~/.cursor/skills/grilling/SKILL.md`（缺则先 `scripts/link-companion-skills.sh`），不准用「自己拷问几句」顶替，不准跳过直接请签/代写：
 
-- S1 / `req-review`：需求分析、正确性/合理性/边界/细节未订死；`grill.md` 的 frontier 不是 `empty`；`objections` 或 `review_questions` 非空。本轮能问的一次问完
+- S1 / `req-review`：需求分析、正确性/合理性/边界/细节未订死；`grill.md` 的 frontier 不是 `empty`；`objections` 或 `review_questions` 非空。按当前编制把能问的一次列全，条件后续写在同一轮。问谁见 [chat-confirm-signoff.md](chat-confirm-signoff.md)
 - 任意阶段出现 `open_questions` / `baseline-conflict` / 目标或边界含糊 / 人说「不确定」「再想想」「帮我定一下」
 - 即将请签前，仍有未回答分叉或未清空异议
 - 架构方案已经交出，人 Review 时仍有分叉；`code` 发现像基线写错（先问清冲突，禁止默许改 goal）
 
-frontier 未空之前禁止写 `sealed`。答问不是签字。共享理解写在需求通过那一次确认里。架构没有分叉就不要先拷问再给方案。
+frontier 未空之前禁止写 `sealed`。答问不是签字。共享理解写在需求通过那一次确认里。架构没有分叉就不要先拷问再给方案。只有回答打开这轮没写到的新分叉才再开一轮。
 
 ### 7.3 认票
 

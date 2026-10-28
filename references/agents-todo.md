@@ -87,6 +87,8 @@ Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未�
 |---|---|---|---|
 | 7 | 端到端一轮：真票跑 `code-review` 全程 | **进行中** | report 步已 PASS（reviewer 异步委派 + 诚实性五查全过），停在 `gate-report` 等人从自己终端签收 gate `01M5A86FX2GB614BK2TGF80DV6`（step_confirm / P1，2026-10-22T14:14:10Z 到期，过期重问即可）；其后还有 plan→gate-plan→fix→run 三段 |
 | 8 | agent prompt 的真任务有效性 | 待验 | #7 首轮回报零措辞类 SUGGEST（早好信号）；等全程跑完按回报质量定 |
+| 25 | 委派检查只留一套实现：Python 留痕检查与 Go `delegsvc` 并存 | 待议 | 真源方向。A：Go/SQLite 成为唯一真源，agent 与 gate 步也走 Apply；B：冻结 Go，只留 gate、lease、audit，删掉 `delegsvc` 等没在用的服务。等两周真实运行数据（到 2026-11-11），届时库里 `delegations` 仍是 0 条就选 B（2026-10-28 为 0）。做完的判据：只剩一个实现，真实留痕对拍零差异 |
+| 26 | 委派遥测的真数据 | 待验 | 2026-10-28 钩子已装到用户级。等真委派跑过，`agent-metrics.py` 的 `telemetry` 接近留痕总数才算数；仍偏低就查宿主有没有给 `duration_ms` / `tool_call_count` |
 
 **第 7 项首轮（2026-10-20，joypaas 真票）已有结论。** reviewer 子代理按委派完成了 report 步：产出 9 `I*` / 7 `O*` / 3 `UNPROVEN`，
 canon §7 记 T3/T7/T8/T10+T11/F4 命中，五轴齐写，栈指南开 java8 + common-bugs（vue.md 明示未开、委派范围内）。值得记的
@@ -160,7 +162,7 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E2.1 | `record` 进入 `runsvc.Apply`，`run.yaml` 改为导出 | 进行中 | 直播 conductor `idev run record` → Apply + Export；`idev run start/apply` 已接线；Python/`external` 仍 YAML（拍板） | 一次 PASS 同事务改 run+审计；YAML 为投影 |
+| E2.1 | `record` 进入 `runsvc.Apply`，`run.yaml` 改为导出 | 进行中 | 直播 conductor Apply+Export+audit jsonl 投影；agent/gate step 仍 YAML 回退（拍板） | 一次 PASS 同事务改 run+审计；YAML 为投影 |
 | E2.2 | 接上 `RunRepo` 的 Create/Save，去掉 `external` 投影 | 完成 | Create/Save/FindLive 接线；`external` 投影仍服务 Python/lease，与直播 run 并存 | sqlite 不再 `errNotWired`；`ConflictStaleVersion` 有测 |
 | E2.3 | 租约、状态、审计包进同一个事务 | 完成 | Apply 同事务；`TestAFailedLeaseReleaseRollsBackRunAndLease` + FailOn audit/Save | 中途失败：lease 与 run 同回滚 |
 | E2.4 | fencing 从领租约走到回报 | 完成 | `TestStaleFencingIsRefusedWithNoAudit` + sqlite/CLI：旧 token 拒、零审计；现 token 过 | 旧 fencing 迟到回报被拒，零审计残留 |
@@ -182,6 +184,7 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 | E4.1 | 接上 `BaselineRepo` | 完成 | sqlite Put/Seal/Sealed；第二次 Seal → ConflictSealedBaseline；CLI `baseline seal` | 第二次 `Seal` 返回 `ConflictSealedBaseline`；baseline 不再 `errNotWired` |
 | E4.2 | 密封写入 `manifest_root`，后续阶段重算 | 完成 | seal 绑 ManifestRoot；`baseline verify` + check-feature 重算；drift 可 Apply BaselineDriftDetected | 摘要不一致则 run blocked，原因 `baseline-drift`；重算失败不自动解封 |
 | E4.3 | YAML 的 `sealed` 变成行的投影 | 完成 | seal `--project-yaml`；check-feature 手改 sealed:true 无库行 → FAIL（go 引擎） | 库中无密封行时，手改 `sealed: true`，`check-feature` FAIL |
+| E4.4 | 存储上线前已封存的基线收进库 | 完成 | `idev baseline adopt --feature --ticket --repo --by --reason`：git 里 `sealed: true` 的提交早于 2026-10-28 05:51:44Z 且此后基线未改才收，记 `provenance: legacy-yaml`、`assurance: low` 和审计 `baseline.adopted`。2026-10-28 wangwei794 在对话里确认、agent 代跑：joypaas 8 张、kafka-project 4 张收进真库，审计 seq 192–203 各一条，链从创世复算 203 条无断。kafka-project 的 `create-category-pin` 在切换点前没有提交，adopt 拒收 | 之后改过基线或晚于切换点才封的票，adopt 拒收，只能走闸门重新封 |
 
 ### E5 服务面
 
@@ -190,8 +193,8 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 | E5.1 | `idevd` 只暴露 stdio MCP | 完成 | `api/schemas/tools/*` + `schemas.MustTool`；`TestToolSchemasComeFromAPIContracts`；gate_request 仍薄包装 CLI | 工具面覆盖 run、step、delegation、lease、baseline；契约测试读 `api/schemas` |
 | E5.2 | MCP 面没有 `gate approve` | 完成 | `TestToolsListCoversSurfaceAndOmitsGateApprove`：`tools/list` 无 `gate_approve`/`gate_reject` | `tools/list` 不含批准；agent 令牌调用批准被拒绝并留下审计 |
 | E5.3 | SKILL 收到路由，agent 不再复述签字文法 | 完成 | 五个 agent 签字硬规则改为一行指针 → `chat-confirm-signoff.md`；`agents-check` PASS | 五个 agent 的签字字段改成指向 [chat-confirm-signoff.md](chat-confirm-signoff.md) 的一行；`agents-check` 仍绿 |
-| E5.4 | 审计 span 由服务写入 | 进行中 | run Apply + delegation allocate 写审计；`trace.sh append` 导出化未完 | run→step→delegation 在审计链上有序列；`trace.sh append` 变为导出，漏写不影响事务提交 |
-| E5.5 | workspace 适配器做哈希和票定位 | 进行中 | `ticketbaseline` + 稳定 ManifestRoot 测；完整 workspace 对拍未完 | 与 Python 对同一票目录输出同一 digest |
+| E5.4 | 审计 span 由服务写入 | 完成 | `auditsvc.Export` + `idev audit export --run`；`trace.py append` 合并审计骨架、写盘失败 WARN/0 | run→step→delegation 在审计链上有序列；`trace.sh append` 变为导出，漏写不影响事务提交 |
+| E5.5 | workspace 适配器做哈希和票定位 | 完成 | `adapters/workspace`：locate≡doc_home、manifest≡baseline_manifest.py、diff/head；CLI `workspace *` | 与 Python 对同一票目录输出同一 digest |
 
 ### E6 后置
 

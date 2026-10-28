@@ -4,4 +4,4 @@
 -- exit --
 2
 -- output --
-BLOCKED human.gate PASS needs --quote with the person's confirm words (确认 / 全签 / 同意 / LGTM); it reads as a question, not a decision
+BLOCKED human.gate PASS needs --quote with the person's own words, and those words have to show agreement; it reads as a question, not a decision

@@ -136,7 +136,19 @@
 | `ui.clean_pass_loop` | 外层整轮循环控制(`policy.max_clean_attempts`),跨多个 step,不属于单步执行 |
 | `ui.product_batch` | 历史 kind,新配方不用 |
 
-## 导体回路(每步五动作)
+## 导体回路(委派步两到三条命令)
+
+1. `python3 scripts/workflow.py next --feature <f>` 看 `NEXT` / `OPEN` / `DELEGATE`。`DELEGATE none` 导体自己做;`human.gate` 照旧 `record --by --quote`。
+2. `workflow.py step <step> --feature <f>`:交给 agent,要写代码的领写租约,打印机器填好的委派包(`BRIEF` 到 `END BRIEF`),记下开始时间。原样发给 agent。有 `FANOUT` 时仍按分片 `delegate <step> --shard <id>`,不走 `step`。
+3. agent 回来,回报原文交给 `workflow.py land <step> --feature <f> --report -`(走 stdin)。它写委派留痕,机检与下面第 5 条相同,然后:
+   - kind 要独立复核(`next` 打 `VERIFY`)且回报 PASS:领复核租约,打印复核包(`复核对象` 是写手这次的留痕)。发给复核者,它的回报再 `land` 一次,这次带 `--verified-by` / `--verify-evidence` 记下本步。
+   - 不复核的 kind:按回报的 STATUS 直接 record。
+   - `SEND BACK`:归 agent 的检查没过,或复核没过。再跑 `step <step>` 拿带 `prior_failure` 的重派包。确认检查器误判、这次仍该过,才在写手那次 `land` 加 `--accept-with-findings "<为什么仍然过>"`,理由带到最后的 record。
+   - `STOP`:回报 BLOCKED,或有信号等人答。照 `HANDOFF` / `CONSULT` / `REBRIEF` / `SIGNAL` 做,人答了 `decide`,再把同一份回报 `land` 一次(不会重复写留痕)。
+
+带复核的一步三条命令(`step`、`land`、`land`),其余委派步两条。复核租约要在写手回报被接受之后、复核者开工之前领,租约 30 分钟,所以不能提前到 `step`。规则和 BLOCKED 文案都在下面这些底层命令里,`step` / `land` 只是按顺序调它们;出了问题可以逐条手跑定位。
+
+### 底层命令
 
 1. `python3 scripts/workflow.py next --feature <f>` → 读 `NEXT` / `OPEN` / `DELEGATE` 三行
 2. `DELEGATE none` → 导体自己做这一步;`DELEGATE <agent>` → 组委派包(见下)
@@ -158,9 +170,16 @@
 6. `workflow.py record <step> <STATUS> --evidence <路径>`。`human.gate` 另须
    `--by <人名> --quote "<确认原话>"`;
    `KIND_VERIFIER` 里的 kind(`next` 打印 `VERIFY …`)PASS 前先派那个 agent 复核。
-   它把自己的留痕写进 `delegations/`，报告里用整词写上证据路径；再
-   `record PASS --verified-by <它> --verify-evidence <那条路径>`。
-   执行者自己的留痕不算。报告不存在、是空文件、或没有它的留痕引用这条路径，都会 BLOCKED。
+   Go 引擎下先 `workflow.py delegate <step> --verify` 给它领复核租约。
+   它的留痕和写手同一个 `step`、同一个 `kind`,加 `role: verifier`,同样走
+   `delegation.py write`:落成 `<step>-<attempt>.verify.yaml`,挂在写手那次 attempt 上,
+   **不占新的 attempt**,同一次 attempt 只收一份。不要另起 `fix-verify` 之类的步骤名。
+   报告里用整词写上证据路径;再 `record PASS --verified-by <它> --verify-evidence <那条路径>`。
+   执行者自己的留痕不算。报告不存在、是空文件、或没有它的留痕引用这条路径,都会 BLOCKED。
+   写手最新一份留痕的机检里有归 agent 的 FAIL(`brief-complete` 归导体,不算)时,
+   `record PASS` 默认拒绝并列出是哪几项:打回重做(`delegation.py check --feature <f> --step <step>` 看原因);
+   确认检查器误判、这次仍该过,才写 `--accept-with-findings "<为什么仍然过>"`,
+   这几项和理由写进该步的 `accepted_findings` 与审计。没有 FAIL 时带这个参数会被拒。
 
 两个时间戳是**可选**的 —— 可观测性不该挡住一次正常委派。但缺了就没有耗时视图,
 「哪个 agent 慢、哪一步是瓶颈」就答不出来,所以默认记上。
@@ -179,7 +198,7 @@ python3 scripts/delegation.py replay --feature <f> --step <step>
 
 它打印可直接重发的委派包(含 `prior_failure`),**但不自动重派** —— 派不派仍是你的决定。
 
-每轮末导体统一写一条 trace(`scripts/trace.sh append`),委派记成 `calls[].kind: agent`(见下)。**各 agent 自己不写 trace**,否则一轮多条账。
+每轮末导体统一写一条 trace(`scripts/trace.sh append`),这一轮派了谁、几次由它从留痕生成(见下)。**各 agent 自己不写 trace**,否则一轮多条账。
 
 ## 委派包(固定格式)
 
@@ -253,7 +272,7 @@ Cursor 侧这些收紧不生效(它忽略 `tools`,subagent 继承父级全部工
 
 ## trace
 
-委派记成 `calls[].kind: agent`(已在 `scripts/trace.py` 的 `CALL_KINDS` 里),`target` 写 agent 名,`from: conductor`,`to: agent:<name>`。
+派了谁、哪一步、第几次、是不是复核,`trace.py append` 从委派留痕生成 `delegations` 段,条数就是留痕份数,导体不用手记(字段见 [trace.md](trace.md))。想在跳转里看到这一跳,可以另记 `calls[].kind: agent`(已在 `scripts/trace.py` 的 `CALL_KINDS` 里),`target` 写 agent 名,`from: conductor`,`to: agent:<name>`。
 知道模型就写 `model`(通常 `inherit`),这一跳的思考压成一行 `thinking`,有计时再写 `duration_s`。
 同时在 `decisions` 记一条 `kind: delegate`(`chose: none` 表示导体自己做)。模型这一跳另记 `calls[].kind: model`,不要伪装成 script。
 这些字段都可选:缺了不挡委派,有了才能看出谁调了谁、想了什么。字段表在 [trace.md](trace.md)。

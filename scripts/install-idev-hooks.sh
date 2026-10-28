@@ -30,6 +30,12 @@ PROMPT_LOG="${PY} ${ROOT}/hooks/prompt_log.py"
 PRE_TOOL="${PY} ${ROOT}/hooks/pre_tool.py"
 SUB_STOP="${PY} ${ROOT}/hooks/subagent_stop.py"
 STOP_TRACE="${PY} ${ROOT}/hooks/stop_trace.py"
+# An idev entry is known by its hook script, not by the checkout's directory
+# name: a kernel cloned as anything but idev/ must still replace its own block.
+export IDEV_HOOK_RE='idev/hooks/|/hooks/(prompt_log|pre_tool|subagent_stop|stop_trace)\.py --client '
+# subagentStop asks a subagent with no summary to continue; only idev's own
+# agents owe a delegation return, so other subagents never see that nudge.
+AGENTS_RE="^($("${PY}" -c "import sys; sys.path.insert(0, sys.argv[1]); import kind_agents; print('|'.join(kind_agents.AGENTS))" "${ROOT}/scripts/lib"))\$"
 
 if [ "${TARGET}" = "repo" ]; then
   CURSOR_DIR="${REPO}/.cursor"
@@ -49,8 +55,9 @@ write_cursor() {
   tmp="$(mktemp)"
   if [ "${MODE}" = "uninstall" ]; then
     "${PY}" - "${dest}" "${tmp}" <<'PY'
-import json, sys
+import json, os, re, sys
 from pathlib import Path
+ours = re.compile(os.environ["IDEV_HOOK_RE"]).search
 src, dst = Path(sys.argv[1]), Path(sys.argv[2])
 data = {"version": 1, "hooks": {}}
 if src.is_file():
@@ -59,7 +66,7 @@ hooks = data.setdefault("hooks", {})
 for event, entries in list(hooks.items()):
     if not isinstance(entries, list):
         continue
-    hooks[event] = [e for e in entries if "idev/hooks/" not in str(e.get("command", ""))]
+    hooks[event] = [e for e in entries if not ours(str(e.get("command", "")))]
     if not hooks[event]:
         del hooks[event]
 dst.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -72,9 +79,11 @@ PY
     --prompt-log "${PROMPT_LOG} --client cursor" \
     --pre-tool "${PRE_TOOL} --client cursor" \
     --sub-stop "${SUB_STOP} --client cursor" \
+    --sub-stop-matcher "${AGENTS_RE}" \
     --stop-trace "${STOP_TRACE} --client cursor" <<'PY'
-import json, sys
+import json, os, re, sys
 from pathlib import Path
+ours = re.compile(os.environ["IDEV_HOOK_RE"]).search
 src, dst = Path(sys.argv[1]), Path(sys.argv[2])
 # argv after -- : pairs are unused; we read from env-like flags via remaining
 args = sys.argv[3:]
@@ -97,7 +106,7 @@ if not isinstance(data.get("hooks"), dict):
 hooks = data["hooks"]
 
 def drop_idev(entries):
-    return [e for e in entries if "idev/hooks/" not in str(e.get("command", ""))]
+    return [e for e in entries if not ours(str(e.get("command", "")))]
 
 idev = {
     "beforeSubmitPrompt": [{"command": cmds["prompt_log"], "failClosed": False}],
@@ -107,7 +116,7 @@ idev = {
     "beforeShellExecution": [
         {"command": cmds["pre_tool"], "failClosed": False},
     ],
-    "subagentStop": [{"command": cmds["sub_stop"], "failClosed": False}],
+    "subagentStop": [{"command": cmds["sub_stop"], "matcher": cmds["sub_stop_matcher"], "failClosed": False}],
     "stop": [{"command": cmds["stop_trace"], "failClosed": False}],
 }
 for event, entries in idev.items():
@@ -126,8 +135,9 @@ write_claude() {
   tmp="$(mktemp)"
   if [ "${MODE}" = "uninstall" ]; then
     "${PY}" - "${dest}" "${tmp}" <<'PY'
-import json, sys
+import json, os, re, sys
 from pathlib import Path
+ours = re.compile(os.environ["IDEV_HOOK_RE"]).search
 src, dst = Path(sys.argv[1]), Path(sys.argv[2])
 data = {}
 if src.is_file():
@@ -146,11 +156,11 @@ if isinstance(hooks, dict):
                 block = dict(block)
                 block["hooks"] = [
                     h for h in inner
-                    if "idev/hooks/" not in str((h or {}).get("command", ""))
+                    if not ours(str((h or {}).get("command", "")))
                 ]
                 if block["hooks"]:
                     cleaned.append(block)
-            elif "idev/hooks/" not in str(block.get("command", "")):
+            elif not ours(str(block.get("command", ""))):
                 cleaned.append(block)
         if cleaned:
             hooks[event] = cleaned
@@ -169,8 +179,9 @@ PY
     --pre-tool "${PRE_TOOL} --client claude" \
     --sub-stop "${SUB_STOP} --client claude" \
     --stop-trace "${STOP_TRACE} --client claude" <<'PY'
-import json, sys
+import json, os, re, sys
 from pathlib import Path
+ours = re.compile(os.environ["IDEV_HOOK_RE"]).search
 src, dst = Path(sys.argv[1]), Path(sys.argv[2])
 args = sys.argv[3:]
 cmds = {}
@@ -199,12 +210,12 @@ def drop_idev_blocks(entries):
             continue
         inner = block.get("hooks")
         if isinstance(inner, list):
-            kept = [h for h in inner if "idev/hooks/" not in str((h or {}).get("command", ""))]
+            kept = [h for h in inner if not ours(str((h or {}).get("command", "")))]
             if kept:
                 b = dict(block)
                 b["hooks"] = kept
                 out.append(b)
-        elif "idev/hooks/" not in str(block.get("command", "")):
+        elif not ours(str(block.get("command", ""))):
             out.append(block)
     return out
 

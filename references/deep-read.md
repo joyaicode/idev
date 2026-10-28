@@ -20,10 +20,10 @@ bash ~/.cursor/skills/idev/scripts/install-weekly-audit.sh
 | calls 弱/空 | 无可核验调用 | 补真实 calls |
 | `feature: -` 未绑票 | 产品会话未认票 | 小改走 s8-preflight；非交付说明原因 |
 | S1 未打开 grilling | S1 opened 无 grilling | 必开 `grilling/SKILL.md` 写入 opened |
-| 疑似写入签收但无 signoff | 写了 sealed/accepted/aligned 却无确认块 | 补 `signoff` 或改掉伪造写入 |
+| 写了签收标记或对话确认代写，signoff 缺失或不全 | 记了 `chat-confirm-signoff`、`signoff.marks` 非空、`repo` 调用写明写入标记，或 `recorded` 有带标记的门，却没有完整的确认块。判断规则见 [trace.md](trace.md) 的 `signoff` 一节 | 补 `signoff`（没写字段就 `status: none`）或改掉伪造写入 |
 | **阶段页未写入 opened** | trace 有 `extensions`，其中路径不在 `opened` | 把 `OPEN` 行抄进 `opened` 后再请签 |
 | **有标记的产品 trace 缺 extensions** | 产品仓 `.idev/traces/` 的 trace 没有 `extensions` 字段 | 补 `extensions: []` 或本轮 `OPEN` 路径 |
-| 仅否定/描述签收词 | 「不写 aligned / 他票仍 sealed」 | **不算违规** |
+| 仅否定/描述签收词 | 「不写 aligned / 他票仍 sealed」 | **不算违规**。检查只看结构字段，这类词不进统计 |
 | 观察覆盖（技能 / 委派 / 模型 / 组件跳 / 工具跳） | 窗口里写了可选字段的条数。工具跳是 `from: react:` 且 `to: tool:` | **不是报警**。空着说明没记。inbox 里未消费的 `react-tool-fail` / `react-exhausted` 另计一行，不计清零、不进 `HARD_COUNT`。字段见 [trace.md](trace.md) |
 
 本轮若写入签收字段，trace 必须带：

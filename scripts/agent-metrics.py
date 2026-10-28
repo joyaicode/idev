@@ -6,7 +6,7 @@ ranks by trouble density, so the next change is chosen from data instead of
 from whoever complained last.
 
     agent-metrics.py --repo <checkout> [--days N] [--by agent|kind|both]
-                     [--signal] [--trend] [--unused]
+                     [--signal] [--trend] [--unused] [--suggestions]
 
 Trouble density = (blocked + retried + rejected + check_fail) / delegated.
 
@@ -14,7 +14,7 @@ These are counts, not scores: nothing here gates a record or a signoff. A
 slow verify.run may simply have more cases, so duration is reported as a
 distribution and never as a verdict.
 
---signal reports whether the two nudge conditions in agents-evolve.md
+--signal reports whether the nudge conditions in agents-evolve.md
 section 6 are met, matching how the kernel's evolve-review.sh reports
 signal= — a hard signal is a reason to offer to draft a proposal, nothing
 more. The proposal still goes through grill and a person's confirmation.
@@ -35,13 +35,38 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import delegation  # noqa: E402
 import kind_agents  # noqa: E402
 import record_paths  # noqa: E402
 import safeyaml  # noqa: E402
 import textwidth as tw  # noqa: E402
 
 GLOBS = record_paths.REPO_GLOBS
-STATUS_LINE = re.compile(r"(?mi)^\s*STATUS:\s*(\S+)")
+KERNEL = Path(__file__).resolve().parent.parent
+TOKEN = re.compile(r"[A-Za-z0-9_.-]+")
+
+
+def kernel_things() -> dict[str, str]:
+    """Words a SUGGEST can use for a kernel script, agent or kind, mapped to its name.
+
+    A hyphenated script stem ("coding-scan") is distinctive enough without
+    its extension; a one-word stem ("workflow") only counts as workflow.py.
+    """
+    things: dict[str, str] = {}
+    for path in sorted((KERNEL / "scripts").iterdir()):
+        if path.suffix in (".sh", ".py"):
+            things[path.name] = path.name
+            if "-" in path.stem:
+                things.setdefault(path.stem, path.name)
+    for name in (*kind_agents.AGENTS, *kind_agents.KIND_AGENTS):
+        things[name] = name
+    return things
+
+
+def subjects(text: str, things: dict[str, str]) -> list[str]:
+    named = {things[word] for word in (t.rstrip(".") for t in TOKEN.findall(text)) if word in things}
+    return sorted(named)
 
 
 class Bucket:
@@ -91,7 +116,7 @@ def status_of(record: dict) -> str:
     report = record.get("report") or {}
     if report.get("status"):
         return str(report["status"]).upper()
-    hit = STATUS_LINE.search(str(report.get("raw", "")))
+    hit = delegation.STATUS_LINE.search(str(report.get("raw", "")))
     return hit.group(1).upper() if hit else ""
 
 
@@ -115,11 +140,14 @@ def collect(repo: Path, days: int | None):
     by_kind: defaultdict[str, Bucket] = defaultdict(Bucket)
     by_week: defaultdict[str, Bucket] = defaultdict(Bucket)
     severe: list[str] = []
-    untimed = 0
+    suggestions: list[dict] = []
+    things = kernel_things()
+    untimed = untelemetered = 0
     cutoff = None
     if days:
         cutoff = dt.datetime.now().astimezone() - dt.timedelta(days=days)
 
+    loaded = []
     for pattern in GLOBS:
         for path in sorted(repo.glob(pattern)):
             if path.name.endswith(".example.yaml"):
@@ -130,53 +158,66 @@ def collect(repo: Path, days: int | None):
             if record is None:
                 print(f"WARN unreadable or not a mapping, skipped: {path}", file=sys.stderr)
                 continue
+            loaded.append((path, record))
 
-            when = None
-            try:
-                when = dt.datetime.fromisoformat(str(record.get("at", "")))
-            except (ValueError, TypeError):
-                pass
-            if cutoff is not None and when is not None and when < cutoff:
-                continue
+    pairs = record_paths.distinct(loaded)
+    kinds = record_paths.attempt_kinds(pairs)
+    unscoped = sum(1 for kind in kinds.values() if kind == "unscoped")
+    for path, record in pairs:
+        when = None
+        try:
+            when = dt.datetime.fromisoformat(str(record.get("at", "")))
+        except (ValueError, TypeError):
+            pass
+        if cutoff is not None and when is not None and when < cutoff:
+            continue
 
-            agent = str(record.get("agent", "?"))
-            kind = str(record.get("kind", "?"))
-            feature = str(record.get("feature", "?"))
-            status = status_of(record)
-            attempt = safeyaml.as_int(record.get("attempt"), 1)
-            outcome = str(record.get("outcome", ""))
-            checks = record.get("checks") or {}
-            seconds = duration_of(record)
-            if seconds is None:
-                untimed += 1
+        agent = str(record.get("agent", "?"))
+        kind = str(record.get("kind", "?"))
+        feature = str(record.get("feature", "?"))
+        status = status_of(record)
+        outcome = str(record.get("outcome", ""))
+        checks = delegation.remeasure(record)
+        seconds = duration_of(record)
+        if seconds is None:
+            untimed += 1
+        if not delegation.has_telemetry(record):
+            untelemetered += 1
+        said = delegation.suggestion_of(record)
+        if said:
+            suggestions.append({
+                "where": f"{feature}/{record.get('step')} #{record.get('attempt', 1)} {agent}",
+                "text": said,
+                "subjects": subjects(said, things),
+            })
 
-            week = when.strftime("%G-W%V") if when is not None else "unknown"
-            for bucket, key in ((by_agent, agent), (by_kind, kind), (by_week, week)):
-                b = bucket[key]
-                b.delegated += 1
-                b.features.add(feature)
-                if seconds is not None:
-                    b.durations.append(seconds)
-                if status.startswith("BLOCKED"):
-                    b.blocked += 1
-                    if "brief" in status:
-                        b.blocked_brief += 1
-                    elif "env" in status:
-                        b.blocked_env += 1
-                if attempt > 1:
-                    b.retried += 1
-                if outcome == "rejected":
-                    b.rejected += 1
-                if str(record.get("suggest", "")).strip():
-                    b.suggest += 1
-                for name, value in checks.items():
-                    if str(value).startswith("FAIL"):
-                        b.check_fail[name] += 1
+        week = when.strftime("%G-W%V") if when is not None else "unknown"
+        for bucket, key in ((by_agent, agent), (by_kind, kind), (by_week, week)):
+            b = bucket[key]
+            b.delegated += 1
+            b.features.add(feature)
+            if seconds is not None:
+                b.durations.append(seconds)
+            if status.startswith("BLOCKED"):
+                b.blocked += 1
+                if "brief" in status:
+                    b.blocked_brief += 1
+                elif "env" in status:
+                    b.blocked_env += 1
+            if kinds[path] == "retry":
+                b.retried += 1
+            if outcome == "rejected":
+                b.rejected += 1
+            if said:
+                b.suggest += 1
+            for name, value in checks.items():
+                if value.startswith("FAIL"):
+                    b.check_fail[name] += 1
 
-            if str(checks.get("no-signoff-write", "")).startswith("FAIL"):
-                severe.append(f"{feature}/{record.get('step')} {agent}: no-signoff-write")
+        if checks.get("no-signoff-write", "").startswith("FAIL"):
+            severe.append(f"{feature}/{record.get('step')} {agent}: no-signoff-write")
 
-    return dict(by_agent), dict(by_kind), dict(by_week), severe, untimed
+    return dict(by_agent), dict(by_kind), dict(by_week), severe, untimed, unscoped, untelemetered, suggestions
 
 
 def advise(name: str, b: Bucket) -> str:
@@ -292,6 +333,7 @@ def main() -> int:
     parser.add_argument("--signal", action="store_true", help="print signal=yes|no for the nudge rules")
     parser.add_argument("--trend", action="store_true", help="also print the per-week trend")
     parser.add_argument("--unused", action="store_true", help="only print the never-used report")
+    parser.add_argument("--suggestions", action="store_true", help="only print the agents' SUGGEST lines")
     args = parser.parse_args()
 
     repo = args.repo.resolve()
@@ -299,10 +341,10 @@ def main() -> int:
         print(f"BLOCKED no such checkout: {repo}", file=sys.stderr)
         return 2
 
-    by_agent, by_kind, by_week, severe, untimed = collect(repo, args.days)
+    by_agent, by_kind, by_week, severe, untimed, unscoped, untelemetered, suggestions = collect(repo, args.days)
     total = sum(b.delegated for b in by_agent.values())
 
-    # Nudge rules 5 and 6 from references/agents-evolve.md section 6.
+    # Nudge rules 5, 6 and 7 from references/agents-evolve.md section 6.
     hits: list[str] = []
     for name, b in by_agent.items():
         failures = sum(b.check_fail.values())
@@ -311,7 +353,24 @@ def main() -> int:
     for name, b in by_kind.items():
         if b.retried + b.rejected >= 2:
             hits.append(f"kind {name}: retried+rejected {b.retried + b.rejected} 次(≥2)")
+    named: defaultdict[str, int] = defaultdict(int)
+    for item in suggestions:
+        for subject in item["subjects"]:
+            named[subject] += 1
+    hits.extend(f"suggest {subject}: {n} 条(≥2)" for subject, n in sorted(named.items()) if n >= 2)
     hits.extend(severe)
+
+    if args.suggestions:
+        print("## agent 的建议")
+        print()
+        if not suggestions:
+            print("(没有)")
+        for item in sorted(suggestions, key=lambda i: (i["subjects"] or ["~"], i["where"])):
+            tag = ",".join(item["subjects"]) or "未点名内核对象"
+            print(f"- [{tag}] {item['where']}: {item['text']}")
+        print()
+        print("同一对象被点名 ≥ 2 次才算信号;单条建议只列出,不改任何东西。")
+        return 0
 
     if args.signal:
         print(f"signal={'yes' if hits else 'no'}")
@@ -331,6 +390,12 @@ def main() -> int:
     print(f"# 留痕 {total} 条" + (f",近 {args.days} 天" if args.days else "") + f",{len(by_agent)} 个 agent,{len(by_kind)} 个 kind")
     if untimed:
         print(f"# {untimed} 条没有计时,耗时列不完整")
+    if untelemetered:
+        print(f"# {untelemetered} 条没有 subagentStop 遥测(duration_ms / tool_call_count),"
+              "钩子没装或没对上这次委派")
+    if unscoped:
+        print(f"# {unscoped} 条在旧的扁平目录里且 attempt > 1,分不出是重试还是新一轮 run,不计入 retried;"
+              "逐票看 delegation.py eval 列出的 prior_failure")
     print()
     if args.by in ("agent", "both"):
         table("按 agent", by_agent, kind_mode=False)

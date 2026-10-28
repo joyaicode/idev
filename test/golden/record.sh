@@ -29,8 +29,9 @@ export PYTHONUNBUFFERED=1
 export IDEV_ENGINE=python
 export IDEV_AGENT_FEEDBACK=off
 # E1.3 only fires when an idev binary is visible. Keep this lane on pure
-# Python so txtar bytes stay stable: hide IDEV_BIN and any PATH idev.
-unset IDEV_BIN
+# Python so txtar bytes stay stable: switch the binary off (the kernel's own
+# bin/idev included) and hide any PATH idev.
+export IDEV_BIN=off
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
 
 IDEV="$(cd "$(dirname "$0")/../.." && pwd -P)"
@@ -50,6 +51,9 @@ trap 'rm -rf "$WORK"' EXIT
 # the unresolved form would leave the scratch path in the golden file and make
 # every recording machine-specific.
 WORK="$(cd "$WORK" && pwd -P)"
+# delegation write copies timing from the newest subagent stop in the store;
+# the person's ~/.idev would leak into the bytes.
+export IDEV_DATA="$WORK/idev-data"
 
 # A product checkout: product_repo() walks up for .git, and doc_home puts the
 # ticket under .idev/task/<feature>.

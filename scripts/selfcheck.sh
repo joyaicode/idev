@@ -4,12 +4,19 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-DELIVER="${HOME}/.cursor/skills/idev/deliver/references"
-VERIFY="${HOME}/.cursor/skills/idev/verify/references"
-OPS="${HOME}/.cursor/skills/idev/ops/references"
+KERNEL="$(cd "${ROOT}/.." && pwd)"
+DELIVER="${KERNEL}/deliver/references"
+VERIFY="${KERNEL}/verify/references"
+OPS="${KERNEL}/ops/references"
 CHECK=(python3 "${ROOT}/check-feature.py")
 SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/idev-selfcheck-run.XXXXXX")"
 export TMPDIR="${SCRATCH}"
+# The run's own store, and the python lane unless the caller pinned a binary:
+# a selfcheck never writes the person's ~/.idev, and the same tree gives the
+# same answers whether or not a build is lying around. The lanes that need Go
+# build their own.
+export IDEV_DATA="${SCRATCH}/idev-data"
+export IDEV_BIN="${IDEV_BIN:-off}"
 FIX="$(mktemp -d "${SCRATCH}/idev-selfcheck.XXXXXX")"
 FEATURE=example-change
 DST="${FIX}/docs/task/${FEATURE}"
@@ -361,13 +368,13 @@ BAD="${SCRATCH}/idev-trace-bad.yaml"
 export IDEV_TRACE_DIR="${TRACE_DIR}"
 
 echo "=== positive: trace example ==="
-"${TRACE[@]}" check "${HOME}/.cursor/skills/idev/references/trace.example.yaml" \
+"${TRACE[@]}" check "${KERNEL}/references/trace.example.yaml" \
   || fail "expected PASS on trace.example.yaml"
 
 echo "=== negative: trace missing route.why ==="
 python3 - <<PY
 from pathlib import Path
-text = Path("${HOME}/.cursor/skills/idev/references/trace.example.yaml").read_text()
+text = Path("${KERNEL}/references/trace.example.yaml").read_text()
 text = text.replace('why: "deliver.yaml.stage=code; user asked to implement include paths, not a phenomenon."', "why: \"\"", 1)
 Path("${BAD}").write_text(text)
 PY
@@ -376,14 +383,14 @@ if "${TRACE[@]}" check "${BAD}"; then fail "expected FAIL on empty route.why"; f
 echo "=== negative: v2 missing thinking.summary ==="
 python3 - <<PY2
 from pathlib import Path
-text = Path("${HOME}/.cursor/skills/idev/references/trace.example.yaml").read_text()
+text = Path("${KERNEL}/references/trace.example.yaml").read_text()
 text = text.replace('summary: "看到 stage=code 与「补测试」诉求；排除 ops（无现象）与直接 verify（plan 未 accepted）；先走 deliver/code，并打开 java 规约。"', 'summary: ""', 1)
 Path("${BAD}").write_text(text)
 PY2
 if "${TRACE[@]}" check "${BAD}"; then fail "expected FAIL on empty thinking.summary"; fi
 
 echo "=== positive: trace append + last ==="
-"${TRACE[@]}" append "${HOME}/.cursor/skills/idev/references/trace.example.yaml" >/dev/null \
+"${TRACE[@]}" append "${KERNEL}/references/trace.example.yaml" >/dev/null \
   || fail "expected append to succeed"
 "${TRACE[@]}" last >/dev/null || fail "expected last after append"
 
@@ -391,7 +398,7 @@ echo "=== positive: S2 short render ==="
 SHORT="${SCRATCH}/idev-trace-short.yaml"
 python3 - <<PY3
 from pathlib import Path
-text = Path("${HOME}/.cursor/skills/idev/references/trace.example.yaml").read_text()
+text = Path("${KERNEL}/references/trace.example.yaml").read_text()
 text = text.replace("  risk_tier: P1\n", "  risk_tier: P1\n  scenario: S2\n", 1)
 Path("${SHORT}").write_text(text)
 PY3
@@ -401,8 +408,8 @@ if echo "${OUT}" | grep -q '| thinking |'; then fail "S2 render should omit thin
 rm -f "${SHORT}"
 
 echo "=== positive: workflow recipes ==="
-WF_ARGS=(--recipes-dir "${HOME}/.cursor/skills/idev/workflows")
-PROD_ROOT="$(python3 -c "import json;from pathlib import Path;p=Path('${HOME}/.cursor/skills/idev/state/outbound-config.json');d=json.loads(p.read_text()) if p.is_file() else {};print(d.get('product_root') or '')")"
+WF_ARGS=(--recipes-dir "${KERNEL}/workflows")
+PROD_ROOT="$(python3 -c "import json;from pathlib import Path;p=Path('${KERNEL}/state/outbound-config.json');d=json.loads(p.read_text()) if p.is_file() else {};print(d.get('product_root') or '')")"
 if [ -n "${PROD_ROOT}" ] && [ -d "${PROD_ROOT}/.idev/workflows" ] \
   && [ -n "$(python3 "${ROOT}/lib/product_marker.py" --check "${PROD_ROOT}")" ]; then
   WF_ARGS+=(--product-recipes "${PROD_ROOT}/.idev/workflows")
@@ -414,15 +421,15 @@ DISC="$(mktemp -d "${TMPDIR:-/tmp}/idev-disc.XXXXXX")"
 mkdir -p "$DISC/prod"
 printf '%s\n' 'schema_version: 1' 'id: sample-ui' 'aliases: [UI自动化]' 'steps:' '  - {id: s, kind: human.gate, with: {will_write: []}}' \
   > "$DISC/prod/sample-ui.yaml"
-python3 "${ROOT}/workflow-check.py" --recipes-dir "${HOME}/.cursor/skills/idev/workflows" --product-recipes "$DISC/prod" \
+python3 "${ROOT}/workflow-check.py" --recipes-dir "${KERNEL}/workflows" --product-recipes "$DISC/prod" \
   >"${SCRATCH}"/idev-disc-clean.out 2>&1 || { cat "${SCRATCH}"/idev-disc-clean.out; rm -rf "$DISC"; fail "entry should not name a product alias"; }
-cp -R "${HOME}/.cursor/skills/idev/workflows" "$DISC/workflows"
-sed 's/适用所有端到端交付产品/UI自动化 适用所有端到端交付产品/' "${HOME}/.cursor/skills/idev/SKILL.md" > "$DISC/SKILL.md"
+cp -R "${KERNEL}/workflows" "$DISC/workflows"
+sed 's/适用所有端到端交付产品/UI自动化 适用所有端到端交付产品/' "${KERNEL}/SKILL.md" > "$DISC/SKILL.md"
 if python3 "${ROOT}/workflow-check.py" --recipes-dir "$DISC/workflows" --product-recipes "$DISC/prod" >"${SCRATCH}"/idev-disc-leak.out 2>&1; then
   rm -rf "$DISC"; fail "product alias in the entry description should fail workflow-check"
 fi
 grep -q "names product recipe 'UI自动化'" "${SCRATCH}"/idev-disc-leak.out || { cat "${SCRATCH}"/idev-disc-leak.out; rm -rf "$DISC"; fail "leak message missing"; }
-sed 's/path-view、//' "${HOME}/.cursor/skills/idev/SKILL.md" > "$DISC/SKILL.md"
+sed 's/path-view、//' "${KERNEL}/SKILL.md" > "$DISC/SKILL.md"
 if python3 "${ROOT}/workflow-check.py" --recipes-dir "$DISC/workflows" >"${SCRATCH}"/idev-disc-miss.out 2>&1; then
   rm -rf "$DISC"; fail "entry missing a kernel recipe id should fail workflow-check"
 fi
@@ -430,12 +437,12 @@ rm -rf "$DISC"
 if rg -q 'outbound-config' "${ROOT}/ticket_metrics.py"; then
   fail "ticket_metrics must not pick the session repo from the install ledger"
 fi
-if rg -q 'framework/config' "${HOME}/.cursor/skills/idev/workflows/lite-change.yaml"; then
+if rg -q 'framework/config' "${KERNEL}/workflows/lite-change.yaml"; then
   fail "lite-change recipe still carries product pitfalls"
 fi
 echo "OK  entry discovery"
 echo "=== lock: execution pages resolve ticket paths through doc_home ==="
-IDEV_HOME="${HOME}/.cursor/skills/idev"
+IDEV_HOME="${KERNEL}"
 if rg -n 'docs/test-case/<(feature|f)>|docs/task/\*/' "$IDEV_HOME/ops" "$IDEV_HOME/verify" "$IDEV_HOME/deliver" \
   "$IDEV_HOME/workflows" "$IDEV_HOME/conventions" "$IDEV_HOME/references/operator-cheatsheet.md" \
   "$IDEV_HOME/references/chat-confirm-signoff.md"; then
@@ -443,14 +450,14 @@ if rg -n 'docs/test-case/<(feature|f)>|docs/task/\*/' "$IDEV_HOME/ops" "$IDEV_HO
 fi
 echo "OK  ticket paths via doc_home"
 echo "=== positive: workflow run example ==="
-python3 "${ROOT}/workflow-check.py" --run "${HOME}/.cursor/skills/idev/references/workflow-run.example.yaml" \
+python3 "${ROOT}/workflow-check.py" --run "${KERNEL}/references/workflow-run.example.yaml" \
   || fail "expected PASS on workflow-run.example.yaml"
 
 echo "=== positive: S8 short render ==="
 SHORT8="${SCRATCH}/idev-trace-short8.yaml"
 python3 - <<PY8
 from pathlib import Path
-text = Path("${HOME}/.cursor/skills/idev/references/trace.example.yaml").read_text()
+text = Path("${KERNEL}/references/trace.example.yaml").read_text()
 text = text.replace("  risk_tier: P1\n", "  risk_tier: P1\n  scenario: S8\n", 1)
 Path("${SHORT8}").write_text(text)
 PY8
@@ -461,7 +468,7 @@ if echo "${OUT8}" | grep -q '| hops |'; then fail "S8 render should omit hops"; 
 rm -f "${SHORT8}"
 
 echo "=== positive: observation fields on the path ==="
-OBS_PATH="$("${TRACE[@]}" path "${HOME}/.cursor/skills/idev/references/trace.example.yaml")" \
+OBS_PATH="$("${TRACE[@]}" path "${KERNEL}/references/trace.example.yaml")" \
   || fail "expected path of the example to succeed"
 echo "${OBS_PATH}" | grep -q 'skills:' || fail "path missing skills"
 echo "${OBS_PATH}" | grep -q 'explicit: idev' || fail "path missing skill how"
@@ -495,7 +502,7 @@ rm -f "${PLAIN}"
 echo "=== negative: observation fields must be well formed ==="
 python3 - <<PYOBS
 from pathlib import Path
-src = Path("${HOME}/.cursor/skills/idev/references/trace.example.yaml").read_text()
+src = Path("${KERNEL}/references/trace.example.yaml").read_text()
 bad = Path("${SCRATCH}")
 bad.joinpath("idev-trace-how.yaml").write_text(src.replace("how: explicit", "how: guessed", 1))
 bad.joinpath("idev-trace-edge.yaml").write_text(src.replace("    to: skill:idev\n", "", 1))
@@ -518,7 +525,7 @@ if "${TRACE[@]}" check "${SCRATCH}/idev-trace-skill.yaml"; then fail "expected F
 
 echo "=== positive: observation coverage is not a hard alarm ==="
 OBS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/idev-trace-obs.XXXXXX")"
-cp "${HOME}/.cursor/skills/idev/references/trace.example.yaml" "${OBS_DIR}/20261023-001.yaml"
+cp "${KERNEL}/references/trace.example.yaml" "${OBS_DIR}/20261023-001.yaml"
 python3 "${ROOT}/audit_traces_lib.py" "${OBS_DIR}" 5 >"${SCRATCH}"/idev-trace-obs.out
 grep -q '观察覆盖' "${SCRATCH}"/idev-trace-obs.out || fail "audit missing observation coverage"
 grep -q '写了组件跳 | 1 |' "${SCRATCH}"/idev-trace-obs.out || fail "audit did not count the hop"
@@ -531,7 +538,7 @@ echo "=== write-config persists pilot and extra keys ==="
 WCFG="${SCRATCH}/idev-outbound-cfg.json"
 printf '%s\n' '{"pilot":"joypaas","custom":"keep","joypaas_root":"/old","required":["stale"]}' > "${WCFG}"
 python3 "${ROOT}/lib/outbound_registry.py" write-config \
-  --root "${HOME}/.cursor/skills/idev" \
+  --root "${KERNEL}" \
   --cfg "${WCFG}" \
   --product-root "/tmp/jp-root" \
   --pack joypaas >/dev/null \
@@ -549,7 +556,7 @@ PY
 echo "=== write-config keeps other pilot unless --force-pack ==="
 printf '%s\n' '{"pilot":"example","custom":"keep","joypaas_root":"/old"}' > "${WCFG}"
 python3 "${ROOT}/lib/outbound_registry.py" write-config \
-  --root "${HOME}/.cursor/skills/idev" \
+  --root "${KERNEL}" \
   --cfg "${WCFG}" \
   --product-root "/tmp/jp-root" \
   --pack joypaas >/dev/null \
@@ -562,7 +569,7 @@ assert d.get("custom")=="keep", d
 assert d.get("joypaas_root")=="/old", d
 PY
 python3 "${ROOT}/lib/outbound_registry.py" write-config \
-  --root "${HOME}/.cursor/skills/idev" \
+  --root "${KERNEL}" \
   --cfg "${WCFG}" \
   --product-root "/tmp/jp-forced" \
   --pack joypaas \
@@ -580,7 +587,7 @@ rm -f "${WCFG}"
 echo "=== resolve: current product is the pilot, install ledger is not ==="
 RTMP="$(mktemp -d "${TMPDIR:-/tmp}/idev-registry-root.XXXXXX")"
 mkdir -p "${RTMP}/handoffs" "${RTMP}/state"
-cp "${HOME}/.cursor/skills/idev/handoffs/registry.yaml" "${RTMP}/handoffs/registry.yaml"
+cp "${KERNEL}/handoffs/registry.yaml" "${RTMP}/handoffs/registry.yaml"
 printf '%s\n' '{"pilot":"joypaas"}' > "${RTMP}/state/outbound-config.json"
 pack_of() {
   python3 "${ROOT}/lib/outbound_registry.py" resolve --root "${RTMP}" "$@" \
@@ -650,7 +657,7 @@ rm -rf "${HTMP}"
 echo "=== pack-link without --pack does not guess a product ==="
 set +e
 python3 "${ROOT}/lib/outbound_registry.py" pack-link \
-  --root "${HOME}/.cursor/skills/idev" >"${SCRATCH}"/idev-pack-link-nopack.out 2>&1
+  --root "${KERNEL}" >"${SCRATCH}"/idev-pack-link-nopack.out 2>&1
 pack_rc=$?
 set -e
 [ "$pack_rc" -ne 0 ] || fail "pack-link without --pack should fail"
@@ -679,15 +686,15 @@ fi
 rm -rf "${OTMP}"
 
 echo "=== lock: S8 requires one product name; no three-product aliases ==="
-if [ -e "${HOME}/.cursor/skills/idev/workflows/ui-lifecycle-batch.yaml" ]; then
+if [ -e "${KERNEL}/workflows/ui-lifecycle-batch.yaml" ]; then
   fail "ui-lifecycle-batch recipe must stay deleted"
 fi
-if [ -e "${HOME}/.cursor/skills/idev/references/workflow-ui-lifecycle-batch.md" ]; then
+if [ -e "${KERNEL}/references/workflow-ui-lifecycle-batch.md" ]; then
   fail "workflow-ui-lifecycle-batch.md must stay deleted"
 fi
 if rg -q '三产品UI自动化|依次UI自动化' \
-  "${HOME}/.cursor/skills/idev/SKILL.md" \
-  "${HOME}/.cursor/skills/idev/references/invoke.md"; then
+  "${KERNEL}/SKILL.md" \
+  "${KERNEL}/references/invoke.md"; then
   fail "live invoke still has three-product aliases"
 fi
 
@@ -701,26 +708,26 @@ echo "=== lock: ops-schema is not the only handoff ==="
 if rg -q '`kind=onboard` → `joypaas-onboard-diagnose`' "${OPS}/ops-schema.md"; then
   fail "ops-schema still maps onboard uniquely to joypaas-onboard-diagnose"
 fi
-if rg -q '交给 onboard / jmiss' "${HOME}/.cursor/skills/idev/deliver/references/deliver-schema.md"; then
+if rg -q '交给 onboard / jmiss' "${KERNEL}/deliver/references/deliver-schema.md"; then
   fail "deliver-schema still says 交给 onboard / jmiss"
 fi
 if rg -q '不要写回 joypaas 仓|不要 PR 进 joypaas|不写回 joypaas 仓' \
-  "${HOME}/.cursor/skills/idev/verify/SKILL.md" \
-  "${HOME}/.cursor/skills/idev/verify/references/evolve.md" \
-  "${HOME}/.cursor/skills/idev/verify/references/0007-verify-conductor-evolve.md" \
-  "${HOME}/.cursor/skills/idev/ops/references/0010-ops-conductor.md"; then
+  "${KERNEL}/verify/SKILL.md" \
+  "${KERNEL}/verify/references/evolve.md" \
+  "${KERNEL}/verify/references/0007-verify-conductor-evolve.md" \
+  "${KERNEL}/ops/references/0010-ops-conductor.md"; then
   fail "verify/ops live docs still say write back to joypaas repo"
 fi
 if rg -q '先走仓库 `joypaas-frontend-test`' \
-  "${HOME}/.cursor/skills/idev/verify/references/plan-schema.md"; then
+  "${KERNEL}/verify/references/plan-schema.md"; then
   fail "plan-schema still treats joypaas-frontend-test as the only cookie skill"
 fi
 
 echo "=== lock: no module-level ledgers (only entry state/ledger.yaml) ==="
 for m in deliver verify ops docs; do
-  [ ! -e "${HOME}/.cursor/skills/idev/${m}/state/ledger.yaml" ] || fail "module ledger must not exist: ${m}/state/ledger.yaml"
+  [ ! -e "${KERNEL}/${m}/state/ledger.yaml" ] || fail "module ledger must not exist: ${m}/state/ledger.yaml"
 done
-[ -f "${HOME}/.cursor/skills/idev/state/ledger.yaml" ] || fail "missing entry ledger state/ledger.yaml"
+[ -f "${KERNEL}/state/ledger.yaml" ] || fail "missing entry ledger state/ledger.yaml"
 
 echo "=== positive: unknown IDEV_PILOT does not require a kernel pack ==="
 IDEV_PILOT=example IDEV_OUTBOUND_NO_HOME=1 bash "${ROOT}/outbound-skills-check.sh" --repo "${FIX}" \
@@ -728,25 +735,25 @@ IDEV_PILOT=example IDEV_OUTBOUND_NO_HOME=1 bash "${ROOT}/outbound-skills-check.s
 
 
 echo "=== lock: path-view runtime path ==="
-bash "${HOME}/.cursor/skills/idev/scripts/path-view.sh" >"${SCRATCH}"/idev-path.out 2>&1 \
+bash "${KERNEL}/scripts/path-view.sh" >"${SCRATCH}"/idev-path.out 2>&1 \
   || fail "path-view failed"
 grep -q '运行路径' "${SCRATCH}"/idev-path.out || fail "path-view missing 运行路径 header"
-bash "${HOME}/.cursor/skills/idev/scripts/trace.sh" path-stats -n 5 >"${SCRATCH}"/idev-path-stats.out 2>&1 \
+bash "${KERNEL}/scripts/trace.sh" path-stats -n 5 >"${SCRATCH}"/idev-path-stats.out 2>&1 \
   || fail "path-stats failed"
 grep -q 'path-stats' "${SCRATCH}"/idev-path-stats.out || fail "path-stats missing header"
 # no score language
 if rg -qi '总分|score|百分' "${SCRATCH}"/idev-path.out "${SCRATCH}"/idev-path-stats.out; then
   fail "path-view must not emit scores"
 fi
-[ -x "${HOME}/.cursor/skills/idev/scripts/path-view.sh" ] || fail "path-view.sh not executable"
-[ -f "${HOME}/.cursor/skills/idev/workflows/path-view.yaml" ] || fail "missing path-view workflow"
+[ -x "${KERNEL}/scripts/path-view.sh" ] || fail "path-view.sh not executable"
+[ -f "${KERNEL}/workflows/path-view.yaml" ] || fail "missing path-view workflow"
 echo "OK  path-view lock"
 
 echo "=== lock: single authority for routing / ticket / H-rules ==="
-BRIEF="${HOME}/.cursor/skills/idev/references/agent-brief.md"
-SKILL="${HOME}/.cursor/skills/idev/SKILL.md"
-CHEAT="${HOME}/.cursor/skills/idev/references/operator-cheatsheet.md"
-INVOKE="${HOME}/.cursor/skills/idev/references/invoke.md"
+BRIEF="${KERNEL}/references/agent-brief.md"
+SKILL="${KERNEL}/SKILL.md"
+CHEAT="${KERNEL}/references/operator-cheatsheet.md"
+INVOKE="${KERNEL}/references/invoke.md"
 if rg -q '都没有则' "$BRIEF"; then
   fail "agent-brief still inlines a shortened ticket-binding algorithm"
 fi
@@ -769,35 +776,35 @@ if rg -q '^\| S1 \|' "$INVOKE"; then
   fail "invoke.md still has a second S1-S8 scene table"
 fi
 for wf in localdev-start localdev-stop ui-lifecycle-full ui-automation-build multi-agent-coord; do
-  if [ -e "${HOME}/.cursor/skills/idev/workflows/${wf}.yaml" ]; then
+  if [ -e "${KERNEL}/workflows/${wf}.yaml" ]; then
     fail "product pipeline ${wf} still sits in the idev kernel"
   fi
 done
-if [ -e "${HOME}/.cursor/skills/idev/packs/joypaas" ] || [ -d "${HOME}/.cursor/skills/idev/packs" ]; then
+if [ -e "${KERNEL}/packs/joypaas" ] || [ -d "${KERNEL}/packs" ]; then
   fail "product pack directory still sits in the idev kernel"
 fi
-if [ -e "${HOME}/.cursor/skills/idev/joypaas-ui-lifecycle" ]; then
+if [ -e "${KERNEL}/joypaas-ui-lifecycle" ]; then
   fail "product overlay symlink still sits in the idev kernel"
 fi
-if rg -q '^joypaas:' "${HOME}/.cursor/skills/idev/handoffs/registry.yaml"; then
+if rg -q '^joypaas:' "${KERNEL}/handoffs/registry.yaml"; then
   fail "kernel registry still names a product"
 fi
-if rg -q 'npm run lint-fix' "${HOME}/.cursor/skills/idev/scripts/coding-scan.sh"; then
+if rg -q 'npm run lint-fix' "${KERNEL}/scripts/coding-scan.sh"; then
   fail "coding-scan still hardcodes npm run lint-fix"
 fi
 if [ -n "${PROD_ROOT}" ] && [ -f "${PROD_ROOT}/.idev/extensions.yaml" ]; then
-  python3 "${HOME}/.cursor/skills/idev/scripts/stage-extensions.py" --repo "${PROD_ROOT}" --check-all \
+  python3 "${KERNEL}/scripts/stage-extensions.py" --repo "${PROD_ROOT}" --check-all \
     >"${SCRATCH}"/idev-stage-ext-prod.out || { cat "${SCRATCH}"/idev-stage-ext-prod.out; fail "installed product extensions.yaml has a missing page"; }
 fi
 if [ -n "${PROD_ROOT}" ] && [ -d "${PROD_ROOT}/.idev/checks" ]; then
-  bash "${HOME}/.cursor/skills/idev/scripts/product-checks.sh" "${PROD_ROOT}" \
+  bash "${KERNEL}/scripts/product-checks.sh" "${PROD_ROOT}" \
     >"${SCRATCH}"/idev-prod-checks.out || { cat "${SCRATCH}"/idev-prod-checks.out; fail "installed product checks failed"; }
 fi
 echo "OK  routing authority + product pipelines stay out of the kernel"
 
 echo "=== lock: product intermediates stay out of the kernel ==="
-SINK="${HOME}/.cursor/skills/idev/scripts/lib/product_sink.py"
-PROMO="${HOME}/.cursor/skills/idev/scripts/kernel-promote-check.sh"
+SINK="${KERNEL}/scripts/lib/product_sink.py"
+PROMO="${KERNEL}/scripts/kernel-promote-check.sh"
 HERE="$(python3 "$SINK" traces)"
 # product_sink.kernel_root() resolves symlinks, so when ~/.cursor/skills/idev
 # is a symlink into a checkout this comes back as the physical path and never
@@ -841,7 +848,7 @@ fi
 BARE="$(mktemp -d "${TMPDIR:-/tmp}/idev-bare-evolve.XXXXXX")"
 mkdir -p "$BARE/.idev"
 printf '%s\n' 'schema_version: 1' 'marker: idev' 'id: bare' > "$BARE/.idev/marker.yaml"
-python3 - "$BARE" "${HOME}/.cursor/skills/idev/scripts/lib" <<'PY' || { rm -rf "$PREPO" "$BARE"; fail "missing evolve must stay off"; }
+python3 - "$BARE" "${KERNEL}/scripts/lib" <<'PY' || { rm -rf "$PREPO" "$BARE"; fail "missing evolve must stay off"; }
 import sys
 sys.path.insert(0, sys.argv[2])
 from product_marker import load_marker
@@ -868,7 +875,7 @@ echo "=== lock: stage extensions follow the marker ==="
 EXT="$(mktemp -d "${TMPDIR:-/tmp}/idev-ext.XXXXXX")"
 git -C "$EXT" init -q
 EXT="$(cd "$EXT" && pwd -P)"
-python3 "${HOME}/.cursor/skills/idev/scripts/stage-extensions.py" code --repo "$EXT" \
+python3 "${KERNEL}/scripts/stage-extensions.py" code --repo "$EXT" \
   >"${SCRATCH}"/idev-ext-none.out || { rm -rf "$EXT"; fail "unmarked repo should not fail stage-extensions"; }
 if grep -q '^OPEN ' "${SCRATCH}"/idev-ext-none.out; then
   rm -rf "$EXT"
@@ -877,24 +884,24 @@ fi
 mkdir -p "$EXT/.idev"
 printf '%s\n' 'schema_version: 1' 'marker: idev' 'id: acme' 'evolve: false' > "$EXT/.idev/marker.yaml"
 printf '%s\n' 'schema_version: 1' 'stages:' '  code:' '    - pack/note.md' > "$EXT/.idev/extensions.yaml"
-if python3 "${HOME}/.cursor/skills/idev/scripts/stage-extensions.py" code --repo "$EXT" >"${SCRATCH}"/idev-ext-miss.out 2>&1; then
+if python3 "${KERNEL}/scripts/stage-extensions.py" code --repo "$EXT" >"${SCRATCH}"/idev-ext-miss.out 2>&1; then
   rm -rf "$EXT"
   fail "missing declared page should fail"
 fi
 grep -q 'missing .idev/pack/note.md' "${SCRATCH}"/idev-ext-miss.out || { rm -rf "$EXT"; cat "${SCRATCH}"/idev-ext-miss.out; fail "missing page message"; }
 mkdir -p "$EXT/.idev/pack"
 printf '%s\n' 'note' > "$EXT/.idev/pack/note.md"
-python3 "${HOME}/.cursor/skills/idev/scripts/stage-extensions.py" code --repo "$EXT" \
+python3 "${KERNEL}/scripts/stage-extensions.py" code --repo "$EXT" \
   >"${SCRATCH}"/idev-ext-ok.out || { rm -rf "$EXT"; cat "${SCRATCH}"/idev-ext-ok.out; fail "present page should pass"; }
 grep -q "^OPEN $EXT/.idev/pack/note.md" "${SCRATCH}"/idev-ext-ok.out || { rm -rf "$EXT"; fail "OPEN line missing"; }
 mkdir -p "$EXT/.idev/checks"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$EXT/.idev/checks/ok.sh"
-bash "${HOME}/.cursor/skills/idev/scripts/product-checks.sh" "$EXT" >"${SCRATCH}"/idev-ext-checks.out \
+bash "${KERNEL}/scripts/product-checks.sh" "$EXT" >"${SCRATCH}"/idev-ext-checks.out \
   || { rm -rf "$EXT"; cat "${SCRATCH}"/idev-ext-checks.out; fail "product check script should pass"; }
 grep -q 'product-checks PASS' "${SCRATCH}"/idev-ext-checks.out || { rm -rf "$EXT"; fail "product-checks summary"; }
 rm -rf "$EXT"
 
-SX="${HOME}/.cursor/skills/idev/scripts/stage-extensions.py"
+SX="${KERNEL}/scripts/stage-extensions.py"
 EXTP="$(mktemp -d "${TMPDIR:-/tmp}/idev-extroot.XXXXXX")"
 EXTP="$(cd "$EXTP" && pwd -P)"
 PLAT="$EXTP/platform"
@@ -922,13 +929,13 @@ python3 "$SX" test --repo "$CHILD" --product elasticsearch >"${SCRATCH}"/idev-ex
   || { rm -rf "$EXTP"; cat "${SCRATCH}"/idev-extroot-es.out; fail "child test stage with --product should pass"; }
 grep -q "^OPEN $PLAT/.idev/pack/es.md" "${SCRATCH}"/idev-extroot-es.out \
   || { rm -rf "$EXTP"; cat "${SCRATCH}"/idev-extroot-es.out; fail "--product elasticsearch should open es.md"; }
-python3 "${HOME}/.cursor/skills/idev/scripts/session-context.py" --repo "$CHILD" --scenario S8 --stage test \
+python3 "${KERNEL}/scripts/session-context.py" --repo "$CHILD" --scenario S8 --stage test \
   >"${SCRATCH}"/idev-ctx-marker.out || { rm -rf "$EXTP"; cat "${SCRATCH}"/idev-ctx-marker.out; fail "session-context should pass for marker id"; }
 if grep -q 'es.md' "${SCRATCH}"/idev-ctx-marker.out; then
   rm -rf "$EXTP"
   fail "session-context without --product must not open another product page"
 fi
-python3 "${HOME}/.cursor/skills/idev/scripts/session-context.py" --repo "$CHILD" --scenario S8 --stage test --product elasticsearch \
+python3 "${KERNEL}/scripts/session-context.py" --repo "$CHILD" --scenario S8 --stage test --product elasticsearch \
   >"${SCRATCH}"/idev-ctx-named.out || { rm -rf "$EXTP"; cat "${SCRATCH}"/idev-ctx-named.out; fail "session-context --product should pass"; }
 grep -q "^OPEN $PLAT/.idev/pack/es.md" "${SCRATCH}"/idev-ctx-named.out \
   || { rm -rf "$EXTP"; cat "${SCRATCH}"/idev-ctx-named.out; fail "session-context --product should open es.md"; }
@@ -944,10 +951,10 @@ grep -q 'extension_root must be a relative path' "${SCRATCH}"/idev-extroot-abs.e
 
 mkdir -p "$PLAT/.idev/checks"
 printf '%s\n' '# idev-stages: code' 'exit 1' > "$PLAT/.idev/checks/code-only.sh"
-bash "${HOME}/.cursor/skills/idev/scripts/product-checks.sh" --stage req --repo "$PLAT" >"${SCRATCH}"/idev-extroot-req.out \
+bash "${KERNEL}/scripts/product-checks.sh" --stage req --repo "$PLAT" >"${SCRATCH}"/idev-extroot-req.out \
   || { rm -rf "$EXTP"; cat "${SCRATCH}"/idev-extroot-req.out; fail "code-only check should not run for req"; }
 grep -q 'skipped' "${SCRATCH}"/idev-extroot-req.out || { rm -rf "$EXTP"; cat "${SCRATCH}"/idev-extroot-req.out; fail "req stage should report skipped"; }
-if bash "${HOME}/.cursor/skills/idev/scripts/product-checks.sh" --stage code --repo "$PLAT" >/dev/null 2>&1; then
+if bash "${KERNEL}/scripts/product-checks.sh" --stage code --repo "$PLAT" >/dev/null 2>&1; then
   rm -rf "$EXTP"
   fail "code-only failing check should fail the code stage"
 fi
@@ -958,7 +965,7 @@ mkdir -p "$AUD/miss" "$AUD/hit"
 printf '%s\n' 'scenario: S2' 'feature: demo' 'opened:' '  - deliver/SKILL.md' \
   'extensions:' '  - /repo/.idev/pack/note.md' 'calls:' '  - name: deliver/code' > "$AUD/miss/t1.yaml"
 printf '%s\n' 'scenario: S2' 'feature: demo' 'opened:' '  - deliver/SKILL.md' > "$AUD/miss/t2.yaml"
-python3 "${HOME}/.cursor/skills/idev/scripts/audit_traces_lib.py" "$AUD/miss" 5 >"${SCRATCH}"/idev-audext-miss.out \
+python3 "${KERNEL}/scripts/audit_traces_lib.py" "$AUD/miss" 5 >"${SCRATCH}"/idev-audext-miss.out \
   || { rm -rf "$AUD"; fail "audit_traces_lib should run on the miss dir"; }
 grep -q 'extensions-not-opened' "${SCRATCH}"/idev-audext-miss.out \
   || { rm -rf "$AUD"; cat "${SCRATCH}"/idev-audext-miss.out; fail "unopened extension page should be flagged"; }
@@ -967,7 +974,7 @@ HC="$(sed -n 's/^HARD_COUNT=//p' "${SCRATCH}"/idev-audext-miss.out)"
 printf '%s\n' 'scenario: S2' 'feature: demo' 'opened:' '  - deliver/SKILL.md' '  - /repo/.idev/pack/note.md' \
   'extensions:' '  - /repo/.idev/pack/note.md' 'calls:' '  - name: deliver/code' > "$AUD/hit/t1.yaml"
 printf '%s\n' 'scenario: S2' 'feature: demo' 'opened:' '  - deliver/SKILL.md' 'calls:' '  - name: deliver/code' > "$AUD/hit/t2.yaml"
-python3 "${HOME}/.cursor/skills/idev/scripts/audit_traces_lib.py" "$AUD/hit" 5 >"${SCRATCH}"/idev-audext-hit.out \
+python3 "${KERNEL}/scripts/audit_traces_lib.py" "$AUD/hit" 5 >"${SCRATCH}"/idev-audext-hit.out \
   || { rm -rf "$AUD"; fail "audit_traces_lib should run on the hit dir"; }
 if grep -q 'extensions-not-opened' "${SCRATCH}"/idev-audext-hit.out; then
   rm -rf "$AUD"
@@ -978,12 +985,12 @@ MARK="$(mktemp -d "${TMPDIR:-/tmp}/idev-audmark.XXXXXX")"
 mkdir -p "$MARK/.idev/traces"
 printf '%s\n' 'schema_version: 1' 'marker: idev' 'id: aud' 'evolve: false' > "$MARK/.idev/marker.yaml"
 printf '%s\n' 'scenario: S2' 'feature: demo' 'opened:' '  - deliver/SKILL.md' 'calls:' '  - name: deliver/code' > "$MARK/.idev/traces/bare.yaml"
-python3 "${HOME}/.cursor/skills/idev/scripts/audit_traces_lib.py" "$MARK/.idev/traces" 5 >"${SCRATCH}"/idev-audmark-miss.out \
+python3 "${KERNEL}/scripts/audit_traces_lib.py" "$MARK/.idev/traces" 5 >"${SCRATCH}"/idev-audmark-miss.out \
   || { rm -rf "$MARK"; fail "audit of marked traces should run"; }
 grep -q 'extensions-missing' "${SCRATCH}"/idev-audmark-miss.out \
   || { rm -rf "$MARK"; cat "${SCRATCH}"/idev-audmark-miss.out; fail "marked product trace without extensions should be flagged"; }
 printf '%s\n' 'scenario: S2' 'feature: demo' 'opened:' '  - deliver/SKILL.md' 'extensions: []' 'calls:' '  - name: deliver/code' > "$MARK/.idev/traces/bare.yaml"
-python3 "${HOME}/.cursor/skills/idev/scripts/audit_traces_lib.py" "$MARK/.idev/traces" 5 >"${SCRATCH}"/idev-audmark-empty.out \
+python3 "${KERNEL}/scripts/audit_traces_lib.py" "$MARK/.idev/traces" 5 >"${SCRATCH}"/idev-audmark-empty.out \
   || { rm -rf "$MARK"; fail "audit of empty extensions should run"; }
 if grep -q 'extensions-missing' "${SCRATCH}"/idev-audmark-empty.out; then
   rm -rf "$MARK"
@@ -1000,12 +1007,12 @@ printf '%s\n' 'schema_version: 1' 'id: no-ticket' 'needs_ticket: false' 'summary
   '  - id: run' '    kind: shell.confirmed' '    with:' '      cmd: "true"' > "$S8R/.idev/workflows/no-ticket.yaml"
 printf '%s\n' 'schema_version: 1' 'id: wants-ticket' 'summary: probe' 'steps:' \
   '  - id: run' '    kind: shell.confirmed' '    with:' '      cmd: "true"' > "$S8R/.idev/workflows/wants-ticket.yaml"
-(cd "$S8R" && IDEV_REPO="$S8R" bash "${HOME}/.cursor/skills/idev/scripts/s8-preflight.sh" some-feature no-ticket) \
+(cd "$S8R" && IDEV_REPO="$S8R" bash "${KERNEL}/scripts/s8-preflight.sh" some-feature no-ticket) \
   >"${SCRATCH}"/idev-s8wf-ok.out || { rm -rf "$S8R"; cat "${SCRATCH}"/idev-s8wf-ok.out; fail "needs_ticket: false recipe should pass without docs/task"; }
 grep -q 'RESULT OK' "${SCRATCH}"/idev-s8wf-ok.out || { rm -rf "$S8R"; cat "${SCRATCH}"/idev-s8wf-ok.out; fail "no-ticket preflight should report RESULT OK"; }
 grep -q "OK  recipe $S8R/.idev/workflows/no-ticket.yaml" "${SCRATCH}"/idev-s8wf-ok.out \
   || { rm -rf "$S8R"; cat "${SCRATCH}"/idev-s8wf-ok.out; fail "preflight should pick the product .idev/workflows recipe"; }
-if (cd "$S8R" && IDEV_REPO="$S8R" bash "${HOME}/.cursor/skills/idev/scripts/s8-preflight.sh" some-feature wants-ticket) \
+if (cd "$S8R" && IDEV_REPO="$S8R" bash "${KERNEL}/scripts/s8-preflight.sh" some-feature wants-ticket) \
   >"${SCRATCH}"/idev-s8wf-block.out; then
   rm -rf "$S8R"
   fail "recipe without needs_ticket: false should block without deliver.yaml"
@@ -1016,7 +1023,7 @@ mkdir -p "$S8R/.idev/task/some-feature" "$S8R/.idev/pack"
 printf '%s\n' 'stage: code' > "$S8R/.idev/task/some-feature/deliver.yaml"
 printf '%s\n' 'schema_version: 1' 'stages:' '  code:' '    - pack/note.md' > "$S8R/.idev/extensions.yaml"
 printf '%s\n' note > "$S8R/.idev/pack/note.md"
-(cd "$S8R" && IDEV_REPO="$S8R" bash "${HOME}/.cursor/skills/idev/scripts/s8-preflight.sh" some-feature no-ticket) \
+(cd "$S8R" && IDEV_REPO="$S8R" bash "${KERNEL}/scripts/s8-preflight.sh" some-feature no-ticket) \
   >"${SCRATCH}"/idev-s8wf-stage.out || { rm -rf "$S8R"; cat "${SCRATCH}"/idev-s8wf-stage.out; fail "preflight should list the deliver stage page"; }
 grep -q "^OPEN $S8R/.idev/pack/note.md" "${SCRATCH}"/idev-s8wf-stage.out \
   || { rm -rf "$S8R"; cat "${SCRATCH}"/idev-s8wf-stage.out; fail "S8 preflight should open the code-stage page"; }
@@ -1044,7 +1051,7 @@ steps:
   - id: start
     kind: localdev.start
 YAML
-if (cd "$DEF/child" && IDEV_REPO="$DEF/child" bash "${HOME}/.cursor/skills/idev/scripts/s8-preflight.sh" probe needs-defaults) \
+if (cd "$DEF/child" && IDEV_REPO="$DEF/child" bash "${KERNEL}/scripts/s8-preflight.sh" probe needs-defaults) \
   >"${SCRATCH}"/idev-def-miss.out; then
   rm -rf "$DEF"
   fail "missing workflow-defaults on the extension root should block"
@@ -1056,11 +1063,11 @@ coding_root: "~/src"
 commands:
   start: "./start.sh start {target}"
 YAML
-(cd "$DEF/child" && IDEV_REPO="$DEF/child" bash "${HOME}/.cursor/skills/idev/scripts/s8-preflight.sh" probe needs-defaults) \
+(cd "$DEF/child" && IDEV_REPO="$DEF/child" bash "${KERNEL}/scripts/s8-preflight.sh" probe needs-defaults) \
   >"${SCRATCH}"/idev-def-ok.out || { rm -rf "$DEF"; cat "${SCRATCH}"/idev-def-ok.out; fail "extension-root workflow-defaults should satisfy preflight"; }
 grep -q "OK  defaults $DEF/plat/.idev/workflow-defaults.yaml" "${SCRATCH}"/idev-def-ok.out \
   || { rm -rf "$DEF"; cat "${SCRATCH}"/idev-def-ok.out; fail "preflight should print the extension-root defaults path"; }
-grep -q 'doc_home.py' "${HOME}/.cursor/skills/idev/deliver/SKILL.md" \
+grep -q 'doc_home.py' "${KERNEL}/deliver/SKILL.md" \
   || { rm -rf "$DEF"; fail "deliver must resolve ticket paths with doc_home.py"; }
 rm -rf "$DEF"
 echo "OK  stage extensions"
@@ -1086,7 +1093,7 @@ printf '%s\n' 'status: archived' > "$CLEAN/.idev/proposals/old.md"
 touch -t 202001010000 "$CLEAN/.idev/proposals/old.md"
 printf '%s\n' ticket > "$CLEAN/docs/task/demo/deliver.yaml"
 printf '%s\n' pack > "$CLEAN/.idev/pack/README.md"
-python3 "${HOME}/.cursor/skills/idev/scripts/execution-clean.py" --repo "$CLEAN" --days 30 --keep 1 \
+python3 "${KERNEL}/scripts/execution-clean.py" --repo "$CLEAN" --days 30 --keep 1 \
   >"${SCRATCH}"/idev-clean-dry.out || { rm -rf "$CLEAN"; fail "execution-clean dry-run failed"; }
 grep -q 'DRY traces/old.yaml' "${SCRATCH}"/idev-clean-dry.out || { rm -rf "$CLEAN"; fail "dry-run should list old trace"; }
 grep -q 'DRY inbox/done.yaml' "${SCRATCH}"/idev-clean-dry.out || { rm -rf "$CLEAN"; fail "dry-run should list consumed inbox"; }
@@ -1095,7 +1102,7 @@ if grep -q 'proposals/' "${SCRATCH}"/idev-clean-dry.out; then
   fail "execution-clean must not list proposals"
 fi
 [ -f "$CLEAN/.idev/traces/old.yaml" ] || { rm -rf "$CLEAN"; fail "dry-run deleted a trace"; }
-python3 "${HOME}/.cursor/skills/idev/scripts/execution-clean.py" --repo "$CLEAN" --days 30 --keep 1 --apply \
+python3 "${KERNEL}/scripts/execution-clean.py" --repo "$CLEAN" --days 30 --keep 1 --apply \
   >"${SCRATCH}"/idev-clean-apply.out || { rm -rf "$CLEAN"; fail "execution-clean --apply failed"; }
 [ ! -f "$CLEAN/.idev/traces/old.yaml" ] || { rm -rf "$CLEAN"; fail "old trace should be removed"; }
 [ -f "$CLEAN/.idev/traces/new.yaml" ] || { rm -rf "$CLEAN"; fail "newest trace must stay"; }
@@ -1124,7 +1131,7 @@ printf '%s\n' 'summary: fresh-lesson' > "$COMPACT/.idev/traces/fresh.yaml"
 touch -t 202001010000 "$COMPACT/.idev/traces/stale.yaml"
 printf '%s\n' 'see traces/stale.yaml' > "$COMPACT/.idev/reviews/a.md"
 printf '%s\n' 'see traces/stale.yaml' > "$COMPACT/.idev/reviews/b.md"
-python3 "${HOME}/.cursor/skills/idev/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 \
+python3 "${KERNEL}/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 \
   >"${SCRATCH}"/idev-compact-dry.out || { rm -rf "$COMPACT"; fail "compact dry-run failed"; }
 grep -q 'FOLD traces/stale.yaml' "${SCRATCH}"/idev-compact-dry.out || { rm -rf "$COMPACT"; cat "${SCRATCH}"/idev-compact-dry.out; fail "dry-run should fold the cited trace"; }
 if grep -q 'FOLD traces/fresh.yaml' "${SCRATCH}"/idev-compact-dry.out; then
@@ -1133,7 +1140,7 @@ if grep -q 'FOLD traces/fresh.yaml' "${SCRATCH}"/idev-compact-dry.out; then
 fi
 [ -f "$COMPACT/.idev/traces/stale.yaml" ] || { rm -rf "$COMPACT"; fail "dry-run deleted a trace"; }
 [ ! -f "$COMPACT/.idev/memory.md" ] || { rm -rf "$COMPACT"; fail "dry-run wrote memory.md"; }
-python3 "${HOME}/.cursor/skills/idev/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 --apply \
+python3 "${KERNEL}/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 --apply \
   >"${SCRATCH}"/idev-compact-cite.out || { rm -rf "$COMPACT"; fail "compact cite apply failed"; }
 [ ! -f "$COMPACT/.idev/traces/stale.yaml" ] || { rm -rf "$COMPACT"; fail "cited trace should be removed"; }
 [ -f "$COMPACT/.idev/traces/fresh.yaml" ] || { rm -rf "$COMPACT"; fail "hot trace must stay after cite compact"; }
@@ -1144,13 +1151,13 @@ touch -t 202001010000 "$COMPACT/.idev/traces/aged.yaml"
 printf '%s\n' 'summary: keep-lesson' > "$COMPACT/.idev/traces/keep.yaml"
 printf '%s\n' 'status: archived' 'summary: closed-lesson' > "$COMPACT/.idev/proposals/closed.md"
 printf '%s\n' 'status: pending' 'summary: open-lesson' > "$COMPACT/.idev/proposals/open.md"
-python3 "${HOME}/.cursor/skills/idev/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 --apply --bump \
+python3 "${KERNEL}/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 --apply --bump \
   >"${SCRATCH}"/idev-compact-g1.out || { rm -rf "$COMPACT"; fail "bump 1 failed"; }
-python3 "${HOME}/.cursor/skills/idev/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 --apply --bump \
+python3 "${KERNEL}/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 --apply --bump \
   >"${SCRATCH}"/idev-compact-g2.out || { rm -rf "$COMPACT"; fail "bump 2 failed"; }
 [ -f "$COMPACT/.idev/traces/aged.yaml" ] || { rm -rf "$COMPACT"; fail "generation 2 must not delete yet"; }
 [ -f "$COMPACT/.idev/proposals/closed.md" ] || { rm -rf "$COMPACT"; fail "closed proposal must wait for generation 3"; }
-python3 "${HOME}/.cursor/skills/idev/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 --apply --bump \
+python3 "${KERNEL}/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 --apply --bump \
   >"${SCRATCH}"/idev-compact-g3.out || { rm -rf "$COMPACT"; fail "bump 3 failed"; }
 [ ! -f "$COMPACT/.idev/traces/aged.yaml" ] || { rm -rf "$COMPACT"; fail "aged trace should fold at generation 3"; }
 [ ! -f "$COMPACT/.idev/proposals/closed.md" ] || { rm -rf "$COMPACT"; fail "closed proposal should fold at generation 3"; }
@@ -1161,7 +1168,7 @@ grep -q 'closed-lesson' "$COMPACT/.idev/memory.md" || { rm -rf "$COMPACT"; fail 
 printf '%s\n' 'summary: once-lesson' > "$COMPACT/.idev/traces/once.yaml"
 touch -t 202001010000 "$COMPACT/.idev/traces/once.yaml"
 printf '%s\n' 'see traces/once.yaml' > "$COMPACT/.idev/reviews/once.md"
-python3 "${HOME}/.cursor/skills/idev/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 --apply \
+python3 "${KERNEL}/scripts/execution-clean.py" --repo "$COMPACT" --compact --hot 1 --apply \
   >"${SCRATCH}"/idev-compact-once.out || { rm -rf "$COMPACT"; fail "single cite compact failed"; }
 grep -q 'compact SKIP' "${SCRATCH}"/idev-compact-once.out || { rm -rf "$COMPACT"; cat "${SCRATCH}"/idev-compact-once.out; fail "one citation must not compact"; }
 [ -f "$COMPACT/.idev/traces/once.yaml" ] || { rm -rf "$COMPACT"; fail "one citation must keep the trace"; }
@@ -1174,20 +1181,20 @@ echo "OK  compact memory"
 
 echo "=== lock: ui/localdev kinds stay, product recipe pages stay out ==="
 for f in \
-  "${HOME}/.cursor/skills/idev/scripts/ui-surface-scan.py" \
-  "${HOME}/.cursor/skills/idev/scripts/ui-coverage-check.py"
+  "${KERNEL}/scripts/ui-surface-scan.py" \
+  "${KERNEL}/scripts/ui-coverage-check.py"
 do
   [ -e "$f" ] || fail "missing $f"
 done
 for page in workflow-ui-lifecycle workflow-ui-playbook workflow-localdev; do
-  if [ -e "${HOME}/.cursor/skills/idev/references/${page}.md" ]; then
+  if [ -e "${KERNEL}/references/${page}.md" ]; then
     fail "product recipe page ${page}.md still sits in the idev kernel"
   fi
 done
 if rg -n 'ui-automation-build|ui-lifecycle-full|localdev-st(art|op)|multi-agent-coord' \
-  "${HOME}/.cursor/skills/idev/SKILL.md" "${HOME}/.cursor/skills/idev/references" \
-  "${HOME}/.cursor/skills/idev/conventions" "${HOME}/.cursor/skills/idev/deliver" \
-  "${HOME}/.cursor/skills/idev/verify" "${HOME}/.cursor/skills/idev/ops" \
+  "${KERNEL}/SKILL.md" "${KERNEL}/references" \
+  "${KERNEL}/conventions" "${KERNEL}/deliver" \
+  "${KERNEL}/verify" "${KERNEL}/ops" \
   --glob '!changelog.md'; then
   fail "kernel pages name a product recipe id"
 fi
@@ -1202,14 +1209,14 @@ printf '%s\n' 'marker: idev' 'id: demo' 'evolve: off' > "$RDOC/.idev/marker.yaml
 printf '%s\n' 'schema_version: 1' 'id: demo-run' 'needs_ticket: false' 'doc: pack/run.md' \
   'steps:' '  - {id: g, kind: human.gate, with: {will_write: []}}' > "$RDOC/.idev/workflows/demo-run.yaml"
 printf 'how to run\n' > "$RDOC/.idev/pack/run.md"
-python3 "${ROOT}/workflow-check.py" --recipes-dir "${HOME}/.cursor/skills/idev/workflows" \
+python3 "${ROOT}/workflow-check.py" --recipes-dir "${KERNEL}/workflows" \
   --product-recipes "$RDOC/.idev/workflows" >/dev/null || { rm -rf "$RDOC"; fail "recipe with an existing doc should pass workflow-check"; }
 python3 "${ROOT}/session-context.py" --repo "$RDOC" --scenario S8 --workflow demo-run >"${SCRATCH}"/idev-recipe-doc.out \
   || { cat "${SCRATCH}"/idev-recipe-doc.out; rm -rf "$RDOC"; fail "session-context should pass with a recipe doc"; }
 grep -q "^OPEN $RDOC/.idev/pack/run.md" "${SCRATCH}"/idev-recipe-doc.out \
   || { cat "${SCRATCH}"/idev-recipe-doc.out; rm -rf "$RDOC"; fail "session-context should OPEN the recipe doc"; }
 rm "$RDOC/.idev/pack/run.md"
-if python3 "${ROOT}/workflow-check.py" --recipes-dir "${HOME}/.cursor/skills/idev/workflows" \
+if python3 "${ROOT}/workflow-check.py" --recipes-dir "${KERNEL}/workflows" \
   --product-recipes "$RDOC/.idev/workflows" >/dev/null 2>&1; then
   rm -rf "$RDOC"; fail "missing recipe doc should fail workflow-check"
 fi
@@ -1221,18 +1228,18 @@ echo "OK  recipe doc"
 
 echo "=== lock: self-evolution scripts + workflow ==="
 for f in \
-  "${HOME}/.cursor/skills/idev/references/self-evolution.md" \
-  "${HOME}/.cursor/skills/idev/scripts/evolve-review.sh" \
-  "${HOME}/.cursor/skills/idev/scripts/evolve-curator.sh" \
-  "${HOME}/.cursor/skills/idev/scripts/install-weekly-evolve.sh" \
-  "${HOME}/.cursor/skills/idev/workflows/self-evolve-review.yaml"
+  "${KERNEL}/references/self-evolution.md" \
+  "${KERNEL}/scripts/evolve-review.sh" \
+  "${KERNEL}/scripts/evolve-curator.sh" \
+  "${KERNEL}/scripts/install-weekly-evolve.sh" \
+  "${KERNEL}/workflows/self-evolve-review.yaml"
 do
   [ -e "$f" ] || fail "missing $f"
 done
-[ -x "${HOME}/.cursor/skills/idev/scripts/evolve-review.sh" ] || fail "evolve-review.sh not executable"
-[ -x "${HOME}/.cursor/skills/idev/scripts/evolve-curator.sh" ] || fail "evolve-curator.sh not executable"
+[ -x "${KERNEL}/scripts/evolve-review.sh" ] || fail "evolve-review.sh not executable"
+[ -x "${KERNEL}/scripts/evolve-curator.sh" ] || fail "evolve-curator.sh not executable"
 # dry-run must not fail
-bash "${HOME}/.cursor/skills/idev/scripts/evolve-review.sh" --dry-run >"${SCRATCH}"/idev-evolve-dry.out 2>&1 \
+bash "${KERNEL}/scripts/evolve-review.sh" --dry-run >"${SCRATCH}"/idev-evolve-dry.out 2>&1 \
   || fail "evolve-review --dry-run failed"
 grep -q 'DRY-RUN\|signal=' "${SCRATCH}"/idev-evolve-dry.out || fail "evolve-review dry-run unexpected output"
 # with consumed inbox and no HARD, signal must be 0 (reviews soft-only).
@@ -1244,17 +1251,17 @@ if grep -q 'HARD_COUNT=0' "${SCRATCH}"/idev-evolve-dry.out \
   && grep -q 'stale_proposals=0' "${SCRATCH}"/idev-evolve-dry.out; then
   grep -q 'signal=0' "${SCRATCH}"/idev-evolve-dry.out || fail "expected signal=0 when HARD=0, no hot tags and no stale drafts"
 fi
-bash "${HOME}/.cursor/skills/idev/scripts/evolve-curator.sh" --days 30 >"${SCRATCH}"/idev-curator.out 2>&1 \
+bash "${KERNEL}/scripts/evolve-curator.sh" --days 30 >"${SCRATCH}"/idev-curator.out 2>&1 \
   || fail "evolve-curator failed"
 grep -q 'evolve-curator' "${SCRATCH}"/idev-curator.out || fail "evolve-curator missing header"
 # docs must refuse auto-land language
 if ! rg -q '不自动 land|绝不.*改 SKILL|未确认改 Skill' \
-  "${HOME}/.cursor/skills/idev/references/self-evolution.md"; then
+  "${KERNEL}/references/self-evolution.md"; then
   fail "self-evolution.md missing no-auto-land guard"
 fi
 if ! rg -q 'self-evolve-review' \
-  "${HOME}/.cursor/skills/idev/references/invoke.md" \
-  "${HOME}/.cursor/skills/idev/references/operator-cheatsheet.md"; then
+  "${KERNEL}/references/invoke.md" \
+  "${KERNEL}/references/operator-cheatsheet.md"; then
   fail "invoke/cheatsheet missing self-evolve-review pointer"
 fi
 echo "OK  self-evolution lock"
@@ -1494,15 +1501,15 @@ PLURAL="$(cd "$PLURAL" && pwd -P)"
 mkdir -p "$PLURAL/docs/agents"
 printf '%s\n' 'docs/prd/<feature>.md' '规格目录是 docs/specs/，不是技能模板里的 docs/spec/' 'docs/task/<feature>/' \
   'questions follow grilling' > "$PLURAL/docs/agents/issue-tracker.md"
-NEW_SPEC="$(python3 "${HOME}/.cursor/skills/idev/scripts/lib/doc_home.py" --repo "$PLURAL" --feature fresh --key spec)"
+NEW_SPEC="$(python3 "${KERNEL}/scripts/lib/doc_home.py" --repo "$PLURAL" --feature fresh --key spec)"
 [ "$NEW_SPEC" = "$PLURAL/docs/specs/fresh.md" ] || { echo "$NEW_SPEC"; rm -rf "$PLURAL"; fail "declared docs/specs should hold new specs"; }
 mkdir -p "$PLURAL/docs/spec" "$PLURAL/docs/specs"
 printf 'plural line\n' > "$PLURAL/docs/specs/dup.md"
 printf 'singular only line\n' > "$PLURAL/docs/spec/dup.md"
-python3 - "$PLURAL" <<'PY' || { rm -rf "$PLURAL"; fail "reconcile should fold into docs/specs"; }
+python3 - "$PLURAL" "${ROOT}/lib" <<'PY' || { rm -rf "$PLURAL"; fail "reconcile should fold into docs/specs"; }
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path.home() / ".cursor/skills/idev/scripts/lib"))
+sys.path.insert(0, sys.argv[2])
 from doc_home import reconcile_spec
 repo = Path(sys.argv[1])
 kept = reconcile_spec(repo, "dup", "product")
@@ -1517,12 +1524,12 @@ echo "OK  declared spec directory"
 echo "=== lock: doc home follows mattpocock and grilling ==="
 DOC="$(mktemp -d "${TMPDIR:-/tmp}/idev-doc.XXXXXX")"
 DOC="$(cd "$DOC" && pwd -P)"
-TASK="$(python3 "${HOME}/.cursor/skills/idev/scripts/lib/doc_home.py" --repo "$DOC" --feature demo --key task)"
+TASK="$(python3 "${KERNEL}/scripts/lib/doc_home.py" --repo "$DOC" --feature demo --key task)"
 case "$TASK" in
   "$DOC/.idev/task/demo") ;;
   *) rm -rf "$DOC"; echo "$TASK"; fail "a repo without mattpocock and grilling docs should use .idev/task" ;;
 esac
-SPEC="$(python3 "${HOME}/.cursor/skills/idev/scripts/lib/doc_home.py" --repo "$DOC" --feature demo --key spec)"
+SPEC="$(python3 "${KERNEL}/scripts/lib/doc_home.py" --repo "$DOC" --feature demo --key spec)"
 case "$SPEC" in
   "$DOC/.idev/docs/spec/demo.md") ;;
   *) rm -rf "$DOC"; echo "$SPEC"; fail "idev spec path without product docs" ;;
@@ -1530,20 +1537,20 @@ esac
 mkdir -p "$DOC/docs/agents"
 printf '%s\n' 'docs/prd/<feature>.md' 'docs/spec/<feature>.md' 'docs/task/<feature>/' \
   > "$DOC/docs/agents/issue-tracker.md"
-MATT_ONLY="$(python3 "${HOME}/.cursor/skills/idev/scripts/lib/doc_home.py" --repo "$DOC" --feature matt-only --key task)"
+MATT_ONLY="$(python3 "${KERNEL}/scripts/lib/doc_home.py" --repo "$DOC" --feature matt-only --key task)"
 case "$MATT_ONLY" in
   "$DOC/.idev/task/matt-only") ;;
   *) rm -rf "$DOC"; echo "$MATT_ONLY"; fail "mattpocock paths without grilling should stay under .idev" ;;
 esac
 printf '%s\n' 'questions follow grilling' >> "$DOC/docs/agents/issue-tracker.md"
-PLACED="$(python3 "${HOME}/.cursor/skills/idev/scripts/lib/doc_home.py" --repo "$DOC" --feature placed --key task)"
+PLACED="$(python3 "${KERNEL}/scripts/lib/doc_home.py" --repo "$DOC" --feature placed --key task)"
 case "$PLACED" in
   "$DOC/docs/task/placed") ;;
   *) rm -rf "$DOC"; echo "$PLACED"; fail "mattpocock and grilling docs should use docs/task" ;;
 esac
 mkdir -p "$DOC/.idev/task/kept"
 printf '%s\n' 'stage: req-review' > "$DOC/.idev/task/kept/deliver.yaml"
-KEPT="$(python3 "${HOME}/.cursor/skills/idev/scripts/lib/doc_home.py" --repo "$DOC" --feature kept --key deliver)"
+KEPT="$(python3 "${KERNEL}/scripts/lib/doc_home.py" --repo "$DOC" --feature kept --key deliver)"
 case "$KEPT" in
   "$DOC/.idev/task/kept/deliver.yaml") ;;
   *) rm -rf "$DOC"; echo "$KEPT"; fail "an existing .idev ticket stays there" ;;
@@ -1553,8 +1560,8 @@ printf '%s\n' 'stage: from-docs' > "$DOC/docs/task/both/deliver.yaml"
 printf '%s\n' 'stage: from-idev' > "$DOC/.idev/task/both/deliver.yaml"
 printf '%s\n' 'normative spec' > "$DOC/docs/spec/both.md"
 printf '%s\n' 'idev copy' > "$DOC/.idev/docs/spec/both.md"
-BOTH_DELIVER="$(python3 "${HOME}/.cursor/skills/idev/scripts/lib/doc_home.py" --repo "$DOC" --feature both --key deliver)"
-BOTH_SPEC="$(python3 "${HOME}/.cursor/skills/idev/scripts/lib/doc_home.py" --repo "$DOC" --feature both --key spec)"
+BOTH_DELIVER="$(python3 "${KERNEL}/scripts/lib/doc_home.py" --repo "$DOC" --feature both --key deliver)"
+BOTH_SPEC="$(python3 "${KERNEL}/scripts/lib/doc_home.py" --repo "$DOC" --feature both --key spec)"
 case "$BOTH_DELIVER" in
   "$DOC/docs/task/both/deliver.yaml") ;;
   *) rm -rf "$DOC"; echo "$BOTH_DELIVER"; fail "normative deliver.yaml should win" ;;
@@ -1591,37 +1598,37 @@ EOF
 rm -rf "$DOC/docs"
 mkdir -p "$DOC/.idev/docs/spec"
 printf '%s\n' 'restates the sealed baseline' > "$DOC/.idev/docs/spec/native-demo.md"
-python3 "${HOME}/.cursor/skills/idev/scripts/check-feature.py" --repo "$DOC" --feature native-demo --stage req-review \
+python3 "${KERNEL}/scripts/check-feature.py" --repo "$DOC" --feature native-demo --stage req-review \
   >"${SCRATCH}"/idev-doc-native.out || { rm -rf "$DOC"; cat "${SCRATCH}"/idev-doc-native.out; fail "native .idev ticket should pass req-review"; }
 echo "=== lock: docs skill is the delivery entry ==="
-DOC_SKILL="${HOME}/.cursor/skills/idev/docs/SKILL.md"
+DOC_SKILL="${KERNEL}/docs/SKILL.md"
 test -f "$DOC_SKILL" || fail "missing docs/SKILL.md"
 grep -q 'setup-agents-docs/SKILL.md' "$DOC_SKILL" || fail "docs skill must open setup-agents-docs"
 grep -q 'grilling/SKILL.md' "$DOC_SKILL" || fail "docs skill must open grilling"
 grep -q 'doc_home.py' "$DOC_SKILL" || fail "docs skill must resolve paths with doc_home"
 for m in conventions deliver verify ops docs; do
-  head -4 "${HOME}/.cursor/skills/idev/${m}/SKILL.md" | grep -q '^parent: idev$' \
+  head -4 "${KERNEL}/${m}/SKILL.md" | grep -q '^parent: idev$' \
     || fail "${m}/SKILL.md must be an idev module (parent: idev)"
-  if head -6 "${HOME}/.cursor/skills/idev/${m}/SKILL.md" | grep -q '^name:'; then
+  if head -6 "${KERNEL}/${m}/SKILL.md" | grep -q '^name:'; then
     fail "${m}/SKILL.md must not declare a top-level skill name"
   fi
 done
-grep -q 'docs/SKILL.md' "${HOME}/.cursor/skills/idev/SKILL.md" || fail "idev entry must open the docs skill"
-grep -q 'setup-agents-docs' "${HOME}/.cursor/skills/idev/scripts/link-companion-skills.sh" \
+grep -q 'docs/SKILL.md' "${KERNEL}/SKILL.md" || fail "idev entry must open the docs skill"
+grep -q 'setup-agents-docs' "${KERNEL}/scripts/link-companion-skills.sh" \
   || fail "companion linker must include setup-agents-docs"
-grep -q 'docs/SKILL.md' "${HOME}/.cursor/skills/idev/conventions/docs.md" \
+grep -q 'docs/SKILL.md' "${KERNEL}/conventions/docs.md" \
   || fail "conventions/docs.md must point at the docs skill"
-if grep -q '本页是 idev 的文件规范' "${HOME}/.cursor/skills/idev/conventions/docs.md"; then
+if grep -q '本页是 idev 的文件规范' "${KERNEL}/conventions/docs.md"; then
   fail "conventions/docs.md must not invent a second file convention"
 fi
-bash "${HOME}/.cursor/skills/idev/scripts/link-companion-skills.sh" setup-agents-docs \
+bash "${KERNEL}/scripts/link-companion-skills.sh" setup-agents-docs \
   >"${SCRATCH}"/idev-docs-link.out || { cat "${SCRATCH}"/idev-docs-link.out; fail "setup-agents-docs companion link"; }
 grep -q 'link-companion-skills PASS' "${SCRATCH}"/idev-docs-link.out || fail "docs companion link did not pass"
 rm -rf "$DOC"
 echo "OK  doc home"
 
 echo "=== lock: healthcheck counts smoke WARN and does not nest path-view ==="
-IDEV_ROOT="${HOME}/.cursor/skills/idev" python3 - <<'PY'
+IDEV_ROOT="${KERNEL}" python3 - <<'PY'
 import os
 from pathlib import Path
 root = Path(os.environ["IDEV_ROOT"])
@@ -1654,7 +1661,7 @@ print("OK  healthcheck structure")
 PY
 
 echo "=== lock: scripts with a shebang are executable ==="
-for s in "${HOME}/.cursor/skills/idev/scripts/"*.sh "${HOME}/.cursor/skills/idev/scripts/"*.py; do
+for s in "${KERNEL}/scripts/"*.sh "${KERNEL}/scripts/"*.py; do
   head -1 "$s" | grep -q '^#!' || continue
   [ -x "$s" ] || fail "script has a shebang but is not executable: ${s##*/idev/}"
 done
@@ -1664,7 +1671,7 @@ echo "=== lock: published tree keeps no run residue or real home paths ==="
 # Proposal 20261027 §6. Traces, reviews, promptfoo, proposals, lessons and the
 # verify target stay on disk for audits; they must not be in the published tree.
 # /Users/alice, /Users/x and /Users/USER in design/ and testdata are placeholders.
-IDEV_ROOT_LOCK="${HOME}/.cursor/skills/idev"
+IDEV_ROOT_LOCK="${KERNEL}"
 residue="$(git -C "${IDEV_ROOT_LOCK}" ls-files -- \
   'verify/target/' 'state/traces/' 'state/reviews/' 'state/promptfoo/' \
   'state/proposals/' 'state/lessons/' 'state/lessons.yaml' 'state/ledger.yaml' \
@@ -1681,28 +1688,28 @@ fi
 echo "OK  published tree has no run residue"
 
 echo "=== lock: kernel pages do not invent doc dirs or module ledgers ==="
-if rg -q 'docs/debt' "${HOME}/.cursor/skills/idev/conventions/evidence.md"; then
+if rg -q 'docs/debt' "${KERNEL}/conventions/evidence.md"; then
   fail "evidence.md must not name docs/debt; setup-agents-docs Rule 10 has no such directory"
 fi
-if rg -q 'verify/state/ledger\.yaml|模块实验台账' "${HOME}/.cursor/skills/idev/verify/references/evolve.md"; then
+if rg -q 'verify/state/ledger\.yaml|模块实验台账' "${KERNEL}/verify/references/evolve.md"; then
   fail "evolve.md must not imply module-level ledgers"
 fi
 echo "OK  doc dirs and ledgers"
 
 echo "=== lock: unbound tickets count only outside the kernel ==="
-[ ! -e "${HOME}/.cursor/skills/idev/scripts/pin-summary-check.sh" ] || fail "pin-summary-check.sh must stay deleted"
+[ ! -e "${KERNEL}/scripts/pin-summary-check.sh" ] || fail "pin-summary-check.sh must stay deleted"
 UB="$(mktemp -d)"
 mkdir -p "$UB/.idev/traces"
 printf 'scenario: S8\nfeature: "-"\ncalls:\n  - name: deliver/SKILL.md\n' > "$UB/.idev/traces/t.yaml"
-python3 "${HOME}/.cursor/skills/idev/scripts/audit_traces_lib.py" "$UB/.idev/traces" 5 | grep -q '^| `feature: -` 未绑票 | 1 ' \
+python3 "${KERNEL}/scripts/audit_traces_lib.py" "$UB/.idev/traces" 5 | grep -q '^| `feature: -` 未绑票 | 1 ' \
   || { rm -rf "$UB"; fail "product trace with feature - must count as unbound"; }
 rm -rf "$UB"
-python3 "${HOME}/.cursor/skills/idev/scripts/audit_traces_lib.py" "${HOME}/.cursor/skills/idev/state/traces" 50 | grep -q '^| `feature: -` 未绑票 | 0 ' \
+python3 "${KERNEL}/scripts/audit_traces_lib.py" "${KERNEL}/state/traces" 50 | grep -q '^| `feature: -` 未绑票 | 0 ' \
   || fail "kernel conductor traces must not count as unbound"
 echo "OK  unbound scope"
 
 echo "=== lock: workflow syntax, checker and driver agree ==="
-python3 - "${HOME}/.cursor/skills/idev" <<'PY' || fail "workflow-schema.md kind table differs from workflow_spec.KINDS"
+python3 - "${KERNEL}" <<'PY' || fail "workflow-schema.md kind table differs from workflow_spec.KINDS"
 import re, sys
 from pathlib import Path
 root = Path(sys.argv[1])
@@ -1717,16 +1724,16 @@ if doc != set(KINDS) or forbid != FORBIDDEN:
 PY
 WFT="$(mktemp -d)"
 printf '%s\n' 'schema_version: 1' 'id: bad' 'summary: x' 'surprise: 1' 'steps:' '  - {id: a, kind: human.gate, with: {will_write: []}}' > "$WFT/bad.yaml"
-python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WFT/bad.yaml" >/dev/null 2>&1 \
+python3 "${KERNEL}/scripts/workflow-check.py" "$WFT/bad.yaml" >/dev/null 2>&1 \
   && { rm -rf "$WFT"; fail "workflow-check must reject an unknown top-level field"; }
 printf '%s\n' 'schema_version: 1' 'id: nogate' 'summary: x' 'steps:' '  - {id: a, kind: human.gate, label: 人确认}' > "$WFT/nogate.yaml"
-gate_out="$(python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WFT/nogate.yaml" 2>&1 || true)"
+gate_out="$(python3 "${KERNEL}/scripts/workflow-check.py" "$WFT/nogate.yaml" 2>&1 || true)"
 [[ "$gate_out" == *"needs with.will_write"* ]] \
   || { rm -rf "$WFT"; fail "workflow-check must reject a human.gate without will_write or 将代写"; }
 (
   export IDEV_ENGINE=python
   export IDEV_AGENT_FEEDBACK=off
-  unset IDEV_BIN
+  export IDEV_BIN=off
   export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
   cd "$WFT" && git init -q && mkdir -p .idev/task/demo .idev/workflows
   printf 'people:\n  - tester\n' > .idev/people.yaml
@@ -1735,7 +1742,7 @@ gate_out="$(python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WF
   printf '%s\n' 'schema_version: 1' 'id: demo-flow' 'summary: x' 'params:' '  - {name: feature, required: true, from: user}' \
     'steps:' '  - {id: a, kind: deliver.code_pass}' '  - {id: g, kind: human.gate, label: "将代写: x"}' '  - {id: r, kind: verify.run}' \
     > .idev/workflows/demo-flow.yaml
-  W="${HOME}/.cursor/skills/idev/scripts/workflow.py"
+  W="${KERNEL}/scripts/workflow.py"
   "$W" start demo-flow >/dev/null 2>&1 && exit 11
   "$W" start demo-flow --feature demo | grep -q '^NEXT a ' || exit 12
   "$W" record g PASS --feature demo >/dev/null 2>&1 && exit 13
@@ -1744,10 +1751,11 @@ gate_out="$(python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WF
   : > r.md
   "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null 2>&1 && exit 142
   printf 'reviewed\n' > r.md
-  DEL="$(python3 "${HOME}/.cursor/skills/idev/scripts/delegation.py" dir --feature demo)" || exit 140
+  DEL="$(python3 "${KERNEL}/scripts/delegation.py" dir --feature demo)" || exit 140
   mkdir -p "$DEL"
   printf '%s\n' 'step: a' 'attempt: 1' 'kind: deliver.code_pass' 'agent: idev-coder' 'report:' \
-    '  raw: "STATUS: PASS\nEVIDENCE: r.md\n"' > "$DEL/a-1.yaml"
+    '  raw: "STATUS: PASS\nEVIDENCE: r.md\nFACTS: codegraph src/app.py:main and git diff\nDOC_DRIFT: none\nASSUMED: none\nSCOPE: src/app.py:main\nCHANGE_KIND: local\nCANON_TRIGGER: none\nTABLE_HIT: none\n"' \
+    > "$DEL/a-1.yaml"
   "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null 2>&1 && exit 143
   printf '%s\n' 'step: review' 'attempt: 1' 'kind: review.report' 'agent: idev-reviewer' 'report:' \
     '  raw: "STATUS: PASS\nEVIDENCE: r.md\n"' > "$DEL/review-1.yaml"
@@ -1758,7 +1766,7 @@ gate_out="$(python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WF
   "$W" record r FAIL --feature demo >/dev/null || exit 18
   "$W" start demo-flow --feature demo >/dev/null 2>&1 && exit 19
   "$W" record r PASS --feature demo | grep -q '^RUN DONE' || exit 20
-  python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" --run .idev/task/demo/workflow/run.yaml >/dev/null || exit 21
+  python3 "${KERNEL}/scripts/workflow-check.py" --run .idev/task/demo/workflow/run.yaml >/dev/null || exit 21
   grep -q 'FAIL -> PASS' .idev/task/demo/workflow/report.md || exit 22
 ) || { code=$?; rm -rf "$WFT"; fail "workflow.py driver rule broke (case $code)"; }
 rm -rf "$WFT"
@@ -1770,24 +1778,24 @@ WFU="$(mktemp -d)"
   printf '%s\n' 'schema_version: 1' 'id: demo-auto' 'summary: x' 'params:' '  - {name: feature, required: true, from: user}' \
     'steps:' '  - {id: g, kind: human.gate, label: "将代写: x", with: {auto_tiers: [P1, P2]}}' '  - {id: r, kind: verify.run}' \
     > .idev/workflows/demo-auto.yaml
-  W="${HOME}/.cursor/skills/idev/scripts/workflow.py"
+  W="${KERNEL}/scripts/workflow.py"
   out="$("$W" start demo-auto --feature demo 2>&1)" && exit 31
   printf '%s\n' "$out" | grep -q 'auto_tiers needs a gate a machine check can pass' || exit 32
 ) || { code=$?; rm -rf "$WFU"; fail "workflow.py AUTO gate broke (case $code)"; }
 rm -rf "$WFU"
-python3 "${HOME}/.cursor/skills/idev/scripts/test_auto_gate.py" >/dev/null 2>&1 \
+python3 "${KERNEL}/scripts/test_auto_gate.py" >/dev/null 2>&1 \
   || fail "record AUTO passed a gate on something other than the check it ran (python3 scripts/test_auto_gate.py)"
-python3 "${HOME}/.cursor/skills/idev/scripts/test_hooks.py" >/dev/null 2>&1 \
+python3 "${KERNEL}/scripts/test_hooks.py" >/dev/null 2>&1 \
   || fail "client hooks install or the four oversteps broke (python3 scripts/test_hooks.py)"
 # Fixture: missing log → 100%. Live ~/.idev is not consulted (may predate §4).
 IDEV_DATA="$(mktemp -d "${TMPDIR:-/tmp}/idev-timing.XXXXXX")" \
-  python3 "${HOME}/.cursor/skills/idev/hooks/timing_coverage.py" >/dev/null 2>&1 \
+  python3 "${KERNEL}/hooks/timing_coverage.py" >/dev/null 2>&1 \
   || fail "subagent-stops timing coverage lock broke (hooks/timing_coverage.py)"
-python3 "${HOME}/.cursor/skills/idev/scripts/test_delegation_return.py" >/dev/null 2>&1 \
+python3 "${KERNEL}/scripts/test_delegation_return.py" >/dev/null 2>&1 \
   || fail "structured delegation-return schema check broke (python3 scripts/test_delegation_return.py)"
-python3 "${HOME}/.cursor/skills/idev/scripts/test_outcome_metrics.py" >/dev/null 2>&1 \
+python3 "${KERNEL}/scripts/test_outcome_metrics.py" >/dev/null 2>&1 \
   || fail "outcome-metrics WIP/rework counts broke (python3 scripts/test_outcome_metrics.py)"
-python3 "${HOME}/.cursor/skills/idev/scripts/test_phase2.py" >/dev/null 2>&1 \
+python3 "${KERNEL}/scripts/test_phase2.py" >/dev/null 2>&1 \
   || fail "phase 2 retain/eval/usage/budget broke (python3 scripts/test_phase2.py)"
 WFA="$(mktemp -d)"
 (
@@ -1797,19 +1805,19 @@ WFA="$(mktemp -d)"
   printf 'schema_version: 1\nmarker: idev\nid: sess\nevolve: false\nextension_root: ../ext\n' > sess/.idev/marker.yaml
   printf 'schema_version: 1\nmarker: idev\nid: p\nevolve: false\n' > p/.idev/marker.yaml
   printf '%s\n' 'schema_version: 1' 'id: broken' 'summary: x' 'steps:' '  - {id: a, kind: no.such.kind}' > ext/.idev/workflows/broken.yaml
-  (cd sess && bash "${HOME}/.cursor/skills/idev/scripts/workflow-check.sh" >/dev/null 2>&1) && exit 31
+  (cd sess && bash "${KERNEL}/scripts/workflow-check.sh" >/dev/null 2>&1) && exit 31
   for id in one two; do
     printf '%s\n' 'schema_version: 1' "id: $id" 'aliases: ["起服务"]' 'summary: x' 'steps:' '  - {id: a, kind: human.gate, with: {will_write: []}}' > "p/.idev/workflows/$id.yaml"
   done
-  (cd p && bash "${HOME}/.cursor/skills/idev/scripts/workflow-check.sh" >/dev/null 2>&1) && exit 32
+  (cd p && bash "${KERNEL}/scripts/workflow-check.sh" >/dev/null 2>&1) && exit 32
   rm p/.idev/workflows/two.yaml
-  cp "${HOME}/.cursor/skills/idev/workflows/path-view.yaml" p/.idev/workflows/
-  (cd p && bash "${HOME}/.cursor/skills/idev/scripts/workflow-check.sh" >/dev/null) || exit 33
+  cp "${KERNEL}/workflows/path-view.yaml" p/.idev/workflows/
+  (cd p && bash "${KERNEL}/scripts/workflow-check.sh" >/dev/null) || exit 33
   mkdir -p p/.idev/task/demo && printf 'stage: code\n' > p/.idev/task/demo/deliver.yaml
-  (cd p && "${HOME}/.cursor/skills/idev/scripts/workflow.py" start dev-selftest --feature demo >/dev/null) || exit 34
+  (cd p && "${KERNEL}/scripts/workflow.py" start dev-selftest --feature demo >/dev/null) || exit 34
   R=p/.idev/task/demo/workflow/run.yaml
   python3 -c "import sys,yaml;p=sys.argv[1];d=yaml.safe_load(open(p));d['steps'].pop(1);yaml.safe_dump(d,open(p,'w'),allow_unicode=True)" "$R"
-  python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" --run "$R" >/dev/null 2>&1 && exit 35
+  python3 "${KERNEL}/scripts/workflow-check.py" --run "$R" >/dev/null 2>&1 && exit 35
   exit 0
 ) || { code=$?; rm -rf "$WFA"; fail "workflow-check alignment broke (case $code)"; }
 rm -rf "$WFA"
@@ -1820,36 +1828,52 @@ echo "=== lock: the kind table has one source and the copies are current ==="
 # (two Python tables, one JSON enum, two prose tables). A stale copy is how
 # the old five-way duplication came back, so check it here rather than
 # trusting whoever added the kind to have run the generator.
-python3 "${HOME}/.cursor/skills/idev/scripts/gen-kinds.py" --check >/dev/null 2>&1 \
+python3 "${KERNEL}/scripts/gen-kinds.py" --check >/dev/null 2>&1 \
   || fail "kind generated files are stale; run python3 scripts/gen-kinds.py"
 # The tables the rest of the kernel imports must come from the registry, not
 # from a hand-written dict that happens to agree with it today.
 for name in KINDS FORBIDDEN LEGACY_KINDS; do
-  grep -qE "^${name}(: [^=]+)? = _gen\.${name}" "${HOME}/.cursor/skills/idev/scripts/lib/workflow_spec.py" \
+  grep -qE "^${name}(: [^=]+)? = _gen\.${name}" "${KERNEL}/scripts/lib/workflow_spec.py" \
     || fail "workflow_spec.${name} no longer comes from the registry"
 done
-grep -q "^KIND_AGENTS: dict\[str, str\] = _gen.KIND_AGENTS" "${HOME}/.cursor/skills/idev/scripts/lib/kind_agents.py" \
+grep -q "^KIND_AGENTS: dict\[str, str\] = _gen.KIND_AGENTS" "${KERNEL}/scripts/lib/kind_agents.py" \
   || fail "kind_agents.KIND_AGENTS no longer comes from the registry"
-grep -q "^KIND_COMMANDS = _gen.KIND_COMMANDS" "${HOME}/.cursor/skills/idev/scripts/lib/workflow_defaults.py" \
+grep -q "^KIND_COMMANDS = _gen.KIND_COMMANDS" "${KERNEL}/scripts/lib/workflow_defaults.py" \
   || fail "workflow_defaults.KIND_COMMANDS no longer comes from the registry"
 echo "OK  one kind source"
 
 echo "=== lock: signoffs follow the risk tier ==="
-bash "${HOME}/.cursor/skills/idev/test/check-feature-tiers.sh" >/dev/null 2>&1 \
+bash "${KERNEL}/test/check-feature-tiers.sh" >/dev/null 2>&1 \
   || fail "check-feature tier rules broke (bash test/check-feature-tiers.sh)"
-python3 "${HOME}/.cursor/skills/idev/scripts/test_signals.py" >/dev/null 2>&1 \
+python3 "${KERNEL}/scripts/test_signals.py" >/dev/null 2>&1 \
   || fail "signal / answer rules broke (python3 scripts/test_signals.py)"
-python3 "${HOME}/.cursor/skills/idev/scripts/test_concurrency.py" >/dev/null 2>&1 \
+python3 "${KERNEL}/scripts/test_staffing.py" >/dev/null 2>&1 \
+  || fail "staffing mode or the role check on a gate broke (python3 scripts/test_staffing.py)"
+python3 "${KERNEL}/scripts/test_concurrency.py" >/dev/null 2>&1 \
   || fail "concurrent start or decide lost the single-writer rule (python3 scripts/test_concurrency.py)"
-python3 "${HOME}/.cursor/skills/idev/scripts/test_record_paths.py" >/dev/null 2>&1 \
+python3 "${KERNEL}/scripts/test_record_paths.py" >/dev/null 2>&1 \
   || fail "a guard reads delegation records from somewhere the writer does not put them (python3 scripts/test_record_paths.py)"
+python3 "${KERNEL}/scripts/test_record_findings.py" >/dev/null 2>&1 \
+  || fail "record PASS ignored the delegation's machine checks, or a verification took an attempt (python3 scripts/test_record_findings.py)"
+python3 "${KERNEL}/scripts/test_idev_bin.py" >/dev/null 2>&1 \
+  || fail "the idev binary resolver ignored IDEV_BIN or ran a stale build (python3 scripts/test_idev_bin.py)"
+python3 "${KERNEL}/scripts/test_report_lines.py" >/dev/null 2>&1 \
+  || fail "a report field reader took its value from the next line (python3 scripts/test_report_lines.py)"
+python3 "${KERNEL}/scripts/test_telemetry.py" >/dev/null 2>&1 \
+  || fail "a record took another delegation's subagentStop row, or lost its duration and tool calls (python3 scripts/test_telemetry.py)"
+python3 "${KERNEL}/scripts/test_suggest_review.py" >/dev/null 2>&1 \
+  || fail "SUGGEST naming one kernel thing twice no longer raises a review signal (python3 scripts/test_suggest_review.py)"
+python3 "${KERNEL}/scripts/test_trace_derive.py" >/dev/null 2>&1 \
+  || fail "trace append no longer lists the round's delegations from the records, or the signoff check reads words again (python3 scripts/test_trace_derive.py)"
+python3 "${KERNEL}/scripts/test_step_land.py" >/dev/null 2>&1 \
+  || fail "workflow.py step / land no longer carry a delegated step from brief to record (python3 scripts/test_step_land.py)"
 echo "OK  tier signoffs and single writer"
 
 echo "=== lock: a gate is answered by the person's 确认 ==="
 if command -v go >/dev/null 2>&1; then
-  bash "${HOME}/.cursor/skills/idev/test/gate-channel.sh" >/dev/null 2>&1 \
+  bash "${KERNEL}/test/gate-channel.sh" >/dev/null 2>&1 \
     || fail "gate channel broke (bash test/gate-channel.sh)"
-  bash "${HOME}/.cursor/skills/idev/test/lease-channel.sh" >/dev/null 2>&1 \
+  bash "${KERNEL}/test/lease-channel.sh" >/dev/null 2>&1 \
     || fail "lease channel broke (bash test/lease-channel.sh)"
   echo "OK  gate and lease channels"
 else
@@ -1878,6 +1902,13 @@ python3 "$TB" "${FIX}/spoken-block.jsonl" >/dev/null || fail "a long command tha
 python3 "$TB" "${FIX}/suite-bg.jsonl" >/dev/null || fail "a suite started in the background must pass"
 python3 "$TB" "${FIX}/doctor-bg.jsonl" >/dev/null || fail "a doctor started in the background must pass"
 echo "OK  turn budget"
+
+echo "=== lock: the conductor's cold start stays within budget ==="
+python3 "${KERNEL}/scripts/test_cold_start.py" >/dev/null 2>&1 \
+  || fail "cold-start-size no longer counts only the two cold-start pages, or reads more than opened (python3 scripts/test_cold_start.py)"
+python3 "${KERNEL}/scripts/cold-start-size.py" --kernel "${KERNEL}" >"${SCRATCH}/idev-cold-start.out" 2>&1 \
+  || { cat "${SCRATCH}/idev-cold-start.out"; fail "conductor cold start over budget (python3 scripts/cold-start-size.py)"; }
+echo "OK  cold start"
 
 DONE=1
 [ ! -s "${FAILURES}" ] || exit 1

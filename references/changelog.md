@@ -1,5 +1,33 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-28：点名回退或解封但带否定或犹豫，不再算同意。今天工作区里新加的「普通说法点名也算」那条路径跳过了否定和犹豫检查，`不要解除密封`、`先别解除密封，再想想`、`不要回退到需求` 在 Python 和 Go 两边都判成通过；门批不批就靠这个解析。现在两条路径共用同一个拒收检查，共享用例表 `test/signoff/cases.yaml` 补 6 行，修前两边都红。另：`idev audit verify` 补进 CLI，默认从最后一个检查点之后算（没有检查点就从创世），`--from 1` 从创世全算，断链时报出第一条坏的 seq 并退出 1；真库 204 条复算无断。`app.go`、`baseline_cli.go` 补跑 gofmt。未提交。
+
+- 2026-10-28：人机对齐即签字。`idev gate approve --quote` 用对话里的原话批准开着的门，不再要终端，也不再要短码。通道记 `chat`，保证仍是低。会话已在记 prompts.log 时，原话必须出现在这份日志里。`workflow.py record PASS --by --quote` 在门还 pending 时用同一句原话把门批准，再把批准读回这一步。`继续` 仍不批准。人确认：quote「优化这种低效无意义的签字，人机交互达成共识后即算签字。」
+
+- 2026-10-28：签字护栏只查票据和 run 的 YAML。Cursor 改文件时会把整份文件交给 `pre_tool.py`，签字字段的正则又会命中源码里的 Go `by :=`、Python `by: str,` 和字符串里的 `semantic_gate.`，所以内核里 52 个文件对 agent 来说改哪一行都会被拒，`workflow.py`、`delegation.py`、`selfcheck.sh`、`cmd/idev/app.go` 都在内。现在只对 `docs/task/*/`、`.idev/task/*/` 和 `workflow-runs/` 下的 `.yaml` / `.yml` 查签字字段；源码、测试和文档不查；没带路径的写入照旧查。内核里剩下被整份拦的只有 `llm-wiki` 票据的 5 张已签阶段文件。`test_hooks.py` 补 3 条用例，6 个变异全被抓住。人选定：收窄护栏。未提交。
+
+- 2026-10-28：12 张旧基线收进真库。joypaas 8 张、kafka-project 4 张逐张跑 `idev baseline adopt --by wangwei794`，理由「存储上线前已封存，之后未改；wangwei794 在对话里确认由 agent 代跑」。先在真库副本上演练，再写真库；之后密封检查由 FAIL 转 PASS，审计多出 seq 192–203 各一条 `baseline.adopted`，从创世复算 203 条无断。`create-category-pin` 的基线在切换点前没有提交，adopt 拒收，要走闸门重新封。另：gate 通道和 3 个 golden 跟上「交互只为达成同一幅图」后的拒签措辞，拒签行为不变；`claims.py`、`vue-skills.py` 及其测试补上执行位。selfcheck 全绿。人选定：你来执行，确认收这 12 张。未提交。
+
+- 2026-10-28：委派回路收口。遥测：`subagent_stop.py` 每条留痕带 `duration_ms`、`tool_call_count`，宿主没给记 0，`agent-metrics.py` 单列没有遥测的条数；回报的 `SUGGEST` 与 `CONCLUSION` 分字段，`agent-review.sh` 把被 `SUGGEST` 点名两次以上的脚本、agent 或 kind 起草成 `state/proposals/` 草案。真数据要先装 `install-idev-hooks.sh`。审计：Go 引擎每次投影 `run.yaml`，记录变了的步骤逐条写 `step.recorded` / `step.amended` / `step.skipped` / `step.retried`，带结果、证据、签字人、复核人、租约和 `delegation_id`，审计链不读文件也能按步重放。trace：`trace.py append` 从留痕和 `run.yaml` 生成 `round`、`delegations`、`recorded` 三段，一条委派只落进一份 trace；闸门写了标记而 `signoff` 缺失时按记录补上。签字护栏只看结构字段（写入动词、`signoff.marks`、闸门记录、`chose: chat-confirm-signoff`），否定词不再触发；append、check 和周审用同一个函数。真 trace 上周审硬告警由 0 变 3（007、012、030），016、018、027 复核不违规。导体回路：`workflow.py step <id>` 领租约、按 attempt 打出委派包并存档，重试的包带 `prior_failure`；`workflow.py land <id> --report -` 一次做完写留痕、机检、退回和记录。带复核的委派步由 8 条命令降到 3 条，不复核的 2 条。复核租约要在写手回报被接受后才能领，且 30 分钟过期，所以复核那一程另用一条 `land`。BLOCKED 文案的 golden 不变。导体冷启动按 `agent-brief.md` 规定的两页量，现 21,075 字符，在 2.4 万以内；原先按 7 页量出的 47,311 多算了按需页，真实 trace 里它们的打开率是 0% 到 17%。`cold-start-size.py` 打出两页字数和各页打开率，selfcheck 锁 2.4 万上限，本轮不挪内容。钩子装到用户级 `~/.cursor/hooks.json` 与 `~/.claude/settings.json`，原有条目保留。检查只留一套这一项按建议等两周真实数据再定。人选定：按推荐方案；冷启动改口径并加锁、不挪内容；钩子装用户级。未提交。
+
+- 2026-10-28：委派协作收紧。`record PASS` 默认拒绝写手最新留痕里归 agent 的机检 FAIL；确认是检查器误判才用 `--accept-with-findings "<理由>"` 放行，各项和理由写进该步 `accepted_findings`，Go 引擎下另记审计 `delegation.accepted`。复核者的留痕带 `role: verifier`，落成 `<step>-<attempt>.verify.yaml`，挂在写手那次 attempt 上、不占新号，Go 引擎下另记 `verification.recorded`；`next` 打出 `delegate <step> --verify`。`delegation.py eval` 和 `agent-metrics.py` 把逐字节重复的留痕算一份，重试只在同一 run 目录里算，旧扁平目录里 `attempt > 1` 的单列并摘出 `prior_failure`；回报按当前检查器重算，留痕写入检查器版本 `checker`。joypaas code-review 由 14 次委派、10 次重试变为 11 次、0 次重试加 4 条待人判读。`idev baseline adopt` 把存储上线前已在 git 里封存、之后没改过的基线收进库，记 `provenance: legacy-yaml`、`assurance: low`，必须写 `--by` 和 `--reason`。`idev` 二进制只由 `scripts/lib/idev_bin.py` 解析：`IDEV_BIN` 显式优先，`off` 关掉，内核 `bin/idev` 比 Go 源旧就重编；钩子拒绝 agent shell 里的 `IDEV_BIN=off`。selfcheck 以所在的树为根，用临时 `IDEV_DATA`；pytest 经 `conftest.py` 同样封闭，测试不再写进 `~/.idev`。`install-idev-hooks.sh` 按钩子脚本名认自己的条目，不再依赖检出目录叫 `idev`：换了目录名的内核重装不会叠出第二份，卸载也删得掉。人选定：P0 和 P1 一起做；默认拒绝，允许带理由放行并写入审计。
+
+- 2026-10-28：整理存量知识库时，拆掉过时的人读产物，留下审过的需求、规格、密封基线、代码、规约和已晋升经验，再按生成步骤重做。没点名的仓不删。人确认：quote「确认；确认」。本轮未删文件。
+
+- 2026-10-28：Vue 技能收进内核 `skills/vue/`。UI 设计、编码、自测、测试、UI 自动化、根因由 `vue-skills.py` 按阶段打出要打开的 `SKILL.md`；`session-context.py` 在 Vue 仓上打出同样的行。上游是 vuejs-ai/skills。
+
+- 2026-10-28：面向人另交的专业知识文档，先跑该票摄取和校准，退出码非 0 就不生成。正文只写知识库里已有的句子。图用 archify，先校验再交 HTML，不装进内核。需求和规格仍是权威，生成稿不回写。人确认：quote「是；确认；确认」。`llm-wiki` 的 B1–B9 不动。
+
+- 2026-10-28：文档体例改权威。审过的需求和规格是人机同一份，也是权威；规格复述密封基线。方案、测试设计、评审、测试报告进索引只作对照，与这份权威冲突就停。`llm-wiki` 的 B1–B9 不动。人确认：quote「改」。
+
+- 2026-10-28：答完就落笔。`按建议` / `听你的` / 选项号 `a` / `1` / `选a` 就是当前这一步的对齐，不再补第二句。没有未决就不编题。对人只摆方案和证据；`将代写` 留在导体落笔，不念字段名。推翻方案的那一档改方案，不落笔。单独的 `继续` 仍不算。人确认：by wangwei794，quote「确认」，2026-10-28T14:51+08:00。`parse_confirm` 收下。无票、无 A 类闸，不写签字字段。
+
+- 2026-10-28：交互只为达成同一幅图。`可以` / `就这样` / `按这个方案` / `没问题` / `无异议` / `行` 以及「确认，继续」「确认，不用一直询问」都算当前这一步已经对齐。回退和解封用白话点名（`回退到实现`、`打开基线`），不再把 `origin=` 或门短码当验证码。单独的 `继续` / `好` / `ok` 仍然没有说出这幅图。疑问、否定、犹豫、改方案、零宽字符和表情仍然不算。人指出确认不该是答字画押。无票、无新的 A 类字段。
+
+- 2026-10-28：当前这一关的「通过」就是确认。`通过` / `通过了` / `架构通过` / `需求通过` / `实现通过` / `提测通过` / `审核通过` 写入确认文法，Python 与 Go 同一份 `test/signoff/cases.yaml`。人已经这样说了，并且检查过了，就写下这一关。不再回一轮只说明文法不收、字段仍是 false、门仍 pending。基线已经密封就写架构通过。`继续` 仍不算。人指出这类确认毫无意义，应优化掉。无票、无新的 A 类字段。
+
+- 2026-10-28：交互按编制收束。`staffing.py` 从产品名单或 `.idev/staffing.yaml` 认出一个人兼任七岗，还是多人各管一段。一个人把七个视角一次问完；多人只问当前这个人持有的岗位，别人的列成待。判据唯一的既有问题直接写 `scope_debt.decision`。岗位还没写明时只问一次岗位表，写完才签字。`record PASS` 在多人编制下拒绝不在该闸岗位上的人。人确认：by wangwei794，quote「确认，继续」，2026-10-28T13:56+08:00。`parse_confirm` 对这句是 `unparsed-tail`（「继续」不是确认用语）。无票、无 A 类闸，不写 `sealed` / `accepted` / `aligned`。
+
 - 2026-10-28：架构评审三阶段落地。阶段 0：留痕路径、自检/CI、白名单、AUTO 自跑、产物移出跟踪。阶段 1：客户端钩子、`prompts.log` 核对 quote、计时覆盖率、trace 骨架、结构化回报、`idev run write`+`ProjectRunWithAudit`（Go 默认写 YAML，空 expect 也 stale）。阶段 2：outcome 度量、console 在制品老化、timeline 保留结构化字段、A/B 评测夹具、usage-scan/attic、删除预算与 curator。阶段 3 提案 blocked（要触发条件）。人确认阶段 0–2 各提案原话；未提交。
 
 - 2026-10-27：分析代码的步骤里，更新索引写在读代码之前。审查的 `coding-scan`、根因里的 `codegraph_impact`、需求落地、事实工具箱和结构问题原先都是先读后更新。`scripts/test_codegraph_before_read.py` 锁住这个顺序。

@@ -72,20 +72,22 @@ def cmd_write(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="role-to-person staffing for one checkout")
-    parser.add_argument("--repo", default="", help="product checkout; default is the conductor session")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     show = sub.add_parser("show")
+    show.add_argument("--repo", default="", help="product checkout; default is the conductor session")
     show.add_argument("--chat", default="", help="who is in this conversation, if already known")
     show.set_defaults(func=cmd_show)
 
     check = sub.add_parser("check")
+    check.add_argument("--repo", default="")
     check.add_argument("--by", required=True)
     check.add_argument("--gate", default="step_confirm")
     check.add_argument("--stage", default="")
     check.set_defaults(func=cmd_check)
 
     write = sub.add_parser("write")
+    write.add_argument("--repo", required=True)
     write.add_argument("--solo", default="", help="one person holds every role")
     write.add_argument("--role", action="append", default=[], help="role=name, repeat for all seven")
     write.set_defaults(func=cmd_write)

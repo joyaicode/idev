@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -19,7 +18,8 @@ import (
 	"github.com/idev/internal/adapters/local"
 	"github.com/idev/internal/adapters/runyaml"
 	"github.com/idev/internal/adapters/store/sqlite"
-	"github.com/idev/internal/adapters/ticketbaseline"
+	"github.com/idev/internal/adapters/workspace"
+	"github.com/idev/internal/app/auditsvc"
 	"github.com/idev/internal/app/gatesvc"
 	"github.com/idev/internal/app/leasesvc"
 	"github.com/idev/internal/app/runsvc"
@@ -55,7 +55,7 @@ type app struct {
 
 func (a app) run(args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(a.stderr, "usage: idev gate request|approve|reject|status ... | idev lease acquire|release|check ... | idev run start|apply|record|write ... | idev baseline seal|verify|sealed ... | idev delegation allocate ... | idev audit downgrades | idev token init --handle H")
+		fmt.Fprintln(a.stderr, "usage: idev gate request|approve|reject|status ... | idev lease acquire|release|check ... | idev run start|apply|record|write ... | idev baseline seal|adopt|verify|sealed ... | idev delegation allocate|verify|accept ... | idev audit downgrades|export|verify ... | idev workspace locate|manifest|diff|head ... | idev token init --handle H")
 		return exitUsage
 	}
 	ctx := context.Background()
@@ -87,14 +87,32 @@ func (a app) run(args []string) int {
 		err = a.runWrite(args[2:])
 	case "baseline seal":
 		err = a.baselineSeal(ctx, args[2:])
+	case "baseline adopt":
+		err = a.baselineAdopt(ctx, args[2:])
 	case "baseline verify":
 		err = a.baselineVerify(ctx, args[2:])
 	case "baseline sealed":
 		err = a.baselineSealed(ctx, args[2:])
 	case "delegation allocate":
 		err = a.delegationAllocate(ctx, args[2:])
+	case "delegation verify":
+		err = a.delegationVerify(ctx, args[2:])
+	case "delegation accept":
+		err = a.delegationAccept(ctx, args[2:])
 	case "audit downgrades":
 		err = a.auditDowngrades(ctx, args[2:])
+	case "audit export":
+		err = a.auditExport(ctx, args[2:])
+	case "audit verify":
+		err = a.auditVerify(ctx, args[2:])
+	case "workspace locate":
+		err = a.workspaceLocate(args[2:])
+	case "workspace manifest":
+		err = a.workspaceManifest(args[2:])
+	case "workspace diff":
+		err = a.workspaceDiff(args[2:])
+	case "workspace head":
+		err = a.workspaceHead(args[2:])
 	default:
 		fmt.Fprintf(a.stderr, "idev: unknown command %q\n", strings.Join(args[:2], " "))
 		return exitUsage
@@ -250,7 +268,8 @@ func (a app) request(ctx context.Context, args []string) error {
 			subj.Kind = gate.SubjectBaseline
 			// I-4: a seal binds the manifest_root, not a raw-file tree digest.
 			// --revision stays mandatory (domain refuses revision 0).
-			m, err := ticketbaseline.FromTicket(*feature, absRoot, *revision, time.Now().UTC())
+			// absRoot is the ticket; workspace hashes baseline.yaml + details[].
+			m, err := workspace.FromTicket(*feature, absRoot, "", *revision, time.Now().UTC())
 			if err != nil {
 				return err
 			}
@@ -282,7 +301,7 @@ func (a app) request(ctx context.Context, args []string) error {
 		SubjectKind: string(g.Subject.Kind), SubjectDigest: g.Subject.Digest, Subject: subject,
 		RequiredAssurance: string(g.RequiredAssurance),
 		ExpiresAt:         g.ExpiresAt.Format(time.RFC3339),
-		Approve:           "idev gate approve " + g.ID,
+		Approve:           "idev gate approve " + g.ID + " --quote \"<their words>\"",
 	})
 }
 
@@ -345,7 +364,7 @@ func currentDigest(ctx context.Context, e env, g gate.Gate) (string, error) {
 		if root == "" {
 			return "", fmt.Errorf("subject binding missing for %s (%s)", g.ID, g.Subject.Kind)
 		}
-		m, err := ticketbaseline.FromTicket(g.Feature, root, g.Subject.BaselineRevision, time.Now().UTC())
+		m, err := workspace.FromTicket(g.Feature, root, "", g.Subject.BaselineRevision, time.Now().UTC())
 		if err != nil {
 			return "", err
 		}
@@ -380,8 +399,18 @@ func (a app) answer(ctx context.Context, args []string, reject bool) error {
 	if id == "" {
 		return usageError{"gate " + verb + " needs a gate id"}
 	}
-	if !a.isTTY() {
-		return errors.New("an answer comes from a person's own terminal, and this is not one (stdin and stdout must both be a TTY); an agent's shell cannot answer a gate")
+	q := strings.TrimSpace(*quote)
+	if q == "" {
+		return errors.New("the answer is the person's words from the conversation; pass them with --quote")
+	}
+	if reject && !signoff.IsReject(q) {
+		return errors.New("a rejection's words are 驳回; say why in the chat, where the agent can act on it")
+	}
+	if !reject && signoff.IsReject(q) {
+		return errors.New("these words reject; use `idev gate reject`")
+	}
+	if err := quoteFromConversation(q); err != nil {
+		return err
 	}
 
 	e, err := a.open(ctx)
@@ -410,46 +439,129 @@ func (a app) answer(ctx context.Context, args []string, reject bool) error {
 	if err != nil {
 		return err
 	}
-	a.show(g, digest)
-
-	in := bufio.NewReader(a.stdin)
-	fmt.Fprintf(a.stdout, "type the last %d characters of the gate id to answer as %s: ", shortLen, cred.Handle)
-	typed, err := in.ReadString('\n')
-	if err != nil {
-		return err
-	}
-	if strings.TrimSpace(typed) != short(g.ID) {
-		return errors.New("the short code does not match; nothing was recorded")
-	}
-	q := strings.TrimSpace(*quote)
-	if q == "" {
-		fmt.Fprint(a.stdout, "your words, verbatim: ")
-		line, err := in.ReadString('\n')
-		if err != nil {
-			return err
-		}
-		q = strings.TrimSpace(line)
-	}
-	if reject && !signoff.IsReject(q) {
-		return errors.New("a rejection's words are 驳回; say why in the chat, where the agent can act on it")
-	}
-	if !reject && signoff.IsReject(q) {
-		return errors.New("these words reject; use `idev gate reject`")
+	if digest != g.Subject.Digest {
+		a.show(g, digest)
 	}
 
 	d, err := e.svc.Decide(ctx, gatesvc.DecisionParams{
-		GateID: id, Quote: q, Channel: gatesvc.ChannelLocalTokenTTY,
+		GateID: id, Quote: q, Channel: gatesvc.ChannelChat,
 		RecomputedDigest: digest, Actor: cred.Principal(),
 	})
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(a.stdout, "%s %s by %s (approval %s, assurance %s", d.Gate.Status, id, d.Approval.Handle, d.Approval.ID, d.Approval.Assurance)
-	if d.Approval.Downgraded {
-		fmt.Fprintf(a.stdout, ", downgraded from %s", g.RequiredAssurance)
+	return json.NewEncoder(a.stdout).Encode(map[string]any{
+		"status":      string(d.Gate.Status),
+		"gate_id":     id,
+		"by":          d.Approval.Handle,
+		"approval_id": d.Approval.ID,
+		"assurance":   d.Approval.Assurance,
+		"channel":     d.Approval.Channel,
+		"downgraded":  d.Approval.Downgraded,
+		"quote":       d.Approval.Quote,
+	})
+}
+
+// quoteFromConversation refuses a quote the person did not say, once this
+// session is logging prompts. With the check forced off, or with no log yet,
+// the words themselves are the record — the same rule workflow.py uses.
+func quoteFromConversation(quote string) error {
+	flag := strings.ToLower(strings.TrimSpace(os.Getenv("IDEV_PROMPT_LOG_CHECK")))
+	switch flag {
+	case "0", "false", "no", "off":
+		return nil
+	case "1", "true", "yes":
+		if !quoteInPromptsLog(quote) {
+			return errors.New("the quote is not in this session's prompts.log; an answer is the person's own words")
+		}
+		return nil
 	}
-	fmt.Fprintln(a.stdout, ")")
+	if promptsLogActive() && !quoteInPromptsLog(quote) {
+		return errors.New("the quote is not in this session's prompts.log; an answer is the person's own words")
+	}
 	return nil
+}
+
+func promptsLogFile() string {
+	data, err := local.DataDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(data, "prompts.log")
+}
+
+func quoteInPromptsLog(quote string) bool {
+	path := promptsLogFile()
+	if path == "" {
+		return false
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	needle := strings.TrimSpace(quote)
+	if needle == "" {
+		return false
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var row struct {
+			Text string `json:"text"`
+		}
+		if json.Unmarshal([]byte(line), &row) != nil {
+			if strings.Contains(line, needle) {
+				return true
+			}
+			continue
+		}
+		text := strings.TrimSpace(row.Text)
+		if needle == text || strings.Contains(text, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func promptsLogActive() bool {
+	path := promptsLogFile()
+	if path == "" {
+		return false
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return false
+	}
+	lines := strings.Split(string(body), "\n")
+	if len(lines) > 50 {
+		lines = lines[len(lines)-50:]
+	}
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if line == "" {
+			continue
+		}
+		var row struct {
+			Cwd string `json:"cwd"`
+		}
+		if json.Unmarshal([]byte(line), &row) != nil {
+			continue
+		}
+		logged := strings.TrimSpace(row.Cwd)
+		if logged == "" {
+			continue
+		}
+		if logged == cwd || strings.HasPrefix(cwd, logged+string(os.PathSeparator)) || strings.HasPrefix(logged, cwd+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	return false
 }
 
 // splitID takes the first non-flag argument as the gate id, so both
@@ -582,9 +694,9 @@ type runFile struct {
 	WorkflowID string `yaml:"workflow_id"`
 	Feature    string `yaml:"feature"`
 	Steps      []struct {
-		ID        string `yaml:"id"`
-		Kind      string `yaml:"kind"`
-		Status    string `yaml:"status"`
+		ID     string `yaml:"id"`
+		Kind   string `yaml:"kind"`
+		Status string `yaml:"status"`
 		// MachineState carries open domain states (verifying, …) that are
 		// not STEP_STATUS values, so check_run stays quiet while ProjectRun
 		// still sees the independent-verify window (E3.1).
@@ -949,7 +1061,7 @@ func (a app) runRecord(args []string) error {
 	if err := runyaml.Record(*file, *step, *status, *evidence, *note); err != nil {
 		return err
 	}
-	_ = a.projectYAML(*file) // external projection; YAML remains driver until Start migrates
+	_ = a.projectYAML(*file, raw) // external projection; YAML remains driver until Start migrates
 	return json.NewEncoder(a.stdout).Encode(map[string]string{
 		"file": *file, "step": *step, "status": *status, "truth": "yaml",
 	})
@@ -979,7 +1091,34 @@ func (a app) applyRecord(
 	if err != nil {
 		return err
 	}
-	return runyaml.WriteExport(path, raw, next, expect)
+	if err := runyaml.WriteExport(path, raw, next, expect); err != nil {
+		return err
+	}
+	// Audit JSONL beside run.yaml is a projection (design §14). Failure must
+	// not undo Apply — the chain in SQLite is already committed (E5.4).
+	_ = a.projectAuditJSONL(ctx, e, runID, path)
+	return nil
+}
+
+// projectAuditJSONL writes workflow/audit-<run_id>.jsonl next to run.yaml.
+func (a app) projectAuditJSONL(ctx context.Context, e env, runID, runYAML string) error {
+	if runID == "" || runYAML == "" {
+		return nil
+	}
+	dir := filepath.Dir(runYAML)
+	out := filepath.Join(dir, "audit-"+runID+".jsonl")
+	f, err := os.Create(out)
+	if err != nil {
+		fmt.Fprintf(a.stderr, "WARN  audit export projection: %v\n", err)
+		return nil
+	}
+	defer f.Close()
+	svc := auditsvc.Service{Store: e.store, Clock: local.Clock{}}
+	if _, err := svc.Export(ctx, runID, f); err != nil {
+		fmt.Fprintf(a.stderr, "WARN  audit export projection: %v\n", err)
+		return nil
+	}
+	return nil
 }
 
 // errUseYAML tells runRecord to keep the external YAML mutation path.
@@ -1046,6 +1185,9 @@ func (a app) runWrite(args []string) error {
 	if len(body) == 0 {
 		return usageError{"run write needs the new YAML on stdin"}
 	}
+	// Write refuses unless the file still has --expect-sha256, so these are
+	// the bytes it replaces.
+	prior, _ := os.ReadFile(*file)
 	if err := runyaml.Write(*file, body, *expect); err != nil {
 		var stale *runyaml.ErrStale
 		if errors.As(err, &stale) {
@@ -1053,7 +1195,7 @@ func (a app) runWrite(args []string) error {
 		}
 		return err
 	}
-	_ = a.projectYAML(*file)
+	_ = a.projectYAML(*file, prior)
 	sum := sha256Hex(body)
 	return json.NewEncoder(a.stdout).Encode(map[string]string{
 		"file": *file, "sha256": sum,
@@ -1065,7 +1207,9 @@ func sha256Hex(body []byte) string {
 	return fmt.Sprintf("%x", sum)
 }
 
-func (a app) projectYAML(path string) error {
+// projectYAML refreshes the SQLite view of a run.yaml that was just written
+// over `prior` (empty for a new file).
+func (a app) projectYAML(path string, prior []byte) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -1073,6 +1217,10 @@ func (a app) projectYAML(path string) error {
 	doc, err := runyaml.ParseDoc(raw)
 	if err != nil || doc.ID == "" || doc.Feature == "" {
 		return err
+	}
+	var prev runyaml.Doc
+	if len(prior) > 0 {
+		prev, _ = runyaml.ParseDoc(prior)
 	}
 	ctx := context.Background()
 	e, err := a.open(ctx)
@@ -1093,20 +1241,80 @@ func (a app) projectYAML(path string) error {
 	}
 	// Same SQLite TX as the audit append (phase 1 §6). Live domain runs use
 	// Apply + Export; this path keeps the external (YAML-driven) projection.
-	sum := sha256Hex(raw)
-	return e.store.ProjectRunWithAudit(ctx, projected, audit.Event{
-		At:      time.Now().UTC(),
-		Action:  audit.ActionStepRecorded,
-		Actor:   audit.Actor{Handle: "idev", Kind: "system"},
-		RunID:   doc.ID,
-		Feature: doc.Feature,
-		Subject: path,
-		Detail: map[string]any{
-			"source": "run.yaml",
-			"sha256": sum,
-			"steps":  len(doc.Steps),
-		},
-	})
+	events := yamlAuditEvents(ctx, e, path, sha256Hex(raw), len(prior) > 0, prev, doc)
+	return e.store.ProjectRunWithAudit(ctx, projected, events...)
+}
+
+// yamlAuditEvents says what one run.yaml write did: one event per step whose
+// record changed, so the chain can be replayed step by step without the file.
+// Each carries the sha256 of the file it was read from.
+func yamlAuditEvents(ctx context.Context, e env, path, sum string, existed bool, prev, doc runyaml.Doc) []audit.Event {
+	event := func(action audit.Action, step string, detail map[string]any) audit.Event {
+		detail["source"], detail["sha256"] = "run.yaml", sum
+		return audit.Event{
+			At: time.Now().UTC(), Action: action, Actor: audit.Actor{Handle: "idev", Kind: "system"},
+			RunID: doc.ID, StepID: step, Feature: doc.Feature, Subject: path, Detail: detail,
+		}
+	}
+	var events []audit.Event
+	if !existed {
+		events = append(events, event(audit.ActionRunStarted, "",
+			map[string]any{"workflow_id": doc.WorkflowID, "steps": len(doc.Steps)}))
+	}
+	for _, c := range runyaml.StepChanges(prev, doc) {
+		s := c.Step
+		detail := map[string]any{"kind": s.Kind}
+		for key, value := range map[string]string{
+			"outcome": s.Status, "from": c.From, "evidence": clip(s.Evidence), "note": clip(s.Note),
+			"agent": s.Writer, "lease_id": s.LeaseID, "verified_by": s.VerifiedBy,
+			"signed_by": s.SignedBy, "assurance": s.Assurance,
+		} {
+			if value != "" {
+				detail[key] = value
+			}
+		}
+		if s.Auto {
+			detail["auto"] = true
+		}
+		if len(s.Accepted) > 0 {
+			detail["accepted_findings"] = s.Accepted
+		}
+		if s.Writer != "" {
+			_ = e.store.InTx(ctx, func(tx ports.Tx) error {
+				d, err := tx.Delegations().Latest(ctx, doc.ID, s.ID)
+				if err == nil && d.ID != "" {
+					detail["delegation_id"] = d.ID
+				}
+				return nil
+			})
+		}
+		events = append(events, event(stepAction[c.Verb], s.ID, detail))
+	}
+	if doc.Status != prev.Status {
+		switch doc.Status {
+		case "done":
+			events = append(events, event(audit.ActionRunCompleted, "", map[string]any{"from": prev.Status}))
+		case "aborted":
+			events = append(events, event(audit.ActionRunAborted, "", map[string]any{"from": prev.Status}))
+		}
+	}
+	return events
+}
+
+var stepAction = map[runyaml.Verb]audit.Action{
+	runyaml.VerbRecorded: audit.ActionStepRecorded,
+	runyaml.VerbAmended:  audit.ActionStepAmended,
+	runyaml.VerbSkipped:  audit.ActionStepSkipped,
+	runyaml.VerbRetried:  audit.ActionStepRetried,
+}
+
+// clip keeps an audit detail readable; the file named by sha256 has the rest.
+func clip(s string) string {
+	const limit = 240
+	if r := []rune(s); len(r) > limit {
+		return string(r[:limit]) + "…"
+	}
+	return s
 }
 
 // --- audit -------------------------------------------------------------------
@@ -1119,6 +1327,80 @@ type downgradeWeek struct {
 type downgradesOut struct {
 	Total int             `json:"total"`
 	Weeks []downgradeWeek `json:"weeks"`
+}
+
+// auditExport writes the audit chain as JSONL. Optional --run filters to one
+// run. Export is a read: failing to write the file cannot undo committed
+// transitions (E5.4).
+func (a app) auditExport(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("audit export", flag.ContinueOnError)
+	fs.SetOutput(a.stderr)
+	runID := fs.String("run", "", "only events for this run id")
+	format := fs.String("format", "jsonl", "jsonl")
+	outPath := fs.String("out", "", "write to this path instead of stdout")
+	if err := fs.Parse(args); err != nil {
+		return usageError{err.Error()}
+	}
+	if *format != "jsonl" {
+		return usageError{"audit export only supports --format jsonl"}
+	}
+	e, err := a.open(ctx)
+	if err != nil {
+		return err
+	}
+	defer e.store.Close()
+	svc := auditsvc.Service{Store: e.store, Clock: local.Clock{}}
+	w := a.stdout
+	var f *os.File
+	if *outPath != "" {
+		f, err = os.Create(*outPath)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		w = f
+	}
+	n, err := svc.Export(ctx, *runID, w)
+	if err != nil {
+		return err
+	}
+	if *outPath != "" {
+		fmt.Fprintf(a.stderr, "wrote %d events to %s\n", n, *outPath)
+	}
+	return nil
+}
+
+type verifyOut struct {
+	AnchoredOn        int64 `json:"anchored_on"`
+	From              int64 `json:"from"`
+	To                int64 `json:"to"`
+	CheckedCheckpoint bool  `json:"checked_checkpoint"`
+}
+
+// auditVerify recomputes the chain's hashes and names the first broken seq.
+// --from 1 walks from genesis; the default starts after the last checkpoint
+// once its signature holds, which is genesis while there is none.
+func (a app) auditVerify(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("audit verify", flag.ContinueOnError)
+	fs.SetOutput(a.stderr)
+	from := fs.Int64("from", 0, "1 walks from genesis; 0 starts after the last checkpoint")
+	to := fs.Int64("to", 0, "last seq to check (0: the head)")
+	if err := fs.Parse(args); err != nil {
+		return usageError{err.Error()}
+	}
+	e, err := a.open(ctx)
+	if err != nil {
+		return err
+	}
+	defer e.store.Close()
+	svc := auditsvc.Service{Store: e.store, Clock: local.Clock{}, Signer: e.svc.Signer}
+	res, err := svc.Verify(ctx, *from, *to)
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(a.stdout).Encode(verifyOut{
+		AnchoredOn: res.AnchoredOn, From: res.From, To: res.To, CheckedCheckpoint: res.CheckedCheckpoint,
+	})
 }
 
 // auditDowngrades answers one question: how often a high ask was answered at

@@ -112,6 +112,83 @@ func (s Service) Seal(ctx context.Context, p SealParams) (baseline.Manifest, err
 	return sealed, nil
 }
 
+// LegacyCutover is when a seal stopped being a field in baseline.yaml and
+// became a row here (E4.3, kernel commit 2f46b0f). A ticket whose sealed
+// baseline.yaml was committed before it never had a gate to point at.
+var LegacyCutover = time.Date(2026, 10, 28, 5, 51, 44, 0, time.UTC)
+
+// AdoptParams describes a seal made before the store existed.
+type AdoptParams struct {
+	Feature  string
+	Manifest baseline.Manifest
+	// Commit is the product-repo commit whose baseline.yaml said sealed: true;
+	// CommittedAt is its committer date, which must precede LegacyCutover.
+	Commit      string
+	CommittedAt time.Time
+	Reason      string
+	Actor       ports.Principal
+}
+
+// Adopt takes a pre-store seal into the store. There is no gate to bind, so
+// the proof is the git history the caller found, and the event says so:
+// provenance legacy-yaml, assurance low. History can be rewritten by whoever
+// owns the repository, which is why this is a migration for tickets sealed
+// before the cutover and never a second way to seal.
+func (s Service) Adopt(ctx context.Context, p AdoptParams) (baseline.Manifest, error) {
+	switch {
+	case p.Feature == "":
+		return baseline.Manifest{}, fmt.Errorf("baselinesvc: an adoption names its feature")
+	case p.Manifest.ManifestRoot == "":
+		return baseline.Manifest{}, fmt.Errorf("baselinesvc: adopting an empty manifest adopts nothing")
+	case p.Manifest.Feature != p.Feature:
+		return baseline.Manifest{}, fmt.Errorf(
+			"baselinesvc: the manifest names feature %q, not %q", p.Manifest.Feature, p.Feature)
+	case p.Commit == "" || p.CommittedAt.IsZero():
+		return baseline.Manifest{}, fmt.Errorf("baselinesvc: an adoption needs the commit that sealed it")
+	case !p.CommittedAt.Before(LegacyCutover):
+		return baseline.Manifest{}, fmt.Errorf(
+			"baselinesvc: %s sealed %s at %s, after seals moved into the store (%s); seal it through a gate",
+			p.Commit, p.Feature, p.CommittedAt.UTC().Format(time.RFC3339), LegacyCutover.Format(time.RFC3339))
+	case p.Reason == "":
+		return baseline.Manifest{}, fmt.Errorf("baselinesvc: an adoption without a reason is not an audit record")
+	case p.Actor.Handle == "":
+		return baseline.Manifest{}, fmt.Errorf("baselinesvc: an adoption without an actor is not an audit record")
+	}
+
+	err := s.Store.InTx(ctx, func(tx ports.Tx) error {
+		id, err := tx.Baselines().Put(ctx, p.Feature, p.Manifest, "draft")
+		if err != nil {
+			return fmt.Errorf("baselinesvc: storing the draft: %w", err)
+		}
+		if err := tx.Baselines().Seal(ctx, id, s.now()); err != nil {
+			return err
+		}
+		return appendAudit(ctx, tx, audit.Event{
+			Action:  audit.ActionBaselineAdopted,
+			Actor:   actorOf(p.Actor),
+			Feature: p.Feature,
+			Subject: string(p.Manifest.ManifestRoot),
+			Detail: map[string]any{
+				"revision":            p.Manifest.Revision,
+				"manifest_root":       string(p.Manifest.ManifestRoot),
+				"raw_root":            string(p.Manifest.RawRoot),
+				"files":               len(p.Manifest.Files),
+				"repo_head":           p.Manifest.RepoHead,
+				"dirty":               p.Manifest.Dirty,
+				"provenance":          "legacy-yaml",
+				"assurance":           "low",
+				"legacy_commit":       p.Commit,
+				"legacy_committed_at": p.CommittedAt.UTC().Format(time.RFC3339),
+				"reason":              p.Reason,
+			},
+		}, s.Clock)
+	})
+	if err != nil {
+		return baseline.Manifest{}, err
+	}
+	return p.Manifest, nil
+}
+
 // Check compares the manifest as it is now with the feature's sealed one
 // and records what it found. Drift is the only verdict worth an event: it
 // is the one that blocks runs. A format-only change is a warning to the

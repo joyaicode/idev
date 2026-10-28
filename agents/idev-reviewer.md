@@ -59,13 +59,15 @@ is_background: false
    **波及到了却没在本轮变更里的调用方,写进 `review.md` 作为影响面提示** —— 这是审查最容易漏的一类:
    改动本身没问题,但调用方假设被破坏了。查不到(动态分发 / 反射 / 配置路由)就明说查不到。
 
-4. 认语言,扫本轮变更。按 `coding-tables.md` §3.8 跑:
+4. **Vue 语言尺** —— 跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage code`。没有输出就跳过。按 `VUE open` 与本轮碰得到的 `VUE if` 判定规范和不合适的组件、状态边界，写成 `I*`。`VUE MISSING` 就停。
+
+5. 认语言,扫本轮变更。按 `coding-tables.md` §3.8 跑:
    ```bash
    bash $IDEV/scripts/coding-scan.sh <仓根>
    ```
    做五轴 + 栈指南;blocking 项译成 `P#` / `C#`。
-4. 写 `<票目录>/review.md`(照 `$IDEV/deliver/references/review.example.md`):必须写清 §1 命中 / 零命中、§2 已扫、命中的 `T#`、`审查者: idev-reviewer`、带数字的 `文件与行数`(取 coding-scan 的 size 段)。单文件超过 400 行、说不出职责的新文件、说不出为何动的触及文件,译成 `C#` / `T#`。每条发现给编号 `I*`,状态标**待签收**。与本轮无关的脏文件写进 UNRELATED 段,**不改它们**。编码者自己写过的编码规范节由你重写。
-5. 回报(见下)。不要 `trace.sh append` —— trace 由导体统一写,本步不另开账。
+6. 写 `<票目录>/review.md`(照 `$IDEV/deliver/references/review.example.md`):必须写清 §1 命中 / 零命中、§2 已扫、命中的 `T#`、`审查者: idev-reviewer`、带数字的 `文件与行数`(取 coding-scan 的 size 段)。单文件超过 400 行、说不出职责的新文件、说不出为何动的触及文件,译成 `C#` / `T#`。每条发现给编号 `I*`,状态标**待签收**。与本轮无关的脏文件写进 UNRELATED 段,**不改它们**。编码者自己写过的编码规范节由你重写。
+7. 回报(见下)。不要 `trace.sh append` —— trace 由导体统一写,本步不另开账。
 
 ## 硬规则
 

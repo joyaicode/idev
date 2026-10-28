@@ -1,0 +1,130 @@
+schema_version: 1
+run_id: 01M5KXTKM5YWKJBE067A3B1WV4
+workflow_id: code-review
+recipe: /Users/wangwei794/go/src/github.com/idev/workflows/code-review.yaml
+feature: code-review
+status: done
+started_at: '2026-10-23T16:25:19+08:00'
+params:
+  feature: code-review
+policy:
+  on_fail: stop
+  on_gate: stop
+steps:
+- id: report
+  kind: review.report
+  label: 识别语言并出报告（不改代码）
+  delegated:
+    agent: idev-reviewer
+    at: '2026-10-23T16:26:11+08:00'
+  lease:
+    id: 01M5KXW71DZBAYNZE20GKZSA37
+    fencing: 2
+    paths:
+    - docs/task/code-review/**
+    released_at: '2026-10-23T16:58:44+08:00'
+  note: idev-reviewer 完成：I*3(一般)/O*3/UNPROVEN5，无 blocking；证据 docs/task/code-review/review.md
+  status: PASS
+  at: '2026-10-23T16:58:44+08:00'
+  evidence: docs/task/code-review/review.md
+- id: gate-report
+  kind: human.gate
+  label: 人签收修复清单（无 I* 则跳过）
+  with:
+    will_write:
+    - review.md 已签收 I*（待签收 → 已签收）
+    proof: review.md 命中数 / I* 清单
+  signoff:
+    by: wangwei794
+    quote: 确认
+    at: '2026-10-23T17:32:49+08:00'
+    assurance: chat
+  status: PASS
+  at: '2026-10-23T17:32:49+08:00'
+  evidence: review.md I1-I3 全部签收（全签）
+- id: plan
+  kind: verify.plan
+  label: 为已签收项起草 selftest plan
+  with:
+    mode: selftest
+  delegated:
+    agent: idev-verifier
+    at: '2026-10-23T17:34:10+08:00'
+  lease:
+    id: 01M5M1RP4363WRHK7E9P7YN1KR
+    fencing: 3
+    paths:
+    - docs/task/code-review/**
+    released_at: '2026-10-23T19:43:55+08:00'
+  note: idev-verifier 完成 selftest plan：5 cases（I2 双方向），check-feature verify-plan PASS
+    + stage-gate PASS；红绿预演 4红1绿方向正确
+  status: PASS
+  at: '2026-10-23T19:43:54+08:00'
+  evidence: docs/task/code-review/verify/plan.yaml
+- id: gate-plan
+  kind: human.gate
+  label: 人 accepted plan
+  with:
+    will_write:
+    - verify/plan.yaml accepted
+    proof: verify-plan 门禁结果 / case 数
+    auto_tiers:
+    - P1
+    - P2
+  signoff:
+    by: wangwei794
+    quote: 确认
+    at: '2026-10-23T19:46:31+08:00'
+    assurance: chat
+  status: PASS
+  at: '2026-10-23T19:46:31+08:00'
+  evidence: docs/task/code-review/workflow/evidence/gate-plan-check.txt（0 FAIL 无 SIGNAL）+
+    人三次「确认」预签（2026-10-23）
+- id: fix
+  kind: review.fix
+  label: 只改已签收 I*（及显式纳入的 O*）
+  delegated:
+    agent: idev-coder
+    at: '2026-10-23T19:50:28+08:00'
+  lease:
+    id: 01M5M9J8GDRDBM15EJHWHTXKBV
+    fencing: 4
+    paths:
+    - docs/design/console-route-merge-analysis.md
+    - kafka-web/kafka-frontend/src/modules/instance/views/list.vue
+    - kafka-web/kafka-frontend/src/modules/instance/views/detail.vue
+    - kafka-openapi/src/kafka/http/router/console.go
+    - kafka-web/kafka-frontend/src/service/unwrap-envelope.js
+    - kafka-web/kafka-frontend/src/service/unwrap-envelope.spec.cjs
+    - kafka-openapi/src/kafka/http/router/console_diagnose_test.go
+    released_at: '2026-10-23T20:24:08+08:00'
+  verification:
+    by: idev-reviewer
+    evidence: docs/task/code-review/review.md
+    at: '2026-10-23T20:24:08+08:00'
+  note: I1-I3 全部修复（I2 双方向），4 文件在 lease 内；coder 自测 5/5 + 导体复跑 5/5 + reviewer 复核 PASS（review.md
+    末节 + delegation fix-verify 记录）
+  status: PASS
+  at: '2026-10-23T20:24:08+08:00'
+  evidence: docs/task/code-review/workflow/logs/review-fix-selftest.log
+- id: run
+  kind: verify.run
+  label: 跑已勾选验收用例
+  with:
+    mode: selftest
+  delegated:
+    agent: idev-verifier
+    at: '2026-10-23T20:24:39+08:00'
+  lease:
+    id: 01M5MBGVBTD87G5H43V95BHKTT
+    fencing: 5
+    paths:
+    - docs/task/code-review/**
+    released_at: '2026-10-23T20:36:24+08:00'
+  note: verify.run selftest：5/5 PASS（i1/i2②/i2护栏/i2①/i3），无 FAIL 无 UNPROVEN；失败签名无累积
+  status: PASS
+  at: '2026-10-23T20:36:24+08:00'
+  evidence: docs/task/code-review/verify/report.md
+revisions: []
+feedback:
+  status: pending

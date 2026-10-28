@@ -53,6 +53,7 @@ const (
 	// #nosec G101 -- the string names a channel, not a credential: the
 	// token itself is minted at answer time and never stored anywhere.
 	ChannelLocalTokenTTY = "local_token_tty" // a local token typed in a TTY
+	ChannelChat          = "chat"            // the person's words in the conversation
 	ChannelOIDC          = "oidc"            // a logged-in web session
 	ChannelWebAuthn      = "webauthn"        // a user-verifying authenticator
 	ChannelOIDCWebAuthn  = "oidc_webauthn"   // a session plus an authenticator
@@ -508,7 +509,7 @@ func (s Service) VerifyApproval(ctx context.Context, a ports.Approval) error {
 // from a string nobody has defined.
 func assuranceFromChannel(channel string) (gate.Assurance, bool) {
 	switch channel {
-	case ChannelLocalTokenTTY, ChannelOIDC:
+	case ChannelLocalTokenTTY, ChannelChat, ChannelOIDC:
 		return gate.AssuranceLow, true
 	case ChannelWebAuthn, ChannelOIDCWebAuthn:
 		return gate.AssuranceHigh, true

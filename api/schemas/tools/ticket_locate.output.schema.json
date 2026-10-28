@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/ticket_locate.output.schema.json",
+  "title": "idev MCP ticket_locate output",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "path",
+    "home_kind"
+  ],
+  "properties": {
+    "path": {
+      "type": "string"
+    },
+    "home_kind": {
+      "type": "string",
+      "enum": [
+        "docs_task",
+        "idev_task",
+        "product",
+        "native"
+      ]
+    }
+  }
+}

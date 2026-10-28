@@ -13,6 +13,7 @@ the writer's side and from every reader's side.
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -20,7 +21,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / "lib"))
+sys.path.insert(0, str(HERE))
 
+import delegation  # noqa: E402
 import record_paths  # noqa: E402
 import safeyaml  # noqa: E402
 
@@ -129,8 +132,8 @@ class MetricsCountBothLayouts(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.repo = Path(self._tmp.name)
         base = self.repo / "docs" / "task" / "feat" / "workflow" / "delegations"
-        _write(base / "review-1.yaml", _record("review", feature="feat"))
-        _write(base / "RUN2" / "review-1.yaml", _record("review", feature="feat"))
+        _write(base / "review-1.yaml", _record("review", feature="feat", at="2026-10-19T22:13:00+08:00"))
+        _write(base / "RUN2" / "review-1.yaml", _record("review", feature="feat", at="2026-10-24T19:47:00+08:00"))
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
@@ -141,6 +144,103 @@ class MetricsCountBothLayouts(unittest.TestCase):
 
     def test_langfuse_export_takes_flat_and_per_run(self) -> None:
         self.assertEqual(len(langfuse_export.collect(self.repo, None, None)), 2)
+
+
+CODER = {"agent": "idev-coder", "kind": "deliver.code_pass"}
+
+
+class CountsPerRun(unittest.TestCase):
+    """A copy is one delegation, a verification is not an attempt, and the flat
+    layout's attempt numbers are not retries (joypaas code-review read 14
+    delegations and 10 retries; it had 11 and one)."""
+
+    base = Path("/t/delegations")
+
+    def kinds(self, *pairs: tuple[str, dict]) -> list[str]:
+        paired = [(self.base / name, record) for name, record in pairs]
+        found = record_paths.attempt_kinds(paired)
+        return [found[path] for path, _ in paired]
+
+    def test_a_copy_in_the_run_directory_is_one_delegation(self) -> None:
+        record = _record("fix", 3, at="2026-10-24T20:20:00+08:00", **CODER)
+        kept = record_paths.distinct([(self.base / "fix-3.yaml", record), (self.base / "R1" / "fix-3.yaml", dict(record))])
+        self.assertEqual([path for path, _ in kept], [self.base / "R1" / "fix-3.yaml"])
+
+    def test_two_delegations_are_two(self) -> None:
+        one = _record("fix", 1, at="2026-10-22T11:00:00+08:00", **CODER)
+        two = _record("fix", 1, at="2026-10-24T20:20:00+08:00", **CODER)
+        self.assertEqual(len(record_paths.distinct([(self.base / "fix-1.yaml", one), (self.base / "R1" / "fix-1.yaml", two)])), 2)
+
+    def test_retries_count_inside_a_run(self) -> None:
+        self.assertEqual(
+            self.kinds(("R1/c-1.yaml", _record("c", 1, **CODER)), ("R1/c-2.yaml", _record("c", 2, **CODER)),
+                       ("R2/c-3.yaml", _record("c", 3, **CODER))),
+            ["first", "retry", "first"])
+
+    def test_a_verification_is_not_an_attempt(self) -> None:
+        self.assertEqual(
+            self.kinds(("R1/c-1.yaml", _record("c", 1, **CODER)),
+                       ("R1/c-1.verify.yaml", _record("c", 1, kind="deliver.code_pass", role="verifier")),
+                       ("fix-verify-1.yaml", _record("fix", 1, kind="review.fix"))),
+            ["first", "verification", "verification"])
+
+    def test_flat_attempts_are_unscoped(self) -> None:
+        self.assertEqual(
+            self.kinds(("report-1.yaml", _record("report", 1, kind="review.report")),
+                       ("report-2.yaml", _record("report", 2, kind="review.report"))),
+            ["first", "unscoped"])
+
+
+class EvalCounts(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name)
+        (self.repo / ".git").mkdir()
+        ticket = self.repo / ".idev" / "task" / "feat"
+        (ticket / "workflow").mkdir(parents=True)
+        (ticket / "workflow" / "run.yaml").write_text("run_id: R2\nstatus: running\nsteps: []\n", encoding="utf-8")
+        base = ticket / "workflow" / "delegations"
+        review = "STATUS: PASS\nEVIDENCE: review.md\nFACTS: read src/a.py and git diff\nDOC_DRIFT: none\nASSUMED: none\n"
+        fix = _record("fix", 3, at="2026-10-24T20:20:00+08:00", raw=review, kind="review.fix", **{"agent": "idev-coder"})
+        _write(base / "report-1.yaml", _record("report", 1, at="2026-10-19T22:13:00+08:00", raw=review, kind="review.report"))
+        _write(base / "report-2.yaml", _record("report", 2, at="2026-10-21T17:39:00+08:00", raw=review, kind="review.report",
+                                               brief={"prior_failure": "an earlier run's record, not a failure"}))
+        _write(base / "fix-3.yaml", fix)
+        _write(base / "R1" / "fix-3.yaml", fix)
+        _write(base / "R1" / "fix-3.verify.yaml",
+               _record("fix", 3, at="2026-10-24T20:28:00+08:00", raw=review, kind="review.fix", role="verifier"))
+        _write(base / "R1" / "report-1.yaml", _record("report", 1, at="2026-10-24T19:00:00+08:00", raw=review,
+                                                      kind="review.report"))
+        _write(base / "R1" / "report-2.yaml", _record("report", 2, at="2026-10-24T19:47:00+08:00", raw=review,
+                                                      kind="review.report", checks={"facts-first": "FAIL:folded"}))
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def eval(self) -> str:
+        done = subprocess.run([sys.executable, str(HERE / "delegation.py"), "--repo", str(self.repo), "eval",
+                               "--feature", "feat"], capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return done.stdout
+
+    def test_counts(self) -> None:
+        out = self.eval()
+        self.assertIn("- delegated: 6 (duplicate files counted once: 1)", out)
+        self.assertIn("- retried: 1", out)
+        self.assertIn("- verifications: 1", out)
+        self.assertIn("- unscoped: 1 flat records", out)
+        self.assertIn("report-2.yaml: an earlier run's record, not a failure", out)
+
+    def test_reports_are_measured_again(self) -> None:
+        out = self.eval()
+        self.assertNotIn("facts-first", out.split("- check_fail:", 1)[1].splitlines()[0])
+        self.assertRegex(out, r"- checker: [0-9a-f]{12} \(reports measured again; a FAIL differs")
+
+    def test_a_checkout_check_keeps_its_stored_verdict(self) -> None:
+        record = _record("c", 1, raw="STATUS: PASS\nEVIDENCE: r.md\n", checks={"java-hygiene": "FAIL:catch returns null"},
+                         **CODER)
+        self.assertEqual(delegation.remeasure(record)["java-hygiene"], "FAIL:catch returns null")
+        self.assertNotIn("java-hygiene", delegation.remeasure(_record("c", 1, raw="STATUS: PASS\n", **CODER)))
 
 
 if __name__ == "__main__":

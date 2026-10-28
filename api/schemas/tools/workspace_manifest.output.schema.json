@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/workspace_manifest.output.schema.json",
+  "title": "idev MCP workspace_manifest output",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "feature",
+    "revision",
+    "manifest_root"
+  ],
+  "properties": {
+    "feature": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "integer"
+    },
+    "manifest_root": {
+      "type": "string"
+    },
+    "raw_root": {
+      "type": "string"
+    },
+    "files": {
+      "type": "integer",
+      "minimum": 0
+    }
+  }
+}

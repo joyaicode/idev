@@ -1,0 +1,116 @@
+schema_version: 2
+at: "2026-10-28T14:48:31+08:00"
+feature: llm-wiki
+intent: "快照只含需求和规格；知识重算确认票内主张；第三句确认解封建议。"
+invoke:
+  trigger: "需求和Spec；确认；确认"
+  matched: "done 后的答问，原话没有解封字样，不改 goal"
+  alias: ""
+  skill_path: "~/.cursor/skills/idev/SKILL.md"
+  how: continuation
+  skills:
+    - name: idev
+      path: "~/.cursor/skills/idev/SKILL.md"
+      why: "续作 llm-wiki，核对三答能不能解封"
+    - name: docs
+      path: "~/.cursor/skills/idev/docs/SKILL.md"
+      why: "需求和规格现在人机同一份"
+    - name: grilling
+      path: "~/.cursor/skills/grilling/SKILL.md"
+      why: "快照收窄后，已完成的票还要不要解封"
+route:
+  module: conventions
+  scenario: S4
+  convention_class: docs
+  stage: done
+  risk_tier: P1
+  why: "票已 done。原话没点名解封，goal 不动，不回交付改基线。"
+rejected:
+  - module: deliver
+    why: "没有解封字样，不准写 reopen_baseline，也不重开阶段"
+  - module: verify
+    why: "不是红绿"
+  - module: ops
+    why: "不是线上现象"
+thinking:
+  summary: "三答对上上一轮：快照只含需求和规格；知识只从机读工件和代码重算票内主张；第三句确认的是解封建议。整句 parse_confirm 对 reopen_baseline 是 no-verb，单独的确认是 keyword-mismatch。票已 done。B5 仍可摄取方案。剩下的差在文档契约。本轮不改基线，问这张已完成的票还解不解封。"
+  signals:
+    - "deliver.yaml stage=done aligned=true"
+    - "三答：需求和Spec；确认；确认"
+    - "parse_confirm reopen_baseline no-verb；单独确认 keyword-mismatch"
+  excluded:
+    - "把确认写成 reopen_baseline：原话没有解封字样"
+    - "把确认写成提测通过：提测已经签完"
+    - "改 baseline 正文：密封项不准改"
+  uncertainty: "快照收成需求和规格之后，还要不要把这张 done 票解封"
+  steps:
+    - n: 1
+      do: "三答拆开对上 Q2 Q3 Q4"
+      so: "范围收下；解封未点名"
+    - n: 2
+      do: "对照 B5 与文档体例"
+      so: "方案仍可摄取；差在需求和规格的契约"
+    - n: 3
+      do: "票已 done"
+      so: "问还解不解封，本轮不写 reopen"
+opened:
+  - "SKILL.md"
+  - "docs/SKILL.md"
+  - "references/chat-confirm-signoff.md"
+  - "scripts/lib/workflow_spec.py"
+  - ".idev/task/llm-wiki/deliver.yaml"
+  - ".idev/task/llm-wiki/deliver-eval.md"
+  - ".idev/task/llm-wiki/grill.md"
+calls:
+  - kind: skill
+    name: idev
+    from: user
+    to: skill:idev
+    why: "续作三问答问"
+    result: "loaded"
+  - kind: model
+    name: inherit
+    model: inherit
+    from: conductor
+    to: skill:idev
+    why: "判断确认能否写下解封"
+    thinking: "stage=done，原话无解封字样，排除改基线和补签提测"
+    result: "module=conventions scenario=S4 stop=grilling"
+  - kind: script
+    name: workflow_spec.parse_confirm
+    from: conductor
+    to: script:workflow_spec.py
+    args: "需求和Spec；确认；确认 reopen_baseline"
+    result: "no-verb；单独确认 keyword-mismatch"
+  - kind: script
+    name: console.py
+    from: conductor
+    to: script:console.py
+    args: "pending"
+    result: "pending: 0"
+  - kind: repo
+    name: .idev/task/llm-wiki/deliver.yaml
+    from: conductor
+    to: repo:deliver.yaml
+    result: "stage=done aligned=true reopen_baseline=false"
+  - kind: repo
+    name: .idev/task/llm-wiki/deliver-eval.md
+    from: conductor
+    to: repo:deliver-eval.md
+    result: "记下三答，baseline_conflict 仍为 1"
+decisions:
+  - kind: route
+    chose: conventions
+    why: "done 且本轮不改 goal"
+  - kind: delegate
+    chose: none
+    why: "订边界，不派执行者"
+  - kind: stop
+    chose: grilling
+    why: "快照收窄后，解封这张 done 票会作废已通过用例"
+  - kind: refuse
+    chose: "do not write reopen_baseline"
+    why: "原话没有解封、解除密封或 reopen"
+stop: "grilling Q5 这张已完成的票还解不解封"
+next: "人若写解封，再重开并只改需求和规格的契约；否则这张票保持 B1–B9"
+check_feature: skipped

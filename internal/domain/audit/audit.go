@@ -50,6 +50,7 @@ const (
 	ActionGateExpired         Action = "gate.expired"
 	ActionGateWithdrawn       Action = "gate.withdrawn"
 	ActionBaselineSealed      Action = "baseline.sealed"
+	ActionBaselineAdopted     Action = "baseline.adopted"
 	ActionBaselineDrift       Action = "baseline.drift"
 	ActionBaselineReopened    Action = "baseline.reopened"
 	ActionStageAdvanced       Action = "stage.advanced"
