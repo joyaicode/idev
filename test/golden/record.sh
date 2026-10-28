@@ -255,10 +255,6 @@ record gate-unlisted-name "$OUT" "a plausible name that no people list has" -- \
 # so the product checkout lists its own for this section.
 printf 'people:\n  - tester\n' > "$WORK/.idev/people.yaml"
 export IDEV_PRODUCT_REPO="$WORK"
-record gate-no-by "$OUT" "a gate PASS with no --by" -- \
-  W record gate-plan PASS --feature "$FEATURE"
-record gate-no-quote "$OUT" "a gate PASS with a person but no quote" -- \
-  W record gate-plan PASS --by tester --feature "$FEATURE"
 record gate-skip-no-evidence "$OUT" "skipping a gate without evidence" -- \
   W record gate-plan SKIPPED --feature "$FEATURE"
 
@@ -266,13 +262,6 @@ record gate-skip-no-evidence "$OUT" "skipping a gate without evidence" -- \
 record gate-agent-signs "$FIXED" \
   "an agent name in --by. BEFORE P0: exit 0, the gate passed and run.yaml recorded signoff.by=idev-coder — is_human() only blacklisted agent/ai/cursor/assistant. AFTER: BLOCKED. Review §3.1." -- \
   W record gate-plan PASS --by idev-coder --quote "确认" --feature "$FEATURE"
-record gate-question-quote "$FIXED" \
-  "a question as the confirmation. BEFORE P0: exit 0 — is_confirm() was a prefix test, so 同意吗 started with 同意 and counted. AFTER: BLOCKED, reason=question. Review §3.1." -- \
-  W record gate-plan PASS --by tester --quote "同意吗" --feature "$FEATURE"
-record gate-refusal-quote "$FIXED" \
-  "a refusal as the confirmation. BEFORE P0: exit 0 — 确认不了 starts with 确认. AFTER: BLOCKED, reason=unparsed-tail. Review §3.1." -- \
-  W record gate-plan PASS --by tester --quote "确认不了" --feature "$FEATURE"
-
 # AUTO: the plan gate lists every tier, and record AUTO runs check-feature
 # verify-plan itself. The demo ticket has no baseline or design, so the check
 # fails at P0 as at any other tier, and a saved file that says 0 FAIL changes
@@ -288,7 +277,7 @@ printf '%s\n' "---" "0 FAIL" > "$DT/verify/plan-check.log"
 record gate-auto-forged "$OUT" "a saved file that says 0 FAIL does not stand in for the check" -- \
   W record gate-plan AUTO --evidence "verify/plan-check.log" --feature "$FEATURE"
 
-record gate-ok "$OUT" "a person with a real confirmation" -- \
+record gate-ok "$OUT" "a person records the gate; the sentence is a note" -- \
   W record gate-plan PASS --by tester --quote "确认" --feature "$FEATURE"
 unset IDEV_PRODUCT_REPO
 

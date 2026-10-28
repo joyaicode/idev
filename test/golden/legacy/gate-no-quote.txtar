@@ -1,7 +1,0 @@
-# a gate PASS with a person but no quote
-# cmd: W record gate-plan PASS --by tester --feature demo
-
--- exit --
-2
--- output --
-BLOCKED human.gate PASS needs --quote with the person's own words, and those words have to show agreement; it does not show agreement with this step

@@ -73,7 +73,7 @@ class PreTool(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(json.loads(done.stdout)["permission"], "allow")
 
-    def test_denies_signoff_field_write(self) -> None:
+    def test_allows_delivery_field_write(self) -> None:
         done = run_hook("pre_tool.py", {
             "tool_name": "Write",
             "tool_input": {
@@ -81,11 +81,22 @@ class PreTool(unittest.TestCase):
                 "contents": "sealed: true\n",
             },
         })
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertEqual(json.loads(done.stdout)["permission"], "allow")
+
+    def test_denies_reopen_written_by_hand(self) -> None:
+        done = run_hook("pre_tool.py", {
+            "tool_name": "Write",
+            "tool_input": {
+                "path": "docs/task/demo/baseline.yaml",
+                "contents": "reopen_baseline: true\n",
+            },
+        })
         self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
         self.assertEqual(json.loads(done.stdout)["permission"], "deny")
-        self.assertIn("signoff", done.stdout)
+        self.assertIn("reopen", done.stdout)
 
-    def test_denies_signoff_fields_in_every_ticket_and_run_yaml(self) -> None:
+    def test_allows_delivery_fields_in_ticket_and_run_yaml(self) -> None:
         for path, key, field in (
             ("/repo/.idev/task/demo/deliver.yaml", "contents", "aligned: true\n"),
             ("docs/task/demo/workflow/run.yaml", "new_string", "  by: wangwei794\n"),
@@ -95,8 +106,8 @@ class PreTool(unittest.TestCase):
         ):
             for path_key in ("path", "file_path"):
                 done = run_hook("pre_tool.py", {"tool_name": "Edit", "tool_input": {path_key: path, key: field}})
-                self.assertEqual(done.returncode, 2, f"{path} {path_key}: {done.stdout}")
-                self.assertIn("signoff", done.stdout)
+                self.assertEqual(done.returncode, 0, f"{path} {path_key}: {done.stdout}")
+                self.assertEqual(json.loads(done.stdout)["permission"], "allow")
 
     def test_allows_source_and_docs_that_only_quote_signoff_words(self) -> None:
         # Cursor sends the whole file with an edit, so every old line is in the content.
@@ -118,9 +129,9 @@ class PreTool(unittest.TestCase):
             self.assertEqual(json.loads(done.stdout)["permission"], "allow", path)
 
     def test_a_write_without_a_path_is_still_checked(self) -> None:
-        done = run_hook("pre_tool.py", {"tool_name": "Write", "tool_input": {"contents": "sealed: true\n"}})
+        done = run_hook("pre_tool.py", {"tool_name": "Write", "tool_input": {"contents": "reopen_baseline: true\n"}})
         self.assertEqual(done.returncode, 2, done.stdout)
-        self.assertIn("signoff", done.stdout)
+        self.assertIn("reopen", done.stdout)
 
     def test_denies_idev_engine_python(self) -> None:
         done = run_hook("pre_tool.py", {
@@ -215,7 +226,7 @@ class InstallHooks(unittest.TestCase):
 
 
 class QuoteCheck(unittest.TestCase):
-    """chat_signoff checks prompts.log when forced on, or auto when cwd matches."""
+    """A recorded sentence is a note. The prompt log does not gate it."""
 
     def setUp(self) -> None:
         env = mock.patch.dict(os.environ)
@@ -237,7 +248,7 @@ class QuoteCheck(unittest.TestCase):
         self.spec._PEOPLE_CACHE.clear()
         self.tmp.cleanup()
 
-    def test_forged_quote_refused_when_check_on(self) -> None:
+    def test_a_quote_is_stored_when_the_log_check_is_on(self) -> None:
         (self.data / "prompts.log").write_text(
             json.dumps({"text": "hello", "sha256": "x", "at": "t"}) + "\n",
             encoding="utf-8",
@@ -246,16 +257,8 @@ class QuoteCheck(unittest.TestCase):
         os.environ["IDEV_DATA"] = str(self.data)
         os.environ["IDEV_PROMPT_LOG_CHECK"] = "1"
         try:
-            with self.assertRaises(self.w.Blocked) as ctx:
-                self.w.chat_signoff("wangwei794", "确认")
-            self.assertIn("prompts.log", str(ctx.exception))
-            # person really said it
-            (self.data / "prompts.log").write_text(
-                json.dumps({"text": "请确认\n确认", "sha256": "y", "at": "t"}) + "\n",
-                encoding="utf-8",
-            )
-            got = self.w.chat_signoff("wangwei794", "确认")
-            self.assertEqual(got["quote"], "确认")
+            got = self.w.chat_signoff("wangwei794", "确认不了")
+            self.assertEqual(got["quote"], "确认不了")
         finally:
             for key, val in zip(("IDEV_DATA", "IDEV_PROMPT_LOG_CHECK"), env_was):
                 if val is None:
@@ -286,15 +289,8 @@ class QuoteCheck(unittest.TestCase):
         os.environ["IDEV_DATA"] = str(self.data)
         os.environ.pop("IDEV_PROMPT_LOG_CHECK", None)
         try:
-            with self.assertRaises(self.w.Blocked) as ctx:
-                self.w.chat_signoff("wangwei794", "确认")
-            self.assertIn("prompts.log", str(ctx.exception))
-            (self.data / "prompts.log").write_text(
-                json.dumps({"text": "确认", "sha256": "y", "at": "t", "cwd": cwd}) + "\n",
-                encoding="utf-8",
-            )
-            got = self.w.chat_signoff("wangwei794", "确认")
-            self.assertEqual(got["quote"], "确认")
+            got = self.w.chat_signoff("wangwei794", "同意吗")
+            self.assertEqual(got["quote"], "同意吗")
         finally:
             os.environ.pop("IDEV_DATA", None)
 

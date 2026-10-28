@@ -7,6 +7,7 @@ import (
 
 	"github.com/idev/internal/app/gatesvc"
 	"github.com/idev/internal/domain/audit"
+	"github.com/idev/internal/domain/gate"
 	"github.com/idev/internal/domain/run"
 	"github.com/idev/internal/ports"
 )
@@ -229,7 +230,7 @@ func TestAForgedHumanApprovalIsRefused(t *testing.T) {
 	// cannot be walked to PASS by reusing its approval id.
 	g := askGate(t, w, r.ID, "gate-plan")
 	_, err := w.gate.Decide(context.Background(), gatesvc.DecisionParams{
-		GateID: g.ID, Quote: "驳回", Channel: gatesvc.ChannelOIDC,
+		GateID: g.ID, Quote: "驳回", Decision: gate.DecisionReject, Channel: gatesvc.ChannelOIDC,
 		RecomputedDigest: "sha256:gate-plan", Actor: person(),
 	})
 	if err != nil {

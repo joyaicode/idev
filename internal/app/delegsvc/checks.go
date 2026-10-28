@@ -316,9 +316,8 @@ func (c Checker) noSignoffWrite(r Report) Result {
 		return pass(CheckNoSignoffWrite)
 	}
 	return fail(CheckNoSignoffWrite, BlameAgent, fmt.Sprintf(
-		"回报里出现「%s」—— 签字字段只有导体能写,而且要有人本轮的确认用语。"+
-			"你要做的是把事实回报上去,由导体请人签。"+
-			"改成陈述(如「已满足 accepted 的条件,待人确认」)",
+		"回报里出现「%s」—— 签字字段只有导体能写。"+
+			"检查过了由导体落笔，不向人要确认。你要做的是把事实回报上去。",
 		truncate(strings.Join(claims, ","), 30)))
 }
 

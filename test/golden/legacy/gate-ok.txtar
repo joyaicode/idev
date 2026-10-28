@@ -1,4 +1,4 @@
-# a person with a real confirmation
+# a person records the gate; the sentence is a note
 # cmd: W record gate-plan PASS --by tester --quote 确认 --feature demo
 
 -- exit --

@@ -329,14 +329,16 @@ func TestTransitionSwitchDowngradesAndSaysSo(t *testing.T) {
 	denied(t, mustErr(gate.Decide(g, p, s)), gate.ReasonNotHuman)
 }
 
-func TestARefusedQuoteIsNotAnApproval(t *testing.T) {
+func TestAQuoteIsNotParsed(t *testing.T) {
 	g := openSealed(t, gate.Policy{}, gate.RiskP1)
 	s := submit(g)
 	s.QuoteOK = false
-	denied(t, mustErr(gate.Decide(g, gate.Policy{}, s)), gate.ReasonQuoteRejected)
+	if _, err := gate.Decide(g, gate.Policy{}, s); err != nil {
+		t.Fatalf("a quote flag refused the gate: %v", err)
+	}
 }
 
-func TestDestructiveGatesDemandTheirKeyword(t *testing.T) {
+func TestReopenDoesNotNeedAKeyword(t *testing.T) {
 	g, err := gate.Open(gate.Policy{}, gate.Request{
 		ID: "g1", Type: gate.TypeReopenBaseline, Risk: gate.RiskP2,
 		Subject:   gate.Subject{Kind: gate.SubjectBaseline, Digest: "sha256:a", BaselineRevision: 2},
@@ -345,16 +347,8 @@ func TestDestructiveGatesDemandTheirKeyword(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := submit(g)
-	denied(t, mustErr(gate.Decide(g, gate.Policy{}, s)), gate.ReasonKeywordMissing)
-
-	// Either word is enough — the requirement is a disjunction.
-	for _, kw := range []string{"解除密封", "reopen"} {
-		ok := submit(g)
-		ok.QuoteKeywords = []string{kw}
-		if _, err := gate.Decide(g, gate.Policy{}, ok); err != nil {
-			t.Errorf("keyword %q should satisfy reopen_baseline: %v", kw, err)
-		}
+	if _, err := gate.Decide(g, gate.Policy{}, submit(g)); err != nil {
+		t.Fatalf("reopen without a keyword: %v", err)
 	}
 }
 
@@ -369,12 +363,8 @@ func TestDefectOriginKeywordMustMatchTheOrigin(t *testing.T) {
 	}
 	wrong := submit(g)
 	wrong.QuoteKeywords = []string{"origin=arch"}
-	denied(t, mustErr(gate.Decide(g, gate.Policy{}, wrong)), gate.ReasonKeywordMissing)
-
-	right := submit(g)
-	right.QuoteKeywords = []string{"origin=code"}
-	if _, err := gate.Decide(g, gate.Policy{}, right); err != nil {
-		t.Errorf("the matching origin should be accepted: %v", err)
+	if _, err := gate.Decide(g, gate.Policy{}, wrong); err != nil {
+		t.Fatalf("a mismatched origin keyword refused the gate: %v", err)
 	}
 }
 
@@ -476,7 +466,7 @@ func TestPropertyOnlyHumansWithMatchingDigestsApprove(t *testing.T) {
 	// Each flaw breaks one requirement of a valid approval.
 	flaws := []string{
 		"none", "agent", "service", "no-role", "out-of-scope",
-		"weak-auth", "bad-quote", "wrong-keyword", "changed-content", "unrecorded",
+		"weak-auth", "changed-content", "unrecorded",
 	}
 
 	rapid.Check(t, func(t *rapid.T) {
@@ -524,10 +514,6 @@ func TestPropertyOnlyHumansWithMatchingDigestsApprove(t *testing.T) {
 			s.Approver.ScopeCoversFeature = false
 		case "weak-auth":
 			s.Approver.Assurance = gate.AssuranceLow
-		case "bad-quote":
-			s.QuoteOK = false
-		case "wrong-keyword":
-			s.QuoteKeywords = []string{"origin=arch"}
 		case "changed-content":
 			s.RecomputedDigest = "sha256:bbb"
 		case "unrecorded":
@@ -546,9 +532,6 @@ func TestPropertyOnlyHumansWithMatchingDigestsApprove(t *testing.T) {
 			if s.Decision != gate.DecisionApprove {
 				t.Fatal("a rejection produced an approval")
 			}
-			if !s.QuoteOK {
-				t.Fatal("a gate was approved on a quote that is not a confirmation")
-			}
 			if s.RecomputedDigest != g.Subject.Digest {
 				t.Fatal("a gate was approved against changed content")
 			}
@@ -557,9 +540,6 @@ func TestPropertyOnlyHumansWithMatchingDigestsApprove(t *testing.T) {
 			}
 			if !s.Approver.HasApproverRole || !s.Approver.ScopeCoversFeature {
 				t.Fatal("authorisation was skipped")
-			}
-			if missingRequired(g.RequiredKeywords, s.QuoteKeywords) {
-				t.Fatal("a destructive gate was approved without its keyword")
 			}
 			if !s.Approver.Assurance.Satisfies(g.RequiredAssurance) {
 				if !out.Downgraded {
@@ -588,20 +568,6 @@ func satisfyingKeywords(t gate.Type) []string {
 		return []string{"解除密封"}
 	}
 	return nil
-}
-
-func missingRequired(required, got []string) bool {
-	if len(required) == 0 {
-		return false
-	}
-	for _, want := range required {
-		for _, have := range got {
-			if want == have {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 func baselineKind(t gate.Type) gate.SubjectKind {

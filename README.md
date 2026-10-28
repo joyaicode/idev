@@ -154,7 +154,7 @@ $W record <step> PASS --evidence …
 $W status
 ```
 
-要票配方加 `--feature <票名>`。停问步（`human.gate`）等人在聊天里回确认用语，再 `record PASS --by <人名> --quote "确认"`。这句话就是签字；门还开着时，同一句原话把它批准。
+要票配方加 `--feature <票名>`。停问步（`human.gate`）在检查过了之后 `record PASS`。不另要确认。门还开着时，同一次记录把它批准。
 
 ## 推到 GitHub（以后）
 

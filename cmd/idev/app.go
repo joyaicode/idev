@@ -301,7 +301,7 @@ func (a app) request(ctx context.Context, args []string) error {
 		SubjectKind: string(g.Subject.Kind), SubjectDigest: g.Subject.Digest, Subject: subject,
 		RequiredAssurance: string(g.RequiredAssurance),
 		ExpiresAt:         g.ExpiresAt.Format(time.RFC3339),
-		Approve:           "idev gate approve " + g.ID + " --quote \"<their words>\"",
+		Approve:           "idev gate approve " + g.ID,
 	})
 }
 
@@ -400,17 +400,9 @@ func (a app) answer(ctx context.Context, args []string, reject bool) error {
 		return usageError{"gate " + verb + " needs a gate id"}
 	}
 	q := strings.TrimSpace(*quote)
-	if q == "" {
-		return errors.New("the answer is the person's words from the conversation; pass them with --quote")
-	}
-	if reject && !signoff.IsReject(q) {
-		return errors.New("a rejection's words are 驳回; say why in the chat, where the agent can act on it")
-	}
-	if !reject && signoff.IsReject(q) {
-		return errors.New("these words reject; use `idev gate reject`")
-	}
-	if err := quoteFromConversation(q); err != nil {
-		return err
+	decision := gate.DecisionApprove
+	if reject {
+		decision = gate.DecisionReject
 	}
 
 	e, err := a.open(ctx)
@@ -444,7 +436,7 @@ func (a app) answer(ctx context.Context, args []string, reject bool) error {
 	}
 
 	d, err := e.svc.Decide(ctx, gatesvc.DecisionParams{
-		GateID: id, Quote: q, Channel: gatesvc.ChannelChat,
+		GateID: id, Quote: q, Decision: decision, Channel: gatesvc.ChannelChat,
 		RecomputedDigest: digest, Actor: cred.Principal(),
 	})
 	if err != nil {

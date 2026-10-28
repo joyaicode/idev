@@ -74,6 +74,19 @@ confirm:
   - { quote: "不要回退到需求", gate_type: defect_origin, origin: req, ok: false, reason: negation }
   - { quote: "没必要回退到实现", gate_type: defect_origin, origin: code, ok: false, reason: negation }
   - { quote: "回退到实现也许更好", gate_type: defect_origin, origin: code, ok: false, reason: hesitation }
+  - { quote: "回退到实现，但是要补用例", gate_type: defect_origin, origin: code, ok: false, reason: negation }
+  # A seal gate also takes a reply that names the seal; only a seal gate does.
+  - { quote: "进行密封", gate_type: sealed, ok: true, reason: ok }
+  - { quote: "确认密封", gate_type: sealed, ok: true, reason: ok }
+  - { quote: "密封", gate_type: sealed, ok: true, reason: ok }
+  - { quote: "好的，进行密封", gate_type: sealed, ok: true, reason: ok }
+  - { quote: "不要密封", gate_type: sealed, ok: false, reason: negation }
+  - { quote: "等需求定了再密封", gate_type: sealed, ok: false, reason: hesitation }
+  - { quote: "密封？", gate_type: sealed, ok: false, reason: question }
+  - { quote: "密封，但是范围要改", gate_type: sealed, ok: false, reason: negation }
+  - { quote: "解除密封", gate_type: sealed, ok: false, reason: keyword-mismatch }
+  - { quote: "回退到实现", gate_type: sealed, ok: false, reason: keyword-mismatch }
+  - { quote: "进行密封", gate_type: accepted_arch, ok: false, reason: no-verb }
 
   # --- verbs alone ---------------------------------------------------------
   - { quote: "全签", ok: true, reason: ok }

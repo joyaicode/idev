@@ -234,11 +234,17 @@ class CheckRunUsesTheGate(unittest.TestCase):
     def test_an_agent_cannot_sign(self) -> None:
         self.assertTrue(self._run("idev-coder", "确认"))
 
-    def test_a_question_is_not_a_confirmation(self) -> None:
-        self.assertTrue(self._run("wangwei794", "同意吗"))
+    def test_a_question_passes(self) -> None:
+        self.assertEqual(self._run("wangwei794", "同意吗"), [])
 
-    def test_a_refusal_is_not_a_confirmation(self) -> None:
-        self.assertTrue(self._run("wangwei794", "确认不了"))
+    def test_a_refusal_passes(self) -> None:
+        self.assertEqual(self._run("wangwei794", "确认不了"), [])
+
+    def test_continue_passes(self) -> None:
+        self.assertEqual(self._run("wangwei794", "继续"), [])
+
+    def test_an_empty_quote_passes(self) -> None:
+        self.assertEqual(self._run("", ""), [])
 
 
 if __name__ == "__main__":

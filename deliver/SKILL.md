@@ -17,7 +17,7 @@ parent: idev
 1. `session-context.py` → 只开 `OPEN` 行；S1 必开 grilling + [docs/SKILL.md](../docs/SKILL.md)。
 2. 读本阶段票文件（`baseline` / `req` / `arch` / `review`…），边界不清先 grilling，勿自拷问。
 3. 改产物；请签前 `check-feature.sh <feature> <stage>`（FAIL 看 HINT）。
-4. 有确认用语才代写当前停问点；`aligned`/`done` 必须人名 `by`。
+4. 检查通过、没有未决分叉，就写下当前这一关；`aligned`/`done` 的 `by` 是人名。
 5. `trace.sh append`；对话一行运行路径。
 
 | Need | Doc |
@@ -39,12 +39,12 @@ parent: idev
 
 1. **不准跳阶段。** 无 `deliver.yaml` 从 `req-review` 建。
 2. **grill 未闭合不准请签需求通过。** 每个档位都在 req 末一次签 `sealed` + `req.accepted`。基线就绪后可以起草拆解，不必先密封。未决问句只写 `<票目录>/grill.md`。`<票目录>` 只认 `python3 ~/.cursor/skills/idev/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key task`。`baseline.yaml` 仍有 `status: open` 或未清空 `objections` 时，关闭的 `grill.md` 不算数 → **自动唤起** `~/.cursor/skills/grilling/SKILL.md`，把本轮能问的一次问完；不准口头「差不多了」请签。
-2a. **确认前 frontier 必须已空。** 请签需求通过之前，`grill.md` 必须在：`frontier` 与 `shared_understanding` 各自单独成行，正文有 `❓` 与 `➡️`。frontier 不是 `empty` → 不准请签、不准代写。`shared_understanding` 由这次确认写成 `true`，请签前可以仍是 `false`。不要先请一次「共享理解」再请一次密封。缺这份文件也不准把基线标成 `sealed: true`。
+2a. **落笔前 frontier 必须已空。** 写需求通过之前，`grill.md` 必须在：`frontier` 与 `shared_understanding` 各自单独成行，正文有 `❓` 与 `➡️`。frontier 不是 `empty` → 不准写。`shared_understanding` 由这次落笔写成 `true`。不要先停一次「共享理解」再停一次密封。缺这份文件也不准把基线标成 `sealed: true`。
 3. **密封后不准改 baseline 正文。** 下游只引用 `baseline_item_id`。要改原文：人写 `reopen_baseline`，回到 `req-review`。
 4. **回退 origin 只能是 `req` / `arch` / `code`**（译法、方案、实现）。禁止用提测反馈直接改 goal。
 5. **编码必须衔 verify**；case 必须同时挂 `slice_id` 与 `baseline_item_id`。
-6. **过专家拒过清单才能请人签字。** 清单不过就停，不要用「资深意见」绕过。编码 / 路由 / PIN 先过 `../conventions/` 对应类。
-7. **无本轮确认用语不得写 `sealed` / `accepted` / `aligned` / `reopen_baseline`。** 有确认用语则按 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md) 只代写当前停问点。`继续` 不算。解封须带「解除密封」或 `reopen`。
+6. **过专家拒过清单才能写这一关。** 清单不过就停，不要用「资深意见」绕过。编码 / 路由 / PIN 先过 `../conventions/` 对应类。
+7. **检查没过不得写 `sealed` / `accepted` / `aligned`。** 检查过了、没有未决分叉，就按 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md) 只写当前这一关。不问确认。解封须带「解除密封」或 `reopen`。
 8. **试运行改本模块**：提案 + 拷问后只改真源 `~/.cursor/skills/idev/deliver/`。不要写回仓库。台账 [入口 state/ledger.yaml](../state/ledger.yaml)。
 9. **尺是密封基线。** specs 只复述；和 baseline 打架就改 specs。verify 的 goal/non_goal 必须复制基线原文。
 10. **停问按 `risk_tier`（默认 P1）与信号。** 见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。被本模块调用的 verify 不再为导体进化另停一次。

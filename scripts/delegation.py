@@ -772,9 +772,8 @@ def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     if SIGNOFF_WRITE.search(raw) and not SIGNOFF_NEG.search(raw):
         hit = SIGNOFF_WRITE.search(raw)
         checks["no-signoff-write"] = (
-            f"FAIL:回报里出现「{hit.group(0)[:30]}」—— 签字字段只有导体能写,"
-            "而且要有人本轮的确认用语。你要做的是把事实回报上去,"
-            "由导体请人签。改成陈述(如「已满足 accepted 的条件,待人确认」)")
+            f"FAIL:回报里出现「{hit.group(0)[:30]}」—— 签字字段只有导体能写。"
+            "检查过了由导体落笔，不向人要确认。你要做的是把事实回报上去。")
     else:
         checks["no-signoff-write"] = "PASS"
 

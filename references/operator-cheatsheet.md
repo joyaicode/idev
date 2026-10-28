@@ -62,9 +62,9 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> <workflow_id> [--pr
 | 格 | 是什么 | 谁触发 | 产物 |
 |----|--------|--------|------|
 | **selftest** | 开发自测：`plan.mode=selftest`，证明实现不漂基线 | 架构通过后直接起草并跑，计划不单独请签 | `verify/plan.yaml` + 跑证；`stage` 仍在 `code` |
-| **实现审核** | 自测完成后看用例、diff、跑证 | 确认用语写入 `semantic_gate.code`，stage 改为 `test` | 不另问要不要提测 |
+| **实现审核** | 自测完成后看用例、diff、跑证 | 检查通过就写 `semantic_gate.code`，stage 改为 `test` | 不另问要不要提测 |
 | **test** | 提测：`plan.mode=test`，维表六族齐（缺则 UNPROVEN 明示） | 实现审核通过后，或 S8 `test-pack` | `check-feature <f> test` |
-| **aligned** | 人接受提测结果与残留 UNPROVEN 风险 | 测试结果那一次确认 | `deliver.aligned=true` → `stage=done` |
+| **aligned** | 提测结果与残留 UNPROVEN | 检查通过就写 | `deliver.aligned=true` → `stage=done` |
 | **promote** | 把**当前** accepted+已跑 plan 快照成巡检包 | 人说提升 / 巡检包 / promote / 「继续」（done 后） | `doc_home.py --key patrol` |
 
 钉死：promote 吃的是快照那份 plan（可以是 selftest 或 test）。aligned 是人签，promote 是另一刀（H2，全文见 invoke）。
@@ -84,7 +84,7 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> <workflow_id> [--pr
 
 ## 4. 非门禁不停（H1–H6）
 
-全文只在 [invoke.md](invoke.md)。无当前停问点不请签，不擅自 promote，不为观测再停。`继续` ≠ 确认用语。
+全文只在 [invoke.md](invoke.md)。检查过了就写这一关，不请人确认，不擅自 promote，不为观测再停。
 
 签字前：`bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>`
 

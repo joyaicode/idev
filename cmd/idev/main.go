@@ -5,8 +5,8 @@
 //	idev gate request --feature F --type T --risk P1 [--run-id R --step S]
 //	                  [--root DIR --subject PATH ...] [--revision N] [--origin O]
 //	                  [--will-write W ...] [--proof P]
-//	idev gate approve <id> --quote Q      # the person's words of agreement
-//	idev gate reject  <id> --quote Q      # the person's 驳回
+//	idev gate approve <id> [--quote Q]    # records the step; the quote is a note
+//	idev gate reject  <id> [--quote Q]    # the reject command, not a sentence
 //	idev gate status  <id>                 # JSON, for workflow.py
 //	idev lease acquire --run R --step S [--purpose write|verify] [--ticket-dir D] ... # JSON, for workflow.py
 //	idev lease release <id> --token T

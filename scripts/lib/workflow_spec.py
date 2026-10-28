@@ -140,7 +140,7 @@ _REOPEN_PHRASES = ("解除密封", "reopen", "重新打开基线", "打开基线
 # Second line of defence. A hit is a refusal with a reason, so the conductor
 # can quote back why rather than just failing.
 QUESTION_MARKS = ("?", "？", "吗", "么", "嘛", "呢", "是否", "能否", "可否", "要不要")
-NEGATION_CJK = ("不", "没", "别", "未", "否", "勿")
+NEGATION_CJK = ("不", "没", "别", "未", "否", "勿", "但", "可是")
 NEGATION_ASCII = ("not", "no", "don't", "wait", "but", "hold", "later")
 HESITATION = ("先", "等", "再说", "待定", "也许", "可能", "吧")
 
@@ -785,8 +785,12 @@ def check_run(data: Any, path: Path, errors: list[str]) -> None:
             errors.append(f"{path}: steps[{i}] unknown kind {kind}")
         if kind == "human.gate" and ss == "PASS":
             sign = step.get("signoff") if isinstance(step.get("signoff"), dict) else {}
-            if not is_confirm(str(sign.get("quote") or "")) or not is_human(str(sign.get("by") or "")):
-                errors.append(f"{path}: steps[{i}] human.gate PASS needs signoff.by (a person) and a confirm quote")
+            if not isinstance(step.get("signoff"), dict):
+                errors.append(f"{path}: steps[{i}] human.gate PASS needs a signoff record")
+            else:
+                by = str(sign.get("by") or "")
+                if by and not is_human(by):
+                    errors.append(f"{path}: steps[{i}] human.gate PASS by must be a person")
         if ss == "AUTO":
             if kind != "human.gate":
                 errors.append(f"{path}: steps[{i}] AUTO is only for a human.gate that declares auto_tiers")
@@ -874,6 +878,11 @@ def _named_action(text: str):
     return None
 
 
+def _names_seal(text: str) -> bool:
+    """A reply that names the seal itself. 解除密封 names the unseal, not the seal."""
+    return _named_action(text) is None and "密封" in text
+
+
 def _with_canonical(tokens, text: str) -> tuple:
     """Add the keyword the gate domain compares, when ordinary words named it."""
     out = list(tokens)
@@ -922,6 +931,8 @@ def parse_confirm(quote: str, gate_type: str = "", origin: str = "") -> Confirm:
     # them rather than the generic tail error.
     if any(mark in text for mark in QUESTION_MARKS):
         return Confirm(False, "question", ())
+    if gate_type == "sealed" and _names_seal(text):
+        return _refusal(text) or Confirm(True, "ok", ())
 
     verb, tokens = _parse_grammar(text, CONFIRM_WORDS)
     if verb is None:

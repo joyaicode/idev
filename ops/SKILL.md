@@ -47,7 +47,7 @@ parent: idev
 6. **不准自动做生产写操作。** 不重启、不 failover、不 kubectl patch、不建告警屏蔽。预案等人判定。
 7. **不准用排障改密封基线。** 像需求写错 → `baseline-conflict`，停。人选基线内修或 `reopen_baseline`。
 8. **未拷问确认 `defect_origin` 不准回退。** origin 只许 `req` / `arch` / `code`。
-9. **无本轮确认用语不得写 `defect_origin` / `reopen_baseline`；`resolved` 只在 P1/P2 账本收敛时可写 `auto:`，否则同样要确认用语。** 回退确认句须带 `origin=req|arch|code`。`by:` 必须是人名。细则 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。
+9. **回退和解封要点名那件事，才写 `defect_origin` / `reopen_baseline`。** 账本收敛就写 `resolved`，不问确认。回退句须点明 `req` / `arch` / `code`。`by:` 必须是人名。细则 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。
 10. **请人签字前跑**  
     `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> ops`  
     （内含 `outbound-skills-check.sh --repo`。当前产品 `.idev/marker.yaml` 为 `marker: idev` 且有 `handoff.yaml` 时，缺其中的 required Skill 即 FAIL。没有标识或不写名单，就不要求任何产品的 Skill。）  

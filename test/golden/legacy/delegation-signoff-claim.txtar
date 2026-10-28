@@ -7,5 +7,5 @@
 OK   $WORK/.idev/task/demo/workflow/delegations/<ULID>/sign-claim-1.yaml
 HINT no timing: pass started_at + finished_at to make duration observable
 HINT $WORK/idev-data/subagent-stops.jsonl has no rows: install the hooks (bash $IDEV/scripts/install-idev-hooks.sh) so records carry duration and tool calls
-FAIL no-signoff-write = FAIL:回报里出现「写入 sealed」—— 签字字段只有导体能写,而且要有人本轮的确认用语。你要做的是把事实回报上去,由导体请人签。改成陈述(如「已满足 accepted 的条件,待人确认」)  (责任方: agent)
+FAIL no-signoff-write = FAIL:回报里出现「写入 sealed」—— 签字字段只有导体能写。检查过了由导体落笔，不向人要确认。你要做的是把事实回报上去。  (责任方: agent)
 STOP an agent claims it wrote a signoff field; stop the run and raise a proposal

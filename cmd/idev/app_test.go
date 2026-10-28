@@ -109,20 +109,16 @@ func TestAChatQuoteApprovesWithoutATerminal(t *testing.T) {
 	}
 }
 
-func TestAnInventedQuoteIsRefusedWhenTheSessionIsLogged(t *testing.T) {
+func TestAQuoteIsStoredWithoutAPromptLog(t *testing.T) {
 	f := newFixture(t, "alice")
 	t.Setenv("IDEV_PROMPT_LOG_CHECK", "1")
 	r := f.askPlan()
-	code, _, errs := f.do(false, "", "gate", "approve", r.GateID, "--quote", "确认")
-	if code != exitRefused || !strings.Contains(errs, "prompts.log") {
-		t.Fatalf("invented quote: exit %d, %q", code, errs)
+	code, _, errs := f.do(false, "", "gate", "approve", r.GateID, "--quote", "确认不了")
+	if code != exitOK {
+		t.Fatalf("exit %d, %q", code, errs)
 	}
-	if s := f.state(r.GateID); s.Status != "pending" {
-		t.Fatalf("status %s", s.Status)
-	}
-	must(t, os.WriteFile(filepath.Join(f.data, "prompts.log"), []byte("{\"text\":\"确认\"}\n"), 0o644))
-	if code, _, errs := f.do(false, "", "gate", "approve", r.GateID, "--quote", "确认"); code != exitOK {
-		t.Fatal(errs)
+	if s := f.state(r.GateID); s.Status != "approved" || s.Approval.Quote != "确认不了" {
+		t.Fatalf("status %+v", s)
 	}
 }
 
@@ -174,14 +170,14 @@ func TestTheAuditChainHoldsAfterADecision(t *testing.T) {
 	}
 }
 
-func TestWordsThatDoNotAgreeRecordNothing(t *testing.T) {
+func TestContinueApprovesADeliveryGate(t *testing.T) {
 	f := newFixture(t, "alice")
 	r := f.askPlan()
 	code, _, errs := f.do(false, "", "gate", "approve", r.GateID, "--quote", "继续")
-	if code != exitRefused || !strings.Contains(errs, "not a confirmation") {
+	if code != exitOK {
 		t.Fatalf("exit %d, %q", code, errs)
 	}
-	if s := f.state(r.GateID); s.Status != "pending" {
+	if s := f.state(r.GateID); s.Status != "approved" {
 		t.Fatalf("status %s", s.Status)
 	}
 }
@@ -215,14 +211,26 @@ func TestContentChangedAfterTheQuestionIsRefused(t *testing.T) {
 	}
 }
 
-func TestAnUnclearAnswerIsNotAnApproval(t *testing.T) {
+func TestAnUnclearAnswerApprovesADeliveryGate(t *testing.T) {
 	f := newFixture(t, "alice")
 	r := f.askPlan()
-	code, _, _ := f.do(true, r.Short+"\n", "gate", "approve", r.GateID, "--quote", "看着差不多")
-	if code != exitRefused {
-		t.Fatalf("a non-answer approved: exit %d", code)
+	code, _, errs := f.do(true, r.Short+"\n", "gate", "approve", r.GateID, "--quote", "看着差不多")
+	if code != exitOK {
+		t.Fatalf("exit %d, %q", code, errs)
 	}
-	if s := f.state(r.GateID); s.Status != "pending" {
+	if s := f.state(r.GateID); s.Status != "approved" {
+		t.Fatalf("status %s", s.Status)
+	}
+}
+
+func TestANegationApproves(t *testing.T) {
+	f := newFixture(t, "alice")
+	r := f.askPlan()
+	code, _, errs := f.do(true, r.Short+"\n", "gate", "approve", r.GateID, "--quote", "确认不了")
+	if code != exitOK {
+		t.Fatalf("exit %d, %q", code, errs)
+	}
+	if s := f.state(r.GateID); s.Status != "approved" {
 		t.Fatalf("status %s", s.Status)
 	}
 }
@@ -230,10 +238,7 @@ func TestAnUnclearAnswerIsNotAnApproval(t *testing.T) {
 func TestARejectionSaysSoAndIsFinal(t *testing.T) {
 	f := newFixture(t, "alice")
 	r := f.askPlan()
-	if code, _, _ := f.do(true, r.Short+"\n", "gate", "reject", r.GateID, "--quote", "确认"); code != exitRefused {
-		t.Fatal("reject accepted words that confirm")
-	}
-	if code, _, errs := f.do(true, r.Short+"\n", "gate", "reject", r.GateID, "--quote", "驳回"); code != exitOK {
+	if code, _, errs := f.do(true, r.Short+"\n", "gate", "reject", r.GateID, "--quote", "确认"); code != exitOK {
 		t.Fatal(errs)
 	}
 	s := f.state(r.GateID)

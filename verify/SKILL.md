@@ -48,10 +48,10 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 
 ## Hard rules
 
-1. **先 plan，`accepted: true` 后才 run。** P0 要人改 YAML 或本轮确认用语全签；P1/P2 `verify-plan` 0 FAIL 且无 `SIGNAL` 时写 `accepted: true` + `auto: <检查输出>`。协议 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。`继续` / 口头含糊不算。未勾选不跑，标 `UNPROVEN`。
+1. **先 plan，`accepted: true` 后才 run。** `verify-plan` 0 FAIL 且无 `SIGNAL` 时写 `accepted: true` + `auto: <检查输出>`，不问确认。有 `SIGNAL` 留到实现审核一起答。协议 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。未勾选不跑，标 `UNPROVEN`。
 2. **人必须给 `feature` slug**（分支名可当默认，须点头）。无密封基线时还要 `goal` + `non_goal`。**已有 `baseline.yaml` 且 `sealed`：** `plan.goal` / `non_goal` 复制基线原文，不准另编。`debug` 还要环境/产物 + 可观察物。
 3. **`cases[]` 只许 `PASS`/`FAIL`/`UNPROVEN`。** 没跑、无基线、无原型对照 = `UNPROVEN`。禁止「达标」「全面通过」和分数。
-4. **`human_signoff[]` 只许 `PENDING`/`ACCEPTED`/`REJECTED`。** 无本轮确认用语不得写成 `ACCEPTED`。
+4. **`human_signoff[]` 只许 `PENDING`/`ACCEPTED`/`REJECTED`。** 检查过了、没有未决分叉，才写成 `ACCEPTED`。
 5. **影响面：diff + 调用关系扩一跳**（有 codegraph 就用）。只提名，人 `include`。runner 不算图。
 6. **生成测试**只写当事模块 `src/test/java/**/generatedverify/`。**禁止 `git add` 该目录**（仓库未必已 gitignore）。绿了也不入库，除非人 `promote` 勾选。
 7. **`patrol` 无 `doc_home.py --key patrol` 指向的巡检包就拒跑**，不准现编巡检。

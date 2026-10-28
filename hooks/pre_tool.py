@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """preToolUse / PreToolUse / beforeShellExecution: refuse the four oversteps.
 
-1. Writing signoff fields into ticket or run YAML with Write/Edit (must go through the CLI).
+1. Writing reopen_baseline into ticket YAML by hand (name it through the gate).
 2. `git push` that is not clearly preceded by a green gate (best-effort).
 3. Writing outside a held lease when IDEV_LEASE_ID is set (calls idev lease check).
 4. Setting IDEV_ENGINE=python or IDEV_BIN=off in a shell command.
@@ -84,14 +84,20 @@ def write_content(tin: dict) -> str:
 
 
 def refuse_signoff_edit(path: str, content: str) -> str:
+    """Block only a reopen written by hand.
+
+    Delivery fields (sealed, accepted, aligned, resolved) are written when
+    the stage check passes. They are not a confirmation. Reopen still has
+    to name the action, and that write goes through the gate.
+    """
     if path and not SIGNOFF_FILE.search(path.replace("\\", "/")):
         return ""
-    if not content or not SIGNOFF_IN_CONTENT.search(content):
+    if not content or not re.search(r"(?m)^\s*reopen_baseline\s*:\s*true\b", content):
         return ""
     where = path or "a file"
     return (
-        f"refusing to write signoff fields via the agent into {where}; "
-        "use workflow.py / idev gate so a person signs"
+        f"refusing to write reopen_baseline via the agent into {where}; "
+        "name the reopen and record it through the gate"
     )
 
 

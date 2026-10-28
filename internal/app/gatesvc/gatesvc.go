@@ -23,12 +23,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/idev/internal/domain/audit"
 	"github.com/idev/internal/domain/gate"
-	"github.com/idev/internal/domain/signoff"
 	"github.com/idev/internal/ports"
 	"github.com/idev/pkg/canonical"
 )
@@ -162,10 +160,10 @@ func (s Service) Ask(ctx context.Context, p AskParams) (gate.Gate, error) {
 // DecisionParams is one answer on its way in.
 type DecisionParams struct {
 	GateID string
-	// Quote is the person's words, verbatim. The decision is read from
-	// them — 驳回 rejects, a parseable confirmation approves — so a caller
-	// cannot submit an approval the person never wrote.
+	// Quote is a note stored with the decision. It is not parsed.
 	Quote string
+	// Decision is approve or reject. The zero value approves.
+	Decision gate.Decision
 	// Channel is how the answer arrived; the assurance follows from it.
 	Channel string
 	// RecomputedDigest is the digest of the content as it is now,
@@ -190,16 +188,13 @@ type Decision struct {
 // to the same gate fails there instead of overwriting the first, whatever
 // order the two submissions arrived in.
 //
-// A refused submission — wrong identity, weak authentication, a quote that
-// is not a confirmation, content that changed — writes nothing and returns
+// A refused submission — wrong identity, weak authentication, content that
+// changed — writes nothing and returns
 // *gate.Error. The caller shows the person why; the chain records what was
 // actually decided, not every attempt at deciding it.
 func (s Service) Decide(ctx context.Context, p DecisionParams) (Decision, error) {
 	if p.GateID == "" {
 		return Decision{}, fmt.Errorf("gatesvc: deciding needs a gate id")
-	}
-	if p.Quote == "" {
-		return Decision{}, fmt.Errorf("gatesvc: deciding needs the person's words; an empty quote decides nothing")
 	}
 	assurance, ok := assuranceFromChannel(p.Channel)
 	if !ok {
@@ -220,15 +215,9 @@ func (s Service) Decide(ctx context.Context, p DecisionParams) (Decision, error)
 			return fmt.Errorf("gatesvc: loading gate %s: %w", p.GateID, err)
 		}
 
-		// The words decide. 驳回 rejects; anything else must parse as a
-		// confirmation, and a parse that fails is a quote-rejected
-		// refusal, not a rejection.
-		decision := gate.DecisionApprove
-		var parsed signoff.Result
-		if signoff.IsReject(p.Quote) {
-			decision = gate.DecisionReject
-		} else {
-			parsed = signoff.ParseConfirm(p.Quote, signoffGateType(g.Type), gateOrigin(g))
+		decision := p.Decision
+		if decision == "" {
+			decision = gate.DecisionApprove
 		}
 
 		approvalID := s.IDs.New()
@@ -241,8 +230,8 @@ func (s Service) Decide(ctx context.Context, p DecisionParams) (Decision, error)
 				ScopeCoversFeature: s.can(ctx, p.Actor, authzAction, g.Feature),
 				Assurance:          assurance,
 			},
-			QuoteOK:          parsed.OK,
-			QuoteKeywords:    parsed.Tokens,
+			QuoteOK:          true,
+			QuoteKeywords:    nil,
 			RecomputedDigest: p.RecomputedDigest,
 			ApprovalID:       approvalID,
 			Now:              now,
@@ -515,32 +504,6 @@ func assuranceFromChannel(channel string) (gate.Assurance, bool) {
 		return gate.AssuranceHigh, true
 	}
 	return "", false
-}
-
-// signoffGateType narrows a gate type to the two signoff knows keyword
-// requirements for. Every other gate type asks for a plain confirmation.
-func signoffGateType(t gate.Type) signoff.GateType {
-	switch t {
-	case gate.TypeDefectOrigin:
-		return signoff.GateDefectOrigin
-	case gate.TypeReopenBaseline:
-		return signoff.GateReopenBaseline
-	}
-	return ""
-}
-
-// gateOrigin recovers the origin a defect_origin gate is asking about. The
-// gate record does not keep Origin as its own field — it is folded into
-// RequiredKeywords — so this reads it back out. The keyword check in the
-// domain is the enforcement; this is only so the parse expects the right
-// keyword.
-func gateOrigin(g gate.Gate) string {
-	for _, kw := range g.RequiredKeywords {
-		if strings.HasPrefix(kw, "origin=") {
-			return strings.TrimPrefix(kw, "origin=")
-		}
-	}
-	return ""
 }
 
 func (s Service) now() time.Time {

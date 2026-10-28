@@ -45,6 +45,7 @@ type GateType string
 const (
 	GateDefectOrigin   GateType = "defect_origin"
 	GateReopenBaseline GateType = "reopen_baseline"
+	GateSealed         GateType = "sealed"
 )
 
 var (
@@ -92,7 +93,7 @@ var (
 	reopenPhrases = []string{"解除密封", "reopen", "重新打开基线", "打开基线", "解封"}
 
 	questionMarks = []string{"?", "？", "吗", "么", "嘛", "呢", "是否", "能否", "可否", "要不要"}
-	negationCJK   = []string{"不", "没", "别", "未", "否", "勿"}
+	negationCJK   = []string{"不", "没", "别", "未", "否", "勿", "但", "可是"}
 	hesitation    = []string{"先", "等", "再说", "待定", "也许", "可能", "吧"}
 
 	negationASCII = regexp.MustCompile(`\b(?:not|no|don't|wait|but|hold|later)\b`)
@@ -196,6 +197,15 @@ func namedAction(text string) (kind, value string, ok bool) {
 	return "", "", false
 }
 
+// namesSeal reports a reply that names the seal itself. 解除密封 names the
+// unseal, not the seal.
+func namesSeal(text string) bool {
+	if _, _, named := namedAction(text); named {
+		return false
+	}
+	return strings.Contains(text, "密封")
+}
+
 func withCanonical(toks []string, text string) []string {
 	out := append([]string{}, toks...)
 	kind, value, ok := namedAction(text)
@@ -253,6 +263,12 @@ func ParseConfirm(quote string, gate GateType, origin string) Result {
 	// its tail failed to parse.
 	if containsAny(text, questionMarks) {
 		return Result{Reason: ReasonQuestion}
+	}
+	if gate == GateSealed && namesSeal(text) {
+		if r, refused := refusal(text); refused {
+			return r
+		}
+		return Result{OK: true, Reason: ReasonOK}
 	}
 	verb, toks, ok := parseGrammar(text, confirmVerbs)
 	if verb == "" {

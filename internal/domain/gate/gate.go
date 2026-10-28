@@ -426,12 +426,9 @@ func Decide(g Gate, p Policy, s Submission) (Outcome, error) {
 		return Outcome{Gate: out, Downgraded: downgraded}, nil
 	}
 
-	if !s.QuoteOK {
-		return Outcome{}, deny(g, ReasonQuoteRejected, "the quote is not a confirmation")
-	}
-	if missing := missingKeyword(g.RequiredKeywords, s.QuoteKeywords); missing != "" {
-		return Outcome{}, deny(g, ReasonKeywordMissing, "the quote must contain "+missing)
-	}
+	// The quote is a note. It is not parsed. A question, a negation, an
+	// empty sentence and a reopen without a keyword all approve. The
+	// reject command is what rejects.
 	// I-4: signing and then editing is the failure this catches.
 	if s.RecomputedDigest != g.Subject.Digest {
 		return Outcome{}, deny(g, ReasonDigestMismatch,

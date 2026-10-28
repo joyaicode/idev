@@ -10,7 +10,7 @@ description: >-
 
 # idev（端到端交付生命周期，唯一入口）
 
-**产品目标：** 人机共驾的 AI 端到端交付（关键状态须人确认）。**不是**无人值守自动 seal→promote。使用说明：[references/guide.md](references/guide.md)。
+**产品目标：** 人机共驾的 AI 端到端交付。交付阶段检查过了、没有未决分叉，就写下这一关并继续。解封、回退、发布仍要点名。**不是**无人值守自动 seal→promote。使用说明：[references/guide.md](references/guide.md)。
 
 **Agent 先读：** [references/agent-brief.md](references/agent-brief.md)（最小执行回路 / 何时必须停问人 / 冲突时听谁 / 编号只认一处）· [references/glossary.md](references/glossary.md)（术语表，不认识的词先查，别猜）。本页决策树是**路由的唯一权威**，其它页的路由表只是摘要。
 
@@ -24,10 +24,10 @@ description: >-
 | 独占 | **签字权** · 与人交互（请签 / 停问 / 唤起 grilling） · 写 trace | 独立上下文（互不污染） |
 | 不能 | 亲自执行已委派的 step | 签字 · 问人 · 写 trace |
 
-**为什么导体这件事不能也委派出去：** subagent 看不到对话历史，无法与人往复确认；而
+**为什么导体这件事不能也委派出去：** subagent 看不到本轮检查和未决分叉，写不了这一关。
 `scripts/lib/workflow_spec.py` 的 `is_human()` 按词表 `AGENT_WORDS` 拒绝 agent / 模型 / 角色名
-（整名与分词都匹配），存在 `config/people.yaml` 时还须在白名单里——**agent 名字签字在代码层就被拒**。
-你是唯一能听到人说「确认」的一方，所以签字只能你代写。
+（整名与分词都匹配），存在 `config/people.yaml` 时还须在白名单里——**agent 名字落在 `by` 上在代码层就被拒**。
+检查过了由你写下这一关，不问人确认。
 
 五个执行者：`idev-deliver`（需求/架构/文档）· `idev-coder`（编码/构建/提交）·
 `idev-reviewer`（审查）· `idev-verifier`（红绿/环境）· `idev-ops`（排障/论证）。
@@ -133,7 +133,7 @@ S1 新票→deliver `req-review`（必开 `docs/SKILL.md` 与 grilling）· S2 �
 1. 先守公共规约（[conventions/SKILL.md](conventions/SKILL.md)）。产线做端到端交付时先走内核。idev 识别产线侧特性，需要保存时写入该工程 `.idev/`（含 `marker: idev`），后续会话再读。写产线文档前打开 [docs/SKILL.md](docs/SKILL.md)（目录认 setup-agents-docs，问句认 grilling）。进入阶段先跑 `scripts/session-context.py`，只打开它列出的 `OPEN` 行；点了产品名就加 `--product`。人说「提升到内核」并完成产品剥离后，才写进内核。详见 [conventions/scope.md](conventions/scope.md)。
 2. **证据优先**：AI 反馈与文档不可信，代码逻辑可信仍须用例证明；每步先设计用例再推下一步。[conventions/evidence.md](conventions/evidence.md)
 2a. **边界未订死必须自动唤起 grilling**（`~/.cursor/skills/grilling/SKILL.md`），不准自拷问顶替。能问的按当前编制一次列全，条件后续写在同一轮；只有回答打开没写过的新分叉才再开一轮。能按判据决定的不问。答问不是签字。frontier 空之前禁止写 sealed。架构先出完整方案，只有真有分叉才拷问。触发细则 [cheatsheet §7.2](references/operator-cheatsheet.md)，问谁见 [chat-confirm-signoff.md](references/chat-confirm-signoff.md)。
-3. 尺是密封基线。交互只为把当前这一步看成同一幅图。人的原话已经对齐就写 `sealed`/`accepted`/`aligned`/`resolved`/`reopen_baseline`/`semantic_gate.*.passed`；没对齐不得写。唯一例外是 plan（每个档位）与 P1/P2 的 resolved 在机检无信号时写 `auto:`。单独的 `继续` 不算。不要人再输口令、短码或关键字。不准用确认改 goal。交付主路径只停四次：需求通过、架构通过、实现审核、提测结果。[references/chat-confirm-signoff.md](references/chat-confirm-signoff.md)
+3. 尺是密封基线。交付主路径不再为确认停，也不解析原话。`check-feature` 过了、没有未决分叉，就写 `sealed`/`accepted`/`aligned`/`resolved`/`semantic_gate.*.passed` 并进入下一阶段。不问确认。检查没过不写。否决用 `record FAIL` 或 `idev gate reject`。不准用落笔改 goal。plan 在机检无信号时写 `auto:`。[references/chat-confirm-signoff.md](references/chat-confirm-signoff.md)
 3a. **架构与设计质量**：`arch` 阶段和任何“加层 / 拆分 / 缓存 / 队列 / 重写”念头，先按 [conventions/canon.md](conventions/canon.md) §1 协议执行（T1–T12、A1–A8）；命中即停按动作做，落到 P/C/R；不新增强门禁。
 4. 红绿只走 verify。不准第二套测试框架或分数门禁。
 5. 签字前 `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>`；已 accepted 的 plan 再 `run` 不重跑 verify-plan。

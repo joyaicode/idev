@@ -28,16 +28,15 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 2. **认场景**：按 `SKILL.md` 决策树选 S1–S8 之一（**路由以 `SKILL.md` 决策树为准**，其它页的路由表只是摘要）。
 3. **只开一个执行模块**（deliver / verify / ops 不同时加载）。
 4. **动手前**：写架构方案或改代码先读 [conventions/coding.md](../conventions/coding.md) 文首底线与 §0；涉及“加层/拆分/缓存/队列/重试/重写”先走 [conventions/canon.md](../conventions/canon.md) §1。读代码结构、做根因、写文档小结之前，先 `bash scripts/codegraph-sync.sh --repo <仓根> <reason>`。`reason` 只认 [boost.md](boost.md)「索引何时更新」。
-5. **请签之前三道一起过**：`check-feature.sh`（结构）+ `stage-gate.py --feature <f> --all`
-   （七视角拒过清单里可机检的那一半）+ 人按 [experts.md](../deliver/references/experts.md) 过清单。
-   **前两道 PASS 不等于这一关过了** —— 两个工具都会在 PASS 时把这句话打出来。
+5. **落笔之前两道一起过**：`check-feature.sh`（结构）+ `stage-gate.py --feature <f> --all`
+   （七视角拒过清单里可机检的那一半）。两道都过、没有未决分叉，就写下这一关。
    这一格该用哪个工具，看 `SKILL.md` 的「分阶段的能力」索引表，不要凭印象找。
-6. **有不清楚处先 grilling**（`~/.cursor/skills/grilling/SKILL.md`），不要拿含糊摘要请人签。
+6. **有不清楚处先 grilling**（`~/.cursor/skills/grilling/SKILL.md`）。frontier 空了就落笔，不再请人确认。
 7. **收尾**：`scripts/trace.sh append` 写 trace（产品仓进 `.idev/traces/`，导体自身会话才进内核）。技能调起、委派决定、模型与一行思考、组件从哪跳到哪，按 [trace.md](trace.md) 的可选字段写上；缺了不挡本轮，不准编造。对人摆方案和证据；`将代写` 只留在导体落笔，不念给人。见 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
 
 ## 什么时候必须停下来问人（STOP）
 
-- 要写 `sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed` 之前，且本轮人没有明确确认用语（`继续` 不算）。P1/P2 的 plan / resolved 机检无信号时写 `auto:`，不停。
+- 检查没过，或还有未决分叉，却要写 `sealed` / `accepted` / `aligned` / `resolved` / `semantic_gate.*.passed`。检查过了就写，不问确认。`reopen_baseline` 仍要点名。P1/P2 的 plan / resolved 机检无信号时写 `auto:`。
 - 进入阶段先看 `STAFFING` 行。一个人兼任全部岗位就一次问全。多人只问当前这个人持有的岗位，别人的列成待。岗位还没写明时只问一次岗位表。做法见 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
 - 执行者回报出现 `SIGNAL`（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）：按决策包问，答案用 `workflow.py decide` 记。`BLOCKED(domain)` 不是停问：按 [agents.md](agents.md)「角色能力」另派 `DOMAIN` 点名的执行者咨询一次。
 - 全表与档位：[chat-confirm-signoff.md](chat-confirm-signoff.md)。
@@ -48,7 +47,7 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 
 ## 什么时候不要停（H1–H6，别为它们请签）
 
-见 [invoke.md](invoke.md)「非门禁不停」。核心一句：**没有当前停问点就不请签，不擅自 promote，不为观测再停。**
+见 [invoke.md](invoke.md)「非门禁不停」。核心一句：**检查过了就写这一关，不请人确认，不擅自 promote，不为观测再停。**
 
 ## 冲突时听谁（从高到低）
 

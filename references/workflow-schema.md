@@ -19,7 +19,7 @@
 | `params` | 变量声明：`name` + `required` + `from`（`user` \| `deliver.yaml` \| `default` \| `product`）。`from: default` 用 `default` 给值。`from: product` 不在配方里写路径：执行时只读扩展根 `.idev/workflow-defaults.yaml` 的键，键名取 `product_key`（点号分层），缺省同 `name`（没有 `extension_root` 时就是本仓）。没有该文件或没有该键 → 预检 BLOCKED，不猜。`product_key` 只配 `from: product` |
 | `steps` | 有序步骤 |
 | `policy.on_fail` | `stop`（默认）\| `ask` |
-| `policy.on_gate` | `stop`（须确认用语） |
+| `policy.on_gate` | `stop`（检查没过才停；不解析原话） |
 | `policy.on_case_fail` | `stop_fix_continue`：停在首红 → 分析修复 → `ui.fix_deposit` → 从失败点续跑同轮 |
 | `policy.require_clean_pass` | `true` 时：同轮曾有 FAIL 则不算交付；必须再开一轮 **从头** lifecycle，直到一轮零 FAIL |
 | `policy.max_clean_attempts` | 外层整轮上限，默认 `5`；超限 `blocked` 等人 |
@@ -67,7 +67,7 @@
 | kind | 落到 | 说明 |
 |------|------|------|
 | `preflight.inputs` | — | S8 前置可读性探针：缺票/缺路径/缺巡检包 → BLOCKED 并列缺项；不改代码 |
-| `human.gate` | — | 显式停问；无确认用语不前进；`label` 或 `with.will_write` 必须能还原一行 `将代写: …` + 证明上下文（见 chat-confirm） |
+| `human.gate` | — | 检查通过就 `record PASS`，不另要确认；`label` 或 `with.will_write` 必须能还原一行 `将代写: …` + 证明上下文（见 chat-confirm） |
 | `shell.confirmed` | — | 仅跑人已在配方或本轮确认的一条命令 |
 | `tool.step` | — | 已登记工具的一步。next 打出 TOOL 命令，不执行 |
 | `ui.clean_pass_loop` | — | 外层：本轮若曾有 FAIL，必须从 lifecycle_run **重头**再跑，直到一次全绿；受 `policy.max_clean_attempts` 限制 |
@@ -114,7 +114,7 @@
 | `status` | `pending` \| `running` \| `blocked` \| `done` \| `aborted` |
 | `params` | 绑定后的参数 |
 | `policy` | 起跑时抄下的配方 `policy` |
-| `steps[]` | 起跑时展开后的 `id` / `kind` / `label` / `with` / `group` / `writes` / `react` / `tool` / `slots` / `branch`。没有 `status` 就是还没跑；跑过是 `PASS` \| `FAIL` \| `UNPROVEN` \| `SKIPPED` \| `BLOCKED` \| `AUTO`，另有 `at`，`evidence` / `note` 可选。`human.gate` 为 `PASS` 时必须有 `signoff: {by, quote, at}`，`by` 是人名，`quote` 以确认用语开头；为 `AUTO` 时只有 `evidence`（它跑出的检查输出路径）和 `auto: {stage, log, exit, sha256}`，没有 `signoff`。独立复核过的步骤另有 `verification: {by, evidence, at}` |
+| `steps[]` | 起跑时展开后的 `id` / `kind` / `label` / `with` / `group` / `writes` / `react` / `tool` / `slots` / `branch`。没有 `status` 就是还没跑；跑过是 `PASS` \| `FAIL` \| `UNPROVEN` \| `SKIPPED` \| `BLOCKED` \| `AUTO`，另有 `at`，`evidence` / `note` 可选。`human.gate` 为 `PASS` 时必须有 `signoff: {by, quote, at}`，`by` 若写了必须是人名，`quote` 可空；疑问、否定、犹豫拒收。为 `AUTO` 时只有 `evidence`（它跑出的检查输出路径）和 `auto: {stage, log, exit, sha256}`，没有 `signoff`。独立复核过的步骤另有 `verification: {by, evidence, at}` |
 | `revisions[]` | 只追加；改已记录的步骤时写 `step` 与 `旧 -> 新: 原因` |
 | `feedback` | `status`：`pending` \| `filed`；试运行 tag 拷到 verify inbox |
 
@@ -142,7 +142,7 @@ $W step <step> --feature <f>                     # 委派步的入口：交给 a
 $W land <step> --feature <f> --report -          # 收 agent 回报：写留痕；要复核就领复核租约、打印复核包，否则 record
 $W delegate <step> --feature <f>                 # 委派前标记执行者；写代码的步骤同时领写租约
 $W ask <gate-step> --feature <f>                 # 可选；终端 idev gate approve 不是必经
-$W record <gate-step> PASS --feature <f> --by <人名> --quote "确认"   # 聊天里的确认用语就是签字
+$W record <gate-step> PASS --feature <f>   # 检查过了就记录，不另要确认
 $W record <gate-step> AUTO --feature <f>        # 仅当档位在 with.auto_tiers 里；自己跑该闸的检查
 $W record <step> PASS --feature <f> --evidence <路径> --verified-by <复核 agent> --verify-evidence <复核报告>
 $W delegate <step> --verify --feature <f>        # 写手回来后给复核者领复核租约（Go 引擎）
@@ -203,6 +203,6 @@ $W abort --note <原因> --feature <f>
 
 `with.will_write` 与 `label` 里的 `将代写` 至少有一个，都没有 → `workflow-check` 失败；`will_write` 不是字符串列表或含空串也失败。`workflow.py next` 在停问步骤直接打印由它拼出的 `将代写:` 行。
 
-无确认用语不得把本步标 PASS。
+检查没过不得把本步标 PASS。不另要确认用语。
 
 产线配方的别名只写在该仓 `.idev/workflows/<id>.yaml`。内核 kind 表不登记某一条产线的配方名。产品配方顶栏若有 `roles` / `rules`，只是说明，`workflow-check` 不校验。它校验 `needs_ticket` / `aliases` / `risk_tier` / `params` / `policy` / `steps` 与 `human.gate` 的 `将代写`。

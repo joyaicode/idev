@@ -550,71 +550,27 @@ func TestPolicyMayDowngradeAssurance(t *testing.T) {
 	}
 }
 
-// I-4: the whole sentence must be a confirmation. A prefix match once
-// recorded 确认不了 and 同意吗 as approvals, so anything left over — no
-// verb, a question, prose in the tail — is a refusal, and the refusal
-// writes nothing.
-func TestDecideRejectsQuotesThatAreNotConsent(t *testing.T) {
-	s, st, _ := newSvc(t)
-	p := sealParams()
-	p.Risk = gate.RiskP2
-	g := ask(t, s, p)
-
-	for _, quote := range []string{
-		"sealed 基线",     // no confirming word at all
-		"同意 sealed 吗",   // a question is not an answer
-		"全签 sealed 和基线", // 和 is prose, not a qualifier
-	} {
-		_, err := s.Decide(context.Background(), answerParams(g.ID, quote))
-		wantGateErr(t, err, gate.ReasonQuoteRejected, quote)
-		if got, _ := s.Get(context.Background(), g.ID); got.Status != gate.StatusPending {
-			t.Errorf("after %q the gate is %s; refusals must leave it pending", quote, got.Status)
+// Any sentence approves. The quote is stored, not parsed.
+func TestAnySentenceApproves(t *testing.T) {
+	s, _, _ := newSvc(t)
+	for _, quote := range []string{"", "继续", "同意吗", "确认不了", "不要密封", "sealed 基线"} {
+		p := sealParams()
+		p.Risk = gate.RiskP2
+		g := ask(t, s, p)
+		d, err := s.Decide(context.Background(), answerParams(g.ID, quote))
+		if err != nil || d.Gate.Status != gate.StatusApproved {
+			t.Fatalf("%q: %v status %s", quote, err, d.Gate.Status)
 		}
 	}
-	if n := len(st.Events()); n != 1 {
-		t.Errorf("%d events after three refusals, want only the ask", n)
-	}
-}
 
-// I-5: the destructive gates may not pass on a bare 确认 — the quote must
-// name what is being destroyed. A defect_origin gate wants the origin it
-// asked about; a reopen wants 解除密封 or reopen, either word.
-func TestDestructiveGatesDemandTheirKeywords(t *testing.T) {
-	s, _, _ := newSvc(t)
 	p := sealParams()
-	p.Type = gate.TypeDefectOrigin
-	p.Risk = gate.RiskP2
-	p.Origin = "req"
-	p.Subject = gate.Subject{Kind: gate.SubjectArtifactSet, Digest: baseDigest}
-	g := ask(t, s, p)
-
-	for _, quote := range []string{
-		"全签 基线",          // parses, but never names the origin
-		"确认 origin=arch", // names the wrong origin
-	} {
-		_, err := s.Decide(context.Background(), answerParams(g.ID, quote))
-		wantGateErr(t, err, gate.ReasonQuoteRejected, quote)
-	}
-	if got, _ := s.Get(context.Background(), g.ID); got.Status != gate.StatusPending {
-		t.Errorf("gate = %s; keyword-less answers must not pass", got.Status)
-	}
-	d := decide(t, s, answerParams(g.ID, "确认 origin=req"))
-	if d.Gate.Status != gate.StatusApproved {
-		t.Errorf("gate = %s, want approved once the origin is named", d.Gate.Status)
-	}
-
-	// A reopen of the sealed baseline: the subject is the baseline itself,
-	// and the quote must say 解除密封 in so many words.
-	p = sealParams()
 	p.Type = gate.TypeReopenBaseline
 	p.Risk = gate.RiskP2
 	p.Proof = "the run regressed; the baseline must reopen"
 	r := ask(t, s, p)
-	_, err := s.Decide(context.Background(), answerParams(r.ID, "确认"))
-	wantGateErr(t, err, gate.ReasonQuoteRejected, "a bare 确认 on a reopen")
-	d = decide(t, s, answerParams(r.ID, "同意 reopen"))
-	if d.Gate.Status != gate.StatusApproved {
-		t.Errorf("gate = %s, want approved on the reopen keyword", d.Gate.Status)
+	d, err := s.Decide(context.Background(), answerParams(r.ID, "确认"))
+	if err != nil || d.Gate.Status != gate.StatusApproved {
+		t.Fatalf("reopen without a keyword: %v status %s", err, d.Gate.Status)
 	}
 }
 
@@ -661,7 +617,6 @@ func TestDecideValidatesItsParameters(t *testing.T) {
 		mut  func(*gatesvc.DecisionParams)
 	}{
 		{"no gate id", func(a *gatesvc.DecisionParams) { a.GateID = "" }},
-		{"no quote", func(a *gatesvc.DecisionParams) { a.Quote = "" }},
 		{"no digest", func(a *gatesvc.DecisionParams) { a.RecomputedDigest = "" }},
 		{"unknown channel", func(a *gatesvc.DecisionParams) { a.Channel = "sms" }},
 	}
@@ -712,6 +667,7 @@ func TestADecisionIsFinal(t *testing.T) {
 	p.StepID = "seal-baseline-2"
 	g2 := ask(t, s, p)
 	a := answerParams(g2.ID, "驳回")
+	a.Decision = gate.DecisionReject
 	a.RecomputedDigest = "sha256:" + strings.Repeat("0", 64)
 	d := decide(t, s, a)
 	if d.Gate.Status != gate.StatusRejected {

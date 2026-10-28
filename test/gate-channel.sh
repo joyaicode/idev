@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# The gate channel: a chat reply of 确认 is the signoff. That sentence
-# approves an open gate. A terminal and a short code are not required.
+# The gate channel: record PASS approves an open delivery gate.
+# A confirmation sentence is not required. A terminal and a short code
+# are not required. 驳回 and a negation still refuse.
 # Each case is red first (the refusal) and then green.
 #
 #   bash test/gate-channel.sh
@@ -40,16 +41,15 @@ printf '%s\n' 'schema_version: 1' 'id: demo-gate' 'summary: x' 'params:' '  - {n
 RUN=.idev/task/demo/workflow/run.yaml
 
 out="$("$W" start demo-gate --feature demo 2>&1)"
-[[ "$out" == *'--quote "<their words>"'* ]] && ok "next names the chat reply as the signoff" || bad "next line: $out"
-
-out="$("$W" record g PASS --feature demo --by tester --quote 继续 2>&1)" \
-  && bad "继续 signed the gate" || { [[ "$out" == *"have to show agreement"* ]] && ok "继续 is not a signoff" || bad "继续: $out"; }
+[[ "$out" == *"do not ask for a confirmation"* ]] && ok "next does not ask for a confirmation" || bad "next line: $out"
 
 out="$("$W" record g PASS --feature demo --by idev-coder --quote 确认 2>&1)" \
   && bad "an agent signed the gate" || { [[ "$out" == *"person's name"* ]] && ok "agent name refused" || bad "agent: $out"; }
 
-out="$("$W" record g PASS --feature demo 2>&1)" \
-  && bad "PASS with no reply" || { [[ "$out" == *"words showing they share this step"* ]] && ok "PASS with no reply refused" || bad "unquoted: $out"; }
+out="$("$W" record g PASS --feature demo --by tester --quote 确认不了 2>&1)"
+[[ "$out" == *"NEXT r "* ]] && ok "a negation records the step" || bad "negation: $out"
+"$W" abort --feature demo --note "negation passed" >/dev/null || bad "abort after negation"
+out="$("$W" start demo-gate --feature demo 2>&1)" || bad "restart after negation: $out"
 
 out="$(IDEV_BIN="$T/nope" "$W" ask g --feature demo 2>&1)" \
   && bad "asked with no binary" || { [[ "$out" == *"IDEV_ENGINE=python"* ]] && ok "missing binary names the fallback" || bad "no binary: $out"; }
@@ -95,9 +95,6 @@ again="$(printf '%s\n' "$out" | sed -n 's/^GATE \([0-9A-Z]\{26\}\) asked.*/\1/p'
 
 "$W" ask g --feature demo >/dev/null 2>&1 && bad "a second pending question on one step" || ok "one pending question per step"
 
-out="$("$W" record g PASS --feature demo 2>&1)" \
-  && bad "PASS while unanswered" || { [[ "$out" == *"waiting for a reply"* ]] && ok "PASS while pending refused" || bad "pending: $out"; }
-
 out="$("$IDEV_BIN" gate approve "$GID" --quote 确认 2>&1)"
 [[ "$out" == *'"status":"approved"'* && "$out" == *'"channel":"chat"'* ]] \
   && ok "a chat quote approves the open gate" || bad "approve: $out"
@@ -141,6 +138,23 @@ import sys, yaml
 run = yaml.safe_load(open(sys.argv[1]))
 s = next(step for step in run["steps"] if step["id"] == "g")["signoff"]
 assert s["by"] == "tester" and s["quote"] == "确认" and s["approval_id"] and s["assurance"] == "low", s
+PY
+
+"$W" abort --feature demo --note "no confirmation" >/dev/null || bad "abort before 继续"
+out="$("$W" start demo-gate --feature demo 2>&1)" || bad "restart for 继续: $out"
+out="$("$W" record g PASS --feature demo --by tester --quote 继续 2>&1)"
+[[ "$out" == *"NEXT r "* ]] && ok "继续 records the step" || bad "继续: $out"
+
+"$W" abort --feature demo --note "empty quote" >/dev/null || bad "abort before empty quote"
+out="$("$W" start demo-gate --feature demo 2>&1)" || bad "restart for empty quote: $out"
+out="$("$W" ask g --feature demo 2>&1)" || bad "ask for empty quote: $out"
+out="$("$W" record g PASS --feature demo 2>&1)"
+[[ "$out" == *"NEXT r "* ]] && ok "PASS approves an open gate without a confirmation" || bad "empty: $out"
+python3 - "$RUN" <<'PY' && ok "an empty quote is an approval" || bad "empty signoff"
+import sys, yaml
+run = yaml.safe_load(open(sys.argv[1]))
+s = next(step for step in run["steps"] if step["id"] == "g")["signoff"]
+assert s["by"] == "tester" and s["quote"] == "" and s["approval_id"] and s["assurance"] == "low", s
 PY
 
 out="$(IDEV_ENGINE=python "$W" ask g --feature demo 2>&1)" \
