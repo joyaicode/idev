@@ -64,7 +64,7 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 | `opened[]` | 本轮深读的规约/模块页或关键仓文件（短路径） |
 | `extensions` | 本轮 `session-context.py` 打出的 `OPEN` 路径。产品仓 `.idev/traces/` 且该仓 `marker: idev` 时必须有这个字段，没有页就写 `extensions: []`；缺字段周审计记 HARD。内核 `state/traces/` 是导体自己的会话，不要求这个字段。有列表时每一项必须出现在 `opened` |
 | `stop` | 等人的点；没有则空 |
-| `next` | 下一手 |
+| `next` | 本轮真要停时的下一手。没有停点就空，并在同一轮做掉 |
 | `check_feature` | `PASS` \| `FAIL` \| `skipped` |
 
 `decisions[].kind` 只许：`route` \| `gate` \| `stop` \| `refuse` \| `handoff` \| `call` \| `open` \| `delegate` \| `model`。

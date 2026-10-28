@@ -118,7 +118,7 @@ python3 scripts/turn-budget.py [--max 8] <transcript.jsonl>
 | 产品专属接入 / 脚手架 / 集群排障 | **S7** | 交出口 | `scripts/bootstrap-outbound.sh`，再开产品 handoff Skill |
 | 说不清 | — | — | 先看 `deliver.yaml` 的 `stage`；仍不清则按编制把问题一次问全 |
 
-小改不要无故从 S1 重开。签字只在固定的 A 类点，拿不准时按信号停问；哪些点、哪个档位可 `AUTO` 只看 [chat-confirm-signoff.md](references/chat-confirm-signoff.md)。边界不清先 grilling。每轮末 `scripts/trace.sh append`。
+小改不要无故从 S1 重开。没有未决分叉就在同一轮接着做，不把下一步留成 `next` 等「继续」。拿不准时按信号停问；哪些点、哪个档位可 `AUTO` 只看 [chat-confirm-signoff.md](references/chat-confirm-signoff.md)。边界不清先 grilling。有进展就 `scripts/trace.sh append`，trace 不结束本轮。
 
 ## 场景（S1–S8）一句话
 
@@ -133,7 +133,7 @@ S1 新票→deliver `req-review`（必开 `docs/SKILL.md` 与 grilling）· S2 �
 1. 先守公共规约（[conventions/SKILL.md](conventions/SKILL.md)）。产线做端到端交付时先走内核。idev 识别产线侧特性，需要保存时写入该工程 `.idev/`（含 `marker: idev`），后续会话再读。写产线文档前打开 [docs/SKILL.md](docs/SKILL.md)（目录认 setup-agents-docs，问句认 grilling）。进入阶段先跑 `scripts/session-context.py`，只打开它列出的 `OPEN` 行；点了产品名就加 `--product`。人说「提升到内核」并完成产品剥离后，才写进内核。详见 [conventions/scope.md](conventions/scope.md)。
 2. **证据优先**：AI 反馈与文档不可信，代码逻辑可信仍须用例证明；每步先设计用例再推下一步。[conventions/evidence.md](conventions/evidence.md)
 2a. **边界未订死必须自动唤起 grilling**（`~/.cursor/skills/grilling/SKILL.md`），不准自拷问顶替。能问的按当前编制一次列全，条件后续写在同一轮；只有回答打开没写过的新分叉才再开一轮。能按判据决定的不问。答问不是签字。frontier 空之前禁止写 sealed。架构先出完整方案，只有真有分叉才拷问。触发细则 [cheatsheet §7.2](references/operator-cheatsheet.md)，问谁见 [chat-confirm-signoff.md](references/chat-confirm-signoff.md)。
-3. 尺是密封基线。交付主路径不再为确认停，也不解析原话。`check-feature` 过了、没有未决分叉，就写 `sealed`/`accepted`/`aligned`/`resolved`/`semantic_gate.*.passed` 并进入下一阶段。不问确认。检查没过不写。否决用 `record FAIL` 或 `idev gate reject`。不准用落笔改 goal。plan 在机检无信号时写 `auto:`。[references/chat-confirm-signoff.md](references/chat-confirm-signoff.md)
+3. 尺是密封基线。交付主路径不再为确认停，也不解析原话。`check-feature` 过了、没有未决分叉，就写 `sealed`/`accepted`/`aligned`/`resolved`/`semantic_gate.*.passed` 并进入下一阶段，同一轮接着做下一阶段的事。不问确认，不等「继续」。检查没过不写。否决用 `record FAIL` 或 `idev gate reject`。不准用落笔改 goal。plan 在机检无信号时写 `auto:`。[references/chat-confirm-signoff.md](references/chat-confirm-signoff.md)
 3a. **架构与设计质量**：`arch` 阶段和任何“加层 / 拆分 / 缓存 / 队列 / 重写”念头，先按 [conventions/canon.md](conventions/canon.md) §1 协议执行（T1–T12、A1–A8）；命中即停按动作做，落到 P/C/R；不新增强门禁。
 4. 红绿只走 verify。不准第二套测试框架或分数门禁。
 5. 签字前 `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>`；已 accepted 的 plan 再 `run` 不重跑 verify-plan。

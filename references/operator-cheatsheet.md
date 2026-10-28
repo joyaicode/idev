@@ -84,7 +84,7 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> <workflow_id> [--pr
 
 ## 4. 非门禁不停（H1–H6）
 
-全文只在 [invoke.md](invoke.md)。检查过了就写这一关，不请人确认，不擅自 promote，不为观测再停。
+全文只在 [invoke.md](invoke.md)。没有未决分叉就在同一轮接着做。检查过了就写这一关，不请人确认，不擅自 promote，不为观测再停。
 
 签字前：`bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>`
 

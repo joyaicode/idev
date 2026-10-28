@@ -67,12 +67,12 @@ grilling 不是可选追问，而是**订死边界与不清楚处**的默认动�
 
 | 码 | 做法 |
 |----|------|
-| H1 | 无当前停问点：不请签，不说「请确认」 |
+| H1 | 无当前停问点：不请签。下一步已确定就在同一轮做，不把 trace 的 `next` 当停点 |
 | H2 | 人没提提升 / 巡检包 / promote → 不问 `promote.sh` |
 | H3 | 导体 feedback tag：仅入口**直接**落到 verify 且 trial；deliver / ops 调用 verify 不问 |
 | H4 | 已 accepted 的 plan 再 `run`：不重跑 `verify-plan`、不请再签 |
 | H5 | 写 trace 不为观测再停 |
-| H6 | 自测跑完后停在实现审核，不另问「要不要提测」。审核确认后才把 `plan.mode` 改成 `test` |
+| H6 | 自测跑完且检查通过就写实现审核并进入提测，不另问「要不要提测」 |
 
 停问时对人摆方案和证据。`将代写` 是导体的落笔清单，不念给人（见 [chat-confirm-signoff.md](chat-confirm-signoff.md)）。
 
@@ -90,7 +90,7 @@ grilling 不是可选追问，而是**订死边界与不清楚处**的默认动�
 6. **module + convention_class**：按打开预算实际打开哪一页？
 7. **calls / opened**：本轮实际打开或执行了什么？
 
-这些不是给用户看长文。S2 / S3 / S5 对话短表只打 trigger / route / stop / next；落盘仍全量。
+这些不是给用户看长文。S2 / S3 / S5 对话短表只打 trigger / route / stop / next；落盘仍全量。`stop` 为空时 `next` 也空，并在同一轮做掉已经确定的下一步。
 
 ## 签字前
 
