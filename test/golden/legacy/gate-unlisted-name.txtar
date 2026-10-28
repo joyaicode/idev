@@ -1,0 +1,7 @@
+# a plausible name that no people list has
+# cmd: W record gate-plan PASS --by tester --quote 确认 --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED human.gate PASS needs --by with a name listed in people.yaml

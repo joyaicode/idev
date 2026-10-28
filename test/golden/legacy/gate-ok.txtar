@@ -2,6 +2,12 @@
 # cmd: W record gate-plan PASS --by tester --quote 确认 --feature demo
 
 -- exit --
-2
+0
 -- output --
-BLOCKED finish plan first; record it SKIPPED to skip
+DIGEST match aec1243bf708f640
+NEXT fix  kind=review.fix  status=pending
+OPEN conventions/coding.md
+DELEGATE idev-coder
+LABEL 按审查清单改掉全部 I*（实现审核前，不另请签）
+WITH {'accept_all_findings': True}
+VERIFY idev-reviewer confirms before PASS: --verified-by idev-reviewer --verify-evidence <report>

@@ -4,4 +4,4 @@
 -- exit --
 2
 -- output --
-BLOCKED finish plan first; record it SKIPPED to skip
+BLOCKED a gate is skipped only with --evidence: the earlier signoff, or the file that shows nothing is left to sign

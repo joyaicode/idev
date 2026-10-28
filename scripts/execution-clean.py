@@ -23,6 +23,11 @@ The hot set always stays: newest --hot traces, latest reviews,
 status.env, inbox that is not consumed/archived, and proposals that are
 still open. --bump advances the generation counter (evolve-review does
 this once per real run).
+
+Phase 2 §2: before a trace is unlinked, its structured fields (route,
+calls, extensions, feature, at, …) are appended to
+.idev/timeline/<feature>.yaml. memory.md keeps only a one-line prose
+pointer — structured facts are not compressed away.
 """
 from __future__ import annotations
 
@@ -34,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from product_sink import kernel_root, product_repo, sink_dir  # noqa: E402
+import structured_retain  # noqa: E402
 
 INBOX_DONE = {"consumed", "archived"}
 PROPOSAL_CLOSED = {"archived", "landed", "rejected", "ga", "done", "consumed"}
@@ -54,6 +60,7 @@ def execution_dirs(repo: Path | None) -> dict[str, Path]:
             "inbox": sink_dir("inbox"),
             "proposals": sink_dir("proposals"),
             "memory": root / "memory.md",
+            "timeline": root / "timeline",
         }
     base = repo / ".idev"
     return {
@@ -62,6 +69,7 @@ def execution_dirs(repo: Path | None) -> dict[str, Path]:
         "inbox": base / "inbox",
         "proposals": base / "proposals",
         "memory": base / "memory.md",
+        "timeline": base / "timeline",
     }
 
 
@@ -249,14 +257,27 @@ def resolve_repo(raw: str) -> Path | None:
     return product_repo()
 
 
-def apply_items(items: list[tuple[str, Path]], *, do_apply: bool, label: str) -> int:
+def apply_items(
+    items: list[tuple[str, Path]],
+    *,
+    do_apply: bool,
+    apply_label: str,
+    dry_label: str,
+    dirs: dict[str, Path] | None = None,
+) -> int:
     removed = 0
     for kind, path in items:
+        if kind == "traces" and dirs is not None:
+            kept = structured_retain.append_facts(dirs, path) if do_apply else None
+            if kept is not None:
+                print("KEEP-STRUCT %s -> %s" % (path.name, kept.name))
+            elif not do_apply and structured_retain.extract_trace_facts(path) is not None:
+                print("KEEP-STRUCT %s (dry-run)" % path.name)
         if do_apply:
             path.unlink()
-            print("%s %s/%s" % (label, kind, path.name))
+            print("%s %s/%s" % (apply_label, kind, path.name))
         else:
-            print("FOLD %s/%s" % (kind, path.name))
+            print("%s %s/%s" % (dry_label, kind, path.name))
         removed += 1
     return removed
 
@@ -270,15 +291,9 @@ def run_age(dirs: dict[str, Path], *, days: int, keep: int, do_apply: bool) -> i
     if do_apply and chosen:
         generation, last, body = read_memory(dirs["memory"])
         write_memory(dirs["memory"], generation, last, body, section_for("age", chosen))
-    removed = 0
-    for kind, path in chosen:
-        if do_apply:
-            path.unlink()
-            print("RM  %s/%s" % (kind, path.name))
-        else:
-            print("DRY %s/%s" % (kind, path.name))
-        removed += 1
-    return removed
+    return apply_items(
+        chosen, do_apply=do_apply, apply_label="RM ", dry_label="DRY", dirs=dirs
+    )
 
 
 def run_compact(
@@ -321,7 +336,9 @@ def run_compact(
         write_memory(dirs["memory"], generation_now, last_out, body, section)
     if bump:
         print("BUMP generation=%s" % generation_now)
-    return apply_items(chosen, do_apply=do_apply, label="RM ")
+    return apply_items(
+        chosen, do_apply=do_apply, apply_label="RM ", dry_label="FOLD", dirs=dirs
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

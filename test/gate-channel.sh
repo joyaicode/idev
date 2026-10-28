@@ -38,6 +38,8 @@ in_pty() {
 P="$T/product"
 mkdir -p "$P/.idev/task/demo/verify" "$P/.idev/workflows"
 cd "$P" && git init -q
+# workflow.py reads the checkout's own list; the kernel's lists real people only.
+printf 'people:\n  - tester\n' > .idev/people.yaml
 printf 'schema_version: 1\nmarker: idev\nid: demo\nevolve: false\n' > .idev/marker.yaml
 printf 'stage: test\nrisk_tier: P1\n' > .idev/task/demo/deliver.yaml
 printf 'cases: []\n' > .idev/task/demo/verify/plan.yaml

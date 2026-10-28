@@ -14,7 +14,7 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 ## 本阶段 5 步（先做这些）
 
 1. 读 `plan.yaml`；无 plan 先起草（goal/non_goal 复制密封基线）。票在 `arch` 时就起草，每条 `case_intent` 一条 case（`slice_id` / `baseline_item_id` / `dimension` 一致），不要等到编码之后另起一套。
-2. 请人 `accepted` 或记 `AUTO` 前跑 `check-feature.sh <f> verify-plan`（已 accepted 再 run 不重跑）。
+2. 请人 `accepted` 前跑 `check-feature.sh <f> verify-plan`（已 accepted 再 run 不重跑）。S8 的 `workflow.py record <gate> AUTO` 自己跑这一步。
 3. 按 mode 跑 cases；只许 PASS/FAIL/UNPROVEN；PASS 必须有证据路径。
 4. 提测维表六族：`mode: test` + `unproven.md`；人没提 promote 不问不跑。
 5. 写 `conductor-eval` 件数；试运行停问 feedback tags；`trace.sh append`。
@@ -74,7 +74,7 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 3. 按 mode 的维度表起草 `cases[]`（能挂上已有 `*Test`/`*IT` 就挂；没有则写人确认后的 `shell`，或生成到 `generatedverify/` 且 `accepted: false` 直到人勾）。
 4. 写下 `<票目录>/verify/plan.yaml`（照 [plan.example.yaml](references/plan.example.yaml)）。`accepted: false`。`arch.yaml` 里还有两条以上没有 case 的 `case_intent` 时，先跑 `fanout.py assess --activity plan`。`FANOUT` 时每个分片只写 `verify/shards/plan-<id>.yaml`，不写 `plan.yaml`，不改 `accepted`。导体 `fanout.py merge` 再把草稿收进计划。`SERIAL` 就一个人起草。
 5. 起草后或之后改了 `cases[]` / goal：跑 `check-feature.sh <feature> verify-plan`。FAIL 不准请人 `accepted`。
-6. **P0，或 P1/P2 有 `SIGNAL`：停，等人改 plan**（勾选 / 删 case / `accepted: true`），或回复确认用语全签（见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)）。P1/P2 无 `SIGNAL`：把检查输出存成 `verify/plan-check.log`，写 `accepted: true` + `auto: verify/plan-check.log`，不停。已 `accepted` 且本轮未改用例，不要再走本步。
+6. **P0，或 P1/P2 有 `SIGNAL`：停，等人改 plan**（勾选 / 删 case / `accepted: true`），或回复确认用语全签（见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)）。P1/P2 无 `SIGNAL`：S8 里由 `workflow.py record <gate> AUTO` 跑检查并把输出写进 `verify/plan-check.log`，不在配方里时自己把检查输出存成这个文件；都写 `accepted: true` + `auto: verify/plan-check.log`，不停。已 `accepted` 且本轮未改用例，不要再走本步。
 
 ### 2. run
 

@@ -20,9 +20,15 @@
 `healthcheck.sh` 按文档的设定去检查,于是**恒定 FAIL** —— 一个永远红的健康检查等于没有
 健康检查,真问题会被淹掉。谁读那份 README 都会被带偏,包括写代码的人自己。
 
-所以:**深入排查、定根因、下判断之前,用工具拿第一手事实,不要拿文档当依据。**
+所以:**深入排查、定根因、下判断之前，先更新 CodeGraph 索引，再用工具拿第一手事实，不要拿文档当依据。**
 
 ### 本地事实工具箱(按「问什么」选)
+
+读源码或查结构之前先更新索引。代码没变会跳过。
+
+```bash
+bash scripts/codegraph-sync.sh --repo <仓根> semantic
+```
 
 | 你要知道 | 用什么 | 不要用 |
 |---|---|---|
@@ -38,6 +44,30 @@
 **codegraph 等同「代码」一档** —— 它帮你读懂实际结构,但**不替代用例证明**。
 `--depth 1` 是规约不是建议:`conductor-eval` 的 `one-hop-only` 以「候选 hop > 1」为失败。
 查不到(动态分发 / 反射 / 配置路由)就**明说查不到**,不要当成「没有影响面」。
+
+### 索引何时更新
+
+索引过时还拿来当代码,等于拿一份旧快照当现场。更新只走一条命令。
+模型认出下面的时刻就跑。**代码有没有变动由脚本判定**,没变就跳过,有变才 `codegraph sync`。
+不要凭感觉说索引还新。
+
+```bash
+bash scripts/codegraph-sync.sh --repo <仓根> <reason>
+```
+
+| 时刻 | reason | 谁跑 |
+|---|---|---|
+| 代码提交 / 推送前 | `commit` | `pre-commit`、`pre-push`（`scripts/install-codegraph-hooks.sh`） |
+| 深入研究前 | `research` | S4 论证、`idev-deliver` 把需求落到代码、`idev-reviewer` 深读 |
+| 问题定位 / 根因分析前 | `rootcause` | `idev-ops` |
+| 总结知识库 / 文档前 | `docs` | `idev-deliver` 回填与小结、`docs/SKILL.md`、`lessons.py promote` |
+| 还没到上面的时刻,但代码已经变了 | `semantic` | 模型自己,在下一次 `codegraph_*` 之前 |
+| Agent 读结构 | `agent` | `idev-coder`、`idev-verifier` 查影响面前 |
+| Promote | `promote` | `verify/scripts/promote.sh` |
+
+没有 `.codegraph/` 就跳过,退出码 0。有索引、代码变了,但 `codegraph` 不在 PATH 或 sync 失败,退出码 1,后面的提交、根因、入库、promote 停住。
+
+判定范围是源码后缀(`.go` `.py` `.java` `.ts` `.vue` `.sh` 等),不含 Markdown。只改文档不会触发更新。
 
 ### 把 codegraph 用深,而不是只用一次
 

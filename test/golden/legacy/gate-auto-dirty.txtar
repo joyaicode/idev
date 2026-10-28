@@ -1,7 +1,0 @@
-# AUTO on a check output that did not end clean
-# cmd: W record gate-plan AUTO --evidence verify/plan-check.log --feature demo
-
--- exit --
-2
--- output --
-BLOCKED finish plan first; record it SKIPPED to skip

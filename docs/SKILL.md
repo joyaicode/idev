@@ -22,6 +22,8 @@ parent: idev
 - S5 契约或经验回填。
 - 本轮要新建或移动产线文档。
 
+总结知识库或写文档小结之前，先 `bash ~/.cursor/skills/idev/scripts/codegraph-sync.sh --repo <仓根> docs`。代码没变会跳过。时刻只认 `references/boost.md`「索引何时更新」。`docs.backfill` / `docs.changelog` 同样先跑这一条。
+
 执行模块仍只开一个。本技能和 grilling 一样，是交付时额外打开的同伴技能。
 
 ## 落点

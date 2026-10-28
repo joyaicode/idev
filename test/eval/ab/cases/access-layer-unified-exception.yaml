@@ -1,0 +1,28 @@
+id: access-layer-unified-exception
+source_ticket: access-layer-unified-exception
+include:
+  - joypaas-access-layer/
+  - docs/design/joypaas-access-layer/
+checks:
+  - id: tests-pass
+    command: "true"
+  - id: stage-gate-clean
+    fail_lines: 0
+  - id: paths-within-include
+    changed:
+      - joypaas-access-layer/src/ExceptionAdvice.java
+      - docs/design/joypaas-access-layer/exception.md
+  - id: no-signoff-write
+    report: |
+      STATUS: PASS
+      CHANGED: joypaas-access-layer/src/ExceptionAdvice.java
+      CONCLUSION: 统一异常落点
+      no-signoff-write = PASS
+modes:
+  with-idev:
+    expect_pass: true
+  without-idev:
+    # Without idev the same frozen facts still grade; the delta is measured
+    # when a live agent run fills artifacts/ — default fixture stays green so
+    # the harness itself is locked.
+    expect_pass: true

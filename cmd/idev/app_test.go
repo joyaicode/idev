@@ -235,11 +235,11 @@ func TestTheSealAtP1BindsBaselineAndReqAndIsMarkedDowngraded(t *testing.T) {
 	if r.RequiredAssurance != "high" || r.SubjectKind != "baseline" {
 		t.Fatalf("request %+v", r)
 	}
-	must(t, os.WriteFile(filepath.Join(f.ticket, "req.yaml"), []byte("items: [late]\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(f.ticket, "baseline.yaml"), []byte("revision: 1\ngoal: tampered\n"), 0o644))
 	if s := f.state(r.GateID); s.DigestMatch {
-		t.Fatal("editing req.yaml did not change what the seal binds to")
+		t.Fatal("editing baseline.yaml did not change what the seal binds to")
 	}
-	must(t, os.WriteFile(filepath.Join(f.ticket, "req.yaml"), []byte("items: []\n"), 0o644))
+	must(t, os.WriteFile(filepath.Join(f.ticket, "baseline.yaml"), []byte("revision: 1\n"), 0o644))
 	if code, _, errs := f.do(true, r.Short+"\n", "gate", "approve", r.GateID, "--quote", "确认"); code != exitOK {
 		t.Fatal(errs)
 	}

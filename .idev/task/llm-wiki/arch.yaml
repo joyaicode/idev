@@ -1,0 +1,72 @@
+schema_version: 2
+feature: llm-wiki
+revision: 1
+baseline_revision: 1
+req_revision: 1
+accepted: false
+by: ""
+approach: "一个 claims.py 在票目录维护 claims.yaml。摄取只读拆解、方案和已有用例里的显式主张；校准用来源子串和同一主题的文本冲突决定退出码。不改 lessons、realign、SKILL.md、check-feature。"
+non_approach: "不装向量库，不做健康分，不让模型判断矛盾，不把 lessons 或 realign 抄进索引，不把校准加进 check-feature，不改 SKILL.md。回退是停用 claims.py 并删除该票 claims.yaml。"
+impact_candidates:
+  - path: scripts/claims.py
+    hop: 0
+    include: true
+  - path: scripts/test_claims.py
+    hop: 0
+    include: true
+  - path: references/claim-index.md
+    hop: 0
+    include: true
+scope_debt:
+  decision: mark
+  recommend: mark
+  child: ""
+  requirement_lines: 0
+  debt_lines: 0
+case_intents:
+  - id: ops-exist
+    slice_id: schema-ops
+    baseline_item_id: B1
+    dimension: correctness
+    hint: "ingest、query、calibrate 三个子命令都存在并且能跑。"
+  - id: no-extra
+    slice_id: no-extra-stack
+    baseline_item_id: B2
+    dimension: boundary
+    hint: "diff 不新增依赖、不改 check-feature、不复制内核说明正文。"
+  - id: source-required
+    slice_id: source-path
+    baseline_item_id: B3
+    dimension: correctness
+    hint: "缺来源或句子不在来源中则摄取失败；查询输出含路径。"
+  - id: ticket-only
+    slice_id: ticket-index
+    baseline_item_id: B4
+    dimension: boundary
+    hint: "索引文件只在票目录。"
+  - id: claim-from-artifact
+    slice_id: claim-scope
+    baseline_item_id: B5
+    dimension: boundary
+    hint: "聊天不产生记录；工件里的主张行会产生记录。"
+  - id: conflict-nonzero
+    slice_id: conflict-exit
+    baseline_item_id: B6
+    dimension: correctness
+    hint: "来源不一致或同一主题两条记录互相装不下时退出码非 0。"
+  - id: ledgers-stay
+    slice_id: keep-ledgers
+    baseline_item_id: B7
+    dimension: compat
+    hint: "不改 realign.py 与 lessons.py，索引不含它们的正文。"
+  - id: guard-doc
+    slice_id: calibrate-before-doc
+    baseline_item_id: B8
+    dimension: correctness
+    hint: "校准非 0 时方案、拆解、用例与运行前一致。"
+  - id: guard-code
+    slice_id: calibrate-before-code
+    baseline_item_id: B9
+    dimension: correctness
+    hint: "被点名的代码文件在校准非 0 时与运行前一致。"
+open_questions: []

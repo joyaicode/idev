@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/run_apply.output.schema.json",
+  "title": "idev MCP run_apply output",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "run_id",
+    "status"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    }
+  }
+}

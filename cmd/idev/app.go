@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -16,9 +17,12 @@ import (
 
 	"github.com/idev/internal/adapters/kindreg"
 	"github.com/idev/internal/adapters/local"
+	"github.com/idev/internal/adapters/runyaml"
 	"github.com/idev/internal/adapters/store/sqlite"
+	"github.com/idev/internal/adapters/ticketbaseline"
 	"github.com/idev/internal/app/gatesvc"
 	"github.com/idev/internal/app/leasesvc"
+	"github.com/idev/internal/app/runsvc"
 	"github.com/idev/internal/domain/audit"
 	"github.com/idev/internal/domain/gate"
 	"github.com/idev/internal/domain/lease"
@@ -51,7 +55,7 @@ type app struct {
 
 func (a app) run(args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(a.stderr, "usage: idev gate request|approve|reject|status ... | idev lease acquire|release|check ... | idev audit downgrades | idev token init --handle H")
+		fmt.Fprintln(a.stderr, "usage: idev gate request|approve|reject|status ... | idev lease acquire|release|check ... | idev run start|apply|record|write ... | idev baseline seal|verify|sealed ... | idev delegation allocate ... | idev audit downgrades | idev token init --handle H")
 		return exitUsage
 	}
 	ctx := context.Background()
@@ -73,6 +77,22 @@ func (a app) run(args []string) int {
 		err = a.leaseRelease(ctx, args[2:])
 	case "lease check":
 		err = a.leaseCheck(ctx, args[2:])
+	case "run start":
+		err = a.runStart(args[2:])
+	case "run apply":
+		err = a.runApply(args[2:])
+	case "run record":
+		err = a.runRecord(args[2:])
+	case "run write":
+		err = a.runWrite(args[2:])
+	case "baseline seal":
+		err = a.baselineSeal(ctx, args[2:])
+	case "baseline verify":
+		err = a.baselineVerify(ctx, args[2:])
+	case "baseline sealed":
+		err = a.baselineSealed(ctx, args[2:])
+	case "delegation allocate":
+		err = a.delegationAllocate(ctx, args[2:])
 	case "audit downgrades":
 		err = a.auditDowngrades(ctx, args[2:])
 	default:
@@ -107,6 +127,7 @@ type env struct {
 	store  *sqlite.Store
 	svc    gatesvc.Service
 	leases leasesvc.Service
+	runs   runsvc.Service
 	data   string
 }
 
@@ -145,11 +166,15 @@ func (a app) open(ctx context.Context) (env, error) {
 			// Passkeys are not wired, so every local answer is low. The
 			// transition switch lets a high requirement complete at low and
 			// the audit chain records each one as assurance_downgraded.
-			Policy: gate.Policy{AllowLowForHigh: true},
+			// E6.1: passkey/high assurance turns off the local low-for-high downgrade.
+			Policy: gate.Policy{AllowLowForHigh: os.Getenv("IDEV_REQUIRE_PASSKEY") == ""},
 		},
 		// Kinds 决定每个 step 领什么用途的租约、谁有权验证；不接的话 verify 租约会
 		// 发给先到者（delegated 态只绑定 agent）。见 review A1。
 		leases: leasesvc.Service{Store: store, Clock: local.Clock{}, IDs: local.IDs{}, Kinds: kindreg.MustLoad()},
+		runs: runsvc.Service{
+			Store: store, Clock: local.Clock{}, IDs: local.IDs{}, Registry: kindreg.MustLoad(),
+		},
 	}, nil
 }
 
@@ -223,8 +248,14 @@ func (a app) request(ctx context.Context, args []string) error {
 		subj.Kind = gate.SubjectArtifactSet
 		if t == gate.TypeSealed || t == gate.TypeReopenBaseline {
 			subj.Kind = gate.SubjectBaseline
-		}
-		if subj.Digest, err = filesDigest(absRoot, subject); err != nil {
+			// I-4: a seal binds the manifest_root, not a raw-file tree digest.
+			// --revision stays mandatory (domain refuses revision 0).
+			m, err := ticketbaseline.FromTicket(*feature, absRoot, *revision, time.Now().UTC())
+			if err != nil {
+				return err
+			}
+			subj.Digest = string(m.ManifestRoot)
+		} else if subj.Digest, err = filesDigest(absRoot, subject); err != nil {
 			return err
 		}
 	} else {
@@ -310,7 +341,17 @@ func currentDigest(ctx context.Context, e env, g gate.Gate) (string, error) {
 	// the missing row as "binds to the question" would compare a different
 	// digest and report a content change, which hides that the binding write
 	// was lost.
-	if g.Subject.Kind == gate.SubjectArtifactSet || g.Subject.Kind == gate.SubjectBaseline {
+	if g.Subject.Kind == gate.SubjectBaseline {
+		if root == "" {
+			return "", fmt.Errorf("subject binding missing for %s (%s)", g.ID, g.Subject.Kind)
+		}
+		m, err := ticketbaseline.FromTicket(g.Feature, root, g.Subject.BaselineRevision, time.Now().UTC())
+		if err != nil {
+			return "", err
+		}
+		return string(m.ManifestRoot), nil
+	}
+	if g.Subject.Kind == gate.SubjectArtifactSet {
 		if len(paths) == 0 {
 			return "", fmt.Errorf("subject binding missing for %s (%s)", g.ID, g.Subject.Kind)
 		}
@@ -544,7 +585,11 @@ type runFile struct {
 		ID        string `yaml:"id"`
 		Kind      string `yaml:"kind"`
 		Status    string `yaml:"status"`
-		Delegated *struct {
+		// MachineState carries open domain states (verifying, …) that are
+		// not STEP_STATUS values, so check_run stays quiet while ProjectRun
+		// still sees the independent-verify window (E3.1).
+		MachineState string `yaml:"machine_state"`
+		Delegated    *struct {
 			Agent string `yaml:"agent"`
 		} `yaml:"delegated"`
 		Group  string   `yaml:"group"`
@@ -563,6 +608,12 @@ func (r runFile) projection(risk string) sqlite.ProjectedRun {
 	for _, st := range r.Steps {
 		ps := sqlite.ProjectedStep{ID: st.ID, Kind: st.Kind, State: run.StepPending, Group: st.Group, Writes: append([]string(nil), st.Writes...)}
 		switch {
+		case st.Status == string(run.StepVerifying) || st.MachineState == string(run.StepVerifying):
+			// Independent verification in progress (E5); keep writer for audit.
+			ps.State = run.StepVerifying
+			if st.Delegated != nil {
+				ps.Writer = st.Delegated.Agent
+			}
 		case st.Delegated != nil && st.Delegated.Agent != "" && !finished[st.Status]:
 			ps.State, ps.Writer = run.StepDelegated, st.Delegated.Agent
 		case st.Status != "":
@@ -590,6 +641,7 @@ func (a app) leaseAcquire(ctx context.Context, args []string) error {
 	runPath := fs.String("run", "", "run.yaml the step belongs to")
 	featureID := fs.String("feature-id", "", "the single-writer key; default run.yaml's feature")
 	step := fs.String("step", "", "step id")
+	agentFlag := fs.String("agent", "", "holder; default the step's delegated writer (override for independent verify)")
 	risk := fs.String("risk", "P1", "the ticket's risk tier")
 	ttl := fs.Duration("ttl", 2*time.Hour, "how long the lease runs")
 	purpose := fs.String("purpose", "write", "what the step will do with it: write or verify")
@@ -618,14 +670,16 @@ func (a app) leaseAcquire(ctx context.Context, args []string) error {
 	if *featureID != "" {
 		rf.Feature = *featureID
 	}
-	agent := ""
-	for _, st := range rf.Steps {
-		if st.ID == *step && st.Delegated != nil {
-			agent = st.Delegated.Agent
+	agent := strings.TrimSpace(*agentFlag)
+	if agent == "" {
+		for _, st := range rf.Steps {
+			if st.ID == *step && st.Delegated != nil {
+				agent = st.Delegated.Agent
+			}
 		}
 	}
 	if agent == "" {
-		return fmt.Errorf("%s is not delegated in %s; delegate it first", *step, *runPath)
+		return fmt.Errorf("%s needs a holder: pass --agent, or delegate the step first", *step)
 	}
 
 	e, err := a.open(ctx)
@@ -718,6 +772,340 @@ func (a app) leaseCheck(ctx context.Context, args []string) error {
 	return json.NewEncoder(a.stdout).Encode(leaseOut{
 		LeaseID: l.ID, Agent: l.Agent, Fencing: l.Fencing, WritePaths: nonNil(l.WritePaths),
 		ExpiresAt: l.ExpiresAt.Format(time.RFC3339), Outside: l.Outside(paths),
+	})
+}
+
+// --- run truth (E2) ----------------------------------------------------------
+
+func (a app) runStart(args []string) error {
+	fs := flag.NewFlagSet("run start", flag.ContinueOnError)
+	fs.SetOutput(a.stderr)
+	file := fs.String("file", "", "path to write the exported run.yaml")
+	workflow := fs.String("workflow", "", "workflow id")
+	feature := fs.String("feature", "", "feature id")
+	var steps multi
+	fs.Var(&steps, "step", "step as id:kind (repeatable)")
+	if err := fs.Parse(args); err != nil {
+		return usageError{err.Error()}
+	}
+	if *file == "" || *workflow == "" || *feature == "" || len(steps) == 0 {
+		return usageError{"run start needs --file, --workflow, --feature and at least one --step id:kind"}
+	}
+	parsed := make([]run.Step, 0, len(steps))
+	for _, raw := range steps {
+		id, kind, ok := strings.Cut(raw, ":")
+		if !ok || id == "" || kind == "" {
+			return usageError{fmt.Sprintf("step %q wants id:kind", raw)}
+		}
+		parsed = append(parsed, run.Step{ID: id, Kind: kind})
+	}
+	ctx := context.Background()
+	e, err := a.open(ctx)
+	if err != nil {
+		return err
+	}
+	defer e.store.Close()
+	out, err := e.runs.Start(ctx, runsvc.StartParams{
+		WorkflowID: *workflow, FeatureID: *feature, Feature: *feature,
+		Steps: parsed,
+		Actor: ports.Principal{Handle: "conductor@claude", Kind: "agent", OwnerHandle: "system"},
+	})
+	if err != nil {
+		return err
+	}
+	existing, _ := os.ReadFile(*file)
+	expect, err := runyaml.SHA256Hex(*file)
+	if err != nil {
+		return err
+	}
+	if err := runyaml.WriteExport(*file, existing, out, expect); err != nil {
+		return err
+	}
+	return json.NewEncoder(a.stdout).Encode(map[string]string{
+		"run_id": out.ID, "file": *file, "status": string(out.Status()), "truth": "sqlite",
+	})
+}
+
+func (a app) runApply(args []string) error {
+	fs := flag.NewFlagSet("run apply", flag.ContinueOnError)
+	fs.SetOutput(a.stderr)
+	file := fs.String("file", "", "optional run.yaml to re-export after Apply")
+	runID := fs.String("run-id", "", "live run id")
+	step := fs.String("step", "", "step id")
+	event := fs.String("event", "", "domain event kind, e.g. DelegationReturned")
+	agent := fs.String("agent", "", "agent handle for return/verify events")
+	fencing := fs.Uint64("fencing", 0, "lease fencing token from acquire")
+	outcome := fs.String("outcome", "", "PASS|FAIL|… when the event records one")
+	evidence := fs.String("evidence", "", "evidence path")
+	note := fs.String("note", "", "optional note")
+	approval := fs.String("approval-id", "", "recorded approval id for GateApproved / skip")
+	by := fs.String("by", "", "human handle for gate events (must match the approval)")
+	if err := fs.Parse(args); err != nil {
+		return usageError{err.Error()}
+	}
+	if *runID == "" || *step == "" || *event == "" {
+		return usageError{"run apply needs --run-id, --step and --event"}
+	}
+	ev := run.Event{
+		Kind: run.EventKind(*event), StepID: *step,
+		Agent: *agent, Fencing: *fencing, Evidence: *evidence, Note: *note,
+		ApprovalID: *approval,
+	}
+	if *outcome != "" {
+		ev.Outcome = run.StepState(*outcome)
+	}
+	switch ev.Kind {
+	case run.EvDelegationReturned, run.EvVerificationRecorded:
+		ev.Actor = run.ActorAgent
+	case run.EvStepActivated, run.EvLeaseExpired:
+		ev.Actor = run.ActorSystem
+	case run.EvGateApproved, run.EvGateRejected:
+		ev.Actor = run.ActorHuman
+	default:
+		ev.Actor = run.ActorConductor
+	}
+	actor := ports.Principal{Handle: "conductor@claude", Kind: "agent", OwnerHandle: "system"}
+	if ev.Actor == run.ActorAgent {
+		if *agent == "" {
+			return usageError{"agent events need --agent"}
+		}
+		actor = ports.Principal{Handle: *agent, Kind: "agent", OwnerHandle: "system"}
+	}
+	if ev.Actor == run.ActorHuman {
+		handle := strings.TrimSpace(*by)
+		if handle == "" {
+			return usageError{"gate events need --by <handle> matching the approval"}
+		}
+		actor = ports.Principal{Handle: handle, Kind: "human"}
+	}
+	ctx := context.Background()
+	e, err := a.open(ctx)
+	if err != nil {
+		return err
+	}
+	defer e.store.Close()
+	next, err := e.runs.Apply(ctx, *runID, ev, actor)
+	if err != nil {
+		return err
+	}
+	if *file != "" {
+		raw, _ := os.ReadFile(*file)
+		expect, err := runyaml.SHA256Hex(*file)
+		if err != nil {
+			return err
+		}
+		if err := runyaml.WriteExport(*file, raw, next, expect); err != nil {
+			return err
+		}
+	}
+	return json.NewEncoder(a.stdout).Encode(map[string]any{
+		"run_id": next.ID, "step": *step, "event": *event,
+		"status": string(next.Status()), "truth": "sqlite",
+	})
+}
+
+func (a app) runRecord(args []string) error {
+	fs := flag.NewFlagSet("run record", flag.ContinueOnError)
+	fs.SetOutput(a.stderr)
+	file := fs.String("file", "", "path to the ticket's workflow/run.yaml")
+	step := fs.String("step", "", "step id")
+	status := fs.String("status", "", "PASS|FAIL|UNPROVEN|SKIPPED|BLOCKED|AUTO")
+	evidence := fs.String("evidence", "", "evidence path")
+	note := fs.String("note", "", "optional note")
+	if err := fs.Parse(args); err != nil {
+		return usageError{err.Error()}
+	}
+	if *file == "" || *step == "" || *status == "" {
+		return usageError{"run record needs --file, --step and --status"}
+	}
+	raw, _ := os.ReadFile(*file)
+	doc, _ := runyaml.ParseDoc(raw)
+	ctx := context.Background()
+	e, err := a.open(ctx)
+	if err != nil {
+		return err
+	}
+	defer e.store.Close()
+	if doc.ID != "" {
+		stored, err := e.store.RunStoredStatus(ctx, doc.ID)
+		if err != nil {
+			return err
+		}
+		if stored != "" && stored != "external" {
+			err := a.applyRecord(ctx, e, *file, raw, doc.ID, *step, *status, *evidence, *note)
+			if err == nil {
+				return json.NewEncoder(a.stdout).Encode(map[string]string{
+					"file": *file, "step": *step, "status": *status, "truth": "sqlite",
+				})
+			}
+			var useYAML *errUseYAML
+			if !errors.As(err, &useYAML) {
+				return err
+			}
+			// Agent / gate steps still ride the YAML driver (acceptance: Python
+			// path); fall through so record does not refuse mid-migration.
+		}
+	}
+	if err := runyaml.Record(*file, *step, *status, *evidence, *note); err != nil {
+		return err
+	}
+	_ = a.projectYAML(*file) // external projection; YAML remains driver until Start migrates
+	return json.NewEncoder(a.stdout).Encode(map[string]string{
+		"file": *file, "step": *step, "status": *status, "truth": "yaml",
+	})
+}
+
+func (a app) applyRecord(
+	ctx context.Context, e env, path string, raw []byte,
+	runID, stepID, status, evidence, note string,
+) error {
+	rn, err := e.runs.Get(ctx, runID)
+	if err != nil {
+		return err
+	}
+	events, err := conductorRecordEvents(rn, stepID, status, evidence, note)
+	if err != nil {
+		return err
+	}
+	actor := ports.Principal{Handle: "conductor@claude", Kind: "agent", OwnerHandle: "system"}
+	var next run.Run
+	for _, ev := range events {
+		next, err = e.runs.Apply(ctx, runID, ev, actor)
+		if err != nil {
+			return err
+		}
+	}
+	expect, err := runyaml.SHA256Hex(path)
+	if err != nil {
+		return err
+	}
+	return runyaml.WriteExport(path, raw, next, expect)
+}
+
+// errUseYAML tells runRecord to keep the external YAML mutation path.
+type errUseYAML struct{ why string }
+
+func (e *errUseYAML) Error() string { return e.why }
+
+// conductorRecordEvents builds the Apply sequence for a conductor-owned step.
+// Agent / gate paths stay on the YAML driver until their event wiring lands.
+func conductorRecordEvents(rn run.Run, stepID, status, evidence, note string) ([]run.Event, error) {
+	var step *run.Step
+	for i := range rn.Steps {
+		if rn.Steps[i].ID == stepID {
+			step = &rn.Steps[i]
+			break
+		}
+	}
+	if step == nil {
+		return nil, fmt.Errorf("no step %q in run %s", stepID, rn.ID)
+	}
+	if step.Executor != run.ByConductor || step.IsGate {
+		return nil, &errUseYAML{why: fmt.Sprintf(
+			"step %s (%s) still uses the YAML driver", stepID, step.Kind)}
+	}
+	outcome := run.StepState(status)
+	base := run.Event{
+		Actor: run.ActorConductor, StepID: stepID,
+		Outcome: outcome, Evidence: evidence, Note: note,
+	}
+	switch step.State {
+	case run.StepReady:
+		return []run.Event{
+			{Kind: run.EvConductorStepStarted, Actor: run.ActorConductor, StepID: stepID},
+			{Kind: run.EvConductorStepRecorded, Actor: base.Actor, StepID: stepID,
+				Outcome: outcome, Evidence: evidence, Note: note},
+		}, nil
+	case run.StepConductorActive:
+		base.Kind = run.EvConductorStepRecorded
+		return []run.Event{base}, nil
+	default:
+		if note == "" {
+			return nil, fmt.Errorf("step %s is %s; amending it needs --note", stepID, step.State)
+		}
+		base.Kind = run.EvStepAmended
+		return []run.Event{base}, nil
+	}
+}
+
+func (a app) runWrite(args []string) error {
+	fs := flag.NewFlagSet("run write", flag.ContinueOnError)
+	fs.SetOutput(a.stderr)
+	file := fs.String("file", "", "path to the ticket's workflow/run.yaml")
+	expect := fs.String("expect-sha256", "", "refuse if the on-disk file's sha256 differs")
+	if err := fs.Parse(args); err != nil {
+		return usageError{err.Error()}
+	}
+	if *file == "" {
+		return usageError{"run write needs --file"}
+	}
+	body, err := io.ReadAll(a.stdin)
+	if err != nil {
+		return err
+	}
+	if len(body) == 0 {
+		return usageError{"run write needs the new YAML on stdin"}
+	}
+	if err := runyaml.Write(*file, body, *expect); err != nil {
+		var stale *runyaml.ErrStale
+		if errors.As(err, &stale) {
+			return err
+		}
+		return err
+	}
+	_ = a.projectYAML(*file)
+	sum := sha256Hex(body)
+	return json.NewEncoder(a.stdout).Encode(map[string]string{
+		"file": *file, "sha256": sum,
+	})
+}
+
+func sha256Hex(body []byte) string {
+	sum := sha256.Sum256(body)
+	return fmt.Sprintf("%x", sum)
+}
+
+func (a app) projectYAML(path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	doc, err := runyaml.ParseDoc(raw)
+	if err != nil || doc.ID == "" || doc.Feature == "" {
+		return err
+	}
+	ctx := context.Background()
+	e, err := a.open(ctx)
+	if err != nil {
+		return err
+	}
+	defer e.store.Close()
+	steps := make([]sqlite.ProjectedStep, 0, len(doc.Steps))
+	for _, st := range doc.Steps {
+		steps = append(steps, sqlite.ProjectedStep{
+			ID: st.ID, Kind: st.Kind, State: run.StepState(st.State),
+			Writer: st.Writer, Group: st.Group, Writes: st.Writes,
+		})
+	}
+	projected := sqlite.ProjectedRun{
+		ID: doc.ID, WorkflowID: doc.WorkflowID, Feature: doc.Feature,
+		Risk: doc.Risk, Steps: steps,
+	}
+	// Same SQLite TX as the audit append (phase 1 §6). Live domain runs use
+	// Apply + Export; this path keeps the external (YAML-driven) projection.
+	sum := sha256Hex(raw)
+	return e.store.ProjectRunWithAudit(ctx, projected, audit.Event{
+		At:      time.Now().UTC(),
+		Action:  audit.ActionStepRecorded,
+		Actor:   audit.Actor{Handle: "idev", Kind: "system"},
+		RunID:   doc.ID,
+		Feature: doc.Feature,
+		Subject: path,
+		Detail: map[string]any{
+			"source": "run.yaml",
+			"sha256": sum,
+			"steps":  len(doc.Steps),
+		},
 	})
 }
 

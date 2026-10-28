@@ -277,7 +277,7 @@ class OneDecision(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             wf = root / "workflow"
-            folder = wf / "delegations"
+            folder = wf / "delegations" / "R"
             folder.mkdir(parents=True)
             run = wf / "run.yaml"
             run.write_text("run_id: R\nstatus: running\nsteps: []\n", encoding="utf-8")
@@ -297,10 +297,10 @@ class OneDecision(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             wf = root / "workflow"
-            (wf / "delegations").mkdir(parents=True)
+            (wf / "delegations" / "R").mkdir(parents=True)
             run = wf / "run.yaml"
             run.write_text("run_id: R\nstatus: running\nsteps: []\n", encoding="utf-8")
-            (wf / "delegations" / "s-1.yaml").write_text(
+            (wf / "delegations" / "R" / "s-1.yaml").write_text(
                 "step: s\nattempt: 1\nsignals:\n  - the question\n", encoding="utf-8"
             )
             ledger = root / "decisions.yaml"

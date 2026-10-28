@@ -114,7 +114,7 @@
 | `status` | `pending` \| `running` \| `blocked` \| `done` \| `aborted` |
 | `params` | 绑定后的参数 |
 | `policy` | 起跑时抄下的配方 `policy` |
-| `steps[]` | 起跑时展开后的 `id` / `kind` / `label` / `with` / `group` / `writes` / `react` / `tool` / `slots` / `branch`。没有 `status` 就是还没跑；跑过是 `PASS` \| `FAIL` \| `UNPROVEN` \| `SKIPPED` \| `BLOCKED` \| `AUTO`，另有 `at`，`evidence` / `note` 可选。`human.gate` 为 `PASS` 时必须有 `signoff: {by, quote, at}`，`by` 是人名，`quote` 以确认用语开头；为 `AUTO` 时只有 `evidence`，没有 `signoff`。独立复核过的步骤另有 `verification: {by, evidence, at}` |
+| `steps[]` | 起跑时展开后的 `id` / `kind` / `label` / `with` / `group` / `writes` / `react` / `tool` / `slots` / `branch`。没有 `status` 就是还没跑；跑过是 `PASS` \| `FAIL` \| `UNPROVEN` \| `SKIPPED` \| `BLOCKED` \| `AUTO`，另有 `at`，`evidence` / `note` 可选。`human.gate` 为 `PASS` 时必须有 `signoff: {by, quote, at}`，`by` 是人名，`quote` 以确认用语开头；为 `AUTO` 时只有 `evidence`（它跑出的检查输出路径）和 `auto: {stage, log, exit, sha256}`，没有 `signoff`。独立复核过的步骤另有 `verification: {by, evidence, at}` |
 | `revisions[]` | 只追加；改已记录的步骤时写 `step` 与 `旧 -> 新: 原因` |
 | `feedback` | `status`：`pending` \| `filed`；试运行 tag 拷到 verify inbox |
 
@@ -141,14 +141,14 @@ $W record <step> PASS|FAIL|UNPROVEN|SKIPPED|BLOCKED --feature <f> [--evidence <�
 $W delegate <step> --feature <f>                 # 委派前标记执行者；写代码的步骤同时领写租约
 $W ask <gate-step> --feature <f>                 # 可选；终端 idev gate approve 不是必经
 $W record <gate-step> PASS --feature <f> --by <人名> --quote "确认"   # 聊天里的确认用语就是签字
-$W record <gate-step> AUTO --feature <f> --evidence <机检结果>        # 仅当档位在 with.auto_tiers 里
+$W record <gate-step> AUTO --feature <f>        # 仅当档位在 with.auto_tiers 里；自己跑该闸的检查
 $W record <step> PASS --feature <f> --evidence <路径> --verified-by <复核 agent> --verify-evidence <复核报告>
 $W decide <step> --feature <f> --signal "<信号原样>" --question <问题> --answer <结论> --quote "<人的原话>" [--options …] [--recommend …]
 $W status --feature <f>
 $W abort --note <原因> --feature <f>
 ```
 
-它守的规则：缺必填参数或 `from: product` 的键 → BLOCKED，不猜；有票配方无 `deliver.yaml` → BLOCKED；同一张票已有进行中的 run 不另起；只能记当前步骤，想跳过就把当前步骤记 `SKIPPED`；改已记录的步骤必须写 `--note` 并进 `revisions[]`；`FAIL` / `BLOCKED` 让 run 停在 `blocked`，修好后重记同一步；`human.gate` 的 `PASS` 用聊天里的确认原话（`--by` + `--quote`）。`ask` 和 `record` 不在写 `run.yaml` 的锁里调用 `idev`。问已经在库里、编号却没写进 run 时，再次 `ask` 把那个 pending 编号写回去，不开第二问；编号已在且仍 pending 时拒绝再开。已经批准且内容没变时直接去 `record`，不再另开一问。`start` 在同一把锁里判断并写入：已有 `running` / `blocked` 的 run 就拒绝（没有 `steps` 也算进行中），读不出来或不是 mapping 的 `run.yaml` 不覆盖，两个 start 不会各写一份再互相覆盖。`report.md` 在 `run.yaml` 写成功之后才更新。同一 attempt 的同一个 signal 只接受一次 `decide`。没有 `--by` / `--quote` 时，`record` 才读回终端批准：状态非 approved、内容在批准后改过、签名验不过都会 BLOCKED。`--quote` 是 `继续` / `ok` 不算确认。gate 的类型取 `with.gate_type`（`accepted_req|accepted_arch|accepted_plan|aligned|resolved|step_confirm`），没写时 `will_write` 提到 `plan.yaml` 的算 `accepted_plan`，其余算 `step_confirm`；摘要覆盖 `with.subject` 列出的票内文件（`accepted_plan` 默认取 `verify/plan.yaml`），没有文件时覆盖问题本身。registry 里 `lease: write` 的 kind（Go 引擎下）要先 `delegate`：它把 run 的步骤状态投影进 `~/.idev` 的 SQLite，按 `arch.yaml` 里 `include: true` 的路径领写租约，同一张票（按票目录绝对路径区分，两个 checkout 的同名票互不相干）同时只有一个写者，fencing 只升不降；持有期间 token 记在 `run.yaml` 的 `steps[].lease`，释放后只留编号、fencing、路径和 `released_at`。没有租约记 `PASS` → BLOCKED；执行者回报的 `CHANGED` 有租约外的路径 → BLOCKED；`record` 收口和 `abort` 都会释放租约，没释放的到期自动回收（默认 2 小时）。`SKIPPED` 要 `--evidence` 指向先前的签字，或指向表明本闸无可签内容的文件（如没有 `I*` 的 `review.md`）。`AUTO` 只给声明了 `with.auto_tiers` 且票的 `risk_tier` 在其中的 `human.gate`，须带 `--evidence`，不得带 `--by` / `--quote`。`KIND_VERIFIER` 登记了复核者的 kind，`PASS` 须 `--verified-by` 正是那个 agent，且 `--verify-evidence` 指向一份已经写好的非空报告；票的 `delegations/` 里还要有该 agent 自己的留痕，正文用整词引用这条路径。执行者自己的留痕不算。两条都是该 agent 名下的文件，机器核对的是「报告在、留痕对得上」，不是另一台进程的签名。该步最新委派留痕里有信号（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）而 `decisions.yaml` 没有对应答复时，`PASS` → BLOCKED；`decide` 只接受留痕里真有的信号，`--quote` 是 `继续` / `ok` 这类不选任何东西的词时拒收。决策不是签字：它记人对一个问题的回答，不授权写签字字段。退出码：0 正常，1 用法或配方非法，2 BLOCKED。
+它守的规则：缺必填参数或 `from: product` 的键 → BLOCKED，不猜；有票配方无 `deliver.yaml` → BLOCKED；同一张票已有进行中的 run 不另起；只能记当前步骤，想跳过就把当前步骤记 `SKIPPED`；改已记录的步骤必须写 `--note` 并进 `revisions[]`；`FAIL` / `BLOCKED` 让 run 停在 `blocked`，修好后重记同一步；`human.gate` 的 `PASS` 用聊天里的确认原话（`--by` + `--quote`）。`ask` 和 `record` 不在写 `run.yaml` 的锁里调用 `idev`。问已经在库里、编号却没写进 run 时，再次 `ask` 把那个 pending 编号写回去，不开第二问；编号已在且仍 pending 时拒绝再开。已经批准且内容没变时直接去 `record`，不再另开一问。`start` 在同一把锁里判断并写入：已有 `running` / `blocked` 的 run 就拒绝（没有 `steps` 也算进行中），读不出来或不是 mapping 的 `run.yaml` 不覆盖，两个 start 不会各写一份再互相覆盖。`report.md` 在 `run.yaml` 写成功之后才更新。同一 attempt 的同一个 signal 只接受一次 `decide`。没有 `--by` / `--quote` 时，`record` 才读回终端批准：状态非 approved、内容在批准后改过、签名验不过都会 BLOCKED。`--quote` 是 `继续` / `ok` 不算确认。gate 的类型取 `with.gate_type`（`accepted_req|accepted_arch|accepted_plan|aligned|resolved|step_confirm`），没写时 `will_write` 提到 `plan.yaml` 的算 `accepted_plan`，其余算 `step_confirm`；摘要覆盖 `with.subject` 列出的票内文件（`accepted_plan` 默认取 `verify/plan.yaml`），没有文件时覆盖问题本身。registry 里 `lease: write` 的 kind（Go 引擎下）要先 `delegate`：它把 run 的步骤状态投影进 `~/.idev` 的 SQLite，按 `arch.yaml` 里 `include: true` 的路径领写租约，同一张票（按票目录绝对路径区分，两个 checkout 的同名票互不相干）同时只有一个写者，fencing 只升不降；持有期间 token 记在 `run.yaml` 的 `steps[].lease`，释放后只留编号、fencing、路径和 `released_at`。没有租约记 `PASS` → BLOCKED；执行者回报的 `CHANGED` 有租约外的路径 → BLOCKED；`record` 收口和 `abort` 都会释放租约，没释放的到期自动回收（默认 2 小时）。`SKIPPED` 要 `--evidence` 指向先前的签字，或指向表明本闸无可签内容的文件（如没有 `I*` 的 `review.md`）。`AUTO` 只给声明了 `with.auto_tiers` 且票的 `risk_tier` 在其中的 `human.gate`，不得带 `--by` / `--quote`。它在锁外自己跑该闸的检查（`accepted_plan` 闸跑 `check-feature verify-plan`），输出写进票的 `verify/plan-check.log`；退出码非 0、没有 `0 FAIL` 行、有 `SIGNAL` 行，或 `verify.plan` 步最新留痕里的信号还没 `decide`，都 BLOCKED。事先存好的文件不读，会被覆盖；`--evidence` 可省，写了必须就是这个文件。`KIND_VERIFIER` 登记了复核者的 kind，`PASS` 须 `--verified-by` 正是那个 agent，且 `--verify-evidence` 指向一份已经写好的非空报告；票的 `delegations/` 里还要有该 agent 自己的留痕，正文用整词引用这条路径。执行者自己的留痕不算。两条都是该 agent 名下的文件，机器核对的是「报告在、留痕对得上」，不是另一台进程的签名。该步最新委派留痕里有信号（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）而 `decisions.yaml` 没有对应答复时，`PASS` → BLOCKED；`decide` 只接受留痕里真有的信号，`--quote` 是 `继续` / `ok` 这类不选任何东西的词时拒收。决策不是签字：它记人对一个问题的回答，不授权写签字字段。退出码：0 正常，1 用法或配方非法，2 BLOCKED。
 
 ## 覆盖
 
@@ -195,7 +195,7 @@ $W abort --note <原因> --feature <f>
 | `label` | 须含或能生成 `将代写: <字段>` |
 | `with.will_write` | 可选；字符串数组，优先用于拼 `将代写`。`[]` 表示 `将代写: 无`（只停问、不写字段） |
 | `with.proof` | 可选；短证明上下文（门禁结果 / PASS 计数） |
-| `with.auto_tiers` | 可选；`risk_tier` 取值的非空子集。票在这些档位时，机检全过即可记 `AUTO`，不停问。不写 = 每档都要人签 |
+| `with.auto_tiers` | 可选；`risk_tier` 取值的非空子集，只能写在有机检的闸上（目前只有 `accepted_plan`），写在别的闸上配方非法。票在这些档位时，`record AUTO` 自己跑的检查全过且无信号即可记 `AUTO`，不停问。不写 = 每档都要人签 |
 
 `with.will_write` 与 `label` 里的 `将代写` 至少有一个，都没有 → `workflow-check` 失败；`will_write` 不是字符串列表或含空串也失败。`workflow.py next` 在停问步骤直接打印由它拼出的 `将代写:` 行。
 

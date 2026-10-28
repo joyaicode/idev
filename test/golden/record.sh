@@ -23,9 +23,15 @@ set -uo pipefail
 # unbuffered order — the program's logical order — so recording and --verify
 # agree in every environment.
 export PYTHONUNBUFFERED=1
-# These record the Python driver's own behaviour, gate signoffs included; the
-# Go gate channel has its own tests (cmd/idev, test/gate-channel.sh).
+# E2.5 python golden lane: byte-stable txtar for the Python driver only.
+# Go default-engine walks live in test/e2e and cmd/idev (run start/apply);
+# do not point this script at the Go writer or the txtar bytes will drift.
 export IDEV_ENGINE=python
+export IDEV_AGENT_FEEDBACK=off
+# E1.3 only fires when an idev binary is visible. Keep this lane on pure
+# Python so txtar bytes stay stable: hide IDEV_BIN and any PATH idev.
+unset IDEV_BIN
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
 
 IDEV="$(cd "$(dirname "$0")/../.." && pwd -P)"
 OUT="${IDEV}/test/golden/legacy"
@@ -123,16 +129,41 @@ record record-bad-status "$OUT" "an unknown status" -- \
 W record scope-guard PASS --evidence "docs/x.md" --feature "$FEATURE" >/dev/null 2>&1
 record code-pass-unverified "$OUT" "a verifier kind PASS with no independent verification" -- \
   W record code-pass PASS --evidence "docs/x.md" --feature "$FEATURE"
-mkdir -p "$WORK/.idev/task/${FEATURE}/docs" "$WORK/.idev/task/${FEATURE}/workflow/delegations"
+mkdir -p "$WORK/.idev/task/${FEATURE}/docs"
 printf 'reviewed\n' > "$WORK/.idev/task/${FEATURE}/docs/x.md"
-printf '%s\n' 'step: review' 'attempt: 1' 'kind: review.report' 'agent: idev-reviewer' 'report:' \
-  '  raw: "STATUS: PASS\nEVIDENCE: docs/x.md\n"' \
-  > "$WORK/.idev/task/${FEATURE}/workflow/delegations/review-1.yaml"
-W record code-pass PASS --evidence "docs/x.md" --verified-by idev-reviewer --verify-evidence "docs/x.md" --feature "$FEATURE" >/dev/null 2>&1 \
-  || { echo "code-pass PASS with a reviewer report failed"; exit 1; }
+record code-pass-no-verifier-record "$OUT" "independent verification named, but the reviewer never recorded a report" -- \
+  W record code-pass PASS --evidence "docs/x.md" --verified-by idev-reviewer --verify-evidence "docs/x.md" --feature "$FEATURE"
+# The reviewer's report goes through delegation.py, so it lands wherever the
+# writer puts this run's records and the guard has to find it there.
+cat > "$WORK/rec-verifier.yaml" <<YAML
+step: review
+kind: review.report
+agent: idev-reviewer
+attempt: 1
+brief:
+  ticket_home: $WORK/.idev/task/${FEATURE}
+  repo: $WORK
+  stage: code
+  risk_tier: P1
+  must_read: conventions/coding.md
+  idev_root: ${IDEV}
+report:
+  raw: |
+    STATUS: PASS
+    FACTS: 源码 docs/x.md:1
+    DOC_DRIFT: 无
+    CHANGED: review.md
+    ASSUMED: 无
+    EVIDENCE: docs/x.md
+    CONCLUSION: golden
+YAML
+D write --feature "$FEATURE" --file "$WORK/rec-verifier.yaml" >/dev/null || [ $? -eq 1 ] \
+  || { echo "the reviewer's record was refused"; exit 1; }
+record code-pass-verified "$OUT" "the reviewer's own record cites the evidence" -- \
+  W record code-pass PASS --evidence "docs/x.md" --verified-by idev-reviewer --verify-evidence "docs/x.md" --feature "$FEATURE"
 # The report only has to exist at record time. Leaving it would show up in
 # the later timeline, which is a different scenario.
-rm -f "$WORK/.idev/task/${FEATURE}/workflow/delegations/review-1.yaml"
+rm -f "$(D dir --feature "$FEATURE")/review-1.yaml"
 record parallel-next "$OUT" "after code-pass the check group is open together" -- \
   W next --feature "$FEATURE"
 record delegate-open "$OUT" "one command delegates every open agent step" -- \
@@ -164,7 +195,7 @@ YAML
 D write --feature "$FEATURE" --file "$WORK/rec-outside.yaml" >/dev/null
 record writes-outside "$OUT" "a grouped step may not record a file outside its writes" -- \
   W record review PASS --evidence "review.md" --feature "$FEATURE"
-rm -f "$WORK/.idev/task/${FEATURE}/workflow/delegations/review-1.yaml"
+rm -f "$(D dir --feature "$FEATURE")/review-1.yaml"
 
 # --- signals: a load-bearing assumption stops PASS until a person decides ---
 # `run` is one member of the open group, so it can be recorded before plan.
@@ -214,6 +245,12 @@ W record review PASS --evidence "review.md" --feature "$FEATURE" >/dev/null 2>&1
 W record accept PASS --evidence "verify/accept.md" --feature "$FEATURE" >/dev/null 2>&1
 
 # --- the human gate -------------------------------------------------------
+record gate-unlisted-name "$OUT" "a plausible name that no people list has" -- \
+  W record gate-plan PASS --by tester --quote "确认" --feature "$FEATURE"
+# tester signs below. The kernel's config/people.yaml lists real people only,
+# so the product checkout lists its own for this section.
+printf 'people:\n  - tester\n' > "$WORK/.idev/people.yaml"
+export IDEV_PRODUCT_REPO="$WORK"
 record gate-no-by "$OUT" "a gate PASS with no --by" -- \
   W record gate-plan PASS --feature "$FEATURE"
 record gate-no-quote "$OUT" "a gate PASS with a person but no quote" -- \
@@ -232,25 +269,24 @@ record gate-refusal-quote "$FIXED" \
   "a refusal as the confirmation. BEFORE P0: exit 0 — 确认不了 starts with 确认. AFTER: BLOCKED, reason=unparsed-tail. Review §3.1." -- \
   W record gate-plan PASS --by tester --quote "确认不了" --feature "$FEATURE"
 
-# AUTO: the plan gate lists every tier; the saved check output decides.
-# P0 used to be refused before the file was read. It now fails the same way
-# as any other tier when that file was never saved, and the gate stays pending.
+# AUTO: the plan gate lists every tier, and record AUTO runs check-feature
+# verify-plan itself. The demo ticket has no baseline or design, so the check
+# fails at P0 as at any other tier, and a saved file that says 0 FAIL changes
+# nothing: AUTO overwrites it with the check it ran.
 DT="$WORK/.idev/task/${FEATURE}"
 sed 's/^risk_tier: P1$/risk_tier: P0/' "$FIXTURE/deliver.yaml" > "$DT/deliver.yaml"
-record gate-auto-p0 "$OUT" "AUTO on a P0 plan gate with no saved check output" -- \
-  W record gate-plan AUTO --evidence "verify/plan-check.log" --feature "$FEATURE"
+record gate-auto-p0 "$OUT" "AUTO on a P0 plan gate runs the plan check, which this ticket fails" -- \
+  W record gate-plan AUTO --feature "$FEATURE"
 cp "$FIXTURE/deliver.yaml" "$DT/deliver.yaml"
-record gate-auto-no-evidence "$OUT" "AUTO pointing at a check output that was never saved" -- \
-  W record gate-plan AUTO --evidence "verify/plan-check.log" --feature "$FEATURE"
-printf '%s\n' "PASS  every correctness case is runnable" "---" "1 FAIL" > "$DT/verify/plan-check.log"
-record gate-auto-dirty "$OUT" "AUTO on a check output that did not end clean" -- \
-  W record gate-plan AUTO --evidence "verify/plan-check.log" --feature "$FEATURE"
-printf '%s\n' "SIGNAL plan leaves UNPROVEN for a person to accept: perf-1" "---" "0 FAIL" > "$DT/verify/plan-check.log"
-record gate-auto-signal "$OUT" "AUTO on a clean check output that still raised a signal" -- \
+record gate-auto-evidence-elsewhere "$OUT" "AUTO naming a file other than the log it writes" -- \
+  W record gate-plan AUTO --evidence "review.md" --feature "$FEATURE"
+printf '%s\n' "---" "0 FAIL" > "$DT/verify/plan-check.log"
+record gate-auto-forged "$OUT" "a saved file that says 0 FAIL does not stand in for the check" -- \
   W record gate-plan AUTO --evidence "verify/plan-check.log" --feature "$FEATURE"
 
 record gate-ok "$OUT" "a person with a real confirmation" -- \
   W record gate-plan PASS --by tester --quote "确认" --feature "$FEATURE"
+unset IDEV_PRODUCT_REPO
 
 # --- delegation records ---------------------------------------------------
 cat > "$WORK/rec.yaml" <<YAML
@@ -488,6 +524,30 @@ sed -e "s|^recipe: .*|recipe: ${IDEV}/workflows/lite-change.yaml|" \
 record verify-plan-ticketed-control "$OUT" "same ticket, ticketed recipe: sealed is demanded again" -- \
   C --repo "$WORK" --feature code-review --stage verify-plan
 mv "$CR/workflow/run.ticketless.yaml" "$CR/workflow/run.yaml"
+
+# --- AUTO on the example ticket --------------------------------------------
+# dev-logic's plan gate may pass on machine checks at P1. The example ticket
+# passes verify-plan, so AUTO passes on the check it ran; a case that can
+# never run is a question for a person, and AUTO stops there first.
+sed 's/^mode: test$/mode: selftest/' "$EX/verify/plan.yaml" > "$WORK/plan.selftest.yaml"
+cp "$WORK/plan.selftest.yaml" "$EX/verify/plan.yaml"
+W start dev-logic --feature example-change >/dev/null 2>&1
+W record plan PASS --evidence "verify/plan.yaml" --feature example-change >/dev/null 2>&1
+python3 - "$IDEV" "$EX/verify/plan.yaml" <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]) / "scripts" / "lib"))
+import safeyaml
+path = Path(sys.argv[2])
+plan = safeyaml.mapping(path)
+plan["cases"][1].pop("runner")
+path.write_text(safeyaml.dump(plan), encoding="utf-8")
+PY
+record gate-auto-signal "$OUT" "AUTO when the plan check passes but leaves a case for a person" -- \
+  W record gate-plan AUTO --feature example-change
+cp "$WORK/plan.selftest.yaml" "$EX/verify/plan.yaml"
+record gate-auto-pass "$OUT" "AUTO when the plan check the gate ran is clean" -- \
+  W record gate-plan AUTO --feature example-change
 echo
 if [ "$VERIFY" = 1 ]; then
   echo "golden verify: ${pass} same, ${diff_count} different"

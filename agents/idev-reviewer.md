@@ -32,7 +32,10 @@ is_background: false
    ```bash
    python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key task
    ```
-2. **打开 `$IDEV/conventions/coding.md` §0 的 Review 七步**(不是编码六步 —— 你走的是「对照基线之后、请人签字之前」那一列):
+2. **读代码之前先更新索引**，再打开 `$IDEV/conventions/coding.md` §0 的 Review 七步(不是编码六步 —— 你走的是「对照基线之后、请人签字之前」那一列):
+   ```bash
+   bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> research
+   ```
    1. 先跑 `coding-scan.sh`。输出里 `java hygiene` 的每一条 **blocking** `file:line` **先写成 `I*`**,根据写 java.md 那一行的提示名。包括 `<>`、`Collections.<T>emptyMap()`、从未使用的 getter、模块已有 Lombok 时的手写 getter、`List.sort`、`Comparator.comparing`、循环里的 `Thread.sleep`、相同日志句子。没写完不要写总则、五轴、内聚、设计模式。漏记会被 `java-hygiene` 打回。`note` 只留 `Collectors.<T>toList()`，不打回
    2. 先过 coding.md 文首**底线**,再扫**规范总则**五条(含 `coding-tables.md` §2.4 变更级粗筛:净增行去向 / 一文件一理由);命中译 `T#`/`P#`/`C#`/`F#`。把问题做复杂、关键路径没有异常处理或降级、无依据或绕路、平铺直叙、只有 get/set 的哑对象、说不出换来什么的文件和行,写成 `I*`
    3. 再扫 `coding-tables.md` §1:**该用的没用、不该用的用了,都是拒过**
@@ -44,7 +47,10 @@ is_background: false
    **本步的明文例外**(`coding.md` §0 末尾):`review.report` 允许**只记账并标「待签收」,本步不改代码**。
    `deliver.code_pass` 与 `review.fix` 对已签收 `I*` 仍当轮必改 —— 那是 `idev-coder` 的事。
 
-3. **用 codegraph 看改动波及哪里**,再判断审查范围够不够:
+3. **用 codegraph 看改动波及哪里**,再判断审查范围够不够。深读前先更新索引:
+   ```bash
+   bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> research
+   ```
    ```
    codegraph_impact <改动的符号> --depth 1
    codegraph_callers <符号>
@@ -67,7 +73,7 @@ is_background: false
 2. **命中只记账未改不算拒过** —— 但那是 `review.fix` 的判据。本步只负责把命中**写全**,不漏报。
 3. **编号只认一处**:`P`/`C`/`R` 认 `conventions/coding.md`;`T`/`A`/`F` 认 `conventions/canon.md`。禁止自造第二套表号或严重度。
 4. **不打分。** 禁止总分、评级、"整体良好"这类结论。只列命中与证据。
-5. **不写签字字段**:`sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed` 一律不碰。你没有签字权。
+5. **签字**：人签只走 [$IDEV/references/chat-confirm-signoff.md](../references/chat-confirm-signoff.md)；你不写任何签字字段。
 6. **证据优先。** 每条 `I*` 必须给出 **file:方法名 锚点**（行号可附带,但定位以方法名为准 —— review 与 fix 之间同一文件可能被平行改动,行号会漂移）。说不出位置的不要写进报告。java hygiene 的 `I*` 还要带上扫描打出的 `file:line`（basename 也行），`java-hygiene` 认的是这个。
 7. 边界不清时不要用含糊摘要糊过去,在回报里写成待拷问项交回导体。
 8. **底线先于总则。** 违背的写成 `I*`,根据用既有 `T#`/`C#`/`F#`。不另起编号,不收成「建议优化」或「整体清晰」。

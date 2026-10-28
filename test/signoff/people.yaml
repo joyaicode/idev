@@ -1,0 +1,10 @@
+# The whitelist the shared signoff cases run against: the `human` rows in
+# cases.yaml are written for exactly these names. scripts/test_signoff.py and
+# internal/domain/signoff read this file, not config/people.yaml, which signs
+# real gates and lists real people only.
+schema_version: 1
+people:
+  - wangwei794
+  - tester
+  - 张三
+  - Alice

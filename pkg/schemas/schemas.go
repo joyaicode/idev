@@ -12,6 +12,7 @@ package schemas
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -37,14 +38,60 @@ const (
 	BaselineManifest = "baseline-manifest.schema.json"
 )
 
-// Names lists every embedded contract, sorted.
+// Names lists every embedded contract, sorted. Tool schemas live under
+// tools/ and are addressed by basename (run_start.input.schema.json).
 func Names() ([]string, error) {
-	entries, err := fs.Glob(apischemas.Files, "*.json")
-	if err != nil {
-		return nil, err
+	var entries []string
+	for _, pattern := range []string{"*.json", "tools/*.json"} {
+		found, err := fs.Glob(apischemas.Files, pattern)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, found...)
 	}
 	sort.Strings(entries)
 	return entries, nil
+}
+
+// MustTool returns the raw JSON Schema object for an MCP tool contract.
+// name is "run_start.input" or "run_start.output" (without .schema.json).
+// Panics on a missing or malformed contract — tool registration is a
+// build-time concern, not a request-time one.
+func MustTool(name string) any {
+	file := name
+	if !strings.HasSuffix(file, ".schema.json") {
+		file = name + ".schema.json"
+	}
+	raw, err := readContract(file)
+	if err != nil {
+		panic(err)
+	}
+	var doc any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		panic(fmt.Errorf("schemas: MustTool(%s): %w", name, err))
+	}
+	return doc
+}
+
+func readContract(basename string) ([]byte, error) {
+	once.Do(load)
+	if loadErr != nil {
+		return nil, loadErr
+	}
+	for _, name := range mustNames() {
+		if path.Base(name) == basename {
+			return apischemas.Files.ReadFile(name)
+		}
+	}
+	return nil, fmt.Errorf("schemas: no such contract %q", basename)
+}
+
+func mustNames() []string {
+	names, err := Names()
+	if err != nil {
+		return nil
+	}
+	return names
 }
 
 var (
@@ -87,22 +134,26 @@ func load() {
 			loadErr = fmt.Errorf("schemas: parse %s: %w", name, err)
 			return
 		}
-		if err := compiler.AddResource(Base+name, doc); err != nil {
+		// Tool schemas under tools/ share the top-level $id namespace so
+		// $ref "common.schema.json#/…" resolves the same way root contracts do.
+		key := path.Base(name)
+		if err := compiler.AddResource(Base+key, doc); err != nil {
 			loadErr = fmt.Errorf("schemas: add %s: %w", name, err)
 			return
 		}
 	}
 	for _, name := range names {
-		s, err := compiler.Compile(Base + name)
+		key := path.Base(name)
+		s, err := compiler.Compile(Base + key)
 		if err != nil {
 			loadErr = fmt.Errorf("schemas: compile %s: %w", name, err)
 			return
 		}
-		compiled[name] = s
+		compiled[key] = s
 	}
 }
 
-// Get returns a compiled contract by file name.
+// Get returns a compiled contract by file name (basename).
 func Get(name string) (*jsonschema.Schema, error) {
 	once.Do(load)
 	if loadErr != nil {
@@ -139,7 +190,7 @@ func Def(name, pointer string) (*jsonschema.Schema, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := c.AddResource(Base+n, doc); err != nil {
+		if err := c.AddResource(Base+path.Base(n), doc); err != nil {
 			return nil, err
 		}
 	}

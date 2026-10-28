@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/run_get.output.schema.json",
+  "title": "idev MCP run_get output",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "run_id",
+    "status"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "feature": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string"
+    }
+  }
+}

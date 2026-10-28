@@ -389,6 +389,9 @@ func (l leaseRepo) Extend(
 }
 
 func (l leaseRepo) Release(_ context.Context, id string) error {
+	if err := l.s.fail("leases.Release"); err != nil {
+		return err
+	}
 	row, ok := l.s.leases[id]
 	if !ok {
 		return conflict(ports.ConflictNotFound, "lease "+id)
@@ -439,6 +442,16 @@ type delegRepo struct{ s *Store }
 func (d delegRepo) Insert(_ context.Context, rec ports.Delegation) error {
 	if err := d.s.fail("delegations.Insert"); err != nil {
 		return err
+	}
+	if rec.Attempt <= 0 {
+		latest := 0
+		for _, existing := range d.s.delegs {
+			if existing.RunID == rec.RunID && existing.StepID == rec.StepID &&
+				existing.Attempt > latest {
+				latest = existing.Attempt
+			}
+		}
+		rec.Attempt = latest + 1
 	}
 	// Invariant I-5: a record is never replaced.
 	for _, existing := range d.s.delegs {

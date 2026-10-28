@@ -4,6 +4,7 @@
 -- exit --
 0
 -- output --
+DIGEST match aec1243bf708f640
 PARALLEL check
 NEXT plan  kind=verify.plan  status=pending
 OPEN verify/SKILL.md

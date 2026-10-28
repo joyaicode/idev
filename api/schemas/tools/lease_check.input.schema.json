@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/lease_check.input.schema.json",
+  "title": "idev MCP lease_check input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lease_id",
+    "paths"
+  ],
+  "properties": {
+    "lease_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "paths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

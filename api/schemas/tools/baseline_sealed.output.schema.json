@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/baseline_sealed.output.schema.json",
+  "title": "idev MCP baseline_sealed output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "feature",
+    "revision",
+    "manifest_root"
+  ],
+  "properties": {
+    "feature": {
+      "type": "string"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "manifest_root": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

@@ -4,4 +4,4 @@
 -- exit --
 2
 -- output --
-BLOCKED finish plan first; record it SKIPPED to skip
+BLOCKED human.gate PASS needs --by with a person's name, not an agent

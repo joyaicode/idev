@@ -91,13 +91,16 @@ func TestPythonChecksAreEitherPortedOrListedAsDeferred(t *testing.T) {
 	// decision, so it is recorded here rather than discovered later: each
 	// one is either in the Go set or in this list with a reason.
 	deferred := map[string]string{
-		"anchor-granularity": "WARN-only nicety about file:symbol granularity; no behaviour depends on it",
-		"artifact-verified":  "needs the workspace port to compare a running artefact with source (P2.4)",
-		"canon-walked":       "needs review.md parsing, which moves to the asset bundle in P3",
-		"drift-declared":     "needs doc-drift detection against the asset bundle (P3)",
-		"facts-sourced":      "subsumed by facts-first here; the Python split is historical",
-		"hit-applied":        "needs the convention tables, which are asset-bundle data (P3)",
-		"struct-gated":       "needs the structured-change gate from coding.md §3 (P3)",
+		"anchor-granularity":     "WARN-only nicety about file:symbol granularity; no behaviour depends on it",
+		"artifact-verified":      "needs the workspace port to compare a running artefact with source (P2.4)",
+		"canon-walked":           "needs review.md parsing, which moves to the asset bundle in P3",
+		"changed-within-actual":  "reads IDEV_DATA/subagent-stops.jsonl from the client hook; Go record path has no hook log yet (phase 1 §4)",
+		"drift-declared":         "needs doc-drift detection against the asset bundle (P3)",
+		"facts-sourced":          "subsumed by facts-first here; the Python split is historical",
+		"hit-applied":            "needs the convention tables, which are asset-bundle data (P3)",
+		"java-hygiene":           "scans the product checkout's branch diff against the java.md rows; needs the workspace port (P2.4) and the asset bundle (P3)",
+		"return-schema":          "validates api/schemas/delegation-return.schema.json via Python jsonschema; port with the asset-bundle validator (phase 1 §7)",
+		"struct-gated":           "needs the structured-change gate from coding.md §3 (P3)",
 	}
 
 	ported := map[string]bool{}

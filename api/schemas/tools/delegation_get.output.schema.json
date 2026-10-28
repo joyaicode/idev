@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/delegation_get.output.schema.json",
+  "title": "idev MCP delegation_get output",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "id",
+    "attempt",
+    "state"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "step_id": {
+      "type": "string"
+    },
+    "attempt": {
+      "type": "integer"
+    },
+    "agent": {
+      "type": "string"
+    },
+    "state": {
+      "type": "string"
+    }
+  }
+}

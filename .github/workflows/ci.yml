@@ -10,7 +10,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
 
 permissions:
@@ -136,6 +136,14 @@ jobs:
         run: python3 scripts/test_signoff.py
       - name: concurrent writes lose nothing
         run: python3 scripts/test_concurrency.py
+      - name: guards read delegation records where they are written
+        run: python3 scripts/test_record_paths.py
+      - name: AUTO passes a gate only on the check it ran
+        run: python3 scripts/test_auto_gate.py
+      - name: client hooks install and the four oversteps
+        run: python3 scripts/test_hooks.py
+      - name: structured delegation-return schema
+        run: python3 scripts/test_delegation_return.py
       - name: refactor guard grammar
         run: python3 scripts/test_review_coding.py
       - name: ticketless waiver stays narrow

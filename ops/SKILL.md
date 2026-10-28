@@ -61,7 +61,7 @@ parent: idev
 2. **分类** — 按 [classify.md](references/classify.md) 写 `ops.yaml`（[ops.example.yaml](references/ops.example.yaml)）。`kind` 不是 `feature` / `patrol` 则 `handoff` 后**停**，打开对应 Skill。
 3. **取证** — `kind=feature`：起草 verify `debug` plan（goal 抄基线）→ 人确认 → run。原现象至少红一次。  
    `kind=patrol`：只重放 `doc_home.py --feature <feature> --key patrol` 输出的巡检包。
-4. **根因** — 能红/绿切换才写进 report。对照密封基线 item。超出基线 → `baseline-conflict`。台账里有两条以上 `open` 假设时，先跑 `fanout.py assess --activity rootcause`。`FANOUT` 时每个 `idev-ops` 只查一个 id，只写 `verify/shards/rootcause-<id>.yaml`。另一片的结论不是证据。导体 `merge` 才改 `hypotheses.yaml`。只有一条 `open` 时不拆。
+4. **根因** — 读代码之前先 `bash ~/.cursor/skills/idev/scripts/codegraph-sync.sh --repo <仓根> rootcause`。能红/绿切换才写进 report。对照密封基线 item。超出基线 → `baseline-conflict`。台账里有两条以上 `open` 假设时，先跑 `fanout.py assess --activity rootcause`。`FANOUT` 时每个 `idev-ops` 只查一个 id，只写 `verify/shards/rootcause-<id>.yaml`。另一片的结论不是证据。导体 `merge` 才改 `hypotheses.yaml`。只有一条 `open` 时不拆。
 5. **回退** — 人写下 `defect_origin` 后，把 `deliver.yaml.stage` 回到 origin，作废其后 accepted / aligned，按 deliver 再向后走。
 6. **关闭** — `check-feature.sh <feature> ops`。P0：人写 `resolved: true` + `by:`。P1/P2：`hypothesis.py check` 绿、无 `open`、有 `proven` 时写 `resolved: true` + `auto: hypotheses.yaml`，不停；否则停问人。人没提提升 / 巡检包 / promote 则不问是否把本次 debug case 晋升巡检包。
 

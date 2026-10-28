@@ -1,7 +1,7 @@
-# AUTO on a P0 plan gate with no saved check output
-# cmd: W record gate-plan AUTO --evidence verify/plan-check.log --feature demo
+# AUTO on a P0 plan gate runs the plan check, which this ticket fails
+# cmd: W record gate-plan AUTO --feature demo
 
 -- exit --
 2
 -- output --
-BLOCKED finish plan first; record it SKIPPED to skip
+BLOCKED AUTO refused: check-feature verify-plan did not pass (verify/plan-check.log): FAIL  baseline.sealed is not true; FAIL  missing verify/plan.yaml; FAIL  missing design.md

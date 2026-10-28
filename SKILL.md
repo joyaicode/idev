@@ -66,9 +66,9 @@ S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none`
 1. `block_until_ms` 大于 30000 的命令发出之前，先写一句：命令、预算、在等什么。`scripts/selfcheck.sh`、`test/golden/record.sh`、`test/gate-channel.sh`、`test/lease-channel.sh` 同样先写这一句，再放后台，结束再报。
 2. 连续 8 个只有工具、没有正文的回合之后，先写一句现状再继续。
 3. 不用 `claude -p` 或 `agent -p` 做存活探测。存活是一次不调用工具的一行回复。`scripts/healthcheck.sh` 和 `scripts/agent-smoke.sh` 是全量检查，与下面四条套件一样先说一句再放后台。
-4. 结构问题先一次 `codegraph_context`。查不到就停并写明查不到。
+4. 结构问题先跑 `scripts/codegraph-sync.sh`，再一次 `codegraph_context`。查不到就停并写明查不到。时刻和 `reason` 只认 [boost.md](references/boost.md)「索引何时更新」。代码有没有变动由脚本判定，没变就跳过。
 
-`scripts/turn-budget.py` 对一份转录判这些事，无正文回合默认超过 8 即失败：第一句之前的无正文回合、连续无正文回合、`block_until_ms` 大于 30000 且这一条和上一条助手消息都没有正文、命令里出现 `claude -p` 或 `agent -p`。`selfcheck.sh`、`test/golden/record.sh`、`test/gate-channel.sh`、`test/lease-channel.sh`、`healthcheck.sh`、`agent-smoke.sh` 的 `block_until_ms` 大于 30000 也失败，先说一句不算放过。有没有把多次只读并进一条消息，不是通过或失败的条件。结构问题先用 `codegraph_context`、查不到就停，这是做法，不进这个脚本。
+`scripts/turn-budget.py` 对一份转录判这些事，无正文回合默认超过 8 即失败：第一句之前的无正文回合、连续无正文回合、`block_until_ms` 大于 30000 且这一条和上一条助手消息都没有正文、命令里出现 `claude -p` 或 `agent -p`。`selfcheck.sh`、`test/golden/record.sh`、`test/gate-channel.sh`、`test/lease-channel.sh`、`healthcheck.sh`、`agent-smoke.sh` 的 `block_until_ms` 大于 30000 也失败，先说一句不算放过。有没有把多次只读并进一条消息，不是通过或失败的条件。结构问题先更新索引再 `codegraph_context`、查不到就停，这是做法，不进这个脚本。
 
 ```bash
 python3 scripts/turn-budget.py [--max 8] <transcript.jsonl>

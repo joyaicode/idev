@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/delegation_allocate.input.schema.json",
+  "title": "idev MCP delegation_allocate input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "step_id",
+    "agent"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "feature": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    }
+  }
+}

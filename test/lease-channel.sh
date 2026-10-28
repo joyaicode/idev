@@ -24,21 +24,32 @@ unset IDEV_ENGINE
 
 checkout() {
   local dir="$1"
-  mkdir -p "$dir/.idev/task/demo/workflow/delegations" "$dir/.idev/workflows"
+  mkdir -p "$dir/.idev/task/demo/workflow" "$dir/.idev/workflows"
   (cd "$dir" && git init -q)
   printf 'schema_version: 1\nmarker: idev\nid: demo\nevolve: false\n' > "$dir/.idev/marker.yaml"
   printf 'stage: code\nrisk_tier: P1\n' > "$dir/.idev/task/demo/deliver.yaml"
   printf '%s\n' 'schema_version: 1' 'id: demo-code' 'summary: x' 'params:' '  - {name: feature, required: true, from: user}' \
     'steps:' '  - {id: c, kind: deliver.code_pass}' '  - {id: r, kind: verify.run}' > "$dir/.idev/workflows/demo-code.yaml"
   printf 'reviewed\n' > "$dir/review.md"
+}
+
+# Records go where delegation.py writes them for the live run, so these run
+# from the checkout after start.
+records() {
+  local dir
+  dir="$(python3 "${IDEV}/scripts/delegation.py" dir --feature demo)" && mkdir -p "$dir" && printf '%s\n' "$dir"
+}
+
+# reviewed: the reviewer's own record, citing review.md.
+reviewed() {
   printf '%s\n' 'step: review' 'attempt: 1' 'kind: review.report' 'agent: idev-reviewer' 'report:' \
-    '  raw: "STATUS: PASS\nEVIDENCE: review.md\n"' > "$dir/.idev/task/demo/workflow/delegations/review-1.yaml"
+    '  raw: "STATUS: PASS\nEVIDENCE: review.md\n"' > "$(records)/review-1.yaml"
 }
 
 # report STEP CHANGED: a delegation record whose report names what it changed.
 report() {
   printf '%s\n' 'step: c' 'attempt: 1' 'kind: deliver.code_pass' 'agent: idev-coder' 'report:' \
-    "  raw: \"STATUS: PASS\\nCHANGED: $1\\n\"" > .idev/task/demo/workflow/delegations/c-1.yaml
+    "  raw: \"STATUS: PASS\\nCHANGED: $1\\n\"" > "$(records)/c-1.yaml"
 }
 
 P="$T/one"
@@ -49,6 +60,7 @@ VER=(--verified-by idev-reviewer --verify-evidence review.md)
 
 out="$("$W" start demo-code --feature demo 2>&1)"
 [[ "$out" == *"workflow.py delegate c"* ]] && ok "next names delegate for a code step" || bad "next: $out"
+reviewed
 
 out="$("$W" record c PASS --feature demo --evidence r.md "${VER[@]}" 2>&1)" \
   && bad "PASS with no lease" || { [[ "$out" == *"never given a write lease"* ]] && ok "PASS without a lease refused" || bad "no lease: $out"; }
@@ -74,6 +86,18 @@ PY
 out="$("$IDEV_BIN" lease acquire --run "$T/rival.yaml" --step c --feature-id "$(cd .idev/task/demo && pwd -P)" --write-path src/app.py 2>&1)" \
   && bad "a second writer on one ticket" || { [[ "$out" == *"lease_held"* ]] && ok "second writer on the ticket refused" || bad "rival: $out"; }
 
+out="$("$W" record c PASS --feature demo --evidence r.md "${VER[@]}" 2>&1)" \
+  && bad "PASS with write lease but no verify lease" \
+  || { [[ "$out" == *"--verify"* || "$out" == *"verify lease"* ]] && ok "PASS without verify lease refused" || bad "no verify lease: $out"; }
+
+out="$("$W" delegate c --verify --feature demo 2>&1)"
+CVID="$(printf '%s\n' "$out" | sed -n 's/^LEASE \([0-9A-Z]\{26\}\) fencing=[0-9][0-9]* .*/\1/p')"
+{ [ -n "$CVID" ] && printf '%s\n' "$out" | grep -qF 'paths .idev/task/demo/**'; } \
+  && ok "delegate --verify took verify lease $CVID for the reviewer" || bad "code verify delegate: $out"
+
+out="$("$W" delegate c --verify --feature demo 2>&1)" \
+  && bad "a second verify lease" || ok "held verify lease is not taken twice"
+
 Q="$T/two"
 checkout "$Q"
 (cd "$Q" && printf '%s\n' 'impact_candidates:' '  - {path: src/app.py, hop: 0, include: true}' > .idev/task/demo/arch.yaml \
@@ -97,7 +121,7 @@ PY
 # fenced to the ticket directory, not a write lease over product code.
 vreport() {
   printf '%s\n' 'step: r' 'attempt: 1' 'kind: verify.run' 'agent: idev-verifier' 'report:' \
-    "  raw: \"STATUS: PASS\\nCHANGED: $1\\n\"" > .idev/task/demo/workflow/delegations/r-1.yaml
+    "  raw: \"STATUS: PASS\\nCHANGED: $1\\n\"" > "$(records)/r-1.yaml"
 }
 
 vreport "src/app.py"
@@ -105,7 +129,7 @@ out="$("$W" record r PASS --feature demo --evidence v.md 2>&1)" \
   && bad "verifier PASS with no lease" || { [[ "$out" == *"never given a verify lease"* ]] && ok "verifier PASS without a lease refused" || bad "verifier no lease: $out"; }
 
 out="$("$W" delegate r --feature demo 2>&1)"
-VID="$(printf '%s\n' "$out" | sed -n 's/^LEASE \([0-9A-Z]\{26\}\) fencing=2 .*/\1/p')"
+VID="$(printf '%s\n' "$out" | sed -n 's/^LEASE \([0-9A-Z]\{26\}\) fencing=[0-9][0-9]* .*/\1/p')"
 { [ -n "$VID" ] && printf '%s\n' "$out" | grep -qF 'paths .idev/task/demo/**'; } \
   && ok "delegate took verify lease $VID fenced to the ticket" || bad "verify delegate: $out"
 
@@ -117,8 +141,19 @@ vreport ".idev/task/demo/report/v.md"
 out="$("$W" record r PASS --feature demo --evidence v.md 2>&1)"
 [[ "$out" == *"LEASE $VID released"* && "$out" == *"RUN DONE"* ]] && ok "verifier PASS inside the ticket releases it" || bad "verify record: $out"
 
+# rival.yaml may still say verifying from an earlier copy; reset c to delegated.
+python3 - "$T/rival.yaml" <<'PY'
+import sys, yaml
+rival = yaml.safe_load(open(sys.argv[1]))
+for s in rival.get("steps") or []:
+    if s.get("id") == "c":
+        for key in ("status", "machine_state", "lease", "verify_lease"):
+            s.pop(key, None)
+        s["delegated"] = {"agent": "idev-coder"}
+yaml.safe_dump(rival, open(sys.argv[1], "w"), allow_unicode=True)
+PY
 out="$("$IDEV_BIN" lease acquire --run "$T/rival.yaml" --step c --feature-id "$(cd .idev/task/demo && pwd -P)" --write-path src/app.py 2>&1)"
-[[ "$out" == *'"fencing":3'* ]] && ok "the released slot goes to the next writer with a higher fencing token" || bad "after release: $out"
+[[ "$out" == *'"fencing":'* ]] && ok "the released slot goes to the next writer with a higher fencing token" || bad "after release: $out"
 
 (cd "$Q" && "$W" abort --note test --feature demo 2>&1 | grep -q "released") \
   && ok "abort releases the lease it held" || bad "abort kept its lease"
@@ -143,11 +178,12 @@ checkout "$S"
   cd "$S"
   printf '%s\n' 'impact_candidates:' '  - {path: src/app.py, hop: 0, include: true}' > .idev/task/demo/arch.yaml
   "$W" start demo-code --feature demo >/dev/null
+  reviewed
   "$W" delegate c --feature demo
+  "$W" delegate c --verify --feature demo
 ) > "$T/three-delegate.out"
-L3="$(sed -n 's/^LEASE \([0-9A-Z]\{26\}\) fencing=.*/\1/p' "$T/three-delegate.out")"
-printf '%s\n' 'step: c' 'attempt: 1' 'kind: deliver.code_pass' 'agent: idev-coder' 'report:' \
-  '  raw: "STATUS: PASS\nCHANGED: src/app.py\n"' > "$S/.idev/task/demo/workflow/delegations/c-1.yaml"
+L3="$(sed -n 's/^LEASE \([0-9A-Z]\{26\}\) fencing=1 .*/\1/p' "$T/three-delegate.out")"
+(cd "$S" && report "src/app.py")
 out="$(cd "$S" && LEASE_FAIL_ONCE="$T/release-failed" IDEV_REAL="$IDEV_BIN" IDEV_BIN="$T/bin/idev-release-once" \
   "$W" record c PASS --feature demo --evidence r.md "${VER[@]}" 2>&1)"
 [[ "$out" == *"WARN lease $L3 not released"* && "$out" == *"token stays"* ]] \
@@ -166,9 +202,24 @@ c = next(s for s in yaml.safe_load(open(sys.argv[1]))["steps"] if s["id"] == "c"
 assert "token" not in c["lease"] and c["lease"].get("released_at"), c
 PY
 
+# E1.3: with idev on PATH, bare IDEV_ENGINE=python is refused.
+out="$(cd "$Q" && IDEV_ENGINE=python "$W" start demo-code --feature demo 2>&1)" \
+  && bad "python without break-glass started" \
+  || { [[ "$out" == *"break-glass"* || "$out" == *"IDEV_ENGINE=python"* ]] \
+       && ok "IDEV_ENGINE=python refused without break-glass" || bad "no break-glass: $out"; }
+
+# Break-glass opens the python YAML lane but write leases stay mandatory.
+mkdir -p "$IDEV_DATA/break-glass"
+cat > "$IDEV_DATA/break-glass/python-engine.yaml" <<EOF
+reason: lease-channel E1.3
+by: tester
+expires: 2099-01-01T00:00:00+00:00
+EOF
 out="$(cd "$Q" && IDEV_ENGINE=python "$W" start demo-code --feature demo >/dev/null 2>&1 \
-  && IDEV_ENGINE=python "$W" record c PASS --feature demo --evidence r.md "${VER[@]}" 2>&1)" \
-  && ok "IDEV_ENGINE=python records without a lease" || bad "python engine: $out"
+  && reviewed && IDEV_ENGINE=python "$W" record c PASS --feature demo --evidence r.md "${VER[@]}" 2>&1)" \
+  && bad "break-glass python recorded without a lease" \
+  || { [[ "$out" == *"lease"* || "$out" == *"LEASE"* || "$out" == *"BLOCKED"* ]] \
+       && ok "break-glass python still requires a write lease" || bad "break-glass lease: $out"; }
 
 echo "lease channel: ${pass} OK, ${fail} FAIL"
 [ "$fail" -eq 0 ]

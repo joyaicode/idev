@@ -8,8 +8,9 @@ package apischemas
 
 import "embed"
 
-// Files holds every contract, including the generated kinds.schema.json, so
-// a built binary validates against the enum its generator produced.
+// Files holds every contract, including the generated kinds.schema.json and
+// the MCP tool input/output schemas under tools/, so a built binary validates
+// against the enum its generator produced and the tool surface agents see.
 //
-//go:embed *.json
+//go:embed *.json tools/*.json
 var Files embed.FS

@@ -36,15 +36,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import kind_agents  # noqa: E402
+import record_paths  # noqa: E402
 import safeyaml  # noqa: E402
 import textwidth as tw  # noqa: E402
 
-# Both doc_home layouts, so this works whether or not the repo has the
-# setup-agents-docs tree.
-GLOBS = (
-    "docs/task/*/workflow/delegations/*.yaml",
-    ".idev/task/*/workflow/delegations/*.yaml",
-)
+GLOBS = record_paths.REPO_GLOBS
 STATUS_LINE = re.compile(r"(?mi)^\s*STATUS:\s*(\S+)")
 
 

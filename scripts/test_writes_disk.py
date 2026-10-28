@@ -40,6 +40,20 @@ class DiskWrites(unittest.TestCase):
         outside = workflow.disk_outside_group(run, run["steps"][1], ticket)
         self.assertEqual(outside, [])
 
+    def test_a_decision_taken_in_the_wave_is_not_a_group_write(self) -> None:
+        ticket = Path(tempfile.mkdtemp())
+        run = {
+            "steps": [
+                {"id": "run", "group": "check", "writes": ["verify/selftest.md"], "status": "pending"},
+                {"id": "plan", "group": "check", "writes": ["verify/plan.yaml"], "status": "pending"},
+            ]
+        }
+        workflow.stamp_open_group(run, ticket)
+        ledger = workflow.decisions_path(ticket / "workflow" / "run.yaml")
+        workflow.safeyaml.save_locked(ledger, lambda data: {**data, "decisions": [{"id": "D1"}]})
+        for step in run["steps"]:
+            self.assertEqual(workflow.disk_outside_group(run, step, ticket), [], step["id"])
+
 
 if __name__ == "__main__":
     unittest.main()

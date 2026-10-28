@@ -15,7 +15,23 @@ FEATURE=example-change
 DST="${FIX}/docs/task/${FEATURE}"
 mkdir -p "${DST}/verify"
 
-cleanup() { rm -rf "${SCRATCH}"; }
+FAILURES="${SCRATCH}/.selfcheck-failures"
+: > "${FAILURES}"
+DONE=""
+
+cleanup() {
+  local rc=$?
+  if [ -z "${DONE}" ] && [ "$rc" -ne 0 ]; then
+    echo "selfcheck stopped early (exit ${rc}); the locks after this point did not run" >&2
+  fi
+  if [ -s "${FAILURES}" ]; then
+    echo "selfcheck FAIL: $(wc -l < "${FAILURES}" | tr -d ' ') failure(s)" >&2
+    sed 's/^/  - /' "${FAILURES}" >&2
+    [ "$rc" -ne 0 ] || rc=1
+  fi
+  rm -rf "${SCRATCH}"
+  exit "$rc"
+}
 trap cleanup EXIT
 
 python3 - <<PY
@@ -54,7 +70,14 @@ shutil.copy(Path("${VERIFY}") / "plan.example.yaml", dst / "verify" / "plan.yaml
 shutil.copy(Path("${OPS}") / "ops.example.yaml", dst / "ops.yaml")
 PY
 
-fail() { echo "selfcheck FAIL: $*" >&2; exit 1; }
+# One broken lock must not hide the rest, so the main shell records and goes
+# on. Inside ( ) or $( ) a failure still exits that subshell: the caller's
+# `|| fail` and set -e depend on seeing it.
+fail() {
+  echo "selfcheck FAIL: $*" >&2
+  printf '%s\n' "$*" >> "${FAILURES}"
+  [ "${BASH_SUBSHELL}" -eq 0 ] || exit 1
+}
 
 run() {
   local stage="$1"
@@ -1637,6 +1660,26 @@ for s in "${HOME}/.cursor/skills/idev/scripts/"*.sh "${HOME}/.cursor/skills/idev
 done
 echo "OK  script exec bits"
 
+echo "=== lock: published tree keeps no run residue or real home paths ==="
+# Proposal 20261027 §6. Traces, reviews, promptfoo, proposals, lessons and the
+# verify target stay on disk for audits; they must not be in the published tree.
+# /Users/alice, /Users/x and /Users/USER in design/ and testdata are placeholders.
+IDEV_ROOT_LOCK="${HOME}/.cursor/skills/idev"
+residue="$(git -C "${IDEV_ROOT_LOCK}" ls-files -- \
+  'verify/target/' 'state/traces/' 'state/reviews/' 'state/promptfoo/' \
+  'state/proposals/' 'state/lessons/' 'state/lessons.yaml' 'state/ledger.yaml' \
+  'state/outbound-config.json' 2>/dev/null || true)"
+if [ -n "${residue}" ]; then
+  fail "tracked run residue (untrack; keep on disk): $(printf '%s' "${residue}" | head -3 | tr '\n' ' ')"
+fi
+homes="$(git -C "${IDEV_ROOT_LOCK}" grep -nEH '/Users/[A-Za-z0-9._-]+' -- \
+  ':!state/' ':!design/' ':!api/schemas/testdata/' 2>/dev/null \
+  | grep -Ev '/Users/(alice|x|USER)(/|:|[[:space:]]|$)' || true)"
+if [ -n "${homes}" ]; then
+  fail "tracked file names a real home directory: $(printf '%s' "${homes}" | head -1)"
+fi
+echo "OK  published tree has no run residue"
+
 echo "=== lock: kernel pages do not invent doc dirs or module ledgers ==="
 if rg -q 'docs/debt' "${HOME}/.cursor/skills/idev/conventions/evidence.md"; then
   fail "evidence.md must not name docs/debt; setup-agents-docs Rule 10 has no such directory"
@@ -1682,7 +1725,11 @@ gate_out="$(python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WF
   || { rm -rf "$WFT"; fail "workflow-check must reject a human.gate without will_write or 将代写"; }
 (
   export IDEV_ENGINE=python
+  export IDEV_AGENT_FEEDBACK=off
+  unset IDEV_BIN
+  export PATH="/usr/bin:/bin:/usr/sbin:/sbin"
   cd "$WFT" && git init -q && mkdir -p .idev/task/demo .idev/workflows
+  printf 'people:\n  - tester\n' > .idev/people.yaml
   printf 'schema_version: 1\nmarker: idev\nid: demo\nevolve: false\n' > .idev/marker.yaml
   printf 'stage: code\n' > .idev/task/demo/deliver.yaml
   printf '%s\n' 'schema_version: 1' 'id: demo-flow' 'summary: x' 'params:' '  - {name: feature, required: true, from: user}' \
@@ -1697,12 +1744,13 @@ gate_out="$(python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WF
   : > r.md
   "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null 2>&1 && exit 142
   printf 'reviewed\n' > r.md
-  mkdir -p .idev/task/demo/workflow/delegations
+  DEL="$(python3 "${HOME}/.cursor/skills/idev/scripts/delegation.py" dir --feature demo)" || exit 140
+  mkdir -p "$DEL"
   printf '%s\n' 'step: a' 'attempt: 1' 'kind: deliver.code_pass' 'agent: idev-coder' 'report:' \
-    '  raw: "STATUS: PASS\nEVIDENCE: r.md\n"' > .idev/task/demo/workflow/delegations/a-1.yaml
+    '  raw: "STATUS: PASS\nEVIDENCE: r.md\n"' > "$DEL/a-1.yaml"
   "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null 2>&1 && exit 143
   printf '%s\n' 'step: review' 'attempt: 1' 'kind: review.report' 'agent: idev-reviewer' 'report:' \
-    '  raw: "STATUS: PASS\nEVIDENCE: r.md\n"' > .idev/task/demo/workflow/delegations/review-1.yaml
+    '  raw: "STATUS: PASS\nEVIDENCE: r.md\n"' > "$DEL/review-1.yaml"
   "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null || exit 144
   "$W" record g PASS --feature demo --by tester --quote 继续 >/dev/null 2>&1 && exit 15
   "$W" record g PASS --feature demo --by assistant --quote 确认 >/dev/null 2>&1 && exit 16
@@ -1716,20 +1764,31 @@ gate_out="$(python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" "$WF
 rm -rf "$WFT"
 WFU="$(mktemp -d)"
 (
-  cd "$WFU" && git init -q && mkdir -p .idev/task/demo/verify .idev/workflows
+  cd "$WFU" && git init -q && mkdir -p .idev/task/demo .idev/workflows
   printf 'schema_version: 1\nmarker: idev\nid: demo\nevolve: false\n' > .idev/marker.yaml
   printf 'stage: code\nrisk_tier: P2\n' > .idev/task/demo/deliver.yaml
   printf '%s\n' 'schema_version: 1' 'id: demo-auto' 'summary: x' 'params:' '  - {name: feature, required: true, from: user}' \
     'steps:' '  - {id: g, kind: human.gate, label: "将代写: x", with: {auto_tiers: [P1, P2]}}' '  - {id: r, kind: verify.run}' \
     > .idev/workflows/demo-auto.yaml
   W="${HOME}/.cursor/skills/idev/scripts/workflow.py"
-  "$W" start demo-auto --feature demo | grep -q 'record AUTO' || exit 31
-  printf '%s\n' '---' '0 FAIL' > .idev/task/demo/verify/plan-check.log
-  "$W" record g AUTO --feature demo --evidence verify/plan-check.log --by tester >/dev/null 2>&1 && exit 32
-  "$W" record g AUTO --feature demo --evidence verify/plan-check.log | grep -q '^NEXT r ' || exit 33
-  python3 "${HOME}/.cursor/skills/idev/scripts/workflow-check.py" --run .idev/task/demo/workflow/run.yaml >/dev/null || exit 34
+  out="$("$W" start demo-auto --feature demo 2>&1)" && exit 31
+  printf '%s\n' "$out" | grep -q 'auto_tiers needs a gate a machine check can pass' || exit 32
 ) || { code=$?; rm -rf "$WFU"; fail "workflow.py AUTO gate broke (case $code)"; }
 rm -rf "$WFU"
+python3 "${HOME}/.cursor/skills/idev/scripts/test_auto_gate.py" >/dev/null 2>&1 \
+  || fail "record AUTO passed a gate on something other than the check it ran (python3 scripts/test_auto_gate.py)"
+python3 "${HOME}/.cursor/skills/idev/scripts/test_hooks.py" >/dev/null 2>&1 \
+  || fail "client hooks install or the four oversteps broke (python3 scripts/test_hooks.py)"
+# Fixture: missing log → 100%. Live ~/.idev is not consulted (may predate §4).
+IDEV_DATA="$(mktemp -d "${TMPDIR:-/tmp}/idev-timing.XXXXXX")" \
+  python3 "${HOME}/.cursor/skills/idev/hooks/timing_coverage.py" >/dev/null 2>&1 \
+  || fail "subagent-stops timing coverage lock broke (hooks/timing_coverage.py)"
+python3 "${HOME}/.cursor/skills/idev/scripts/test_delegation_return.py" >/dev/null 2>&1 \
+  || fail "structured delegation-return schema check broke (python3 scripts/test_delegation_return.py)"
+python3 "${HOME}/.cursor/skills/idev/scripts/test_outcome_metrics.py" >/dev/null 2>&1 \
+  || fail "outcome-metrics WIP/rework counts broke (python3 scripts/test_outcome_metrics.py)"
+python3 "${HOME}/.cursor/skills/idev/scripts/test_phase2.py" >/dev/null 2>&1 \
+  || fail "phase 2 retain/eval/usage/budget broke (python3 scripts/test_phase2.py)"
 WFA="$(mktemp -d)"
 (
   cd "$WFA" && mkdir -p ext/.idev/workflows sess/.idev p/.idev/workflows
@@ -1782,6 +1841,8 @@ python3 "${HOME}/.cursor/skills/idev/scripts/test_signals.py" >/dev/null 2>&1 \
   || fail "signal / answer rules broke (python3 scripts/test_signals.py)"
 python3 "${HOME}/.cursor/skills/idev/scripts/test_concurrency.py" >/dev/null 2>&1 \
   || fail "concurrent start or decide lost the single-writer rule (python3 scripts/test_concurrency.py)"
+python3 "${HOME}/.cursor/skills/idev/scripts/test_record_paths.py" >/dev/null 2>&1 \
+  || fail "a guard reads delegation records from somewhere the writer does not put them (python3 scripts/test_record_paths.py)"
 echo "OK  tier signoffs and single writer"
 
 echo "=== lock: a gate is answered by the person's 确认 ==="
@@ -1818,4 +1879,6 @@ python3 "$TB" "${FIX}/suite-bg.jsonl" >/dev/null || fail "a suite started in the
 python3 "$TB" "${FIX}/doctor-bg.jsonl" >/dev/null || fail "a doctor started in the background must pass"
 echo "OK  turn budget"
 
+DONE=1
+[ ! -s "${FAILURES}" ] || exit 1
 echo "selfcheck PASS"

@@ -93,6 +93,7 @@ git push "$remote" "$branch"
 - 整仓：在 `project_root` 一次提交，不拆子模块另策（子模块有独立 `.git` 则对每个 git 根各跑一遍本配方，或人只点一个根）。
 - 无变更 → `SKIPPED` 不 push。
 - push 失败 → restore 后 `BLOCKED`。
+- idev 真源仓：`git commit` 前（`pre-commit`）和 `git push` 前（`pre-push`）前台跑 `scripts/codegraph-sync.sh commit`。代码文件有变动才更新，没变跳过；更新失败则中止。新克隆后跑一次 `scripts/install-codegraph-hooks.sh`（只写 `.git/hooks`，不改 git config）。没有 `.codegraph/` 的仓跳过。时刻表在 [boost.md](boost.md)「索引何时更新」。
 
 ## 不做
 

@@ -1,0 +1,7 @@
+# independent verification named, but the reviewer never recorded a report
+# cmd: W record code-pass PASS --evidence docs/x.md --verified-by idev-reviewer --verify-evidence docs/x.md --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED no report from idev-reviewer cites docs/x.md; that agent records its own delegation, then this PASS points --verify-evidence at that report

@@ -50,6 +50,12 @@ def dump(data: dict) -> str:
     return yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
 
 
+def lock_path(path) -> Path:
+    """The file load_locked and save_locked flock beside a ledger."""
+    path = Path(path)
+    return path.with_suffix(path.suffix + ".lock")
+
+
 def load_locked(path, read):
     """Call read(data) while the lock is held. Does not write.
 
@@ -60,8 +66,7 @@ def load_locked(path, read):
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = path.with_suffix(path.suffix + ".lock")
-    with open(lock_path, "a+") as lock:
+    with open(lock_path(path), "a+") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         try:
             data = mapping(path)
@@ -90,9 +95,8 @@ def save_locked(path, mutate):
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    lock_path = path.with_suffix(path.suffix + ".lock")
 
-    with open(lock_path, "a+") as lock:
+    with open(lock_path(path), "a+") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
         try:
             data = mapping(path)

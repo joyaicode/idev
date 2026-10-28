@@ -1,0 +1,57 @@
+schema_version: 2
+feature: llm-wiki
+revision: 1
+baseline_revision: 1
+accepted: true
+by: wangwei794
+slices:
+  - id: schema-ops
+    baseline_item_id: B1
+    must: "内核提供 schema 和操作，规定摄取、查询、校准怎么做。"
+    must_not: "无"
+    accept_hint: "schema 写明摄取、查询、校准三步；各有一条可执行入口。"
+  - id: no-extra-stack
+    baseline_item_id: B2
+    must: "不安装第三方 wiki 引擎，不建向量库，不做健康分，不编译第二份内核文档，不收录个人笔记，不改产品控制台知识库，不把耗时写成通过条件，不把校准加进 check-feature。"
+    must_not: "无"
+    accept_hint: "依赖清单、check-feature 与内核文档 diff 里不出现这些新增。"
+  - id: source-path
+    baseline_item_id: B3
+    must: "索引中每条记录都有非空来源路径。来源中不存在的句子不能写入记录。查询输出该来源路径。"
+    must_not: "无"
+    accept_hint: "缺来源或句子不在来源中时摄取失败；查询输出含该路径。"
+  - id: ticket-index
+    baseline_item_id: B4
+    must: "索引文件只出现在当前票目录。仓根和内核里不新增跨票索引。"
+    must_not: "无"
+    accept_hint: "跑完摄取后，索引文件只在该票目录下。"
+  - id: claim-scope
+    baseline_item_id: B5
+    must: "索引只收录已经写进该票方案、拆解或用例的主张。只出现在聊天里的句子不产生记录。来源路径指向这些工件，或它们点名的基线条目、代码、已晋升经验和规约。"
+    must_not: "无"
+    accept_hint: "聊天句子不产生记录；方案里的一句会产生一条带来源的记录。"
+  - id: conflict-exit
+    baseline_item_id: B6
+    must: "一条记录与其来源不一致，或同一事项的两条记录互相矛盾时，校准退出码非 0，并打印所涉来源路径。"
+    must_not: "无"
+    accept_hint: "夹具里放一条与来源不一致的记录，校准退出码非 0 且输出含路径。"
+  - id: keep-ledgers
+    baseline_item_id: B7
+    must: "方案、拆解、用例相对基线的漂移仍由 realign 报告。经验的新增、升级和召回仍只走 lessons。索引不复制这两套的正文，也不作为它们的查询入口。"
+    must_not: "无"
+    accept_hint: "realign 与 lessons 的现有命令仍可用；索引文件不含它们的正文副本。"
+  - id: calibrate-before-doc
+    baseline_item_id: B8
+    must: "写该票的方案、拆解或用例之前跑校准。退出码非 0 时不写这一份。"
+    must_not: "无"
+    accept_hint: "校准非 0 时，对应工件文件的内容与运行前一致。"
+  - id: calibrate-before-code
+    baseline_item_id: B9
+    must: "改索引记录所点名的代码之前跑校准。退出码非 0 时不改这些文件。"
+    must_not: "无"
+    accept_hint: "记录点名的文件在校准非 0 时字节与运行前一致；未点名的文件不在这条里。"
+open_questions: []
+human_signoff:
+  - id: req
+    status: signed
+    by: wangwei794

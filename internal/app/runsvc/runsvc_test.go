@@ -269,6 +269,67 @@ func TestAFailedSaveWritesNoAudit(t *testing.T) {
 	}
 }
 
+// E2.3: a mid-transaction lease failure must not leave a saved run or a
+// released lease. Save + audit + lease release share one InTx.
+func TestAFailedLeaseReleaseRollsBackRunAndLease(t *testing.T) {
+	s, st := newSvc(t)
+	r := start(t, s)
+	ctx := context.Background()
+	agent := ports.Principal{Handle: "idev-coder", Kind: "agent", OwnerHandle: "wangwei794"}
+	for _, step := range []struct {
+		ev    run.Event
+		actor ports.Principal
+	}{
+		{run.Event{Kind: run.EvConductorStepStarted, Actor: run.ActorConductor, StepID: "preflight"}, conductor()},
+		{run.Event{Kind: run.EvConductorStepRecorded, Actor: run.ActorConductor, StepID: "preflight",
+			Outcome: run.StepPASS, Evidence: "p.md"}, conductor()},
+		{run.Event{Kind: run.EvStepActivated, Actor: run.ActorSystem, StepID: "code-pass"}, conductor()},
+		{run.Event{Kind: run.EvDelegationIssued, Actor: run.ActorConductor, StepID: "code-pass", Agent: "idev-coder"}, conductor()},
+	} {
+		if _, err := s.Apply(ctx, r.ID, step.ev, step.actor); err != nil {
+			t.Fatalf("%s: %v", step.ev.Kind, err)
+		}
+	}
+	issueLease(t, st, r.ID, "code-pass", "idev-coder", 1)
+	if _, err := s.Apply(ctx, r.ID, run.Event{
+		Kind: run.EvDelegationReturned, Actor: run.ActorAgent, StepID: "code-pass",
+		Agent: "idev-coder", Fencing: 1,
+	}, agent); err != nil {
+		t.Fatalf("return: %v", err)
+	}
+	before := len(st.Events())
+
+	boom := errors.New("lease storage is down")
+	st.FailOn["leases.Release"] = boom
+	_, err := s.Apply(ctx, r.ID, run.Event{
+		Kind: run.EvDelegationAccepted, Actor: run.ActorConductor, StepID: "code-pass",
+		Outcome: run.StepPASS, Evidence: "review.md",
+	}, conductor())
+	if !errors.Is(err, boom) {
+		t.Fatalf("err = %v, want lease release failure", err)
+	}
+	stored, _ := st.Run(r.ID)
+	if stored.Steps[1].State != run.StepReturned {
+		t.Errorf("step = %s, want returned: run advanced despite lease failure",
+			stored.Steps[1].State)
+	}
+	if n := len(st.Events()); n != before {
+		t.Errorf("%d audit events, want %d: partial Apply left audit behind", n, before)
+	}
+	var held lease.Lease
+	err = st.InTx(ctx, func(tx ports.Tx) error {
+		var err error
+		held, err = tx.Leases().ActiveFor(ctx, r.ID, "code-pass")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("lease should still be active: %v", err)
+	}
+	if held.Agent != "idev-coder" {
+		t.Fatalf("lease agent = %s", held.Agent)
+	}
+}
+
 func TestARefusedDomainEventChangesNothing(t *testing.T) {
 	s, st := newSvc(t)
 	r := start(t, s)
@@ -289,6 +350,88 @@ func TestARefusedDomainEventChangesNothing(t *testing.T) {
 	stored, _ := st.Run(r.ID)
 	if stored.Steps[0].State != run.StepReady {
 		t.Error("a refused event changed the run")
+	}
+}
+
+// E2.4: fencing travels acquire → return. A late report presenting the
+// superseded token is refused inside checkEvent, so the run and the audit
+// chain stay exactly as they were.
+func TestStaleFencingIsRefusedWithNoAudit(t *testing.T) {
+	s, st := newSvc(t)
+	r := start(t, s)
+	ctx := context.Background()
+	agent := ports.Principal{Handle: "idev-coder", Kind: "agent", OwnerHandle: "wangwei794"}
+	for _, ev := range []run.Event{
+		{Kind: run.EvConductorStepStarted, Actor: run.ActorConductor, StepID: "preflight"},
+		{Kind: run.EvConductorStepRecorded, Actor: run.ActorConductor, StepID: "preflight",
+			Outcome: run.StepPASS, Evidence: "p.md"},
+		{Kind: run.EvStepActivated, Actor: run.ActorSystem, StepID: "code-pass"},
+		{Kind: run.EvDelegationIssued, Actor: run.ActorConductor, StepID: "code-pass", Agent: "idev-coder"},
+	} {
+		if _, err := s.Apply(ctx, r.ID, ev, conductor()); err != nil {
+			t.Fatalf("%s: %v", ev.Kind, err)
+		}
+	}
+	issueLease(t, st, r.ID, "code-pass", "idev-coder", 1)
+	// New holder: same step, higher fencing. The old token is now stale.
+	issueLease(t, st, r.ID, "code-pass", "idev-coder", 2)
+	before := len(st.Events())
+
+	_, err := s.Apply(ctx, r.ID, run.Event{
+		Kind: run.EvDelegationReturned, Actor: run.ActorAgent, StepID: "code-pass",
+		Agent: "idev-coder", Fencing: 1,
+	}, agent)
+	if err == nil {
+		t.Fatal("a superseded fencing token was accepted")
+	}
+	if !strings.Contains(err.Error(), "fencing") && !strings.Contains(err.Error(), "superseded") {
+		t.Errorf("err = %q, want fencing/superseded", err)
+	}
+	if n := len(st.Events()); n != before {
+		t.Errorf("%d audit events, want %d: a late return left residue", n, before)
+	}
+	stored, _ := st.Run(r.ID)
+	if stored.Steps[1].State != run.StepDelegated {
+		t.Errorf("step = %s, want delegated after a refused late return", stored.Steps[1].State)
+	}
+
+	// The live token still works.
+	if _, err := s.Apply(ctx, r.ID, run.Event{
+		Kind: run.EvDelegationReturned, Actor: run.ActorAgent, StepID: "code-pass",
+		Agent: "idev-coder", Fencing: 2,
+	}, agent); err != nil {
+		t.Fatalf("current fencing refused: %v", err)
+	}
+}
+
+func TestMissingFencingIsRefusedWithNoAudit(t *testing.T) {
+	s, st := newSvc(t)
+	r := start(t, s)
+	ctx := context.Background()
+	agent := ports.Principal{Handle: "idev-coder", Kind: "agent", OwnerHandle: "wangwei794"}
+	for _, ev := range []run.Event{
+		{Kind: run.EvConductorStepStarted, Actor: run.ActorConductor, StepID: "preflight"},
+		{Kind: run.EvConductorStepRecorded, Actor: run.ActorConductor, StepID: "preflight",
+			Outcome: run.StepPASS, Evidence: "p.md"},
+		{Kind: run.EvStepActivated, Actor: run.ActorSystem, StepID: "code-pass"},
+		{Kind: run.EvDelegationIssued, Actor: run.ActorConductor, StepID: "code-pass", Agent: "idev-coder"},
+	} {
+		if _, err := s.Apply(ctx, r.ID, ev, conductor()); err != nil {
+			t.Fatalf("%s: %v", ev.Kind, err)
+		}
+	}
+	issueLease(t, st, r.ID, "code-pass", "idev-coder", 1)
+	before := len(st.Events())
+
+	_, err := s.Apply(ctx, r.ID, run.Event{
+		Kind: run.EvDelegationReturned, Actor: run.ActorAgent, StepID: "code-pass",
+		Agent: "idev-coder", // Fencing omitted → 0
+	}, agent)
+	if err == nil {
+		t.Fatal("a return without fencing was accepted")
+	}
+	if n := len(st.Events()); n != before {
+		t.Errorf("%d audit events, want %d", n, before)
 	}
 }
 

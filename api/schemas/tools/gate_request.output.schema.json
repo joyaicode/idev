@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/gate_request.output.schema.json",
+  "title": "idev MCP gate_request output",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [],
+  "properties": {
+    "gate_id": {
+      "type": "string"
+    },
+    "blocked": {
+      "type": "boolean"
+    }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/lease_acquire.input.schema.json",
+  "title": "idev MCP lease_acquire input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "feature",
+    "run_id",
+    "step_id",
+    "agent",
+    "purpose"
+  ],
+  "properties": {
+    "feature": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(-|[a-z0-9][a-z0-9-]*)$"
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "purpose": {
+      "type": "string",
+      "enum": [
+        "write",
+        "verify"
+      ]
+    },
+    "ticket_dir": {
+      "type": "string"
+    },
+    "write_paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

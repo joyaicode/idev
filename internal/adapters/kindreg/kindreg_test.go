@@ -5,19 +5,36 @@ import (
 	"strings"
 	"testing"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/idev/internal/adapters/kindreg"
 )
 
+// Load keeps every kind and agent that registry/kinds.yaml lists.
 func TestTheEmbeddedRegistryLoads(t *testing.T) {
 	r, err := kindreg.Load()
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got := len(r.Kinds()); got != 29 {
-		t.Errorf("%d kinds, want 29", got)
+	source, err := os.ReadFile("../../../registry/kinds.yaml")
+	if err != nil {
+		t.Fatalf("read the registry: %v", err)
 	}
-	if got := len(r.Agents()); got != 5 {
-		t.Errorf("%d agents, want 5", got)
+	var listed struct {
+		Agents map[string]any `yaml:"agents"`
+		Kinds  map[string]any `yaml:"kinds"`
+	}
+	if err := yaml.Unmarshal(source, &listed); err != nil {
+		t.Fatalf("parse the registry: %v", err)
+	}
+	if len(listed.Kinds) == 0 || len(listed.Agents) == 0 {
+		t.Fatalf("registry/kinds.yaml lists %d kinds and %d agents", len(listed.Kinds), len(listed.Agents))
+	}
+	if got := len(r.Kinds()); got != len(listed.Kinds) {
+		t.Errorf("%d kinds, registry/kinds.yaml lists %d", got, len(listed.Kinds))
+	}
+	if got := len(r.Agents()); got != len(listed.Agents) {
+		t.Errorf("%d agents, registry/kinds.yaml lists %d", got, len(listed.Agents))
 	}
 }
 

@@ -51,6 +51,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -268,6 +269,16 @@ def cmd_promote(args: argparse.Namespace) -> int:
     if not repro:
         print("BLOCKED 缺 --repro —— 入库前要旁路复现过,不是只凭印象", file=sys.stderr)
         return 2
+
+    target = args.repo or (Path(os.environ["IDEV_PRODUCT_REPO"])
+                           if os.environ.get("IDEV_PRODUCT_REPO") else Path.cwd())
+    script = Path(__file__).resolve().parent / "codegraph-sync.sh"
+    refreshed = subprocess.run(
+        ["bash", str(script), "--repo", str(target.resolve()), "docs"],
+        check=False,
+    )
+    if refreshed.returncode != 0:
+        return refreshed.returncode
 
     item["status"] = "authoritative"
     item["confirmed_by"] = args.by

@@ -21,7 +21,8 @@ idev, ex, work = map(Path, sys.argv[1:4])
 base = idev / "deliver" / "references"
 for src, dst in (("baseline.example.yaml", "baseline.yaml"), ("req.example.yaml", "req.yaml"),
                  ("arch.example.yaml", "arch.yaml"), ("deliver.example.yaml", "deliver.yaml"),
-                 ("review.example.md", "review.md"), ("deliver-eval.example.md", "deliver-eval.md")):
+                 ("review.example.md", "review.md"), ("deliver-eval.example.md", "deliver-eval.md"),
+                 ("design.example.md", "design.md")):
     shutil.copy(base / src, ex / dst)
 shutil.copy(idev / "verify" / "references" / "plan.example.yaml", ex / "verify" / "plan.yaml")
 shutil.copy(idev / "ops" / "references" / "ops.example.yaml", ex / "ops.yaml")

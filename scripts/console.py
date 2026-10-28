@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import delegation  # noqa: E402
 import hypothesis  # noqa: E402
+import outcome_metrics_lib as outcome_metrics  # noqa: E402
 import safeyaml  # noqa: E402
 import trace  # noqa: E402
 from product_sink import product_repo, sink_dir  # noqa: E402
@@ -1023,6 +1024,20 @@ function renderMeters() {
     button.addEventListener("click", () => pinBasis("假设 · " + (row.label || row.id) + " " + (row.n || 0)));
     hypos.append(button);
   });
+  const wipRows = (m.wip && m.wip.rows) || [];
+  const wipBox = el("div", {class: "hbars"}, []);
+  if (!wipRows.length) {
+    wipBox.append(el("div", {class: "muted"}, [tx("没有在制品")]));
+  }
+  wipRows.forEach(row => {
+    const button = el("button", {class: "hbar", type: "button"}, [
+      el("span", {}, [tx((row.feature || "") + " · " + (row.stage || ""))]),
+      el("u", {}, [el("i", {style: "width:" + Math.min(100, Math.max(4, Number(row.age_days) || 0)) + "%"}, [])]),
+      el("b", {}, [tx((row.age_days || 0) + "d")]),
+    ]);
+    button.addEventListener("click", () => pinBasis("在制品 " + (row.feature || "") + " · " + (row.stage || "") + " · " + (row.age_days || 0) + " 天"));
+    wipBox.append(button);
+  });
   root.replaceChildren(
     instrument("场景", [cols]),
     instrument("执行者耗时", [bars]),
@@ -1030,6 +1045,7 @@ function renderMeters() {
     instrument("回报 " + (m.delegations || 0), [pips]),
     instrument("技能调起", [hits]),
     instrument("假设", [hypos]),
+    instrument("在制品老化 " + ((m.wip && m.wip.count) || 0), [wipBox]),
   );
 }
 
@@ -1930,6 +1946,7 @@ def _meters(traces: list[dict], features: dict, live: list[dict]) -> dict:
         "hypotheses": [{"id": sid, "label": label, "n": hypo_n[sid]} for sid, label in HYPO_STATUS],
         "other_hypotheses": [{"id": sid, "n": other_h[sid]} for sid in sorted(other_h)],
         "live": len(live),
+        "wip": {"count": 0, "oldest_age_days": 0, "rows": []},
     }
 
 
@@ -1952,12 +1969,25 @@ def board(*, trace_dir: Path, repo: Path, console_dir: Path) -> dict:
         if name not in features:
             features.append(name)
     viewed = {name: _feature_view(name, repo, live) for name in features}
+    meters = _meters(traces, viewed, live)
+    try:
+        wip = outcome_metrics.wip_rows(outcome_metrics.ticket_dirs(repo))
+        meters["wip"] = {
+            "count": len(wip),
+            "oldest_age_days": wip[0]["age_days"] if wip else 0,
+            "rows": [
+                {"feature": r["feature"], "stage": r["stage"], "age_days": r["age_days"]}
+                for r in wip[:12]
+            ],
+        }
+    except OSError:
+        pass
     return {
         "traces": traces,
         "features": viewed,
         "live": live,
         "current": _current(traces, viewed, live, repo),
-        "meters": _meters(traces, viewed, live),
+        "meters": meters,
         "thread": read_thread(console_dir),
     }
 

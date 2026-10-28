@@ -14,8 +14,10 @@ So every delegation lands a record next to run.yaml:
     Records from another run of the same feature stay in their own directory,
     so a new review does not collide with report-1.yaml from last time.
     A run without run_id still writes the flat delegations/ directory.
+    The layout lives in lib/record_paths.py; every reader asks it too.
 
     delegation.py write    --feature F [--file -]   # yaml on stdin
+    delegation.py dir      --feature F              # where this run's records go
     delegation.py check    --feature F [--step S]   # the five honesty checks
     delegation.py replay   --feature F --step S     # print the brief again
     delegation.py timeline --feature F              # run.yaml + records, in order
@@ -36,16 +38,21 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import os
 import re
+import shutil
 import statistics
+import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import delegation_return  # noqa: E402
 import java_hygiene  # noqa: E402
 import kind_agents  # noqa: E402
+import record_paths  # noqa: E402
 import safeyaml  # noqa: E402
 import textwidth as tw  # noqa: E402
 import yaml_representers  # noqa: E402
@@ -113,12 +120,7 @@ def dir_for(feature: str, repo: Path | None) -> Path:
 
 def record_dir(feature: str, repo: Path | None) -> Path:
     """Where this run's records go. A run_id gets its own directory."""
-    base = dir_for(feature, repo)
-    run = load_run(feature, repo)
-    rid = str((run or {}).get("run_id") or "").strip()
-    if rid and _SHARD.fullmatch(rid) and ".." not in rid:
-        return base / rid
-    return base
+    return record_paths.run_dir(dir_for(feature, repo), load_run(feature, repo))
 
 
 def now() -> str:
@@ -335,7 +337,73 @@ def check_accuracy(record: dict) -> dict[str, str]:
         rf = RED_FIRST_LINE.search(raw)
         out["red-first"] = "PASS" if rf else "FAIL:no RED_FIRST line (evidence.md step 4)"
 
+    # Phase 1 §4: when the subagentStop hook logged modified_files, CHANGED
+    # must be a subset. No log → skip (fail open); the hook is best-effort.
+    if touched:
+        actual = _recent_modified_files()
+        if actual is not None:
+            extra = changed_paths - actual
+            out["changed-within-actual"] = (
+                "PASS" if not extra
+                else "FAIL:CHANGED names " + ",".join(sorted(extra))
+                     + " but subagentStop did not see those modifications"
+            )
+
     return out
+
+
+def _subagent_stops_path() -> Path:
+    raw = (os.environ.get("IDEV_DATA") or "").strip()
+    root = Path(raw).expanduser() if raw else Path.home() / ".idev"
+    return root / "subagent-stops.jsonl"
+
+
+def _latest_subagent_stop() -> dict | None:
+    """Newest parseable row from subagent-stops.jsonl, or None."""
+    path = _subagent_stops_path()
+    if not path.is_file():
+        return None
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    for line in reversed(lines):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(row, dict):
+            return row
+    return None
+
+
+def _recent_modified_files() -> set[str] | None:
+    """Union of modified_files from the newest subagent-stops.jsonl rows, or None."""
+    path = _subagent_stops_path()
+    if not path.is_file():
+        return None
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return None
+    found: set[str] = set()
+    saw = False
+    for line in lines[-20:]:
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        files = row.get("modified_files") or []
+        if isinstance(files, list):
+            saw = True
+            for f in files:
+                if str(f).strip():
+                    found.add(str(f).strip().replace("\\", "/"))
+    return found if saw else None
 
 
 def read_evidence(record: dict, repo: Path | None) -> str | None:
@@ -538,6 +606,30 @@ def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     raw = str(report.get("raw", ""))
     status = report_status(record)
 
+    # Structured return (phase 1 §7). When JSON is present it is the main path:
+    # schema fields win over prose lines. Absent → WARN unless required.
+    require_json = (os.environ.get("IDEV_REQUIRE_RETURN_JSON") or "").strip() in (
+        "1", "true", "yes",
+    )
+    checks["return-schema"] = delegation_return.check_report(raw, require=require_json)
+    structured, _ = delegation_return.extract(raw)
+    if structured and checks["return-schema"] == "PASS":
+        raw = delegation_return.apply_as_main(raw, structured)
+        report = dict(report)
+        report["raw"] = raw
+        evidence = structured.get("evidence")
+        if evidence:
+            if isinstance(evidence, list):
+                report["evidence"] = " ".join(str(p) for p in evidence if str(p).strip())
+            else:
+                report["evidence"] = str(evidence).strip()
+        if structured.get("status"):
+            report["status"] = structured["status"]
+        record = dict(record)
+        record["report"] = report
+        if structured.get("changed") is not None:
+            record["changed"] = list(structured["changed"])
+
     # 1 evidence-present: a PASS needs a path, and the path should exist.
     evidence = report_evidence(record)
     if status.startswith("PASS"):
@@ -708,9 +800,7 @@ def load_all(feature: str, repo: Path | None) -> list[tuple[Path, dict]]:
     target = dir_for(feature, repo)
     if not target.is_dir():
         return out
-    files = list(target.glob("*.yaml"))
-    for sub in sorted(path for path in target.iterdir() if path.is_dir()):
-        files.extend(sub.glob("*.yaml"))
+    files = [path for leaf in record_paths.LEAVES for path in target.glob(leaf)]
     for path in sorted(files):
         if path.name.endswith(".example.yaml"):
             continue
@@ -733,16 +823,70 @@ def load_run(feature: str, repo: Path | None) -> dict | None:
     return data
 
 
-_SHARD = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$")
-
-
 def record_name(step: str, attempt: int, shard: str = "") -> str:
     """One file per step attempt. A shard adds its id so siblings do not collide."""
     if shard:
-        if _SHARD.fullmatch(shard) is None or ".." in shard:
+        if not record_paths.is_slug(shard):
             raise ValueError(shard)
         return f"{step}-{shard}-{attempt}.yaml"
     return f"{step}-{attempt}.yaml"
+
+
+def _go_engine() -> bool:
+    return (os.environ.get("IDEV_ENGINE") or "go").strip().lower() != "python"
+
+
+def _idev_bin() -> str | None:
+    exe = (os.environ.get("IDEV_BIN") or "").strip()
+    if exe and Path(exe).is_file():
+        return exe
+    built = Path(__file__).resolve().parent.parent / "bin" / "idev"
+    if built.is_file():
+        return str(built)
+    return shutil.which("idev")
+
+
+def _allocate_attempt(record: dict, repo: Path | None) -> dict | None:
+    """Ask DelegationRepo for the next attempt (E3.3). None → client path."""
+    if not _go_engine():
+        return None
+    idev = _idev_bin()
+    if not idev:
+        return None
+    feature = str(record.get("feature") or "").strip()
+    run = load_run(feature, repo) if feature else None
+    run_id = str((run or {}).get("run_id") or record.get("run_id") or "").strip()
+    if not run_id:
+        return None
+    step = str(record.get("step") or "").strip()
+    agent = str(record.get("agent") or "").strip()
+    if not step or not agent:
+        return None
+    cmd = [
+        idev, "delegation", "allocate",
+        "--run-id", run_id, "--step", step, "--agent", agent,
+    ]
+    if feature:
+        cmd.extend(["--feature", feature])
+    if str(record.get("delegation_id") or "").strip():
+        cmd.extend(["--id", str(record["delegation_id"]).strip()])
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        print(
+            f"BLOCKED delegation allocate failed: {(proc.stderr or proc.stdout or '').strip()}",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    try:
+        data = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        print(f"BLOCKED delegation allocate returned non-JSON: {proc.stdout!r}", file=sys.stderr)
+        raise SystemExit(2)
+    attempt = int(data.get("attempt") or 0)
+    if attempt <= 0 or not data.get("id"):
+        print(f"BLOCKED delegation allocate missing id/attempt: {data!r}", file=sys.stderr)
+        raise SystemExit(2)
+    return {"id": str(data["id"]), "attempt": attempt}
 
 
 def cmd_write(args: argparse.Namespace) -> int:
@@ -794,6 +938,13 @@ def cmd_write(args: argparse.Namespace) -> int:
     record["guide"] = optional_line(raw_report, GUIDE_LINE)
     record["domain"] = optional_line(raw_report, DOMAIN_LINE)
 
+    # E3.3: when the Go engine owns truth, attempt comes from DelegationRepo
+    # (server assigns). The YAML filename is a projection of that number, not
+    # the primary key. Python golden keeps client-chosen attempt + exclusive create.
+    allocated = _allocate_attempt(record, args.repo)
+    if allocated is not None:
+        record["attempt"] = allocated["attempt"]
+        record["delegation_id"] = allocated["id"]
     attempt = safeyaml.as_int(record.get("attempt"), 1)
     record["attempt"] = attempt
     shard = str(record.get("shard") or "").strip()
@@ -808,10 +959,20 @@ def cmd_write(args: argparse.Namespace) -> int:
 
     # Timing is optional on purpose: observability must not become a gate.
     # When both ends are present, store the derived duration so views and
-    # metrics never have to re-parse timestamps.
+    # metrics never have to re-parse timestamps. The subagentStop hook also
+    # leaves duration_ms; copy it when the record has none yet (phase 1 §4).
     seconds = duration_of(record)
     if seconds is not None:
         record["duration_s"] = seconds
+    stop = _latest_subagent_stop()
+    if stop is not None:
+        if "duration_ms" not in record and isinstance(stop.get("duration_ms"), (int, float)):
+            record["duration_ms"] = int(stop["duration_ms"])
+            if seconds is None and record["duration_ms"] >= 0:
+                record["duration_s"] = round(record["duration_ms"] / 1000, 3)
+                seconds = record["duration_s"]
+        if "tool_call_count" not in record and isinstance(stop.get("tool_call_count"), (int, float)):
+            record["tool_call_count"] = int(stop["tool_call_count"])
 
     record["checks"] = run_checks(record, args.repo)
     record["signals"] = signals_of(record)
@@ -1125,6 +1286,11 @@ def cmd_eval(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dir(args: argparse.Namespace) -> int:
+    print(record_dir(args.feature, args.repo))
+    return 0
+
+
 def cmd_list(args: argparse.Namespace) -> int:
     records = load_all(args.feature, args.repo)
     if not records:
@@ -1150,6 +1316,10 @@ def main() -> int:
     p.add_argument("--feature", required=True)
     p.add_argument("--file", help="yaml file, or - for stdin (default)")
     p.set_defaults(fn=cmd_write)
+
+    p = sub.add_parser("dir", help="print the directory this run's records go to")
+    p.add_argument("--feature", required=True)
+    p.set_defaults(fn=cmd_dir)
 
     p = sub.add_parser("check", help="run the five honesty checks")
     p.add_argument("--feature", required=True)

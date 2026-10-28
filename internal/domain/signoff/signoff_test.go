@@ -16,43 +16,59 @@ import (
 // stopped being one rule (design §20.2).
 const casesPath = "../../../test/signoff/cases.yaml"
 
-// The whitelist the shared cases assume: config/people.yaml in the kernel
-// root, the second lookup point people_whitelist() reads. Building the
-// identity from the real file keeps the Go rows and the Python rows
-// describing the same configuration rather than two hand-maintained lists.
-const peoplePath = "../../../config/people.yaml"
+// The whitelist the shared cases assume. scripts/test_signoff.py reads the
+// same file, so the Go rows and the Python rows describe one configuration
+// rather than two hand-maintained lists.
+const peoplePath = "../../../test/signoff/people.yaml"
 
-// identityFromPeople reads config/people.yaml the way _read_people does:
-// the `people` (or `humans`) list, lowercased.
-func identityFromPeople(t *testing.T) signoff.Identity {
+// The list that signs real gates.
+const productionPeoplePath = "../../../config/people.yaml"
+
+// readPeople reads a people.yaml the way _read_people does: the `people`
+// (or `humans`) list, lowercased.
+func readPeople(t *testing.T, path string) map[string]bool {
 	t.Helper()
-	raw, err := os.ReadFile(filepath.Clean(peoplePath))
+	raw, err := os.ReadFile(filepath.Clean(path))
 	if err != nil {
-		t.Fatalf("read people.yaml: %v", err)
+		t.Fatalf("read %s: %v", path, err)
 	}
 	var doc struct {
 		People []string `yaml:"people"`
 		Humans []string `yaml:"humans"`
 	}
 	if err := yaml.Unmarshal(raw, &doc); err != nil {
-		t.Fatalf("parse people.yaml: %v", err)
+		t.Fatalf("parse %s: %v", path, err)
 	}
 	names := doc.People
 	if len(names) == 0 {
 		names = doc.Humans
 	}
 	if len(names) == 0 {
-		t.Fatal("config/people.yaml lists nobody; the shared cases assume a whitelist")
+		t.Fatalf("%s lists nobody", path)
 	}
-	whitelist := make(map[string]bool, len(names))
+	out := make(map[string]bool, len(names))
 	for _, n := range names {
-		whitelist[strings.ToLower(strings.TrimSpace(n))] = true
+		out[strings.ToLower(strings.TrimSpace(n))] = true
 	}
+	return out
+}
+
+func identityFromPeople(t *testing.T) signoff.Identity {
+	t.Helper()
 	return signoff.Identity{
-		Whitelist: whitelist,
+		Whitelist: readPeople(t, peoplePath),
 		Agents: []string{
 			"idev-deliver", "idev-coder", "idev-reviewer", "idev-verifier", "idev-ops",
 		},
+	}
+}
+
+func TestProductionWhitelistListsNoTestIdentity(t *testing.T) {
+	names := readPeople(t, productionPeoplePath)
+	for _, n := range []string{"tester", "张三", "alice"} {
+		if names[n] {
+			t.Errorf("config/people.yaml lists the test identity %q; it belongs in test/signoff/people.yaml", n)
+		}
 	}
 }
 

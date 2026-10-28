@@ -9,10 +9,11 @@
 # 2026-10-19; formerly ~/Downloads/idev-refactor-design.md); four of them
 # pass under the old prefix matcher and must not.
 #
-# `human` rows assume whitelist mode: config/people.yaml lists exactly
-# wangwei794, tester, 张三 and Alice, and the runner builds the identity
+# `human` rows assume whitelist mode: test/signoff/people.yaml lists exactly
+# wangwei794, tester, 张三 and Alice, and both runners build the identity
 # from that file, so a name is a person only when the file says so — and
 # the blacklist still applies first (listing a model there would not help).
+# config/people.yaml signs real gates and lists none of the test names.
 schema_version: 1
 mode: whitelist
 

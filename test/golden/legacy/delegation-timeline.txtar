@@ -12,11 +12,11 @@
 preflight         preflight.inputs      导体            PASS                    -  -
 scope-guard       route.s4              —               PASS                    -  -
 code-pass         review.report         idev-reviewer   PASS                    -  $WORK/.idev/task/demo/review.md
-plan              verify.plan           —               pending                 -  -
+plan              verify.plan           —               PASS                    -  -
 run               verify.run            idev-verifier   PASS                    -  $WORK/.idev/task/demo/review.md
-review            review.report         —               pending                 -  -
-accept            verify.run            —               pending                 -  -
-gate-plan         human.gate            导体(签字)      pending                 -  -
+review            review.report         —               PASS                    -  -
+accept            verify.run            —               PASS                    -  -
+gate-plan         human.gate            导体(签字)      PASS                    -  -
 fix               review.fix            —               pending                 -  -
 refresh           verify.run            —               pending                 -  -
 gate-review       human.gate            导体(签字)      pending                 -  -

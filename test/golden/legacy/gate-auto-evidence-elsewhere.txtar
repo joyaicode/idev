@@ -1,0 +1,7 @@
+# AUTO naming a file other than the log it writes
+# cmd: W record gate-plan AUTO --evidence review.md --feature demo
+
+-- exit --
+2
+-- output --
+BLOCKED AUTO keeps the output of the check it runs in verify/plan-check.log; drop --evidence or name that file

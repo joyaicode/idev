@@ -583,6 +583,11 @@ def _check_gate(step: dict, where: str, errors: list[str]) -> None:
         tiers = payload["auto_tiers"]
         if not isinstance(tiers, list) or not tiers or not set(tiers) <= RISK_TIERS:
             errors.append(f"{where} human.gate with.auto_tiers must be a non-empty list of {sorted(RISK_TIERS)}")
+        elif gate_type(step) not in AUTO_CHECKS:
+            errors.append(
+                f"{where} human.gate with.auto_tiers needs a gate a machine check can pass "
+                f"({', '.join(sorted(AUTO_CHECKS))}); a {gate_type(step)} gate is signed by a person"
+            )
     if "gate_type" in payload and payload["gate_type"] not in GATE_TYPES:
         errors.append(f"{where} human.gate with.gate_type must be one of {sorted(GATE_TYPES)}")
     subject = payload.get("subject")
@@ -599,6 +604,29 @@ def _check_gate(step: dict, where: str, errors: list[str]) -> None:
 GATE_TYPES = frozenset({
     "accepted_req", "accepted_arch", "accepted_plan", "aligned", "resolved", "step_confirm",
 })
+
+
+def gate_type(step: dict) -> str:
+    """with.gate_type when the recipe says; else accepted_plan for a gate that
+    writes plan.yaml, and step_confirm for anything else."""
+    payload = step.get("with") or {}
+    declared = str(payload.get("gate_type") or "")
+    if declared:
+        return declared
+    will_write = [str(w) for w in (payload.get("will_write") or [])]
+    return "accepted_plan" if any("plan.yaml" in w for w in will_write) else "step_confirm"
+
+
+class AutoCheck(NamedTuple):
+    """What `record <gate> AUTO` runs in place of a person."""
+
+    stage: str  # the check-feature stage it runs
+    log: str  # where the ticket keeps that run's output
+    source: str  # the step kind whose unanswered signals still need a person
+
+
+# By gate type. A gate type missing here has no check that could pass it.
+AUTO_CHECKS = {"accepted_plan": AutoCheck("verify-plan", "verify/plan-check.log", "verify.plan")}
 
 
 def auto_tiers(step: dict) -> set:
@@ -906,6 +934,24 @@ def _read_people(path: Path):
     return {str(x).strip().lower() for x in data if str(x).strip()}
 
 
+def _by_blacklisted(low: str) -> bool:
+    """True when the lowercased name is an agent, a model or a role."""
+    if _names_an_agent(low):
+        return True
+    if re.match(r"^idev[-_]", low):
+        return True
+    if "agent" in low or "assistant" in low:
+        return True
+    try:
+        import kind_agents  # noqa: PLC0415
+
+        if low in {a.lower() for a in kind_agents.AGENTS}:
+            return True
+    except ImportError:  # pragma: no cover - prefix rule already covers these
+        pass
+    return False
+
+
 def is_human(by: str) -> bool:
     """True when `by` may sign.
 
@@ -918,20 +964,27 @@ def is_human(by: str) -> bool:
     if not name:
         return False
     low = unicodedata.normalize("NFKC", name).strip().lower()
-    if _names_an_agent(low):
+    if _by_blacklisted(low):
         return False
-    if re.match(r"^idev[-_]", low):
-        return False
-    if "agent" in low or "assistant" in low:
-        return False
-    try:
-        import kind_agents  # noqa: PLC0415
-
-        if low in {a.lower() for a in kind_agents.AGENTS}:
-            return False
-    except ImportError:  # pragma: no cover - prefix rule already covers these
-        pass
     allowed = people_whitelist()
     if allowed:
         return low in allowed
     return True
+
+
+def signoff_by_refusal(by: str) -> str:
+    """Why this --by cannot sign, or \"\" when it can.
+
+    Three different refusals, so the person can tell an agent name from a
+    missing whitelist entry from a blank --by.
+    """
+    name = str(by or "").strip()
+    if not name:
+        return "human.gate PASS needs --by with a person's name"
+    low = unicodedata.normalize("NFKC", name).strip().lower()
+    if _by_blacklisted(low):
+        return "human.gate PASS needs --by with a person's name, not an agent"
+    allowed = people_whitelist()
+    if allowed and low not in allowed:
+        return "human.gate PASS needs --by with a name listed in people.yaml"
+    return ""

@@ -1,0 +1,41 @@
+# the reviewer's own record cites the evidence
+# cmd: W record code-pass PASS --evidence docs/x.md --verified-by idev-reviewer --verify-evidence docs/x.md --feature demo
+
+-- exit --
+0
+-- output --
+DIGEST match aec1243bf708f640
+PARALLEL check
+NEXT plan  kind=verify.plan  status=pending
+OPEN verify/SKILL.md
+DELEGATE idev-verifier
+FANOUT_ASSESS plan python3 scripts/fanout.py assess --feature demo --activity plan
+LABEL 起草测试用例（与审查、自测、验收索引并行）
+GROUP check
+WRITES verify/plan.yaml
+WITH {'mode': 'selftest'}
+---
+NEXT run  kind=verify.run  status=pending
+OPEN verify/SKILL.md
+DELEGATE idev-verifier
+FANOUT_ASSESS selftest python3 scripts/fanout.py assess --feature demo --activity selftest
+LABEL 自测（只写自测报告，不改用例文件）
+GROUP check
+WRITES verify/selftest.md
+WITH {'mode': 'selftest'}
+---
+NEXT review  kind=review.report  status=pending
+OPEN conventions/coding.md
+DELEGATE idev-reviewer
+LABEL 独立审查（只写 review.md）
+GROUP check
+WRITES review.md
+---
+NEXT accept  kind=verify.run  status=pending
+OPEN verify/SKILL.md
+DELEGATE idev-verifier
+FANOUT_ASSESS selftest python3 scripts/fanout.py assess --feature demo --activity selftest
+LABEL 验收索引（只写验收报告，不改用例、不写 aligned）
+GROUP check
+WRITES verify/accept.md
+WITH {'mode': 'selftest'}

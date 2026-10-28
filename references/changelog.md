@@ -1,6 +1,8 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
-- 2026-10-26：`agent-smoke` 里认工具列表的正向用例补上 `GUIDE:` 和 `DOMAIN:`。检查器已经要求这两行，缺了会把格式问题报成工具列表没认出来。
+- 2026-10-28：架构评审三阶段落地。阶段 0：留痕路径、自检/CI、白名单、AUTO 自跑、产物移出跟踪。阶段 1：客户端钩子、`prompts.log` 核对 quote、计时覆盖率、trace 骨架、结构化回报、`idev run write`+`ProjectRunWithAudit`（Go 默认写 YAML，空 expect 也 stale）。阶段 2：outcome 度量、console 在制品老化、timeline 保留结构化字段、A/B 评测夹具、usage-scan/attic、删除预算与 curator。阶段 3 提案 blocked（要触发条件）。人确认阶段 0–2 各提案原话；未提交。
+
+- 2026-10-27：分析代码的步骤里，更新索引写在读代码之前。审查的 `coding-scan`、根因里的 `codegraph_impact`、需求落地、事实工具箱和结构问题原先都是先读后更新。`scripts/test_codegraph_before_read.py` 锁住这个顺序。
 
 - 2026-10-26：缺的槽位用 `workflow.py param` 写回当前开放步骤。工具登记的 `inputs` 缺了也先 `ASK`。`next` 对照 `recipe_digest` 打出 `DIGEST match|drift|missing`，文件变了不改已展开的步骤。声明了 `react` 的步骤打出 `LOOP` 状态，不挡这一步。分支不能落进一组的中间，也不能跳到已经记完的步骤。
 

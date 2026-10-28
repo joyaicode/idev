@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/run_get.input.schema.json",
+  "title": "idev MCP run_get input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

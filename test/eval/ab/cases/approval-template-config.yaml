@@ -1,0 +1,25 @@
+id: approval-template-config
+source_ticket: approval-template-config
+include:
+  - joypaas-access-layer/
+  - docs/design/
+checks:
+  - id: tests-pass
+    command: "true"
+  - id: stage-gate-clean
+    fail_lines: 0
+  - id: paths-within-include
+    changed:
+      - joypaas-access-layer/src/ApprovalTemplate.java
+      - docs/design/approval-template.md
+  - id: no-signoff-write
+    report: |
+      STATUS: PASS
+      CHANGED: joypaas-access-layer/src/ApprovalTemplate.java
+      CONCLUSION: 模板配置收敛
+      no-signoff-write = PASS
+modes:
+  with-idev:
+    expect_pass: true
+  without-idev:
+    expect_pass: true

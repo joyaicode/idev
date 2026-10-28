@@ -73,7 +73,11 @@ python3 $IDEV/scripts/hypothesis.py check --feature <f>
 `candidates` 子命令按「已证成 / 待验 / 已排除」三栏列出。只有一条假设且直接证成会给 WARN ——
 第一个猜想恰好对是可能的,但更常见的是别的可能性从没写下来。
 
-**修复前记影响范围用例:**
+**修复前记影响范围用例。** 读代码或查调用方之前先更新索引:
+
+```bash
+bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> rootcause
+```
 
 ```bash
 python3 $IDEV/scripts/hypothesis.py blast --feature <f> --id H1 \
@@ -87,7 +91,11 @@ guard 用例从 `codegraph_impact <根因符号> --depth 1` 提名的调用方�
 **复现失败 = 猜想未成立:** 标 `disproven`,换命题,**不写结论**。证否的**留着不删** ——
 排除过的路径是证据链的一部分,也是下次不重走弯路的依据。
 
-用 codegraph 缩小搜索面(它等同"代码"一档:帮你读懂实际行为,**不替代用例证明**):
+用 codegraph 缩小搜索面之前先更新索引。问题定位和根因用 `rootcause`;`route.s4` 的深入研究用 `research`。它等同"代码"一档:帮你读懂实际行为,**不替代用例证明**:
+
+```bash
+bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> rootcause
+```
 
 ```
 codegraph_context "<现象/任务描述>"        # 入口 + 相关符号 + 关键代码,一次调用
@@ -100,7 +108,7 @@ codegraph_impact <symbol> --depth 1         # 改它会波及谁
 
 ## kind = route.s4(论证)
 
-按 `evidence.md` 闭环**按序**走,失败回第 1 步:
+深入研究前先 `bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> research`。按 `evidence.md` 闭环**按序**走,失败回第 1 步:
 
 1. 假设进台账(见上)
 2. **根因层停** — 能解释用户看到的**全部**现象 · 能用用例红/绿切换 · 修在产生该现象的那一层
@@ -158,7 +166,7 @@ python3 $IDEV/scripts/failure_signature.py check --feature <f>
 8. **不准自动做生产写操作。** 不重启、不 failover、不 `kubectl patch`、不建告警屏蔽。预案只写出来,等人判定。
 9. **不准用排障改密封基线。** 像需求写错 → 写 `baseline-conflict` 并停,由人选基线内修还是 `reopen_baseline`。
 10. **未拷问确认 `defect_origin` 不准回退。** origin 只许 `req`/`arch`/`code` —— 那是导体和人的事。
-11. **不写签字字段**:`sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` 一律不碰;`by:` 必须人名,你填不了。
+11. **签字**：人签只走 [$IDEV/references/chat-confirm-signoff.md](../references/chat-confirm-signoff.md)；你不写任何签字字段，`by:` 只能是人名。
 12. **有界修复红线命中必须停**,不叠补丁,不改签名归一化规则来让检查过。
 13. **不打分。** 禁止总分、评级、LLM-judge 式结论。
 14. **不准抄平行 Skill。** `onboard` / `runtime` 交产品 `.idev/handoff.yaml` 里的 Skill。

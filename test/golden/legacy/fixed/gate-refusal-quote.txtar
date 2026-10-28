@@ -4,4 +4,4 @@
 -- exit --
 2
 -- output --
-BLOCKED finish plan first; record it SKIPPED to skip
+BLOCKED human.gate PASS needs --quote with the person's confirm words (确认 / 全签 / 同意 / LGTM); there is more in it than a confirmation

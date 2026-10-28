@@ -17,6 +17,8 @@ is_background: false
 | `docs.backfill` | 契约 / 经验回填(S5) |
 | `docs.changelog` | 变更说明 / 任务小结 |
 
+`docs.backfill` 和 `docs.changelog` 落笔前先 `bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> docs`。
+
 委派消息是你唯一的任务输入 —— 你看不到之前的对话。`$IDEV` 指 idev 内核根(在委派包里)。
 **缺 stage 就回报 `BLOCKED(brief)`**,不要自己从 `deliver.yaml` 推断后径自推进。
 
@@ -72,8 +74,9 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
      python3 $IDEV/scripts/ui-spec.py --schema                      # 看格式
      python3 $IDEV/scripts/ui-spec.py --feature <f>                 # 校验 + 生成
      ```
-     **密封前先把需求落到既有代码上**(否则影响面要到 arch 才发现,那时只能 reopen):
+     **密封前先把需求落到既有代码上**(否则影响面要到 arch 才发现,那时只能 reopen)。深入研究前先更新索引:
      ```bash
+     bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> research
      python3 $IDEV/scripts/req-ground.py --feature <f> --probe   # 要读什么
      python3 $IDEV/scripts/req-ground.py --feature <f>           # 校验落地
      ```
@@ -115,7 +118,7 @@ shared_understanding: true
 1. **不准跳阶段。** 无 `deliver.yaml` 就从 `req-review` 建,不要从中间插入。
 2. **frontier 未空不准把需求当通过。** `baseline.yaml` 仍有 `status: open` 或未清空 `objections` 时不准请导体签需求 —— 回报 `BLOCKED(logic)`,让导体把本轮问题一次问完。基线就绪后可以起草拆解,密封和拆解同一次确认。**禁止**口头"差不多了"。
 3. **密封后不准改 baseline 正文。** 下游只引用 `baseline_item_id`。要改原文必须人说「解除密封」或 `reopen`,那是导体的事。
-4. **不写签字字段。** `sealed` / `accepted` / `aligned` / `reopen_baseline` / `semantic_gate.*.passed` 一律不碰。`by:` 必须是人名,**禁止** `agent` / `ai` —— 你填不了。
+4. **签字**：人签只走 [$IDEV/references/chat-confirm-signoff.md](../references/chat-confirm-signoff.md)；你不写任何签字字段，`by:` 只能是人名。
 5. **过专家拒过清单才能请签**(`$IDEV/deliver/references/experts.md`)。清单不过就停,不要用"资深意见"绕过。
 6. **红绿只调用 verify 模块。** 你不跑用例、不造断言 —— 那是 `idev-verifier`。改代码是 `idev-coder`。
 7. **回退 origin 只能是 `req`/`arch`/`code`**,且须人拷问确认。禁止用提测反馈直接改 goal。
@@ -243,6 +246,12 @@ catalog 映射到既有组件库)和 `.html`(零依赖预览,评审时直接打�
 纯后端需求不受此约束。
 
 ## 需求要落到这个工程上(密封前)
+
+读代码之前先更新索引:
+
+```bash
+bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> research
+```
 
 **需求不能脱离代码谈。** 基线一旦密封就是尺,而影响面评估原本要到 `arch` 才做
 (`experts.md`: `codegraph_impact --depth 1`)—— 那时发现和存量逻辑冲突,

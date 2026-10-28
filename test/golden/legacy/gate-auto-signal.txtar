@@ -1,7 +1,7 @@
-# AUTO on a clean check output that still raised a signal
-# cmd: W record gate-plan AUTO --evidence verify/plan-check.log --feature demo
+# AUTO when the plan check passes but leaves a case for a person
+# cmd: W record gate-plan AUTO --feature example-change
 
 -- exit --
 2
 -- output --
-BLOCKED finish plan first; record it SKIPPED to skip
+BLOCKED AUTO refused: the checks raised a question for a person — plan leaves UNPROVEN for a person to accept: compat-enabled-unchanged

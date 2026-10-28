@@ -4,6 +4,7 @@
 -- exit --
 0
 -- output --
+DIGEST match aec1243bf708f640
 NEXT scope-guard  kind=route.s4  status=pending
 OPEN conventions/SKILL.md
 DELEGATE idev-ops

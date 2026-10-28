@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/gate_status.output.schema.json",
+  "title": "idev MCP gate_status output",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [],
+  "properties": {
+    "status": {
+      "type": "string"
+    }
+  }
+}

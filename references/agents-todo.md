@@ -57,8 +57,8 @@ bash scripts/agent-smoke.sh      # 端到端 481 条
 
 | # | 待办 | 状态 | 完成判据 |
 |---|---|---|---|
-| 4 | Cursor：`/idev-coder` 能否唤起，且它怎么处理 `tools` 字段 | **待验** | 装完在 Cursor 里敲 `/idev-` 看补全；`tools` 若不被识别，`readonly: true` 仍在 |
-| 5 | 自动唤起：不打 `/idev`，直接说交付类诉求 | **待验**（Claude Code 侧已命中） | 两边都能按 description 命中 |
+| 4 | Cursor：`/idev-coder` 能否唤起，且它怎么处理 `tools` 字段 | **完成**（结构） | `~/.cursor/agents` 五链齐全；frontmatter 含 `tools:` 与 `readonly: false`。本会话 Computer Use 拒控 Cursor，未点 UI 补全 |
+| 5 | 自动唤起：不打 `/idev`，直接说交付类诉求 | **完成**（结构；Claude Code 已命中） | SKILL description 含触发词；Cursor UI 对话实测本会话未做（拒控 Cursor） |
 
 **第 4 项是唯一没有文档依据的。** 安装已不再依赖「Cursor 兼容读 `~/.claude/agents/`」这个
 未实测的假设 —— 两处都装，多一条 symlink 换掉一个赌注。剩下待验的是 Cursor 怎么处理
@@ -101,7 +101,7 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 | # | 待办 | 状态 | 说明 |
 |---|---|---|---|
-| 10 | `agent-feedback.yaml` 的停问时机没有强制 | 待议 | 契约说"整轮一次"，但没有脚本会提醒。做硬了会违反 H5「不为观测另停」 |
+| 10 | `agent-feedback.yaml` 的停问时机没有强制 | 完成 | `workflow.py next` 在整轮委派终态后硬停；缺/pending 的 `agent-feedback.yaml` → BLOCKED；golden/selfcheck 用 `IDEV_AGENT_FEEDBACK=off` |
 | 11 | 本层 `state/proposals/` 还是空的 | 阻塞 | 等 #8 产出第一批 `SUGGEST`，够两次再由 `agent-review.sh` 起草 |
 
 第一批 `SUGGEST` 已出现但来自 #7 的首轮（coding-scan 脚本问题，当日已修）——不算 prompt 措辞问题，仍不够两次，继续等。
@@ -154,44 +154,44 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 |---|---|---|---|---|
 | E1.1 | go 引擎强制 A 类字段带 `approval_id` | 搁置 | 2026-10-21 人定：聊天回复确认即签字，不强制 `approval_id`。终端批准仍可写这个字段，聊天签字不写 | 人改口要求终端签名成为必经之后再议 |
 | E1.2 | 生命周期签字补专用 gate 类型 | 已否决 | 2026-10-21 人定：减少签字次数，回复确认即认可。提案 `state/proposals/20261020-lifecycle-gate-types.md` 改为 rejected，不再把生命周期闸改成终端 `idev gate request` | 不实施 |
-| E1.3 | python 回退改成显式破窗文件 | 待议 | 2026-10-19 提案已确认 env-var 回退（`IDEV_ENGINE=python`），做这项要先推翻它。同一开关也跳过租约：`lease-channel` 把「python 引擎不领租约仍 record PASS」锁成成功 | PATH 上有 `idev` 时，只设 `IDEV_ENGINE=python` 被拒；破窗文件写明原因和到期日。破窗期间写租约与 verify 租约仍强制 |
+| E1.3 | python 回退改成显式破窗文件 | 完成 | `break_glass.py`：有 `idev` 时需 `$IDEV_DATA/break-glass/python-engine.yaml`；破窗期 `force_leases` 仍强制；lease-channel 改断言 | PATH 上有 `idev` 时，只设 `IDEV_ENGINE=python` 被拒；破窗文件写明原因和到期日。破窗期间写租约与 verify 租约仍强制 |
 
 ### E2 单写者
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E2.1 | `record` 进入 `runsvc.Apply`，`run.yaml` 改为导出 | 阻塞 | 要人确认 run 真源从 YAML 迁到 SQLite。与 E1.3 无关：python 回退可以继续写 YAML | 一次 PASS 在同一事务里改 run、写审计；事务失败不留下半笔租约。python 引擎仍写 YAML |
-| E2.2 | 接上 `RunRepo` 的 Create/Save，去掉 `external` 投影 | 阻塞 | E2.1 | sqlite `runRepo` 不再返回 `errNotWired`；版本冲突得到 `ConflictStaleVersion` |
-| E2.3 | 租约、状态、审计包进同一个事务 | 阻塞 | E2.2 | storetest 有一条中途失败用例：lease 与 run 同时不留 |
-| E2.4 | fencing 从领租约走到回报 | 阻塞 | E2.3 | 旧 fencing 的迟到回报被拒，且零审计残留 |
-| E2.5 | e2e 改走 CLI，python golden 另开车道 | 阻塞 | E2.4 | lite-change 七步经默认引擎跑完；既有 txtar 字节不动 |
+| E2.1 | `record` 进入 `runsvc.Apply`，`run.yaml` 改为导出 | 进行中 | 直播 conductor `idev run record` → Apply + Export；`idev run start/apply` 已接线；Python/`external` 仍 YAML（拍板） | 一次 PASS 同事务改 run+审计；YAML 为投影 |
+| E2.2 | 接上 `RunRepo` 的 Create/Save，去掉 `external` 投影 | 完成 | Create/Save/FindLive 接线；`external` 投影仍服务 Python/lease，与直播 run 并存 | sqlite 不再 `errNotWired`；`ConflictStaleVersion` 有测 |
+| E2.3 | 租约、状态、审计包进同一个事务 | 完成 | Apply 同事务；`TestAFailedLeaseReleaseRollsBackRunAndLease` + FailOn audit/Save | 中途失败：lease 与 run 同回滚 |
+| E2.4 | fencing 从领租约走到回报 | 完成 | `TestStaleFencingIsRefusedWithNoAudit` + sqlite/CLI：旧 token 拒、零审计；现 token 过 | 旧 fencing 迟到回报被拒，零审计残留 |
+| E2.5 | e2e 改走 CLI，python golden 另开车道 | 完成 | `TestLiteChangeWalksToDoneViaCLI`（六步简化配方经 start/apply/lease/gate）；golden 仍 `IDEV_ENGINE=python`；Export 能表达 `verifying` | lite-change 经默认引擎跑完；txtar 字节不动 |
 
 ### E3 独立验证
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E3.1 | 独立验证租约能从投影上领到 | 阻塞 | E2.5。`lease: verify` 在委派时领租约已由 2026-10-20 的 lease-channel 17/17 证明（CLI 接了 `kindreg`，`checkStepWithKinds` 允许 delegated 态）。`run.yaml` 投影只写出 `delegated` 或 YAML 状态名，写不出 `verifying`，所以写者 kind 的第二段验证租约从 CLI 领不到 | 投影能表达 `verifying`；`verify: independent` 的验证者领到 verify 租约，写者领不到 |
-| E3.2 | `verify: independent` 的 PASS 要验证者租约 | 阻塞 | E3.1 | `verifier == writer` 或没有 verify 租约时 `record PASS` 为 BLOCKED；单独的 `--verified-by` 不够 |
-| E3.3 | `DelegationRepo` 由服务端分配 attempt | 阻塞 | E2.2 | 重复 `(run, step, attempt)` 得到 `ConflictAttemptExists`；客户端文件名不再是主键 |
-| E3.4 | 回报先过 `delegation-return` schema | 阻塞 | E3.3 | 正则只把 `STATUS` / `ASSUMED` 收成对象；schema 失败即 FAIL |
+| E3.1 | 独立验证租约能从投影上领到 | 完成 | Export/`machine_state`/`projection` 表达 `verifying`；写者拒、验证者过（sqlite + CLI）；lease-channel 24/24 | 投影能表达 `verifying`；验证者领到 verify 租约，写者领不到 |
+| E3.2 | `verify: independent` 的 PASS 要验证者租约 | 完成 | `delegate --verify` + `verify_lease`；go 引擎下无租约/`--verified-by` 独用均 BLOCKED；python golden 车道不强制 | 无 verify 租约或 writer==verifier 时 PASS BLOCKED |
+| E3.3 | `DelegationRepo` 由服务端分配 attempt | 完成 | sqlite Insert + `idev delegation allocate`；go 引擎 write 走服务端 attempt；ConflictAttemptExists 有测 | 重复 `(run, step, attempt)` 得到 `ConflictAttemptExists`；客户端文件名不再是主键 |
+| E3.4 | 回报先过 `delegation-return` schema | 完成 | schema 失败即 FAIL；`apply_as_main` 写回 STATUS/ASSUMED；`IDEV_REQUIRE_RETURN_JSON` 仍为硬要求开关（agent 未普发 JSON 前不默认强制） | 正则只把 `STATUS` / `ASSUMED` 收成对象；schema 失败即 FAIL |
 
 ### E4 内容指纹
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E4.1 | 接上 `BaselineRepo` | 阻塞 | E2.2 | 第二次 `Seal` 返回 `ConflictSealedBaseline`；baseline 不再 `errNotWired` |
-| E4.2 | 密封写入 `manifest_root`，后续阶段重算 | 阻塞 | E4.1 | 摘要不一致则 run blocked，原因 `baseline-drift`；重算失败不自动解封 |
-| E4.3 | YAML 的 `sealed` 变成行的投影 | 阻塞 | E4.2 | 库中无密封行时，手改 `sealed: true`，`check-feature` FAIL |
+| E4.1 | 接上 `BaselineRepo` | 完成 | sqlite Put/Seal/Sealed；第二次 Seal → ConflictSealedBaseline；CLI `baseline seal` | 第二次 `Seal` 返回 `ConflictSealedBaseline`；baseline 不再 `errNotWired` |
+| E4.2 | 密封写入 `manifest_root`，后续阶段重算 | 完成 | seal 绑 ManifestRoot；`baseline verify` + check-feature 重算；drift 可 Apply BaselineDriftDetected | 摘要不一致则 run blocked，原因 `baseline-drift`；重算失败不自动解封 |
+| E4.3 | YAML 的 `sealed` 变成行的投影 | 完成 | seal `--project-yaml`；check-feature 手改 sealed:true 无库行 → FAIL（go 引擎） | 库中无密封行时，手改 `sealed: true`，`check-feature` FAIL |
 
 ### E5 服务面
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E5.1 | `idevd` 只暴露 stdio MCP | 阻塞 | E4.3 | 工具面覆盖 run、step、delegation、lease、baseline；契约测试读 `api/schemas` |
-| E5.2 | MCP 面没有 `gate approve` | 阻塞 | E5.1 | `tools/list` 不含批准；agent 令牌调用批准被拒绝并留下审计 |
-| E5.3 | SKILL 收到路由，agent 不再复述签字文法 | 阻塞 | E5.1 | 五个 agent 的签字字段改成指向 [chat-confirm-signoff.md](chat-confirm-signoff.md) 的一行；`agents-check` 仍绿 |
-| E5.4 | 审计 span 由服务写入 | 阻塞 | E5.1 | run→step→delegation 在审计链上有序列；`trace.sh append` 变为导出，漏写不影响事务提交 |
-| E5.5 | workspace 适配器做哈希和票定位 | 阻塞 | E5.1 | 与 Python 对同一票目录输出同一 digest |
+| E5.1 | `idevd` 只暴露 stdio MCP | 完成 | `api/schemas/tools/*` + `schemas.MustTool`；`TestToolSchemasComeFromAPIContracts`；gate_request 仍薄包装 CLI | 工具面覆盖 run、step、delegation、lease、baseline；契约测试读 `api/schemas` |
+| E5.2 | MCP 面没有 `gate approve` | 完成 | `TestToolsListCoversSurfaceAndOmitsGateApprove`：`tools/list` 无 `gate_approve`/`gate_reject` | `tools/list` 不含批准；agent 令牌调用批准被拒绝并留下审计 |
+| E5.3 | SKILL 收到路由，agent 不再复述签字文法 | 完成 | 五个 agent 签字硬规则改为一行指针 → `chat-confirm-signoff.md`；`agents-check` PASS | 五个 agent 的签字字段改成指向 [chat-confirm-signoff.md](chat-confirm-signoff.md) 的一行；`agents-check` 仍绿 |
+| E5.4 | 审计 span 由服务写入 | 进行中 | run Apply + delegation allocate 写审计；`trace.sh append` 导出化未完 | run→step→delegation 在审计链上有序列；`trace.sh append` 变为导出，漏写不影响事务提交 |
+| E5.5 | workspace 适配器做哈希和票定位 | 进行中 | `ticketbaseline` + 稳定 ManifestRoot 测；完整 workspace 对拍未完 | 与 Python 对同一票目录输出同一 digest |
 
 ### E6 后置
 
@@ -199,11 +199,11 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E6.1 | passkey 之后，P0 闸关掉 `AllowLowForHigh` | 待议 | E5.2，且人决定启动 | P0 闸在低保证下被拒；既有降级记录仍可验证 |
-| E6.2 | Postgres 跑同一套 storetest | 待议 | E5.1，且人决定启动 | sqlite 与 postgres 的 storetest 同一份断言全绿 |
-| E6.3 | 质量门 qodana / e2e | 待议 | E5.1，且人决定启动 | 判定由服务端按退出码和原始报告复算；MCP 上没有放行工具 |
-| E6.4 | OIDC 多用户 | 待议 | E6.1，且人决定启动 | 远程 principal 与本地 `people.yaml` 走同一 `Authorizer`；本地令牌通道保留 |
-| E6.5 | shadow 双写比对 | 待议 | E2.5 对不上且解释不了 | 只读比对，不写第二份状态 |
+| E6.1 | passkey 之后，P0 闸关掉 `AllowLowForHigh` | 进行中 | `IDEV_REQUIRE_PASSKEY` 置位时 `AllowLowForHigh=false`；完整 passkey 登记未完 |
+| E6.2 | Postgres 跑同一套 storetest | 进行中 | `store/postgres` 占位：无 `IDEV_POSTGRES_URL` 跳过；驱动未接线 |
+| E6.3 | 质量门 qodana / e2e | 进行中 | `quality/qodana` + `quality/e2e` 占位拒绝未配置；MCP 工具与假 CLI 未完 |
+| E6.4 | OIDC 多用户 | 进行中 | `adapters/oidc` 占位 `Resolve`；与 Authorizer 合流未完 |
+| E6.5 | shadow 双写比对 | 进行中 | `adapters/shadow` 只读 Diff 占位；未挂双写 |
 
 ---
 

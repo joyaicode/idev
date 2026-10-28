@@ -4,7 +4,7 @@
 -- exit --
 1
 -- output --
-OK   $WORK/.idev/task/demo/workflow/delegations/plan-1.yaml
+OK   $WORK/.idev/task/demo/workflow/delegations/<ULID>/plan-1.yaml
 HINT no timing: pass started_at + finished_at to make duration observable
 FAIL brief-complete = FAIL:委派包缺 ticket_home,repo,stage,must_read,idev_root —— **这是导体的问题,不是执行者的**。格式照抄 references/agents.md「委派包(固定格式)」;重派前用 `delegation.py replay` 取回上次那份,别凭记忆重组  (责任方: conductor)
 FAIL facts-first = FAIL:没有 FACTS 行 —— 写你这轮的结论建立在什么第一手材料上:codegraph 查到的符号 / 读过的源码 file:line / 跑过的命令 / git 记录。「看了文档」不算 —— 文档会过时,见 references/boost.md 第零节  (责任方: agent)

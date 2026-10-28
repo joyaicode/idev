@@ -1,0 +1,111 @@
+schema_version: 1
+feature: llm-wiki
+mode: selftest
+accepted: false
+goal: "交付票往下走时，用不可变来源、索引和内核 schema 这三层，把基线、方案、代码、用例和经验对到同一说法。校准是对照来源标出一致或漂移。两处说法冲突就停。"
+non_goal: "不安装 nvk/llm-wiki、llmwikify 或其他 wiki 引擎。不建向量库。不做健康分。不把 idev 技能正文再编译成一份 wiki。不收录个人或团队研究笔记。不改产品控制台的 Agent 知识库。不把耗时下降写成验收。不把校准加进 check-feature 作为新的阶段门禁。不把 lessons 或 realign 的结果抄进索引，也不替换这两套。"
+baseline_revision: 1
+entry:
+  kind: diff
+  intent_ref: "HEAD"
+impact_candidates:
+  - path: scripts/claims.py
+    hop: 0
+    include: true
+  - path: scripts/test_claims.py
+    hop: 0
+    include: true
+  - path: references/claim-index.md
+    hop: 0
+    include: true
+cases:
+  - id: ops-exist
+    slice_id: schema-ops
+    baseline_item_id: B1
+    dimension: correctness
+    accepted: false
+    runner:
+      kind: python
+      selector: scripts/test_claims.py
+    status: UNPROVEN
+    evidence: "not run"
+  - id: no-extra
+    slice_id: no-extra-stack
+    baseline_item_id: B2
+    dimension: boundary
+    accepted: false
+    runner:
+      kind: python
+      selector: scripts/test_claims.py
+    status: UNPROVEN
+    evidence: "not run"
+  - id: source-required
+    slice_id: source-path
+    baseline_item_id: B3
+    dimension: correctness
+    accepted: false
+    runner:
+      kind: python
+      selector: scripts/test_claims.py
+    status: UNPROVEN
+    evidence: "not run"
+  - id: ticket-only
+    slice_id: ticket-index
+    baseline_item_id: B4
+    dimension: boundary
+    accepted: false
+    runner:
+      kind: python
+      selector: scripts/test_claims.py
+    status: UNPROVEN
+    evidence: "not run"
+  - id: claim-from-artifact
+    slice_id: claim-scope
+    baseline_item_id: B5
+    dimension: boundary
+    accepted: false
+    runner:
+      kind: python
+      selector: scripts/test_claims.py
+    status: UNPROVEN
+    evidence: "not run"
+  - id: conflict-nonzero
+    slice_id: conflict-exit
+    baseline_item_id: B6
+    dimension: correctness
+    accepted: false
+    runner:
+      kind: python
+      selector: scripts/test_claims.py
+    status: UNPROVEN
+    evidence: "not run"
+  - id: ledgers-stay
+    slice_id: keep-ledgers
+    baseline_item_id: B7
+    dimension: compat
+    accepted: false
+    runner:
+      kind: python
+      selector: scripts/test_claims.py
+    status: UNPROVEN
+    evidence: "not run"
+  - id: guard-doc
+    slice_id: calibrate-before-doc
+    baseline_item_id: B8
+    dimension: correctness
+    accepted: false
+    runner:
+      kind: python
+      selector: scripts/test_claims.py
+    status: UNPROVEN
+    evidence: "not run"
+  - id: guard-code
+    slice_id: calibrate-before-code
+    baseline_item_id: B9
+    dimension: correctness
+    accepted: false
+    runner:
+      kind: python
+      selector: scripts/test_claims.py
+    status: UNPROVEN
+    evidence: "not run"

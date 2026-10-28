@@ -74,6 +74,9 @@ if [[ "$receipt_mode" == "selftest" ]]; then
   echo "promote: WARN mode=selftest — patrol will snapshot selftest pack; prefer mode=test after 提测 (see operator-cheatsheet §3.5)" >&2
 fi
 
+IDEV_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+bash "$IDEV_ROOT/scripts/codegraph-sync.sh" --repo "$(pwd -P)" promote
+
 mkdir -p "$(dirname "$dest")"
 {
   echo "# promoted from ${plan}"

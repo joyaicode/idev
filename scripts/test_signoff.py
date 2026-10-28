@@ -25,6 +25,9 @@ except ImportError:  # pragma: no cover
     raise SystemExit("BLOCKED pyyaml is required (the idev contracts are all yaml)")
 
 CASES = Path(__file__).resolve().parents[1] / "test" / "signoff" / "cases.yaml"
+PEOPLE = CASES.with_name("people.yaml")
+PRODUCTION = Path(__file__).resolve().parents[1] / "config" / "people.yaml"
+TEST_IDENTITIES = {"tester", "张三", "alice"}
 
 
 def load_cases() -> dict:
@@ -37,29 +40,30 @@ def load_cases() -> dict:
 
 
 class SignoffCases(unittest.TestCase):
+    """The `human` rows run against test/signoff/people.yaml alone, read
+    through the same parser and union the conductor uses."""
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.data = load_cases()
+        cls._files = w._people_files
+        w._people_files = lambda: [PEOPLE]
+        w._PEOPLE_CACHE.clear()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        w._people_files = cls._files
+        w._PEOPLE_CACHE.clear()
 
     def test_mode_is_whitelist(self) -> None:
-        """The kernel ships config/people.yaml, and the `human` rows are
-        written against exactly that list.
-
-        The runner must see the whitelist in force from the repo root, the
-        way the conductor actually runs — so if people.yaml goes missing,
-        say that plainly instead of failing forty rows with a confusing
-        message.
-        """
+        """If the fixture goes missing, say that plainly instead of failing
+        forty rows with a confusing message."""
         self.assertEqual(self.data.get("mode"), "whitelist")
         w._PEOPLE_CACHE.clear()
-        allowed = w.people_whitelist()
         self.assertEqual(
-            allowed,
+            w.people_whitelist(),
             {"wangwei794", "tester", "张三", "alice"},
-            msg=(
-                "the people.yaml in force is not the one the `human` rows "
-                "assume; run this from the repo root with config/people.yaml"
-            ),
+            msg=f"{PEOPLE} is not the list the `human` rows assume",
         )
         self.assertEqual(w.people_warning(), "")
 
@@ -150,6 +154,53 @@ class WhitelistBehaviour(unittest.TestCase):
         self.assertFalse(w.is_human("idev-coder"))
         self.assertFalse(w.is_human("claude"))
         self.assertTrue(w.is_human("wangwei794"))
+
+
+class SignoffByRefusal(unittest.TestCase):
+    """The refusal says which half of is_human failed."""
+
+    def setUp(self) -> None:
+        w._PEOPLE_CACHE.clear()
+        self.addCleanup(w._PEOPLE_CACHE.clear)
+        key = (
+            __import__("os").environ.get("IDEV_ROOT", ""),
+            str(Path.cwd()),
+        )
+        w._PEOPLE_CACHE[key] = ({"wangwei794"}, "")
+
+    def test_blank_by(self) -> None:
+        self.assertEqual(
+            w.signoff_by_refusal(""),
+            "human.gate PASS needs --by with a person's name",
+        )
+
+    def test_an_agent_name(self) -> None:
+        self.assertEqual(
+            w.signoff_by_refusal("idev-coder"),
+            "human.gate PASS needs --by with a person's name, not an agent",
+        )
+
+    def test_an_unlisted_name(self) -> None:
+        self.assertEqual(
+            w.signoff_by_refusal("tester"),
+            "human.gate PASS needs --by with a name listed in people.yaml",
+        )
+
+    def test_a_listed_person(self) -> None:
+        self.assertEqual(w.signoff_by_refusal("wangwei794"), "")
+
+
+class ProductionWhitelist(unittest.TestCase):
+    """config/people.yaml signs real gates, so it lists real people only."""
+
+    def test_lists_people_and_no_test_identity(self) -> None:
+        names = w._read_people(PRODUCTION)
+        self.assertTrue(names, f"{PRODUCTION} lists nobody")
+        self.assertEqual(
+            names & TEST_IDENTITIES,
+            set(),
+            msg="test identities belong in test/signoff/people.yaml",
+        )
 
 
 class CheckRunUsesTheGate(unittest.TestCase):

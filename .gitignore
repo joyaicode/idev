@@ -7,6 +7,10 @@
 !.idev/workflows/**
 !.idev/pack/
 !.idev/pack/**
+!.idev/task/
+!.idev/task/**
+!.idev/docs/
+!.idev/docs/**
 
 # flock residue from safeyaml's load_locked/save_locked: the lock file
 # outlives the process that held it, and it is always empty.
@@ -14,6 +18,21 @@ state/*.lock
 
 # Optional offline Qodana CLI and linter. Drop a binary here; do not commit it.
 /offline/
+
+# Local CodeGraph index. Refreshed before commit and push; not part of the tree.
+/.codegraph/
+
+# Local run residue. Audits and evolve still read these on disk; they are not
+# part of the published tree. (Proposal 20261027 §6: untrack, do not rewrite history.)
+/state/traces/
+/state/reviews/
+/state/promptfoo/
+/state/outbound-config.json
+/state/proposals/
+/state/lessons.yaml
+/state/lessons/
+/state/ledger.yaml
+/verify/target/
 
 # Go build and test residue. bin/idev is built locally (workflow.py looks there).
 /bin/

@@ -43,7 +43,10 @@ is_background: false
 
 1. 票目录:`python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <f> --key task`
 2. 无 plan 先起草。**已有 `baseline.yaml` 且 `sealed` 时,`goal`/`non_goal` 必须复制基线原文。** `debug` 还要环境 / 产物 / 可观察物。
-3. **影响面用 codegraph 提名**(硬规则 5 原文:「有 codegraph 就用」):
+3. **影响面用 codegraph 提名**(硬规则 5 原文:「有 codegraph 就用」)。提名之前先更新索引:
+   ```bash
+   bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> agent
+   ```
    ```
    codegraph_impact <symbol> --depth 1     # hop 1;hop 0 = diff 文件
    ```
@@ -114,7 +117,7 @@ mkdir -p <票目录>/workflow/logs
 1. **先 plan,人签了才 run。** 未勾选不跑,标 `UNPROVEN`。
 2. **`cases[]` 只许 `PASS`/`FAIL`/`UNPROVEN`。** 没跑、无基线、无原型对照一律 `UNPROVEN`。禁止"达标"和任何分数。
 3. **`PASS` 必须有证据路径。** 说不出证据的不是 PASS(这是 `no-pass-without-evidence`,可机检)。
-4. **不写签字字段。** `accepted` / `human_signoff: ACCEPTED` / `aligned` / `sealed` 都不碰 —— 请签是导体的事。
+4. **签字**：人签只走 [$IDEV/references/chat-confirm-signoff.md](../references/chat-confirm-signoff.md)；你不写任何签字字段，请签是导体的事。
 5. **不跑 promote。** 人没提就不问不跑。`promote.sh` 永远由导体在人明确要求后执行。
 6. **`patrol` 无巡检包就拒跑**(`doc_home.py --key patrol`),不准现编巡检。
 7. **生成测试**只写 `src/test/java/**/generatedverify/`,**禁止 `git add`**。绿了也不入库。

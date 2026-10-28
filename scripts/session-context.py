@@ -281,6 +281,16 @@ def main(argv: list[str] | None = None) -> int:
     print("PATROL %s" % (found_homes["patrol"] if found_homes else "NONE"))
     print("STAGE %s" % (stage or "NONE"))
     print("PRODUCT %s" % (product or "NONE"))
+    try:
+        import staffing
+    except Exception:
+        print("STAFFING mode=unknown source=import ask=none people=- hold=- wait=- chat=-")
+    else:
+        found = staffing.resolve(repo, git_name=staffing.git_user())
+        print(staffing.format_line(found))
+        note = staffing.note_line(found)
+        if note:
+            print(note)
     if args.workflow:
         recipe = resolve_recipe(repo, args.workflow)
         print("RECIPE %s" % (recipe if recipe else "NONE"))

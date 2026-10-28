@@ -1,0 +1,13 @@
+# AUTO when the plan check the gate ran is clean
+# cmd: W record gate-plan AUTO --feature example-change
+
+-- exit --
+0
+-- output --
+DIGEST match 16ca2529b42d6b28
+NEXT run  kind=verify.run  status=pending
+OPEN verify/SKILL.md
+DELEGATE idev-verifier
+FANOUT_ASSESS run python3 scripts/fanout.py assess --feature example-change --activity run
+LABEL 跑已勾选 cases
+WITH {'mode': 'logic'}

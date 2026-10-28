@@ -43,12 +43,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import kind_agents  # noqa: E402
+import record_paths  # noqa: E402
 import safeyaml  # noqa: E402
 
-GLOBS = (
-    "docs/task/*/workflow/delegations/*.yaml",
-    ".idev/task/*/workflow/delegations/*.yaml",
-)
+GLOBS = record_paths.REPO_GLOBS
 STATUS_LINE = re.compile(r"(?mi)^\s*STATUS:\s*(\S+)")
 EVIDENCE_LINE = re.compile(r"(?mi)^\s*EVIDENCE:\s*(.+?)\s*$")
 

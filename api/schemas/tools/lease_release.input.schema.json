@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/lease_release.input.schema.json",
+  "title": "idev MCP lease_release input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lease_id",
+    "token"
+  ],
+  "properties": {
+    "lease_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "token": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

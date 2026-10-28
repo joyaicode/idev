@@ -46,7 +46,10 @@ is_background: false
    - 若 `CHANGE_KIND` 含「结构」:先过 `coding-tables.md` §3「满足条件」;不满足就补测试或拆轮次,**不准硬改**
    - **底线**:写第一行之前用那一句话过 `coding.md` 文首底线。关键路径(失败会让基线结果错或没有)当轮写上失败条件、怎么停或怎么降、日志。没有这条路径就不写 `catch`、默认值、重试、扩展点。说不出依据的段落不要写。逻辑要顺着读能指出重点。不新开只有 get/set 的业务类型。定义只在那一节
 
-3. **影响面(有 codegraph 就必须用)** —— `verify/SKILL.md` 硬规则 5 的原文要求:
+3. **影响面(有 codegraph 就必须用)** —— 先更新索引,再查。`verify/SKILL.md` 硬规则 5 的原文要求:
+   ```bash
+   bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> agent
+   ```
    ```
    codegraph_impact <symbol> --depth 1      # 改这个会波及谁
    codegraph_callers / codegraph_callees <symbol>
@@ -77,7 +80,7 @@ is_background: false
 | `java.build` | 有 `pom.xml` 则 `mvn … package`;`with.skip_tests: true`(默认)加 `-DskipTests` | 构建红了就回报 `FAIL`,**不要**为了绿改测试 |
 | `git.replace_check` | 扫仓内 `go.mod` | **未注释**的本地 `replace => ./ | ../ | /Users | 绝对路径` 即 `FAIL`,须先注释掉 |
 | `git.sensitive_shield` | 提交前屏蔽敏感配置(备份 → 占位符) | 清单见 `$IDEV/references/workflow-repo-commit.md` |
-| `git.commit_push` | 整仓 `git add -A` → commit → push 当前分支 | **委派包必须写明 `human.gate` 已过**;没写就 `BLOCKED(brief)` 拒跑 |
+| `git.commit_push` | 整仓 `git add -A` → commit → push 当前分支 | **委派包必须写明 `human.gate` 已过**;没写就 `BLOCKED(brief)` 拒跑。不要 `--no-verify`：钩子先跑 `codegraph-sync.sh commit` |
 | `git.sensitive_restore` | 推送后从备份还原本地敏感配置 | 别忘了跑,否则本地配置留着占位符 |
 
 命令输出落盘再给路径,便于追溯:
@@ -114,7 +117,7 @@ mkdir -p <票目录>/workflow/logs
 2. **像基线写错就停。** 写 `baseline-conflict`,回报 `BLOCKED`,交回导体问人。**禁止**自己改 `baseline.yaml` 或 goal。
 3. **命中只记账未改 = 拒过。** 扫到的 blocking 项必须当轮改掉。
 4. **§0 三项必须交代,零命中也要显式写。** 不填的回报会被导体打回,不 record。
-5. **不写签字字段**:`sealed` / `accepted` / `aligned` / `resolved` / `reopen_baseline` / `semantic_gate.*.passed` 一律不碰。
+5. **签字**：人签只走 [$IDEV/references/chat-confirm-signoff.md](../references/chat-confirm-signoff.md)；你不写任何签字字段。
 6. **不跑红绿验收。** 你跑的是**增量自测**;plan / run / 提测是 `idev-verifier` 的事。不要自造断言或开第二套测试框架。
 7. **生成测试**只写当事模块 `src/test/java/**/generatedverify/`,且**禁止 `git add` 该目录**。
 8. **有界修复红线命中必须停**,不叠补丁、不改签名归一化规则来让检查过。

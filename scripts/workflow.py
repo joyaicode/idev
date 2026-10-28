@@ -44,24 +44,31 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import doc_home  # noqa: E402
 import ids  # noqa: E402
+import break_glass
 import kind_agents  # noqa: E402
+import record_paths  # noqa: E402
 import safeyaml  # noqa: E402
+import staffing  # noqa: E402
 import workflow_defaults  # noqa: E402
 from product_marker import resolve_extension_repo  # noqa: E402
 import workflow_compose  # noqa: E402
 from product_sink import kernel_root, product_repo, sink_dir  # noqa: E402
 from workflow_spec import (  # noqa: E402
+    AUTO_CHECKS,
     KINDS,
+    AutoCheck,
     STEP_DONE,
     STEP_STATUS,
     STEP_STOP,
     auto_tiers,
     check_recipe,
     check_run,
+    gate_type,
     is_answer,
     is_human,
     parse_confirm,
     people_whitelist,
+    signoff_by_refusal,
     will_write_line,
 )
 
@@ -216,12 +223,20 @@ def decisions_path(run_path: Path) -> Path:
     return run_path.with_name(run_path.stem + ".decisions.yaml")
 
 
+def run_records(run_path: Path) -> list[Path]:
+    """This run's delegation records: the directory delegation.py writes for it."""
+    if run_path.name != "run.yaml":
+        return []
+    folder = record_paths.run_dir(run_path.parent / "delegations", safeyaml.mapping(run_path))
+    return record_paths.records(folder)
+
+
 def latest_delegation(run_path: Path, step_id: str) -> dict | None:
     """The newest delegation record for a step of a ticket run, if any."""
-    if run_path.name != "run.yaml":
-        return None
     best: tuple[int, dict] | None = None
-    for path in (run_path.parent / "delegations").glob(f"{step_id}-*.yaml"):
+    for path in run_records(run_path):
+        if not path.name.startswith(f"{step_id}-"):
+            continue
         data = safeyaml.mapping(path) or {}
         if str(data.get("step")) != step_id:
             continue
@@ -248,6 +263,18 @@ def unanswered(run_path: Path, step_id: str) -> list[str]:
 
 def ticket_of(run_path: Path) -> Path:
     return run_path.parent.parent if run_path.name == "run.yaml" else run_path.parent
+
+
+def deliver_stage(run_path: Path) -> str:
+    """The stage written on this ticket, or "" when the run has no deliver.yaml."""
+    deliver = ticket_of(run_path) / "deliver.yaml"
+    if not deliver.is_file():
+        return ""
+    for line in deliver.read_text(encoding="utf-8", errors="replace").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("stage:"):
+            return stripped.split(":", 1)[1].strip().strip("'\"")
+    return ""
 
 
 def cites(blob: str, evidence: str) -> bool:
@@ -291,44 +318,165 @@ def independent_refusal(run_path: Path, step: dict, verifier: str, evidence: str
             f"{verifier} is the writer of {step['id']}; "
             "independent verification has to come from the other agent"
         )
-    folder = run_path.parent / "delegations"
-    if folder.is_dir():
-        for path in sorted(folder.glob("*.yaml")):
-            data = safeyaml.mapping(path) or {}
-            if str(data.get("agent") or "") != verifier:
-                continue
-            if cites(report_text(data), evidence):
-                return ""
+    for path in run_records(run_path):
+        data = safeyaml.mapping(path) or {}
+        if str(data.get("agent") or "") != verifier:
+            continue
+        if cites(report_text(data), evidence):
+            return ""
     return (
         f"no report from {verifier} cites {evidence}; "
         "that agent records its own delegation, then this PASS points --verify-evidence at that report"
     )
 
 
-def auto_refusal(run_path: Path, evidence: str) -> str:
-    """Why a saved check output cannot stand in for a person, or "" if it can.
+def checkout_of(ticket: Path, feature: str, hint: Path | None) -> Path | None:
+    """The product checkout whose doc layout puts this feature's ticket here."""
+    for repo in ([hint] if hint else []) + list(ticket.parents):
+        if doc_home.homes(repo, feature)["task"].resolve() == ticket.resolve():
+            return repo
+    return None
 
-    The output must end clean (a `0 FAIL` line, as check-feature and
-    stage-gate print) and raise no SIGNAL: a signal is a question for a person.
+
+def run_auto_check(run_path: Path, feature: str, check: AutoCheck, hint: Path | None) -> dict:
+    """Run the gate's check and keep its output in the ticket.
+
+    AUTO trusts only an output it produced itself: a file anyone could have
+    saved says nothing about the plan. The output must end clean (a `0 FAIL`
+    line) and raise no SIGNAL: a signal is a question for a person.
     """
-    target = Path(evidence)
-    if not target.is_absolute():
-        ticket = ticket_of(run_path)
-        target = next((p for p in (ticket / evidence, Path.cwd() / evidence) if p.is_file()), ticket / evidence)
-    if not target.is_file():
-        return f"AUTO evidence not found: {evidence} (save the check output there first)"
-    lines = [line.strip() for line in target.read_text(encoding="utf-8", errors="replace").splitlines()]
-    signals = [line for line in lines if line.startswith("SIGNAL ")]
-    if signals:
-        return ("AUTO refused: the checks raised a question for a person — "
-                + "; ".join(s[len("SIGNAL "):] for s in signals))
-    if "0 FAIL" not in lines:
-        return f"AUTO needs a clean check output (a '0 FAIL' line) in {evidence}"
-    return ""
+    ticket = ticket_of(run_path)
+    repo = checkout_of(ticket, feature, hint) if run_path.name == "run.yaml" else None
+    if repo is None:
+        return {"log": check.log, "refusal": f"AUTO runs check-feature {check.stage} on the ticket; "
+                "this run has none it can find, so it needs a person's signoff"}
+    proc = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve().with_name("check-feature.py")),
+         "--repo", str(repo), "--feature", feature, "--stage", check.stage],
+        capture_output=True, text=True, check=False,
+    )
+    output = proc.stdout + proc.stderr
+    target = ticket / check.log
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(output, encoding="utf-8")
+    lines = [line.strip() for line in output.splitlines()]
+    signals = [line[len("SIGNAL "):] for line in lines if line.startswith("SIGNAL ")]
+    refusal = ""
+    if proc.returncode != 0 or "0 FAIL" not in lines:
+        fails = [line for line in lines if line.startswith("FAIL")]
+        refusal = (f"AUTO refused: check-feature {check.stage} did not pass ({check.log}): "
+                   + ("; ".join(fails[:3]) or f"exit {proc.returncode}"))
+    elif signals:
+        refusal = "AUTO refused: the checks raised a question for a person — " + "; ".join(signals)
+    return {
+        "stage": check.stage,
+        "log": check.log,
+        "exit": proc.returncode,
+        "sha256": hashlib.sha256(output.encode("utf-8")).hexdigest(),
+        "refusal": refusal,
+    }
 
 
 def go_engine() -> bool:
+    """True when the Go lane owns behaviour (default).
+
+    IDEV_ENGINE=python alone is not enough once `idev` is on PATH (E1.3):
+    call ensure_python_engine_allowed() at command entry. While a break-glass
+    window is open, this still returns False so YAML stays on the Python
+    driver, but force_leases() keeps write/verify fencing on.
+    """
     return (os.environ.get("IDEV_ENGINE") or "go").strip().lower() != "python"
+
+
+def force_leases() -> bool:
+    """Leases stay mandatory on the Go lane and during a python break-glass."""
+    if go_engine():
+        return True
+    ok, _ = break_glass.active()
+    return ok
+
+
+def ensure_python_engine_allowed() -> None:
+    """Refuse IDEV_ENGINE=python when idev exists and no break-glass file."""
+    if go_engine():
+        return
+    msg = break_glass.require_or_explain(bool(_idev_bin_path()))
+    if msg:
+        raise Blocked(msg)
+
+
+def _idev_bin_path() -> str | None:
+    exe = (os.environ.get("IDEV_BIN") or "").strip()
+    if exe and Path(exe).is_file():
+        return exe
+    built = kernel_root() / "bin" / "idev"
+    if built.is_file():
+        return str(built)
+    found = shutil.which("idev")
+    return found if found else None
+
+
+def run_writer_go() -> bool:
+    """True when Go owns the run.yaml bytes (phase 1 §6 A).
+
+    Unset → Go when the binary is on disk (thin client default).
+    IDEV_RUN_WRITER=python keeps the flock path for break-glass / no-binary.
+    IDEV_RUN_WRITER=go forces Go and fails closed if the binary is missing.
+    """
+    flag = (os.environ.get("IDEV_RUN_WRITER") or "").strip().lower()
+    if flag in ("python", "py"):
+        return False
+    if flag == "go":
+        return True
+    return _idev_bin_path() is not None
+
+
+def idev_bin() -> str:
+    found = _idev_bin_path()
+    if found:
+        return found
+    raise Blocked(
+        "run.yaml Go writer needs the idev binary: go build -o bin/idev ./cmd/idev "
+        "(or set IDEV_BIN); IDEV_RUN_WRITER=python falls back to the Python flock"
+    )
+
+
+def save_run(path: Path, mutate) -> dict:
+    """Read-mutate-write run.yaml. When IDEV_RUN_WRITER selects Go, only Go
+    writes the bytes (and holds run.yaml.lock). Do not flock in Python first —
+    that deadlocks with idev's own flock on the same sibling lock file.
+    Empty-file races are closed by Go always comparing --expect-sha256,
+    including expect "".
+    """
+    if not run_writer_go():
+        return safeyaml.save_locked(path, mutate)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    for _ in range(8):
+        raw = path.read_bytes() if path.is_file() else b""
+        expect = hashlib.sha256(raw).hexdigest() if raw else ""
+        data = (
+            safeyaml.mapping_from_text(raw.decode("utf-8", errors="replace"))
+            if raw else {}
+        )
+        if data is None:
+            data = {}
+        try:
+            result = mutate(data)
+        except Blocked:
+            raise
+        body = safeyaml.dump(result).encode("utf-8")
+        proc = subprocess.run(
+            [idev_bin(), "run", "write", "--file", str(path), "--expect-sha256", expect],
+            input=body, capture_output=True, check=False,
+        )
+        if proc.returncode == 0:
+            return result
+        err = (proc.stderr or proc.stdout or b"").decode("utf-8", errors="replace").strip()
+        if "stale file" in err or "want sha256" in err:
+            continue
+        raise Blocked(err.removeprefix("idev: ") or f"idev run write failed (exit {proc.returncode})")
+    raise Blocked(f"{path} changed while it was being recorded; record again")
 
 
 def idev(*argv: str) -> dict:
@@ -369,9 +517,7 @@ def gate_question(run: dict, run_path: Path, step: dict) -> list[str]:
     """
     payload = step.get("with") or {}
     will_write = [str(w) for w in (payload.get("will_write") or [])]
-    gtype = str(payload.get("gate_type") or "")
-    if not gtype:
-        gtype = "accepted_plan" if any("plan.yaml" in w for w in will_write) else "step_confirm"
+    gtype = gate_type(step)
     subject = payload.get("subject") or []
     if isinstance(subject, str):
         subject = [subject]
@@ -438,17 +584,42 @@ def feature_id(run: dict, run_path: Path) -> str:
 
 
 def _held_maps(step: dict) -> list[dict]:
-    """The wide lease, plus one map per fanout shard."""
+    """The wide lease, the independent-verify lease, plus one map per fanout shard."""
     found = []
-    wide = step.get("lease") or {}
-    if isinstance(wide, dict):
-        found.append(wide)
+    for key in ("lease", "verify_lease"):
+        item = step.get(key) or {}
+        if isinstance(item, dict):
+            found.append(item)
     shards = step.get("shard_leases") or {}
     if isinstance(shards, dict):
         for item in shards.values():
             if isinstance(item, dict):
                 found.append(item)
     return found
+
+
+def independent_verify_lease_refusal(step: dict, verifier: str) -> str:
+    """Why a verify:independent PASS lacks a verifier lease, or "" when it has one.
+
+    E3.2: --verified-by is a claim; the Go engine also needs a live verify
+    lease held by the registry verifier (not the writer).
+    """
+    if not force_leases():
+        return ""
+    writer = str((step.get("delegated") or {}).get("agent") or "")
+    if writer and writer == verifier:
+        return (
+            f"{verifier} is the writer of {step['id']}; "
+            "independent verification has to come from the other agent"
+        )
+    held = step.get("verify_lease") or {}
+    if str(held.get("agent") or "") != verifier or not held.get("id"):
+        return (
+            f"{step['id']} needs a verify lease held by {verifier}: "
+            f"workflow.py delegate {step['id']} --verify "
+            "(--verified-by alone is not enough)"
+        )
+    return ""
 
 
 def live_tokens(run: dict) -> list[tuple[str, str]]:
@@ -500,7 +671,7 @@ def release_kept(path: Path, pairs: list[tuple[str, str]]) -> list[str]:
             drop_released(run, released)
             return run
 
-        safeyaml.save_locked(path, mutate)
+        save_run(path, mutate)
     return failed
 
 
@@ -508,7 +679,7 @@ def lease_purpose(run: dict, step: dict) -> str | None:
     """The lease this step needs on a ticket run under the Go engine:
     "write" fences the arch.yaml includes, "verify" fences the ticket directory."""
     purpose = kind_agents.KIND_LEASE.get(step["kind"])
-    if go_engine() and purpose in ("write", "verify") and str(run.get("feature") or "-") != "-":
+    if force_leases() and purpose in ("write", "verify") and str(run.get("feature") or "-") != "-":
         return purpose
     return None
 
@@ -560,15 +731,18 @@ def delegation_changed(run_path: Path, step_id: str) -> tuple[bool, bool, list[s
 
 
 def ticket_tree(ticket: Path) -> dict[str, str]:
-    """Hash of each file in the ticket, excluding the workflow bookkeeping directory."""
+    """Hash of each file in the ticket, excluding the conductor's bookkeeping:
+    the workflow directory and the decision ledger a person answers into."""
     found: dict[str, str] = {}
     if not ticket.is_dir():
         return found
+    ledger = decisions_path(ticket / "workflow" / "run.yaml")
+    bookkeeping = {ledger.name, safeyaml.lock_path(ledger).name}
     for path in ticket.rglob("*"):
         if not path.is_file():
             continue
         rel = path.relative_to(ticket).as_posix()
-        if rel == "workflow" or rel.startswith("workflow/"):
+        if rel == "workflow" or rel.startswith("workflow/") or rel in bookkeeping:
             continue
         found[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
     return found
@@ -940,10 +1114,11 @@ def _step_lines(run: dict, step: dict) -> list[str]:
         lines.append(f"COMMAND workflow-defaults.yaml {key}")
     if kind == "human.gate":
         tiers = auto_tiers(step)
-        if tiers:
+        check = AUTO_CHECKS.get(gate_type(step))
+        if tiers and check:
             lines.append(
-                f"GATE at {'/'.join(sorted(tiers))}: save the check output (0 FAIL, no SIGNAL) "
-                "and record AUTO --evidence <that file>; a SIGNAL or another tier means stop and ask"
+                f"GATE at {'/'.join(sorted(tiers))}: record AUTO runs check-feature {check.stage} "
+                f"and keeps its output in {check.log}; a FAIL, a SIGNAL or another tier means stop and ask"
             )
         lines.append(f"GATE stop here; post this line and the proof: {will_write_line(step)}")
         lines.append(
@@ -1060,7 +1235,7 @@ def cmd_param(args: argparse.Namespace) -> int:
         done["run"] = run
         return run
 
-    safeyaml.save_locked(path, mutate)
+    save_run(path, mutate)
     write_report(path, done["run"])
     print("PARAM %s" % key)
     print("\n".join(next_line(done["run"])))
@@ -1084,8 +1259,57 @@ def _set_slot(run: dict, key: str, value: str) -> None:
     run.setdefault("revisions", []).append({"at": now(), "note": "param %s" % key})
 
 
+
+
+def agent_feedback_block(run: dict, run_path: Path) -> str | None:
+    """Hard stop once per round when every delegated step has a terminal status.
+
+    Contract:整轮一次. Missing or pending agent-feedback.yaml blocks next.
+    status received|none clears the stop. Env IDEV_AGENT_FEEDBACK=off is the
+    break-glass for golden/selfcheck (not for product runs).
+    """
+    flag = (os.environ.get("IDEV_AGENT_FEEDBACK") or "").strip().lower()
+    if flag in ("0", "false", "no", "off"):
+        return None
+    steps = run.get("steps") or []
+    done, open_ = [], []
+    for step in steps:
+        if not step.get("delegated"):
+            continue
+        st = str(step.get("status") or "pending").upper()
+        if st in STEP_STATUS and st != "PENDING":
+            # STEP_STATUS may not include pending — treat unknown as open
+            if st in ("PASS", "FAIL", "BLOCKED", "UNPROVEN", "SKIPPED", "AUTO"):
+                done.append(step.get("id"))
+            else:
+                open_.append(step.get("id"))
+        else:
+            open_.append(step.get("id"))
+    if not done or open_:
+        return None
+    path = Path(run_path).resolve().parent / "agent-feedback.yaml"
+    if not path.is_file():
+        return (
+            f"STOP agent-feedback: round of delegations finished ({', '.join(done)}); "
+            f"write {path} once (status: received|none + tags/by/note). "
+            f"See references/agent-feedback.example.yaml"
+        )
+    doc = safeyaml.mapping(path) or {}
+    status = str(doc.get("status") or "").strip().lower()
+    if status in ("received", "none"):
+        return None
+    return (
+        f"STOP agent-feedback: {path} status={status or 'pending'}; "
+        "set status: received (with tags/by/note) or status: none"
+    )
+
 def cmd_next(args: argparse.Namespace) -> int:
-    run = load_yaml(find_run(args))
+    path = find_run(args)
+    run = load_yaml(path)
+    block = agent_feedback_block(run, path)
+    if block:
+        print(block, file=sys.stderr)
+        raise Blocked(block)
     print("\n".join(next_line(run)))
     return 0
 
@@ -1099,6 +1323,83 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def prompts_log_path() -> Path:
+    """Same file hooks/prompt_log.py appends to (IDEV_DATA/prompts.log)."""
+    raw = (os.environ.get("IDEV_DATA") or "").strip()
+    root = Path(raw).expanduser().resolve() if raw else (Path.home() / ".idev").resolve()
+    return root / "prompts.log"
+
+
+def quote_in_prompts_log(quote: str) -> bool:
+    """True when the exact quote appears as a line or substring in a logged prompt."""
+    path = prompts_log_path()
+    if not path.is_file():
+        return False
+    needle = quote.strip()
+    if not needle:
+        return False
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return False
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            if needle in line:
+                return True
+            continue
+        text = str((row or {}).get("text") or "")
+        if needle == text.strip() or needle in text:
+            return True
+    return False
+
+
+def prompts_log_active_for_cwd() -> bool:
+    """True when prompts.log has a recent entry whose cwd matches this process.
+
+    Used to auto-enable quote checking without forcing every golden/selfcheck
+    to export IDEV_PROMPT_LOG_CHECK=1 (those runs use an empty or foreign log).
+    """
+    path = prompts_log_path()
+    if not path.is_file():
+        return False
+    cwd = str(Path.cwd().resolve())
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return False
+    for line in reversed(lines[-50:]):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        logged = str((row or {}).get("cwd") or "").strip()
+        if not logged:
+            continue
+        try:
+            logged_res = str(Path(logged).expanduser().resolve())
+        except OSError:
+            logged_res = logged
+        if logged_res == cwd or cwd.startswith(logged_res + os.sep) or logged_res.startswith(cwd + os.sep):
+            return True
+    return False
+
+
+def prompt_log_check_enabled() -> bool:
+    """Force-on via env, or auto-on when this cwd already has logged prompts."""
+    flag = (os.environ.get("IDEV_PROMPT_LOG_CHECK") or "").strip().lower()
+    if flag in ("1", "true", "yes"):
+        return True
+    if flag in ("0", "false", "no", "off"):
+        return False
+    return prompts_log_active_for_cwd()
+
+
 def chat_signoff(by: str, quote: str) -> dict:
     """The signoff a person's chat reply is. Their words, recorded as they said them."""
     if not people_whitelist():
@@ -1106,14 +1407,23 @@ def chat_signoff(by: str, quote: str) -> dict:
             "human.gate PASS needs a people.yaml whitelist; "
             "blacklist-only is not enough"
         )
-    if not is_human(by or ""):
-        raise Blocked("human.gate PASS needs --by with a person's name, not an agent")
+    refusal = signoff_by_refusal(by or "")
+    if refusal:
+        raise Blocked(refusal)
     parsed = parse_confirm(quote or "")
     if not parsed.ok:
         raise Blocked(
             f"human.gate PASS needs --quote with the person's confirm words "
             f"(确认 / 全签 / 同意 / LGTM); {WHY[parsed.reason]}"
         )
+    # IDEV_PROMPT_LOG_CHECK=1 forces the check; =0 disables it. Unset → auto
+    # when prompts.log already has a recent entry for this cwd (hooks installed).
+    if prompt_log_check_enabled():
+        if not quote_in_prompts_log(quote or ""):
+            raise Blocked(
+                "human.gate PASS --quote must be words from this session's prompts.log "
+                "(the person types them; an agent must not invent the confirmation)"
+            )
     return {"by": by.strip(), "quote": quote.strip(), "at": now(), "assurance": "chat"}
 
 
@@ -1164,7 +1474,15 @@ def cmd_record(args: argparse.Namespace) -> int:
             disk_outside=disk_outside,
             group_writes=group_writes(run, step) if writes else [],
             verifier=kind_agents.KIND_VERIFIER.get(step["kind"]),
+            feature=str(run.get("feature") or ""),
+            verify_lease_id=str((step.get("verify_lease") or {}).get("id") or ""),
+            verify_lease_agent=str((step.get("verify_lease") or {}).get("agent") or ""),
         )
+        if (status == "AUTO" and step["kind"] == "human.gate"
+                and (_step_open(run, step) or args.note)
+                and risk_tier_of(run, path) in auto_tiers(step)
+                and not (args.by or args.quote)):
+            pre["auto"] = AUTO_CHECKS.get(gate_type(step))
 
     safeyaml.load_locked(path, peek)
     verifier_pre = pre.get("verifier")
@@ -1177,6 +1495,9 @@ def cmd_record(args: argparse.Namespace) -> int:
             and status == "PASS" and go_engine() and not (args.by or args.quote)
             and pre.get("gate_id")):
         signed = signed_answer({"id": args.step, "gate": {"id": pre["gate_id"]}})
+    check = pre.get("auto")
+    if check and args.evidence in ("", check.log):
+        pre["auto_run"] = run_auto_check(path, pre["feature"], check, session_repo(args.repo))
     if (pre.get("seen") and not flags_missing and pre.get("purpose")
             and pre.get("lease_id") and pre.get("changed")):
         outside = idev(
@@ -1232,7 +1553,13 @@ def cmd_record(args: argparse.Namespace) -> int:
                 raise Blocked(f"{step['id']} is already {step['status']}; changing it needs --note")
         if step["kind"] == "human.gate":
             if status == "PASS" and (args.by or args.quote or not go_engine()):
-                step["signoff"] = chat_signoff(args.by or "", args.quote or "")
+                signoff = chat_signoff(args.by or "", args.quote or "")
+                blocked_signer = staffing.signer_refusal(
+                    session_repo(args.repo), signoff["by"], gate_type(step), deliver_stage(path)
+                )
+                if blocked_signer:
+                    raise Blocked(blocked_signer)
+                step["signoff"] = signoff
             elif status == "PASS" and go_engine():
                 gid = str((step.get("gate") or {}).get("id") or "")
                 if not gid:
@@ -1242,6 +1569,11 @@ def cmd_record(args: argparse.Namespace) -> int:
                     )
                 if signed is None or gid != str(pre.get("gate_id") or ""):
                     raise Blocked(f"{step['id']} changed while it was being recorded; record again")
+                blocked_signer = staffing.signer_refusal(
+                    session_repo(args.repo), signed["by"], gate_type(step), deliver_stage(path)
+                )
+                if blocked_signer:
+                    raise Blocked(blocked_signer)
                 step["signoff"] = signed
             elif status == "SKIPPED" and not args.evidence:
                 raise Blocked(
@@ -1255,13 +1587,37 @@ def cmd_record(args: argparse.Namespace) -> int:
                         f"{step['id']} may not pass on machine checks at {tier}; "
                         "it needs a person's signoff"
                     )
-                if not args.evidence:
-                    raise Blocked("AUTO needs --evidence of the machine checks that passed")
                 if args.by or args.quote:
                     raise Blocked("AUTO is not a signoff; drop --by / --quote")
-                refusal = auto_refusal(path, args.evidence)
-                if refusal:
-                    raise Blocked(refusal)
+                check = AUTO_CHECKS.get(gate_type(step))
+                if check is None:
+                    raise Blocked(
+                        f"{step['id']} is a {gate_type(step)} gate; no machine check can pass it, "
+                        "so it needs a person's signoff"
+                    )
+                if args.evidence and args.evidence != check.log:
+                    raise Blocked(
+                        f"AUTO keeps the output of the check it runs in {check.log}; "
+                        "drop --evidence or name that file"
+                    )
+                ran = pre.get("auto_run")
+                if not ran or ran["log"] != check.log:
+                    raise Blocked(f"{step['id']} changed while it was being recorded; record again")
+                if ran["refusal"]:
+                    raise Blocked(ran["refusal"])
+                asked = [
+                    f"{s['id']}: {signal}"
+                    for s in run["steps"] if s["kind"] == check.source
+                    for signal in unanswered(path, s["id"])
+                ]
+                if asked:
+                    raise Blocked(
+                        "AUTO refused: signals still wait for a person's decision — "
+                        + "; ".join(asked)
+                        + " — ask, then: workflow.py decide <step> --signal ..."
+                    )
+                step["auto"] = {key: ran[key] for key in ("stage", "log", "exit", "sha256")}
+                step["evidence"] = check.log
         elif status == "AUTO":
             raise Blocked("AUTO is only for a human.gate that declares auto_tiers")
         verifier = kind_agents.KIND_VERIFIER.get(step["kind"])
@@ -1304,10 +1660,21 @@ def cmd_record(args: argparse.Namespace) -> int:
             if changed != list(pre.get("changed") or []) or str(held.get("id") or "") != str(pre.get("lease_id") or ""):
                 raise Blocked(f"{step['id']} changed while it was being recorded; record again")
         if verifier and status == "PASS":
+            # After the write-lease gate: --verified-by alone is not enough (E3.2).
+            lease_gap = independent_verify_lease_refusal(step, verifier)
+            if lease_gap:
+                raise Blocked(lease_gap)
+            now_v = step.get("verify_lease") or {}
+            if (
+                str(now_v.get("id") or "") != str(pre.get("verify_lease_id") or "")
+                or str(now_v.get("agent") or "") != str(pre.get("verify_lease_agent") or "")
+            ):
+                raise Blocked(f"{step['id']} changed while it was being recorded; record again")
             refusal = independent_refusal(path, step, verifier, args.verify_evidence)
             if refusal:
                 raise Blocked(refusal)
             step["verification"] = {"by": args.verified_by, "evidence": args.verify_evidence, "at": now()}
+            step.pop("machine_state", None)
         pairs = [
             (str(item["id"]), str(item["token"]))
             for item in _held_maps(step)
@@ -1353,7 +1720,7 @@ def cmd_record(args: argparse.Namespace) -> int:
         done["step"] = step
         return run
 
-    safeyaml.save_locked(path, mutate)
+    save_run(path, mutate)
     run, step = done["run"], done["step"]
     # The report is a view of the run. Write it only after run.yaml is the
     # new bytes, so a failed save cannot leave the report ahead of the run.
@@ -1440,6 +1807,41 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
         if agent == "-":
             raise Blocked(f"{step['kind']} stays with the conductor; nothing to delegate")
         held = step.get("lease") or {}
+        for_verify = bool(getattr(args, "verify", False))
+        if for_verify:
+            if shard:
+                raise Blocked("delegate --verify does not take --shard")
+            verifier = kind_agents.KIND_VERIFIER.get(step["kind"])
+            if not verifier:
+                raise Blocked(
+                    f"{step['kind']} has no independent verifier; "
+                    "delegate without --verify"
+                )
+            writer = str((step.get("delegated") or {}).get("agent") or "")
+            if not writer:
+                raise Blocked(
+                    f"delegate {args.step} first; --verify follows the writer's handoff"
+                )
+            if writer == verifier:
+                raise Blocked(
+                    f"{verifier} is the writer of {args.step}; "
+                    "independent verification has to come from the other agent"
+                )
+            own = step.get("verify_lease") or {}
+            if own.get("token"):
+                raise Blocked(
+                    f"{args.step} already holds verify lease {own['id']}; "
+                    "record the step to release it"
+                )
+            # Project as verifying without a STEP_STATUS stamp (check_run).
+            step["machine_state"] = "verifying"
+            stamp_open_group(run, ticket_of(path))
+            marked.update(
+                agent=verifier, lease="verify", verify=True,
+                tier=risk_tier_of(run, path), feature_id=feature_id(run, path),
+                shard="",
+            )
+            return run
         if shard:
             ids = fanout_shard_ids(path, step) or []
             if shard not in ids:
@@ -1483,7 +1885,7 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
         )
         return run
 
-    safeyaml.save_locked(path, mark)
+    save_run(path, mark)
     if marked.get("skip"):
         return 0
     who = f"DELEGATE {args.step} -> {marked['agent']}"
@@ -1514,7 +1916,7 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
             )
     acquire = [
         "lease", "acquire", "--run", str(path), "--step", args.step, "--risk", marked["tier"],
-        "--feature-id", marked["feature_id"],
+        "--feature-id", marked["feature_id"], "--agent", marked["agent"],
     ]
     if purpose == "verify":
         acquire += ["--purpose", "verify", "--ticket-dir", ticket]
@@ -1526,15 +1928,20 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
 
     def hold(run: dict) -> dict:
         step = next(s for s in run["steps"] if s["id"] == args.step)
-        entry = {"id": out["lease_id"], "token": out["token"], "fencing": out["fencing"], "paths": paths}
-        if shard:
+        entry = {
+            "id": out["lease_id"], "token": out["token"], "fencing": out["fencing"],
+            "paths": paths, "agent": marked["agent"],
+        }
+        if marked.get("verify"):
+            step["verify_lease"] = entry
+        elif shard:
             step.setdefault("shard_leases", {})[shard] = entry
         else:
             step["lease"] = entry
         return run
 
     try:
-        safeyaml.save_locked(path, hold)
+        save_run(path, hold)
     except BaseException as exc:
         # The token exists only in this process until hold writes it. Release
         # while we still have it; if that also fails, keep it beside the run.
@@ -1599,7 +2006,7 @@ def remember_gate(path: Path, step_id: str, asked: dict) -> None:
         }
         return run
 
-    safeyaml.save_locked(path, hold)
+    save_run(path, hold)
 
 
 def cmd_ask(args: argparse.Namespace) -> int:
@@ -1713,7 +2120,7 @@ def claim_run(path: Path, new_run: dict) -> None:
             path.rename(dest)
         return new_run
 
-    safeyaml.save_locked(path, mutate)
+    save_run(path, mutate)
 
 
 def append_decision(run_path: Path, step: str, fields: dict) -> dict:
@@ -1813,7 +2220,7 @@ def cmd_abort(args: argparse.Namespace) -> int:
         saved["run"] = run
         return run
 
-    safeyaml.save_locked(path, mutate)
+    save_run(path, mutate)
     write_report(path, saved["run"])
     print(f"RUN ABORTED {path}")
     release_kept(path, held)
@@ -1821,6 +2228,7 @@ def cmd_abort(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    ensure_python_engine_allowed()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--repo", default="", help="session checkout (default: cwd)")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -1853,6 +2261,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("step", nargs="?")
     p.add_argument("--open", action="store_true", help="delegate every open agent step in the current wave")
     p.add_argument("--shard", default="", help="fanout shard id; the verify lease covers only that shard's writes")
+    p.add_argument(
+        "--verify", action="store_true",
+        help="take the independent-verify lease for this step's registry verifier (E3.2)",
+    )
     locate(p)
     p.set_defaults(func=cmd_delegate)
     p = sub.add_parser("record")

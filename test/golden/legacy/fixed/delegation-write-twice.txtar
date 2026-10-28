@@ -4,5 +4,5 @@
 -- exit --
 2
 -- output --
-BLOCKED $WORK/.idev/task/demo/workflow/delegations/code-pass-1.yaml already records code-pass attempt 1
+BLOCKED $WORK/.idev/task/demo/workflow/delegations/<ULID>/code-pass-1.yaml already records code-pass attempt 1
 HINT    set attempt: 2 in the record (with brief.prior_failure) to log a retry

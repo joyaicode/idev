@@ -19,23 +19,19 @@ import (
 
 // InTx makes the Store a ports.Store.
 //
-// Gates, leases, audit and idempotency are backed by SQL. Runs are read-only
-// projections of the Python driver's run.yaml (ProjectRun writes them), so
-// creating or saving one through the port refuses; delegations and
-// baselines are not wired at all. A service that reaches one of those is a
-// service this binary does not run yet.
+// Gates, leases, runs, delegations, baselines, audit and idempotency are
+// backed by SQL (E2–E4). ProjectRun still writes status=external rows for
+// the Python driver's YAML view; domain Create/Save own live runs.
 func (s *Store) InTx(ctx context.Context, fn func(ports.Tx) error) error {
 	return s.Tx(ctx, func(tx *sql.Tx) error { return fn(txRepos{tx: tx}) })
 }
-
-var errNotWired = errors.New("sqlite: not wired in this build; runs, leases, delegations and baselines still live in the Python driver's files")
 
 type txRepos struct{ tx *sql.Tx }
 
 func (t txRepos) Runs() ports.RunRepo                { return runRepo{t.tx} }
 func (t txRepos) Leases() ports.LeaseRepo            { return leaseRepo{t.tx} }
-func (t txRepos) Delegations() ports.DelegationRepo  { return unwiredDelegations{} }
-func (t txRepos) Baselines() ports.BaselineRepo      { return unwiredBaselines{} }
+func (t txRepos) Delegations() ports.DelegationRepo  { return delegRepo{t.tx} }
+func (t txRepos) Baselines() ports.BaselineRepo      { return baselineRepo{t.tx} }
 func (t txRepos) Gates() ports.GateRepo              { return gateRepo{t.tx} }
 func (t txRepos) Audit() ports.AuditRepo             { return auditRepo{t.tx} }
 func (t txRepos) Idempotency() ports.IdempotencyRepo { return idempRepo{t.tx} }
@@ -58,6 +54,16 @@ func conflictFrom(err error, detail string) error {
 		return &ports.ConflictError{Kind: ports.ConflictApprovalExists, Detail: detail}
 	case ConflictIdempotencyKey:
 		return &ports.ConflictError{Kind: ports.ConflictIdempotency, Detail: detail}
+	case ConflictLiveRun:
+		return &ports.ConflictError{Kind: ports.ConflictLiveRun, Detail: detail}
+	case ConflictWriteLeaseHeld:
+		return &ports.ConflictError{Kind: ports.ConflictLeaseHeld, Detail: detail}
+	case ConflictAttemptExists:
+		return &ports.ConflictError{Kind: ports.ConflictAttemptExists, Detail: detail}
+	case ConflictSealedBaseline:
+		return &ports.ConflictError{Kind: ports.ConflictSealedBaseline, Detail: detail}
+	case ConflictVerificationSet:
+		return &ports.ConflictError{Kind: ports.ConflictVerification, Detail: detail}
 	default:
 		return err
 	}
@@ -470,81 +476,238 @@ type ProjectedRun struct {
 	Steps      []ProjectedStep
 }
 
-// ProjectRun writes the Python driver's view of a run, replacing each step's
-// state. run.yaml stays the source of truth; this is the copy the lease
-// service checks a delegation against.
-func (s *Store) ProjectRun(ctx context.Context, r ProjectedRun) error {
-	if r.ID == "" || r.Feature == "" {
-		return fmt.Errorf("sqlite: a projected run needs an id and a feature")
+// RunStoredStatus returns the status column for a run id, or "" when missing.
+// "external" means the Python/YAML projection; anything else is a domain run
+// owned by RunRepo Create/Save (E2.1).
+func (s *Store) RunStoredStatus(ctx context.Context, runID string) (string, error) {
+	var status string
+	err := s.db.QueryRowContext(ctx, `SELECT status FROM runs WHERE id = ?`, runID).Scan(&status)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return status, err
+}
+
+// ProjectExternalRun ensures a feature and external run row exist so
+// delegations can reference a Python-owned run_id (same shape as gate Open).
+func (s *Store) ProjectExternalRun(ctx context.Context, runID, featureID string) error {
+	if runID == "" || featureID == "" {
+		return fmt.Errorf("sqlite: projecting an external run needs id and feature")
 	}
 	now := stamp(time.Now())
 	return s.Tx(ctx, func(tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO features
 			(id, workspace, feature_key, stage, risk_tier, created_at, updated_at)
-			VALUES (?, 'local', ?, 'external', ?, ?, ?)`, r.Feature, r.Feature, r.Risk, now, now); err != nil {
-			return fmt.Errorf("sqlite: projecting feature %s: %w", r.Feature, err)
+			VALUES (?, 'local', ?, 'external', 'P1', ?, ?)`,
+			featureID, featureID, now, now); err != nil {
+			return fmt.Errorf("sqlite: projecting feature %s: %w", featureID, err)
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO runs
+		_, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO runs
 			(id, workflow_id, feature_id, status, started_at, created_at)
-			VALUES (?, ?, ?, 'external', ?, ?)
-			ON CONFLICT(id) DO UPDATE SET workflow_id = excluded.workflow_id
-			WHERE runs.status = 'external'`, r.ID, r.WorkflowID, r.Feature, now, now); err != nil {
-			return fmt.Errorf("sqlite: projecting run %s: %w", r.ID, err)
-		}
-		for i, st := range r.Steps {
-			writes, err := json.Marshal(nonNil(st.Writes))
-			if err != nil {
-				return fmt.Errorf("sqlite: projecting step %s: %w", st.ID, err)
-			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO steps
-				(run_id, step_id, ordinal, kind, state, writer, group_id, writes_json)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-				ON CONFLICT(run_id, step_id) DO UPDATE SET
-				  kind = excluded.kind, state = excluded.state, writer = excluded.writer,
-				  group_id = excluded.group_id, writes_json = excluded.writes_json`,
-				r.ID, st.ID, i, st.Kind, string(st.State), nullable(st.Writer), st.Group, string(writes)); err != nil {
-				return fmt.Errorf("sqlite: projecting step %s: %w", st.ID, err)
-			}
-		}
-		return nil
+			VALUES (?, 'external', ?, 'external', ?, ?)`,
+			runID, featureID, now, now)
+		return err
 	})
+}
+
+// ProjectRun writes the Python driver's view of a run, replacing each step's
+// state. For external rows, run.yaml stays the driver; live domain runs use
+// Create/Save and Export the YAML instead.
+func (s *Store) ProjectRun(ctx context.Context, r ProjectedRun) error {
+	return s.Tx(ctx, func(tx *sql.Tx) error {
+		return projectRunTx(ctx, tx, r)
+	})
+}
+
+// ProjectRunWithAudit projects the run and appends one audit event in the
+// same SQLite transaction (phase 1 §6). Either both land or neither does.
+func (s *Store) ProjectRunWithAudit(ctx context.Context, r ProjectedRun, e audit.Event) error {
+	return s.Tx(ctx, func(tx *sql.Tx) error {
+		if err := projectRunTx(ctx, tx, r); err != nil {
+			return err
+		}
+		_, err := auditRepo{tx: tx}.Append(ctx, e)
+		return err
+	})
+}
+
+func projectRunTx(ctx context.Context, tx *sql.Tx, r ProjectedRun) error {
+	if r.ID == "" || r.Feature == "" {
+		return fmt.Errorf("sqlite: a projected run needs an id and a feature")
+	}
+	now := stamp(time.Now())
+	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO features
+		(id, workspace, feature_key, stage, risk_tier, created_at, updated_at)
+		VALUES (?, 'local', ?, 'external', ?, ?, ?)`, r.Feature, r.Feature, r.Risk, now, now); err != nil {
+		return fmt.Errorf("sqlite: projecting feature %s: %w", r.Feature, err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO runs
+		(id, workflow_id, feature_id, status, started_at, created_at)
+		VALUES (?, ?, ?, 'external', ?, ?)
+		ON CONFLICT(id) DO UPDATE SET workflow_id = excluded.workflow_id
+		WHERE runs.status = 'external'`, r.ID, r.WorkflowID, r.Feature, now, now); err != nil {
+		return fmt.Errorf("sqlite: projecting run %s: %w", r.ID, err)
+	}
+	for i, st := range r.Steps {
+		writes, err := json.Marshal(nonNil(st.Writes))
+		if err != nil {
+			return fmt.Errorf("sqlite: projecting step %s: %w", st.ID, err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO steps
+			(run_id, step_id, ordinal, kind, state, writer, group_id, writes_json)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(run_id, step_id) DO UPDATE SET
+			  kind = excluded.kind, state = excluded.state, writer = excluded.writer,
+			  group_id = excluded.group_id, writes_json = excluded.writes_json`,
+			r.ID, st.ID, i, st.Kind, string(st.State), nullable(st.Writer), st.Group, string(writes)); err != nil {
+			return fmt.Errorf("sqlite: projecting step %s: %w", st.ID, err)
+		}
+	}
+	return nil
 }
 
 type runRepo struct{ tx *sql.Tx }
 
-func (runRepo) Create(context.Context, run.Run, string) error { return errNotWired }
-func (runRepo) FindLive(context.Context, string, string) (run.Run, int64, error) {
-	return run.Run{}, 0, errNotWired
+func (r runRepo) ensureFeature(ctx context.Context, featureID, risk string) error {
+	now := stamp(time.Now())
+	_, err := r.tx.ExecContext(ctx, `INSERT OR IGNORE INTO features
+		(id, workspace, feature_key, stage, risk_tier, created_at, updated_at)
+		VALUES (?, 'local', ?, 'external', ?, ?, ?)`,
+		featureID, featureID, risk, now, now)
+	return err
 }
-func (runRepo) Save(context.Context, run.Run, int64) error { return errNotWired }
+
+func (r runRepo) Create(ctx context.Context, rn run.Run, featureID string) error {
+	if rn.ID == "" || featureID == "" {
+		return fmt.Errorf("sqlite: a run needs an id and a feature")
+	}
+	if err := r.ensureFeature(ctx, featureID, ""); err != nil {
+		return fmt.Errorf("sqlite: creating feature %s: %w", featureID, err)
+	}
+	now := stamp(time.Now())
+	status := string(rn.Status())
+	drift := 0
+	if rn.Drift {
+		drift = 1
+	}
+	_, err := r.tx.ExecContext(ctx, `INSERT INTO runs
+		(id, workflow_id, feature_id, status, drift, version, started_at, created_at)
+		VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
+		rn.ID, rn.WorkflowID, featureID, status, drift, now, now)
+	if err != nil {
+		return conflictFrom(err, fmt.Sprintf("%s already has a live %s run", featureID, rn.WorkflowID))
+	}
+	if err := r.replaceSteps(ctx, rn); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r runRepo) FindLive(ctx context.Context, featureID, workflowID string) (run.Run, int64, error) {
+	var id string
+	err := r.tx.QueryRowContext(ctx, `SELECT id FROM runs
+		WHERE feature_id = ? AND workflow_id = ?
+		  AND status IN ('pending', 'running', 'awaiting_human', 'blocked')
+		LIMIT 1`, featureID, workflowID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return run.Run{}, 0, notFound("no live run")
+	}
+	if err != nil {
+		return run.Run{}, 0, err
+	}
+	return r.Get(ctx, id)
+}
+
+func (r runRepo) Save(ctx context.Context, rn run.Run, version int64) error {
+	status := string(rn.Status())
+	drift := 0
+	if rn.Drift {
+		drift = 1
+	}
+	var ended any
+	if status == string(run.StatusDone) || status == string(run.StatusAborted) {
+		ended = stamp(time.Now())
+	}
+	res, err := r.tx.ExecContext(ctx, `UPDATE runs SET
+		status = ?, drift = ?, version = version + 1, ended_at = COALESCE(?, ended_at)
+		WHERE id = ? AND version = ?`,
+		status, drift, ended, rn.ID, version)
+	if err != nil {
+		return fmt.Errorf("sqlite: saving run %s: %w", rn.ID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return &ports.ConflictError{
+			Kind:   ports.ConflictStaleVersion,
+			Detail: fmt.Sprintf("run %s is not at version %d", rn.ID, version),
+		}
+	}
+	if _, err := r.tx.ExecContext(ctx, `DELETE FROM steps WHERE run_id = ?`, rn.ID); err != nil {
+		return fmt.Errorf("sqlite: clearing steps for %s: %w", rn.ID, err)
+	}
+	return r.replaceSteps(ctx, rn)
+}
+
+func (r runRepo) replaceSteps(ctx context.Context, rn run.Run) error {
+	for i, st := range rn.Steps {
+		writes, err := json.Marshal(nonNil(st.Writes))
+		if err != nil {
+			return fmt.Errorf("sqlite: encoding writes for %s: %w", st.ID, err)
+		}
+		_, err = r.tx.ExecContext(ctx, `INSERT INTO steps
+			(run_id, step_id, ordinal, kind, state, attempt, evidence, note, writer, verifier,
+			 approval_id, group_id, writes_json)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			rn.ID, st.ID, i, st.Kind, string(st.State), st.Attempt,
+			nullable(st.Evidence), nullable(st.Note), nullable(st.Writer), nullable(st.Verifier),
+			nullable(st.ApprovalID), st.Group, string(writes))
+		if err != nil {
+			return fmt.Errorf("sqlite: inserting step %s: %w", st.ID, err)
+		}
+	}
+	return nil
+}
 
 func (r runRepo) Get(ctx context.Context, runID string) (run.Run, int64, error) {
 	var (
-		out     run.Run
-		version int64
+		out            run.Run
+		version        int64
+		status         string
+		drift          int
+		featureID      string
 	)
-	err := r.tx.QueryRowContext(ctx, `SELECT id, workflow_id, feature_id, version FROM runs WHERE id = ?`,
-		runID).Scan(&out.ID, &out.WorkflowID, &out.Feature, &version)
+	err := r.tx.QueryRowContext(ctx, `SELECT id, workflow_id, feature_id, status, drift, version
+		FROM runs WHERE id = ?`, runID).Scan(
+		&out.ID, &out.WorkflowID, &featureID, &status, &drift, &version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return run.Run{}, 0, notFound("run " + runID)
 	}
 	if err != nil {
 		return run.Run{}, 0, err
 	}
-	rows, err := r.tx.QueryContext(ctx, `SELECT step_id, kind, state, writer, group_id, writes_json FROM steps
-		WHERE run_id = ? ORDER BY ordinal`, runID)
+	out.Feature = featureID
+	out.Drift = drift == 1
+	out.Aborted = status == string(run.StatusAborted)
+	rows, err := r.tx.QueryContext(ctx, `SELECT step_id, kind, state, attempt, evidence, note,
+		writer, verifier, approval_id, group_id, writes_json
+		FROM steps WHERE run_id = ? ORDER BY ordinal`, runID)
 	if err != nil {
 		return run.Run{}, 0, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var (
-			st     run.Step
-			state  string
-			writer sql.NullString
-			writes string
+			st                                 run.Step
+			state                              string
+			evidence, note, writer, verifier   sql.NullString
+			approval                           sql.NullString
+			writes                             string
 		)
-		if err := rows.Scan(&st.ID, &st.Kind, &state, &writer, &st.Group, &writes); err != nil {
+		if err := rows.Scan(&st.ID, &st.Kind, &state, &st.Attempt, &evidence, &note,
+			&writer, &verifier, &approval, &st.Group, &writes); err != nil {
 			return run.Run{}, 0, err
 		}
 		if writes != "" && writes != "[]" {
@@ -552,7 +715,10 @@ func (r runRepo) Get(ctx context.Context, runID string) (run.Run, int64, error) 
 				return run.Run{}, 0, err
 			}
 		}
-		st.State, st.Writer, st.IsGate = run.StepState(state), writer.String, st.Kind == "human.gate"
+		st.State = run.StepState(state)
+		st.Evidence, st.Note = evidence.String, note.String
+		st.Writer, st.Verifier, st.ApprovalID = writer.String, verifier.String, approval.String
+		st.IsGate = st.Kind == "human.gate"
 		out.Steps = append(out.Steps, st)
 	}
 	return out, version, rows.Err()
@@ -716,35 +882,277 @@ func (l leaseRepo) Expire(ctx context.Context, now time.Time, limit int) ([]leas
 	return out, nil
 }
 
-// --- not wired ---------------------------------------------------------------
+// --- delegations -------------------------------------------------------------
 
-type unwiredDelegations struct{}
+type delegRepo struct{ tx *sql.Tx }
 
-func (unwiredDelegations) Insert(context.Context, ports.Delegation) error { return errNotWired }
-func (unwiredDelegations) Get(context.Context, string) (ports.Delegation, error) {
-	return ports.Delegation{}, errNotWired
-}
-func (unwiredDelegations) Latest(context.Context, string, string) (ports.Delegation, error) {
-	return ports.Delegation{}, errNotWired
-}
-func (unwiredDelegations) Update(context.Context, ports.Delegation) error { return errNotWired }
-func (unwiredDelegations) RecordVerification(context.Context, string, string, string, []string, time.Time) error {
-	return errNotWired
+func (d delegRepo) Insert(ctx context.Context, rec ports.Delegation) error {
+	if rec.ID == "" || rec.RunID == "" || rec.StepID == "" {
+		return fmt.Errorf("sqlite: a delegation needs id, run and step")
+	}
+	if rec.Attempt <= 0 {
+		latest, err := d.Latest(ctx, rec.RunID, rec.StepID)
+		if err == nil {
+			rec.Attempt = latest.Attempt + 1
+		} else if isNotFound(err) {
+			rec.Attempt = 1
+		} else {
+			return err
+		}
+	}
+	packet := rec.Packet
+	if packet == nil {
+		packet = []byte("{}")
+	}
+	checks, err := json.Marshal(rec.Checks)
+	if err != nil {
+		return fmt.Errorf("sqlite: encoding checks: %w", err)
+	}
+	if checks == nil || string(checks) == "null" {
+		checks = []byte("{}")
+	}
+	state := rec.State
+	if state == "" {
+		state = "issued"
+	}
+	_, err = d.tx.ExecContext(ctx, `INSERT INTO delegations
+		(id, run_id, step_id, attempt, agent, lease_id, packet_json, return_json,
+		 checks_json, state, outcome, submitted_via, issued_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		rec.ID, rec.RunID, rec.StepID, rec.Attempt, rec.Agent, nullable(rec.LeaseID),
+		string(packet), nullableBytes(rec.Return), string(checks), state,
+		nullable(rec.Outcome), nullable(rec.Via), stamp(rec.IssuedAt))
+	if err != nil {
+		return conflictFrom(err, fmt.Sprintf("%s attempt %d is already recorded", rec.StepID, rec.Attempt))
+	}
+	return nil
 }
 
-type unwiredBaselines struct{}
+func (d delegRepo) Get(ctx context.Context, id string) (ports.Delegation, error) {
+	return d.scan(d.tx.QueryRowContext(ctx, `SELECT id, run_id, step_id, attempt, agent,
+		COALESCE(lease_id, ''), packet_json, COALESCE(return_json, ''),
+		COALESCE(checks_json, '{}'), state, COALESCE(outcome, ''), COALESCE(submitted_via, ''),
+		issued_at FROM delegations WHERE id = ?`, id))
+}
 
-func (unwiredBaselines) Put(context.Context, string, baseline.Manifest, string) (string, error) {
-	return "", errNotWired
+func (d delegRepo) Latest(ctx context.Context, runID, stepID string) (ports.Delegation, error) {
+	return d.scan(d.tx.QueryRowContext(ctx, `SELECT id, run_id, step_id, attempt, agent,
+		COALESCE(lease_id, ''), packet_json, COALESCE(return_json, ''),
+		COALESCE(checks_json, '{}'), state, COALESCE(outcome, ''), COALESCE(submitted_via, ''),
+		issued_at FROM delegations
+		WHERE run_id = ? AND step_id = ? ORDER BY attempt DESC LIMIT 1`, runID, stepID))
 }
-func (unwiredBaselines) Sealed(context.Context, string) (baseline.Manifest, error) {
-	return baseline.Manifest{}, errNotWired
+
+func (d delegRepo) Update(ctx context.Context, rec ports.Delegation) error {
+	checks, err := json.Marshal(rec.Checks)
+	if err != nil {
+		return err
+	}
+	if checks == nil || string(checks) == "null" {
+		checks = []byte("{}")
+	}
+	res, err := d.tx.ExecContext(ctx, `UPDATE delegations SET
+		agent = ?, lease_id = ?, packet_json = ?, return_json = ?, checks_json = ?,
+		state = ?, outcome = ?, submitted_via = ?
+		WHERE id = ?`,
+		rec.Agent, nullable(rec.LeaseID), string(nonNilBytes(rec.Packet)),
+		nullableBytes(rec.Return), string(checks), rec.State, nullable(rec.Outcome),
+		nullable(rec.Via), rec.ID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return notFound("delegation " + rec.ID)
+	}
+	return nil
 }
-func (unwiredBaselines) Get(context.Context, string) (baseline.Manifest, error) {
-	return baseline.Manifest{}, errNotWired
+
+func (d delegRepo) RecordVerification(
+	ctx context.Context, delegationID, verifier, verdict string, evidence []string, at time.Time,
+) error {
+	if _, err := d.Get(ctx, delegationID); err != nil {
+		return err
+	}
+	ev, err := json.Marshal(nonNil(evidence))
+	if err != nil {
+		return err
+	}
+	id := delegationID + "-v"
+	_, err = d.tx.ExecContext(ctx, `INSERT INTO verifications
+		(id, delegation_id, verifier, verdict, evidence_json, at)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		id, delegationID, verifier, verdict, string(ev), stamp(at))
+	if err != nil {
+		return conflictFrom(err, delegationID+" is already verified")
+	}
+	return nil
 }
-func (unwiredBaselines) Seal(context.Context, string, time.Time) error { return errNotWired }
-func (unwiredBaselines) Reopen(context.Context, string) error          { return errNotWired }
+
+func (d delegRepo) scan(row interface{ Scan(...any) error }) (ports.Delegation, error) {
+	var (
+		rec                            ports.Delegation
+		packet, ret, checks, issuedAt  string
+	)
+	err := row.Scan(&rec.ID, &rec.RunID, &rec.StepID, &rec.Attempt, &rec.Agent,
+		&rec.LeaseID, &packet, &ret, &checks, &rec.State, &rec.Outcome, &rec.Via, &issuedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ports.Delegation{}, notFound("delegation")
+	}
+	if err != nil {
+		return ports.Delegation{}, err
+	}
+	rec.Packet = []byte(packet)
+	if ret != "" {
+		rec.Return = []byte(ret)
+	}
+	if checks != "" && checks != "{}" {
+		_ = json.Unmarshal([]byte(checks), &rec.Checks)
+	}
+	if t, err := parseStamp(issuedAt); err == nil {
+		rec.IssuedAt = t
+	}
+	return rec, nil
+}
+
+func isNotFound(err error) bool {
+	var ce *ports.ConflictError
+	return errors.As(err, &ce) && ce.Kind == ports.ConflictNotFound
+}
+
+func nullableBytes(b []byte) any {
+	if len(b) == 0 {
+		return nil
+	}
+	return string(b)
+}
+
+func nonNilBytes(b []byte) []byte {
+	if b == nil {
+		return []byte("{}")
+	}
+	return b
+}
+
+// --- baselines ---------------------------------------------------------------
+
+type baselineRepo struct{ tx *sql.Tx }
+
+func (b baselineRepo) Put(ctx context.Context, featureID string, m baseline.Manifest, status string) (string, error) {
+	if featureID == "" || m.Revision <= 0 {
+		return "", fmt.Errorf("sqlite: a baseline needs a feature and a revision")
+	}
+	if status == "sealed" {
+		if err := b.checkOneSealed(ctx, featureID, ""); err != nil {
+			return "", err
+		}
+	}
+	now := stamp(m.CreatedAt)
+	if now == "" || m.CreatedAt.IsZero() {
+		now = stamp(time.Now().UTC())
+	}
+	if _, err := b.tx.ExecContext(ctx, `INSERT OR IGNORE INTO features
+		(id, workspace, feature_key, stage, risk_tier, created_at, updated_at)
+		VALUES (?, 'local', ?, 'external', 'P1', ?, ?)`,
+		featureID, featureID, now, now); err != nil {
+		return "", fmt.Errorf("sqlite: projecting feature %s: %w", featureID, err)
+	}
+	body, err := json.Marshal(m)
+	if err != nil {
+		return "", err
+	}
+	id := fmt.Sprintf("bl-%s-%d", featureID, m.Revision)
+	dirty := 0
+	if m.Dirty {
+		dirty = 1
+	}
+	_, err = b.tx.ExecContext(ctx, `INSERT INTO baselines
+		(id, feature_id, revision, status, manifest_json, manifest_root, raw_root,
+		 repo_head, dirty, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, featureID, m.Revision, status, string(body), string(m.ManifestRoot),
+		string(m.RawRoot), nullable(m.RepoHead), dirty, now)
+	if err != nil {
+		return "", conflictFrom(err, featureID+" already has a sealed baseline")
+	}
+	return id, nil
+}
+
+func (b baselineRepo) checkOneSealed(ctx context.Context, featureID, except string) error {
+	var id string
+	err := b.tx.QueryRowContext(ctx, `SELECT id FROM baselines
+		WHERE feature_id = ? AND status = 'sealed' AND id != ? LIMIT 1`,
+		featureID, except).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return &ports.ConflictError{
+		Kind:   ports.ConflictSealedBaseline,
+		Detail: fmt.Sprintf("%s already has a sealed baseline", featureID),
+	}
+}
+
+func (b baselineRepo) Sealed(ctx context.Context, featureID string) (baseline.Manifest, error) {
+	var body string
+	err := b.tx.QueryRowContext(ctx, `SELECT manifest_json FROM baselines
+		WHERE feature_id = ? AND status = 'sealed' LIMIT 1`, featureID).Scan(&body)
+	if errors.Is(err, sql.ErrNoRows) {
+		return baseline.Manifest{}, notFound("no sealed baseline")
+	}
+	if err != nil {
+		return baseline.Manifest{}, err
+	}
+	var m baseline.Manifest
+	if err := json.Unmarshal([]byte(body), &m); err != nil {
+		return baseline.Manifest{}, err
+	}
+	return m, nil
+}
+
+func (b baselineRepo) Get(ctx context.Context, id string) (baseline.Manifest, error) {
+	var body string
+	err := b.tx.QueryRowContext(ctx, `SELECT manifest_json FROM baselines WHERE id = ?`, id).Scan(&body)
+	if errors.Is(err, sql.ErrNoRows) {
+		return baseline.Manifest{}, notFound("baseline " + id)
+	}
+	if err != nil {
+		return baseline.Manifest{}, err
+	}
+	var m baseline.Manifest
+	if err := json.Unmarshal([]byte(body), &m); err != nil {
+		return baseline.Manifest{}, err
+	}
+	return m, nil
+}
+
+func (b baselineRepo) Seal(ctx context.Context, id string, at time.Time) error {
+	var featureID string
+	err := b.tx.QueryRowContext(ctx, `SELECT feature_id FROM baselines WHERE id = ?`, id).Scan(&featureID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return notFound("baseline " + id)
+	}
+	if err != nil {
+		return err
+	}
+	if err := b.checkOneSealed(ctx, featureID, id); err != nil {
+		return err
+	}
+	_, err = b.tx.ExecContext(ctx, `UPDATE baselines SET status = 'sealed', sealed_at = ? WHERE id = ?`,
+		stamp(at), id)
+	return err
+}
+
+func (b baselineRepo) Reopen(ctx context.Context, featureID string) error {
+	_, err := b.tx.ExecContext(ctx, `UPDATE baselines SET status = 'reopened'
+		WHERE feature_id = ? AND status = 'sealed'`, featureID)
+	return err
+}
 
 func nullable(s string) any {
 	if s == "" {

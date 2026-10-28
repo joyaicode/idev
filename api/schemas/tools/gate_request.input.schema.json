@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/gate_request.input.schema.json",
+  "title": "idev MCP gate_request input",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "feature",
+    "type",
+    "risk"
+  ],
+  "properties": {
+    "feature": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string"
+    },
+    "risk": {
+      "type": "string",
+      "enum": [
+        "P0",
+        "P1",
+        "P2"
+      ]
+    }
+  }
+}

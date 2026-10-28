@@ -2,6 +2,31 @@
 # cmd: W record run PASS --evidence docs/x.md --feature demo
 
 -- exit --
-2
+0
 -- output --
-BLOCKED run disk changed files outside the group writes (verify/plan.yaml, verify/selftest.md, review.md, verify/accept.md): decisions.yaml, decisions.yaml.lock — revert them; this wave writes only those paths
+DIGEST match aec1243bf708f640
+PARALLEL check
+NEXT plan  kind=verify.plan  status=pending
+OPEN verify/SKILL.md
+DELEGATE idev-verifier
+FANOUT_ASSESS plan python3 scripts/fanout.py assess --feature demo --activity plan
+LABEL 起草测试用例（与审查、自测、验收索引并行）
+GROUP check
+WRITES verify/plan.yaml
+WITH {'mode': 'selftest'}
+---
+NEXT review  kind=review.report  status=pending
+OPEN conventions/coding.md
+DELEGATE idev-reviewer
+LABEL 独立审查（只写 review.md）
+GROUP check
+WRITES review.md
+---
+NEXT accept  kind=verify.run  status=pending
+OPEN verify/SKILL.md
+DELEGATE idev-verifier
+FANOUT_ASSESS selftest python3 scripts/fanout.py assess --feature demo --activity selftest
+LABEL 验收索引（只写验收报告，不改用例、不写 aligned）
+GROUP check
+WRITES verify/accept.md
+WITH {'mode': 'selftest'}

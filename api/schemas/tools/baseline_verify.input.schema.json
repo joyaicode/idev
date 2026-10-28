@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/baseline_verify.input.schema.json",
+  "title": "idev MCP baseline_verify input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "feature",
+    "ticket"
+  ],
+  "properties": {
+    "feature": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(-|[a-z0-9][a-z0-9-]*)$"
+    },
+    "ticket": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

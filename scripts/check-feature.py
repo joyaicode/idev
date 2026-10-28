@@ -15,7 +15,9 @@ already-accepted plan.
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -945,6 +947,65 @@ def load_ticket(path: Path, errors: list[str]) -> dict:
         return {}
 
 
+def _idev_bin() -> str | None:
+    exe = (os.environ.get("IDEV_BIN") or "").strip()
+    if exe and Path(exe).is_file():
+        return exe
+    built = Path(__file__).resolve().parent.parent / "bin" / "idev"
+    if built.is_file():
+        return str(built)
+    return shutil.which("idev")
+
+
+def check_sealed_projection(
+    feature: str, ticket: Path, baseline: dict, errors: list[str]
+) -> None:
+    """YAML sealed:true is a projection of a sealed SQLite row (E4.3).
+
+    Hand-editing sealed:true without a row must FAIL when the Go binary is
+    available. Without the binary, keep the YAML-only check (python golden).
+    Also recomputes the manifest (E4.2): drift → FAIL, format-only → ok.
+    """
+    if as_str(baseline.get("sealed")) != "true":
+        return
+    idev = _idev_bin()
+    if not idev or (os.environ.get("IDEV_ENGINE") or "").strip().lower() == "python":
+        return
+    sealed = subprocess.run(
+        [idev, "baseline", "sealed", "--feature", feature],
+        capture_output=True,
+        text=True,
+    )
+    if sealed.returncode != 0:
+        fail(
+            "baseline.sealed is true in YAML but no sealed row in the store "
+            "(hand-edited projection; seal via idev baseline seal)",
+            errors,
+        )
+        return
+    ok("baseline sealed row matches YAML projection")
+    verify = subprocess.run(
+        [
+            idev, "baseline", "verify",
+            "--feature", feature,
+            "--ticket", str(ticket),
+            "--block-run=false",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    out = (verify.stdout or "") + (verify.stderr or "")
+    if verify.returncode != 0:
+        if "baseline-drift" in out:
+            fail(out.strip().splitlines()[-1] if out.strip() else "baseline-drift", errors)
+        else:
+            fail("baseline verify failed: %s" % (out.strip() or verify.returncode), errors)
+    elif "format-only" in out:
+        ok("baseline format-only change (WARN)")
+    else:
+        ok("baseline manifest intact")
+
+
 def git_names(repo: Path, *git_args: str) -> list[str]:
     try:
         out = subprocess.check_output(
@@ -1103,6 +1164,7 @@ def main() -> int:
             fail("baseline.sealed is not true", errors)
         else:
             ok("baseline sealed")
+            check_sealed_projection(args.feature, root, baseline, errors)
         b_rev = scalar(baseline, "revision")
         items = section_ids(baseline, "items")
 

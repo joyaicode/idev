@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/baseline_verify.output.schema.json",
+  "title": "idev MCP baseline_verify output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "line"
+  ],
+  "properties": {
+    "verdict": {
+      "enum": [
+        "intact",
+        "format_only",
+        "drift",
+        "unsealed"
+      ]
+    },
+    "line": {
+      "type": "string"
+    }
+  }
+}

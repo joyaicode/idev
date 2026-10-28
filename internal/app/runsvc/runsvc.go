@@ -168,6 +168,9 @@ func (s Service) Apply(ctx context.Context, runID string, ev run.Event, actor po
 		if err != nil {
 			return err
 		}
+		// SQLite (and any adapter that does not round-trip Executor) must be
+		// rehydrated from the kind registry before the domain machine runs.
+		current.Steps = withExecutors(current.Steps, s.Registry)
 		if err := checkEvent(ctx, tx, current, ev, actor); err != nil {
 			return err
 		}
@@ -328,8 +331,12 @@ func (s Service) Get(ctx context.Context, runID string) (run.Run, error) {
 	var out run.Run
 	err := s.Store.InTx(ctx, func(tx ports.Tx) error {
 		r, _, err := tx.Runs().Get(ctx, runID)
+		if err != nil {
+			return err
+		}
+		r.Steps = withExecutors(r.Steps, s.Registry)
 		out = r
-		return err
+		return nil
 	})
 	return out, err
 }

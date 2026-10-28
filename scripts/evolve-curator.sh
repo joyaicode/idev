@@ -37,15 +37,23 @@ prop_dir, stale_days, archive_days, apply_s = (
 now = time.time()
 stale_cut = now - stale_days * 86400
 archive_cut = now - archive_days * 86400
-closed = {"landed", "archived", "rejected", "ga"}
+closed = {
+    "landed", "archived", "rejected", "ga", "implemented", "done", "blocked",
+}
 to_archive = []
 to_stale = []
 kept = []
 
 
 def status_of(text):
-    m = re.search(r"^status:\s*(\S+)", text, re.M)
-    return (m.group(1) if m else "unknown").strip().strip('"').lower()
+    # Proposals use either "status: X" or a markdown list "- status: X".
+    # Values may be followed by a note: "landed (2026-…)" / "rejected（…）".
+    m = re.search(r"(?m)^(?:-\s*)?status:\s*(\S+)", text)
+    if not m:
+        return "unknown"
+    raw = m.group(1).strip().strip("\"'`")
+    raw = re.split(r"[\s（(]", raw, 1)[0]
+    return raw.lower()
 
 
 def stamp_block(status, reason):

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idev.dev/schemas/step_record.input.schema.json",
+  "title": "idev MCP step_record input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run_id",
+    "step_id",
+    "status"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence": {
+      "type": "string"
+    },
+    "note": {
+      "type": "string"
+    },
+    "agent": {
+      "type": "string"
+    },
+    "event": {
+      "type": "string"
+    }
+  }
+}

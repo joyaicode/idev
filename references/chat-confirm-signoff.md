@@ -156,7 +156,7 @@ deliver 各阶段的字段（上表）同样只在这句确认之后代写进 YA
 
 | 点 | 写法 | 谁查 |
 |----|------|------|
-| S8 `human.gate` | 配方 `with.auto_tiers` 含本票档位；把检查输出存成文件，`workflow.py record <gate> AUTO --evidence <文件>`，不带 `--by` / `--quote` | `workflow.py`：文件要有 `0 FAIL` 行，不能有 `SIGNAL` 行 |
+| S8 `human.gate` | 配方 `with.auto_tiers` 含本票档位，且只给 plan 闸（`accepted_plan`）；`workflow.py record <gate> AUTO`，不带 `--by` / `--quote`。它自己跑 `check-feature verify-plan`，输出写进 `verify/plan-check.log`，退出码和 sha256 记进该步 `auto:`；`--evidence` 可省，写了只能是这个文件 | `workflow.py`：它跑出的输出要有 `0 FAIL` 行、没有 `SIGNAL` 行，且 `verify.plan` 步留痕里的信号都已 `decide`。事先存好的文件不算数，会被覆盖 |
 | `plan.yaml` | `accepted: true` + `auto: <检查输出>`，`cases[].accepted: true`；`human_signoff` 保持 `PENDING`，实现审核时给人看。有 `SIGNAL` 不记 `AUTO`，并进实现审核 | `check-feature test`：文件存在、没有人名 `by`。每个档位都可以 |
 | `ops.yaml` | `resolved: true` + `auto: <路径>`，不写 `by` | `check-feature ops`：档位在 P1/P2、`hypothesis.py check` 绿、无 `open`、至少一条 `proven` |
 

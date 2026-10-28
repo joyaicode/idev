@@ -12,10 +12,9 @@
 #   2. When this list is in force, a name must be on it to sign. That is
 #      the half that stops a plausible invented name from signing.
 #
+# Real people only. Test identities live in test/signoff/people.yaml, and a
+# test that signs writes .idev/people.yaml in its own scratch checkout.
 # `evolve-curator` is deliberately not listed: it is a tool, not a person.
 schema_version: 1
 people:
   - wangwei794
-  - tester
-  - 张三
-  - Alice
