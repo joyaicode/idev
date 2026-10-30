@@ -83,6 +83,10 @@ SCHEMA = """\
 # 标记为什么必须:没标记的测试实体和真实数据分不开 —— 清理不敢做,
 # 线上看到它的人也不知道那是什么。
 #
+# 一个阶段里已经知道的步骤和检查放在同一段浏览器程序里
+# （references/browser-program.md）。失败后的下一段听
+# `browser-program.py advise`。
+#
 # e2e/inventory.json 里每个 required token 要挂 wave(由 ui-coverage-check 管),
 # 本工具管的是 flow 自身的生命周期完整性。
 #

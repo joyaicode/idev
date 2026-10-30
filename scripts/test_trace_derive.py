@@ -185,12 +185,16 @@ class DerivedRound(unittest.TestCase):
         run_yaml.write_text(
             "run_id: R1\nfeature: demo\nsteps:\n"
             f"- id: plan\n  kind: verify.plan\n  status: PASS\n  at: '{ago(1)}'\n"
+            "  evidence: docs/task/demo/plan.md\n"
+            "  verification: {by: idev-reviewer, evidence: docs/task/demo/plan.verify.md}\n"
             "  delegated: {agent: idev-verifier}\n"
             "- id: gate-plan\n  kind: human.gate\n  with: {gate_type: accepted_plan}\n"
             f"  signoff: {{by: alice, quote: 确认, assurance: chat}}\n  status: PASS\n  at: '{ago(0.5)}'\n",
             encoding="utf-8")
         stored = self.append(BASE.format(at=ago(0), decisions=CONFIRM))
         self.assertEqual(len(self.entries(stored, "recorded")), 2, stored)
+        self.assertIn("evidence: docs/task/demo/plan.md", stored)
+        self.assertIn("verify_evidence: docs/task/demo/plan.verify.md", stored)
         signoff = re.search(r"(?m)^signoff:\n((?:[ \t].*\n)*)", stored)
         self.assertIsNotNone(signoff, stored)
         self.assertIn("by: alice", signoff.group(1))

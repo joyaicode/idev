@@ -31,7 +31,13 @@ class StructuredRetain(unittest.TestCase):
             trace = root / "20261028-001.yaml"
             trace.write_text(
                 "schema_version: 2\nfeature: demo\nat: \"2026-10-28T00:00:00Z\"\n"
-                "route:\n  scenario: S8\ncalls:\n  - kind: model\n    name: inherit\n"
+                "invoke:\n  trigger: keep this citation\n"
+                "route:\n  scenario: S8\n"
+                "decisions:\n  - kind: route\n    chose: conventions\n    why: keep this decision\n"
+                "rejected:\n  - module: ops\n    why: no incident\n"
+                "delegations:\n  - agent: idev-ops\n    status: FAIL\n    record: delegations/a.yaml\n"
+                "scratch: do not keep this prose\n"
+                "calls:\n  - kind: model\n    name: inherit\n"
                 "extensions: []\n",
                 encoding="utf-8",
             )
@@ -40,6 +46,35 @@ class StructuredRetain(unittest.TestCase):
             body = dest.read_text(encoding="utf-8")
             self.assertIn("scenario: S8", body)
             self.assertIn("feature: demo", body)
+            self.assertIn("keep this citation", body)
+            self.assertIn("keep this decision", body)
+            self.assertIn("no incident", body)
+            self.assertIn("status: FAIL", body)
+            self.assertIn("delegations/a.yaml", body)
+            self.assertNotIn("do not keep", body)
+
+    def test_timeline_keeps_both_events(self) -> None:
+        import structured_retain as sr
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dirs = {"memory": root / "memory.md", "timeline": root / "timeline"}
+            first = root / "20261028-001.yaml"
+            second = root / "20261028-002.yaml"
+            first.write_text(
+                "schema_version: 2\nfeature: demo\nat: \"2026-10-28T00:00:00Z\"\n"
+                "intent: 住在北京\n",
+                encoding="utf-8",
+            )
+            second.write_text(
+                "schema_version: 2\nfeature: demo\nat: \"2026-10-28T01:00:00Z\"\n"
+                "intent: 搬到上海\n",
+                encoding="utf-8",
+            )
+            sr.append_facts(dirs, first)
+            dest = sr.append_facts(dirs, second)
+            body = dest.read_text(encoding="utf-8")
+            self.assertIn("住在北京", body)
+            self.assertIn("搬到上海", body)
 
 
 class UsageScan(unittest.TestCase):

@@ -56,6 +56,7 @@ python3 scripts/hypothesis.py set --feature <f> --id H1 \
 
 一条日志证明**现象发生过**,不证明**为什么**。`proven` 必须有 `code` 级证据
 (`file:line`)解释机制 —— 见 [boost.md](boost.md) 4.1 的证据分级。
+页面回执同样只是现象，下一步见 [browser-program.md](browser-program.md)。
 
 ### 排除也要举证
 
@@ -110,12 +111,40 @@ python3 scripts/lessons.py retire --id L1 --why ...   # 过时就清
 `not_when` 必填不是形式。**没有边界的经验会被用在它不成立的地方** ——
 那正是一条正确经验变成错误经验的方式。
 
+### 决策步:冻住首错之前
+
+原则来自 [ai-agent-book 第七章](https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter7.md) 的轨迹前缀。只给这条经验多一组字段。不另建会执行 Agent 的回归运行器,不用分数决定 `promote`。端到端红绿仍走 verify。
+
+没有可冻结的决策步时不要写。依赖没装上、网关没装配,六问就够。
+
+有决策步时 `add --prefix <yaml>`。`check` 拒绝缺项,手改同样拦。召回把可接受动作和禁止动作印成约束,仍然不是答案。
+
+| 字段 | 记什么 |
+|---|---|
+| `goal` | 这次任务要办成什么 |
+| `env` | 环境 |
+| `agent` | 当时的 agent 版本 |
+| `tools` | 当时的工具集版本 |
+| `before` | 首错之前的上下文,台账根下的一份非空文件 |
+| `first_error.step` | 首错步 |
+| `first_error.kind` | `message` 或 `tool` |
+| `first_error.category` | 失败类型 |
+| `first_error.evidence` | 能指回那一步的原文 |
+| `first_error.cause` | 最早、且能解释后面一串失败的那一下 |
+| `first_error.consequence` | 其后的连锁,不算另一条主因 |
+| `accept` | 可接受的下一步,至少一条 |
+| `forbid` | 禁止的下一步,至少一条 |
+
+`user-correction` 和 `failed-action` 没写 prefix 时,`check` 警告,不因此失败。纯事实不用为了消警告去编一组动作。
+
 ### 召回只给建议,不给答案
 
 `recall` 输出的形状是「出现 X 时先核对 Y,若 Z 则不适用」,不是「原因就是 Y」。
 用它的 Agent 仍要回到当前证据自己走一遍,六条强约束照常生效。
 
 **一条短路掉证据链的经验,比没有经验更糟。**
+
+同一 `scope` 上动作不同时，`recall` 打出 `CONFLICT`，被 `--top` 截掉的那一条也列出。不改旧行，也不只留较新的一条。`check` 只警告。
 
 ### 门禁在读取时也校验
 
@@ -126,7 +155,11 @@ python3 scripts/lessons.py retire --id L1 --why ...   # 过时就清
 一个错误变成一类错误。这条和本层既有的规矩同源:提案 → grill 拷问 → 人确认用语 → land,
 见 [feedback-loop.md](feedback-loop.md) 第五节。
 
+从轨迹提炼之前，先看学习信号够不够、这句话该写到哪里。全文在 [self-evolution.md](self-evolution.md)「学习信号写到哪里」。
+
 `ticket-metrics` 的「签字后被推翻次数」就是这条链没把住时的事后信号。
+
+可重跑脚本不记在这本账上。命令和门禁只在 [sediment.md](sediment.md)。
 
 ---
 

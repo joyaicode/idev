@@ -953,11 +953,14 @@ def round_facts(repo: Path, since: dt.datetime | None, until: dt.datetime) -> tu
             signed = step.get("signoff") if isinstance(step.get("signoff"), dict) else {}
             delegated = step.get("delegated") if isinstance(step.get("delegated"), dict) else {}
             gate = step.get("kind") == "human.gate" and step.get("status") == "PASS" and signed.get("by")
+            verification = step.get("verification") if isinstance(step.get("verification"), dict) else {}
             recorded.append((_when(step.get("at")), {
                 "feature": str(run.get("feature") or run_path.parent.parent.name),
                 "step": str(step.get("id") or ""),
                 "kind": str(step.get("kind") or ""),
                 "status": str(step["status"]),
+                "evidence": str(step.get("evidence") or "").strip(),
+                "verify_evidence": str(verification.get("evidence") or "").strip(),
                 "by": str(signed.get("by") or delegated.get("agent") or "conductor"),
                 "mark": GATE_MARK.get(gate_type(step), "") if gate else "",
                 "run": run_path.relative_to(repo).as_posix(),
@@ -971,7 +974,9 @@ def _scalar(value: str) -> str:
 
 
 DELEGATION_KEYS = ("agent", "feature", "step", "attempt", "role", "status", "record")
-RECORDED_KEYS = ("feature", "step", "kind", "status", "by", "mark", "run")
+RECORDED_KEYS = (
+    "feature", "step", "kind", "status", "evidence", "verify_evidence", "by", "mark", "run",
+)
 
 
 def _items_block(heading: str, items: list[dict], keys: tuple[str, ...]) -> str:

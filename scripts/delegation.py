@@ -272,6 +272,14 @@ def _paths(value: str) -> set[str]:
     return out
 
 
+def _review_write(path: str) -> bool:
+    """A reviewer may only name the review artifact, including a shard of it."""
+    norm = path.replace("\\", "/")
+    if norm == "review.md" or norm.endswith("/review.md"):
+        return True
+    return "/review/shards/" in f"/{norm}" and norm.endswith(".md")
+
+
 def check_accuracy(record: dict) -> dict[str, str]:
     """The accuracy guards. Scoped to the agent and kind that can honour them.
 
@@ -323,6 +331,25 @@ def check_accuracy(record: dict) -> dict[str, str]:
                 "PASS" if ARTIFACT_LINE.search(raw)
                 else "FAIL:no ARTIFACT: MATCH|AHEAD|UNKNOWN line (artifact-match.py)"
             )
+
+    if agent == "idev-reviewer":
+        # The reviewer reads independent evidence. Naming any other file in
+        # CHANGED means they moved the gate (tests, plan, product code).
+        # No CHANGED line stays silent: older reports did not have the field.
+        changed = CHANGED_LINE.search(raw)
+        if changed:
+            text = changed.group(1).strip()
+            paths = _paths(text)
+            if NONE_VALUE.match(text) or not paths:
+                out["gate-held"] = "PASS"
+            else:
+                extra = sorted(p for p in paths if not _review_write(p))
+                out["gate-held"] = (
+                    "PASS" if not extra
+                    else "FAIL:审查者改了 " + ",".join(extra)
+                         + " —— CHANGED 只许 review.md 和 review/shards/。"
+                           "测试、用例门槛和产品代码留给生成者"
+                )
 
     if agent != "idev-coder":
         return out
@@ -1296,6 +1323,7 @@ def cmd_replay(args: argparse.Namespace) -> int:
     else:
         print(f"prior_failure: {prior} — "
               f"{(record.get('report') or {}).get('evidence', '') or '见上次留痕'}")
+    print("# 只改上面点名的失败项和证据路径，不重判上次产物，不索取上次推理。")
     for line in domain_directive(record):
         if line.startswith("CONSULT ") and not line.startswith("CONSULT none"):
             target = line.split()[1]

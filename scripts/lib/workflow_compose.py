@@ -36,10 +36,18 @@ def _names(raw: object) -> list[str]:
 
 
 def tool_command(tool_id: str, catalog: dict | None = None) -> str:
+    return _tool_text(tool_id, "command", catalog)
+
+
+def tool_limit(tool_id: str, catalog: dict | None = None) -> str:
+    return _tool_text(tool_id, "limit", catalog)
+
+
+def _tool_text(tool_id: str, field: str, catalog: dict | None) -> str:
     book = tool_catalog() if catalog is None else catalog
     for tool in book.get("tools") or []:
         if isinstance(tool, dict) and tool.get("id") == tool_id:
-            return str(tool.get("command") or "")
+            return str(tool.get(field) or "")
     return ""
 
 

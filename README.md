@@ -20,7 +20,7 @@
 把导体也做成 agent，等于把「人机共驾」降级成「无人值守」。
 
 两者之间只有三样接口：**委派包**（skill→agent）、**回报**（agent→skill）、
-**留痕**（双向存原文，可重放）。职责分离全文见 [references/agents.md](references/agents.md)。
+**留痕**（双向存原文，可重放）。再派一个执行者，只为上一手生成时拿不到的信息。职责分离全文见 [references/agents.md](references/agents.md)。
 
 ## 目录
 
@@ -33,12 +33,15 @@
 | `scripts/workflow.py` | 按配方驱动 `run.yaml`，`next` 打印 `OPEN` 落点页 + `DELEGATE` 派给谁 |
 | `scripts/lib/kind_agents.py` | `kind → agent` 登记表（29 kinds / 5 agents，24 委派 / 5 导体保留） |
 | `references/feedback-loop.md` | 双向反馈环：下游质疑上游 · 订正后全线对准 · 交付后跟进 |
-| `scripts/lessons.py` | 经验台账：六问必答 · 候选→人确认+复现→权威 · 召回只给建议 |
+| `scripts/lessons.py` | 经验台账：六问必答 · 决策步可附 prefix · 候选→人确认+复现→权威 · 召回只给建议 |
+| `scripts/sediment.py` | 程序候选：两条不同结果+人确认才留下。事实仍走经验账。不执行脚本 |
+| `scripts/context-stage.py` | 两阶段读：薄目录再加载一个区间。本地 Milvus 文件只提名区间 |
 | `references/rootcause-guards.md` | 根因六条强约束：来源/时间窗/穿透/双证据/快照/排除举证 |
 | `scripts/artifact-match.py` | 运维:产物与源码是否同源（MATCH/AHEAD/UNKNOWN） |
 | `scripts/realign.py` | 需求订正后查七类漂移，给出向前的重做顺序 |
 | `scripts/ui-evolve.py` | 编写阶段查剧本状态冲突，提 branch / reorder 方案（不改文件） |
 | `scripts/ui-playbook.py` | UI 剧本生命周期：create→read→change→restore→cleanup，实体打标 |
+| `scripts/browser-program.py` | 浏览器程序准入、回执、下一步、现场和分开计的四个数。不安装浏览器，不调用外部 CLI |
 | `scripts/req-ground.py` | 密封前把需求落到既有代码：落点/影响面/冲突/边界/方向 + 竞品对比 |
 | `scripts/ui-spec.py` | 需求细到交互层：校验 `ui` 规则，生成 json-render spec + 零依赖预览 |
 | `scripts/stage-gate.py` | 七视角把关：experts.md 拒过清单里可机检的那一半（`--list`） |

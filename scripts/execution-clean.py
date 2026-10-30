@@ -24,10 +24,11 @@ status.env, inbox that is not consumed/archived, and proposals that are
 still open. --bump advances the generation counter (evolve-review does
 this once per real run).
 
-Phase 2 §2: before a trace is unlinked, its structured fields (route,
-calls, extensions, feature, at, …) are appended to
-.idev/timeline/<feature>.yaml. memory.md keeps only a one-line prose
-pointer — structured facts are not compressed away.
+Phase 2 §2: before a trace is unlinked, the user citation (invoke),
+decisions, rejected paths, delegations, recorded step status and evidence
+paths, and call results are appended to .idev/timeline/<feature>.yaml.
+memory.md keeps only a one-line prose pointer. Those fields are not folded
+away.
 """
 from __future__ import annotations
 

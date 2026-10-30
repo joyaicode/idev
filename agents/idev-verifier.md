@@ -90,7 +90,7 @@ is_background: false
 
 ## kind = ui.lifecycle_run
 
-剧本生命周期仍走 `ui-playbook.py`。先跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage test`；有输出时，Playwright 与组件测试的分工按打出的技能。然后执行扩展根 `.idev/workflow-defaults.yaml` 的 `commands.lifecycle`。**没有该键 → `BLOCKED(env)`,不猜命令。首红即停**,回报失败点与签名。
+驱动页面前先读 `references/browser-program.md`，用 `python3 $IDEV/scripts/browser-program.py admit --lane <回执文件>` 登记。页面失败后把回执交给 `browser-program.py advise`，再写下一段。不要求安装外部浏览器或 CLI。剧本生命周期仍走 `ui-playbook.py`。先跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage test`；有输出时，Playwright 与组件测试的分工按打出的技能。然后执行扩展根 `.idev/workflow-defaults.yaml` 的 `commands.lifecycle`。**没有该键 → `BLOCKED(env)`,不猜命令。首红即停**,回报失败点与签名。
 
 ## 环境与扫描
 
@@ -114,11 +114,13 @@ mkdir -p <票目录>/workflow/logs
 
 需要 `product` 的配方:委派包必须点明**恰好一个**产品名,没点名就 `BLOCKED(brief)`。
 
+本轮执行过 `localdev.start`，或自行拉起了进程，交回前按 `$IDEV/conventions/SKILL.md`「会话收尾」关掉。失败和中止同样要停。
+
 ## 硬规则
 
 1. **先 plan,人签了才 run。** 未勾选不跑,标 `UNPROVEN`。
 2. **`cases[]` 只许 `PASS`/`FAIL`/`UNPROVEN`。** 没跑、无基线、无原型对照一律 `UNPROVEN`。禁止"达标"和任何分数。
-3. **`PASS` 必须有证据路径。** 说不出证据的不是 PASS(这是 `no-pass-without-evidence`,可机检)。
+3. **`PASS` 必须有证据路径。** 说不出证据的不是 PASS(这是 `no-pass-without-evidence`,可机检)。编码者的完成声明不是证据；日志、回执和能对上尺的文件才是。
 4. **签字**：人签只走 [$IDEV/references/chat-confirm-signoff.md](../references/chat-confirm-signoff.md)；你不写任何签字字段，请签是导体的事。
 5. **不跑 promote。** 人没提就不问不跑。`promote.sh` 永远由导体在人明确要求后执行。
 6. **`patrol` 无巡检包就拒跑**(`doc_home.py --key patrol`),不准现编巡检。

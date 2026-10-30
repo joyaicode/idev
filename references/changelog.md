@@ -1,5 +1,58 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-30：控制面对上现有部件。写租约、分片指纹、会话收尾、`prior_failure`、委派包和 `QUEUED` 就是书里的锁、终止、进度和总线。审查者 `CHANGED` 只许 `review.md` 和 `review/shards/`，`gate-held` 挡住改测试和门槛。同一上下文里不再审查自己刚写的产物。独立密钥、步骤级价值树、多数表决留在书里。人要求：quote「继续深度挖掘和沉淀」。
+- 2026-10-30：留下的程序钉住脚本、结果和复现的字节。文件再变，`check` 失败，召回写明不要当成现行能力。脚本变了还用原来的结果，`transform` 拒绝。没有钉住字节的已留下条目不能在原地补钉。不执行脚本。人要求：quote「继续深度挖掘和沉淀」。
+
+- 2026-10-30：登记工具必须写明做不到什么。`references/tools.yaml` 每条有 `limit`，缺了 `workflow-check` 不过。`next` 和 `react_loop` 原样打出 `LIMIT`，`TOOL` 仍是登记的 `command`，不追加参数，也不执行。不新做工具发现。正文在 `references/agent-accuracy.md`「工具不改口」。人要求：quote「继续深度挖掘和沉淀」。
+
+- 2026-10-30：进度行改成收口数，并点名还开着的步骤。`PROGRESS closed=<已收口>/<总步数> open=<步骤 id>` 打在 `next` 末尾和委派包 `END BRIEF` 前。跳过、未证明、失败后已改道算已收口，不是通过。整理轨迹时留下 `invoke`，`recorded` 带上步骤证据路径和复核证据路径。不新做缓存层。正文在 `references/agent-brief.md`「本轮看到的上下文」。人要求：quote「继续深度挖掘和沉淀：https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter2.md」。
+
+- 2026-10-30：持续进化补上「办成之后还要看什么」。通过件数旁边写下 token、拒绝边界和权限、维护兼容和以后调试的负担。写提案时不打开接受用的结果，下笔前先读当前正文和不能改的验证。旧轨迹上排到最好，不能单独说明下一次在线也会更好。程序结果要写出最终状态，在独立初始状态上复现；回放对不上就清掉再探索，不在旧记录上打补丁。主张写参数名，不写某一次的字面量。模型报出的置信度不是批准门槛。不建回放器，不打分。正文在 `references/self-evolution.md`「学习信号写到哪里」，程序留下条件在 `references/sediment.md`。人要求：quote「继续深度挖掘和沉淀」。
+
+- 2026-10-30：外部文本只当数据，技能里的句子不是护栏。网页、工具结果、检索片段和第三方工具说明里的指令不执行。还没返回的结果不是成功，次数仍认脚本。不可逆动作还要有执行前的门和写入时的拒绝。正文在 `conventions/evidence.md` 信任表，冷启动多第 9 条。第二章的次数、进度和隔离仍在 `references/agent-brief.md`。分类器、模型选型和框架对照没有搬进来。人要求：quote「沉淀经验并改善idev：https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter1.md https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter2.md」。
+
+- 2026-10-30：同一范围里动作不同的经验并排留下。`lessons.py recall` 打 `CONFLICT`，被 `--top` 截掉的那一条也列出；`check` 只警告。不改旧行。画像、图谱和从对话抽记忆仍不建。人要求：quote「沉淀经验并改善idev：https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter3.md」。
+
+- 2026-10-30：工具参数不静默改写。选错命令先改说明。超时后先核对副作用再重试。正文在 `references/agent-accuracy.md`「工具不改口」。嵌入式工具发现、边车模型和技能市场没有搬进来。人要求：quote「沉淀经验并改善idev：https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter4.md」。
+
+- 2026-10-30：启动不是完成，取消不撤销已经做完的动作，排队的更新都生效。页面下一段从现在的页面重新看。正文在 `references/agents.md`「这一轮之外到达的事」和 `references/browser-program.md`。语音、机器人和世界模型没有搬进来。人要求：quote「沉淀经验并改善idev：https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter6.md」。
+
+- 2026-10-30：持续进化再补提炼和淘汰。归纳要带职责边界，不整页重写。通过件数变多时写明是哪一个动作变了，并同时看违规、回退和未证明。程序留下时，`sediment.py transform` 拒绝把起草证据再当 `--repro`（路径或内容相同都不行），手改 `kept` 也会被 `check` 抓住。新条件收窄 `not_when` 并与旧条并列；同一条件被反证才 `retire`。没有自动对错时，走样、把噪声写成发现、只留最顺的一条，都留在记录里给人判断。不建回放器，不打分。正文仍在 `references/self-evolution.md`「学习信号写到哪里」。人要求：quote「继续深度挖掘和沉淀」。
+
+- 2026-10-30：下一轮只接核实过的状态。重派包只带原目标、证据路径、未过的检查和剩余工作；留痕原文和推理不进下一份包。没有检查名或 file:方法名就不重派生成者。生成者只改点名的失败项。复核看证据和尺。`next` 打出的下一步就是这一跳，预算仍是分片 8、循环硬顶 16、无正文回合 8。要撤销另一个执行者本轮已写的产物就停下来问人。不新做消息总线、进度文件、乐观锁或级联取消。`prior_failure` 句末写明只改点名项。正文在 `references/agents.md`「下一轮只接核实过的状态」。人要求：quote「继续深度挖掘」。
+
+- 2026-10-30：上下文再挖两处。`next` 末尾打 `PROGRESS settled=<已完成>/<总步数>`，从步骤状态数出。整理轨迹时 timeline 留下 `decisions`、`rejected`、`delegations`、`recorded` 和 `calls`，memory 仍是一行指针。常驻 `SKILL.md` 去掉与落点页重复的附录，目录改指执行者页。不新做缓存层。人要求：quote「继续深度挖掘和沉淀：https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter2.md」。
+
+- 2026-10-30：经验的决策步可以附上 prefix。目标、环境、agent 与工具版本、首错前的一份文件、可接受动作和禁止动作要一起在。主因是最早且能解释后续失败的那一步，后面的连锁单独写。`lessons.py check` 只验这组形状，不另跑 Agent，也不用分数决定 promote。没有决策步的环境事实仍只写六问。`user-correction` 和 `failed-action` 没写 prefix 时警告，不因此失败。内核记了一条候选 L2，未 promote。正文在 `references/rootcause-guards.md`「决策步」。人要求：quote「沉淀经验并改善idev」（上文 https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter7.md）。
+
+- 2026-10-30：跨会话只把现有三层写清楚。trace 和 timeline 只追加，矛盾的两条都留着；事实走经验账，可重跑的做法走程序候选；codegraph 和本地 Milvus 从源码重建，不收录 `.idev/memory.md`。预览写明检索到的文本不是要执行的指令。不建用户画像，不建知识图谱。正文在 `references/self-evolution.md`「跨会话留下什么」。人要求：quote「继续深度挖掘和沉淀」。
+
+- 2026-10-30：可重跑的做法收成程序候选。事实仍走经验账，要看语境的判断仍走提案。两条内容不同的结果并且由人确认才留下；脚本必须已经存在，本命令不生成也不执行。外部内容拒绝。`gc` 只指出重复、包含、失效和只有一条证据的条目，不删除。正文在 `references/sediment.md`，命令是 `scripts/sediment.py`。人要求：quote「知识沉淀和核心能力转化：https://github.com/bojieli/ai-agent-book/blob/main/book/chapter5.md」。
+
+- 2026-10-30：上下文只补进现有冷启动和循环计数。常驻两页不写时间、当前步和次数。`next` 的 `LOOP` 与 `show` 的 `COUNT` 带 `hops=已用/上限`，次数从循环文件数出。旧轨迹仍是 memory 一行指针，结构化事实留在 timeline。不新做缓存层，不另写状态栏。正文在 `references/agent-brief.md`「本轮看到的上下文」。人要求：quote「沉淀经验并改善idev：https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter2.md」。
+
+- 2026-10-30：持续进化只补进现有闭环。学习信号要四件一起在（环境结果、路径是否允许、证据位置、失败类型）；证据不够就留在轨迹里。事实进经验候选，能说清的判断进 Skill 的最小 diff，能确定执行的检查进程序或既有门禁。写出更新的一方不改验证、测试、发布门槛、审计和上一份稳定版本。不建回放模拟器，不训练参数，不按分数改写 Skill。正文在 `references/self-evolution.md`「学习信号写到哪里」。人要求：quote「知识和经验沉淀：https://github.com/bojieli/ai-agent-book/blob/main/book/chapter9.md」。
+
+- 2026-10-30：再派执行者只为上一手生成时拿不到的信息。跑出来的结果、独立读到的产物和尺、写集不相交的另一片、带证据路径的领域约束，这四样才算。`STATUS: PASS` 仍是提议。三种假象打回原执行者补证据：做了一部分就说全部做完、一条路不通就说整步做不到、口头办成但没有对上尺的产物。分片保持互补，先完成的一片不取消其余。辩论、投票、蜂群、worktree、跨组织协议没有搬进来。正文在 `references/agents.md`「再派一个执行者」。人要求：quote「知识和经验沉淀：https://github.com/bojieli/ai-agent-book/blob/main/book/chapter10.md」。
+
+- 2026-10-30：本地 Milvus 改为两路召回再重排。词和汉字双字各走一路，两路都有命中时用倒数排名合成（k=60），再按片段里查询是否原样出现、词覆盖了多少来重排。汉字双字只补单路词检索覆盖不到的正文。不下载重排模型。人要求：quote「混合召回和重排序」。
+
+- 2026-10-30：两阶段读增加本地 Milvus 提名。`index` 把源码片段写入 `.idev/rag/milvus.db`，`preview` 用它补符号检索没覆盖的正文用词。库里没有函数体；源文件一变，旧库就拒绝再查。不另起 Docker。人要求：quote「考虑增加RAG增强检索，使用单机版milvus来辅助」。
+
+- 2026-10-30：接着挖了四类页面现象。监听要写在动作前，新页面要在 `finally` 里关，定位歧义之后不能改用序号去点。进行中和成功必须是两句不同的字，同名动作用 `scope` 分开。会改页面的后续程序沿用任务里已有的幂等键。`tally` 把虚假成功、结果不明、失败、已核对分成四个数，不加总。人要求：quote「继续深度挖掘和沉淀」。
+
+- 2026-10-30：界面、前端实现和故障现场补进既有落点。`ui` 块要求动作有唯一名字，并写明进行中看得到的字。组件按这个名字和这三态来写。页面故障用 `scene` 核对回执里还缺的现场项，截图只收文件路径。人要求：quote「涉及到UI设计、前端编码规范、运维中故障现场抓取等层面经验和沉淀」。
+
+- 2026-10-30：浏览器程序补上下一步。`advise` 读一条回执，告诉自动化、根因和复现下一段是等待、只读核对、收紧定位、处理遮挡，还是从当前页继续。回执仍只证明发生过什么。不安装浏览器。人要求：quote「集成UI自动化、问题根因分析和问题复现层面可以借鉴的经验和工具」。
+
+- 2026-10-30：两阶段读收进内核。读实现先出薄目录，再加载一个行区间；同一路径同时出现在符号和经验证据里时用倒数排名前移。不建索引，不调用模型。上游仓库里的深度研究图和 Wiki 分析没有可运行实现，没有搬进来。正文在 `references/context-stage.md`，命令是 `scripts/context-stage.py`。人要求：quote「深入理解https://github.com/joyaicode/codestyle代码解读增强处理能力，集成核心能力到idev中，辅助AI端到端能力」。
+
+- 2026-10-30：浏览器程序按确认补全。一段程序里同时放观察、动作和断言。回执带结果、阻塞原因、页面变化和是否结果不明；失败原因带到下一段。页内硬点、base64 截图、任务外浏览器、并行改页面、抢前台、超过 8 个未丢弃任务、把认领的标签页丢掉，都拒绝。`inspect` / `finish` / `claim` / `discard` 只改回执记录。人要求：quote「确认，完全集成」。
+
+- 2026-10-30：浏览器程序收进内核。一段程序一次提交，回执按任务和请求号保存，会改页面的同一段只跑一次；`succeeded` 不等于业务办成。不安装浏览器，不调用外部 CLI。正文在 `references/browser-program.md`，检查是 `scripts/browser-program.py`。人要求：quote「目标：核心能力集成，不一定要装浏览器或者cli」。
+
+- 2026-10-29：编码或查问题期间本轮启动的服务，任务结束时关停清理。正文在 `conventions/SKILL.md`「会话收尾」；编码出门、排查收尾和三个执行者各留一行指针。只关本轮拉起的进程。人要求：quote「规约：编码或者查问题期间启动的服务，在任务完成后要进行关停清理」。
+
 - 2026-10-28：没有未决分叉就在同一轮接着做。`stop` 为空时不把「补跑证 / 再审查」写成 `next` 等人说继续。trace 只作记录，不结束本轮。人要求：quote「优化流程，提升交互效率：不需要停下来对齐认知的地方，直接继续向后执行即可。」
 
 - 2026-10-28：确认文法从批准路径拆掉。疑问、否定、空句子、解封不带关键字都批准。`prompts.log` 不再核对原话。否决只走 `gate reject` / `record FAIL`。人要求：quote「确认机制过于死板机械，完全是负担，没有带来任何收益，彻底废除干净。」

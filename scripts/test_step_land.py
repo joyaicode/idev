@@ -147,6 +147,7 @@ class StepAndLand(unittest.TestCase):
         self.conductor("land", "c", COMPLETE)
         retry = safeyaml.mapping(self.records() / "c-2.yaml")
         self.assertIn("evidence-present", retry["brief"]["prior_failure"])
+        self.assertIn("不重判上次产物", retry["brief"]["prior_failure"])
         self.assertEqual(self.step()["verify_lease"]["agent"], "idev-reviewer")
 
     def test_a_new_report_on_a_used_brief_needs_the_retry_brief(self) -> None:

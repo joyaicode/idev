@@ -57,7 +57,18 @@ is_background: false
    `--depth 1` 是规约不是建议:`conductor-eval` 的 `one-hop-only` 检查以「候选 hop > 1」为失败。
    codegraph 索引滞后约一秒,**先查再改**。查不到(动态分发 / 反射 / 配置路由)就**明说查不到**,不要当成"没有影响面"。
 
-4. **Vue 语言尺** —— 写代码前跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage code`。没有输出就跳过。打开每一行 `VUE open` 的技能并按其工作流做，包括它点名的必读参考。`VUE if` 只在本轮碰到该行主题时打开。`VUE MISSING` 就停。规范问题和不合理的组件、状态边界当轮改掉。
+   读某个实现的正文之前，先出薄目录，再加载一个区间。影响面仍用上面的 `codegraph_impact`，两件事不互相代替：
+
+   ```bash
+   python3 $IDEV/scripts/context-stage.py preview --repo <仓根> --query "<要读的行为>" --feature <f>
+   python3 $IDEV/scripts/context-stage.py load --repo <仓根> --id <path:start:end>
+   ```
+
+   目录里没有函数体。经验行不是答案，正文仍走 `lessons.py recall`。要用正文里的词补符号检索时，先 `python3 $IDEV/scripts/context-stage.py index --repo <仓根>`。没有这份本地库，`SOURCE rag` 是 `absent`，符号照常列。库过期就重新 index，不要把过期提名当现行代码。
+
+   同一做法要收成可重跑脚本时，用 `python3 $IDEV/scripts/sediment.py add --form program` 记成候选，并指向已经存在的脚本。一条成功不能留下。改过已经留下的脚本之后，原来的结果不能再把它留下。全文 `references/sediment.md`。
+
+4. **Vue 语言尺** —— 写代码前跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage code`。没有输出就跳过。打开每一行 `VUE open` 的技能并按其工作流做，包括它点名的必读参考。`VUE if` 只在本轮碰到该行主题时打开。`VUE MISSING` 就停。规范问题和不合理的组件、状态边界当轮改掉。实现 `ui` 块时按 `conventions/vue.md`「实现界面」。
 
 5. **按本步 kind 改**:
    - `deliver.code_pass` — 实现本阶段代码。多做的删掉,少做的补上
@@ -70,6 +81,7 @@ is_background: false
      python3 $IDEV/scripts/ui-playbook.py --repo <仓>      # 校验生命周期
      python3 $IDEV/scripts/ui-evolve.py --schema           # 全局开关契约
      python3 $IDEV/scripts/ui-evolve.py --repo <仓>        # 状态冲突(边写边跑)
+     python3 $IDEV/scripts/browser-program.py --schema    # 页面程序准入和下一步
      ```
    - `frontend.lint_fix` — 跑扩展根 `commands.lint_fix`。残留 lint = FAIL
 
@@ -113,6 +125,10 @@ mkdir -p <票目录>/workflow/logs
 
 不要 `trace.sh append` —— trace 由导体统一写。
 
+## 交回前
+
+本轮为编码或自测启动的服务，按 `$IDEV/conventions/SKILL.md`「会话收尾」关掉后再交回。本轮没启动则跳过。
+
 ## 硬规则
 
 1. **只改 `include: true` 的文件。** 其它脏文件写进 `review.md` 的 UNRELATED 段,**不准顺手改**。方案前置节写明不进本次的既有问题,即使路径已经 `include: true`,也不要在这次 diff 里顺手改掉。写明随本次改掉的,在 `review.md` 标明是既有问题。
@@ -131,7 +147,7 @@ mkdir -p <票目录>/workflow/logs
 13. **构建与提交不编命令、不借机改代码。** 命令只有三个合法来源:配方 `with`、扩展根 `workflow-defaults.yaml` 的键、人本轮明确确认过的那一条。取不到确切命令就 `BLOCKED(env)`,**绝不自己编一条**。
 14. **命令失败不自己兜。** 退出码非 0 就是 `FAIL`,如实回报原文;**不要**改参数重试、换命令绕、或把失败解释成"环境问题"然后继续。禁止"基本成功""只是个警告"这类措辞。
 15. **一步一条命令。** 不要把后续步骤的命令一起跑了。
-
+16. **本步交付都对上之后再写 PASS。** 只做了一块、只试了一条路、或没有能打开的证据，按 `$IDEV/references/agents.md`「再派一个执行者」回报：缺的那块补上，未试路径放在 `BLOCKED` 里。重派时只改 `prior_failure` 点名的失败项。不同意这些条件，写 `BLOCKED(logic)`。没有新的执行结果时，不要在同一上下文里再审查一遍自己刚写的产物。
 
 ## 机检一览(回报缺这些字段会被打回)
 

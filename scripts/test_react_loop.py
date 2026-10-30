@@ -67,7 +67,7 @@ class ReactLoop(unittest.TestCase):
         errors: list[str] = []
         known = spec.check_catalog(
             {"schema_version": 1, "tools": [
-                {"id": "stage-gate", "summary": "gate", "command": "python3 scripts/stage-gate.py"},
+                {"id": "stage-gate", "summary": "gate", "limit": "不写票", "command": "python3 scripts/stage-gate.py"},
             ]},
             Path("tools.yaml"),
             errors,
@@ -109,6 +109,7 @@ class ReactLoop(unittest.TestCase):
             )
             self.assertEqual(acted.returncode, 0, acted.stderr)
             self.assertIn("TOOL python3 scripts/stage-gate.py", acted.stdout)
+            self.assertIn("LIMIT 不写签字，不改票。", acted.stdout)
             failed = loop(
                 "observe", "--feature", "demo", "--step", "look",
                 "--text", "gate red", "--fail", folder=folder,
@@ -129,7 +130,10 @@ class ReactLoop(unittest.TestCase):
             self.assertIn("fail", shown.stdout)
             self.assertIn("WHY check the gate", shown.stdout)
             self.assertIn("RESULT gate red", shown.stdout)
+            self.assertIn("COUNT hops=1/8", shown.stdout)
+            self.assertLess(shown.stdout.index("COUNT hops=1/8"), shown.stdout.index("HOP "))
             self.assertIn("TOOL python3 scripts/stage-gate.py", shown.stdout)
+            self.assertIn("LIMIT 不写签字，不改票。", shown.stdout)
             path = folder / "demo--look.yaml"
             merged, err = trace.merge_react(TRACE % path)
             self.assertEqual(err, "")

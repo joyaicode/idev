@@ -74,6 +74,18 @@ class EmptyFieldStaysEmpty(unittest.TestCase):
                 self.assertIsNotNone(pattern.search(f"{label}: MATCH on its own line\n"))
                 self.assertIsNone(pattern.search(f"{label}:\nMATCH on the next line\n"))
 
+    def test_reviewer_changed_stays_on_the_review(self) -> None:
+        quiet = delegation.run_checks(reviewer(REPORT), None)
+        self.assertNotIn("gate-held", quiet)
+        ok = delegation.run_checks(reviewer(REPORT + "CHANGED: docs/task/x/review.md\n"), None)
+        self.assertEqual(ok["gate-held"], "PASS")
+        shard = delegation.run_checks(reviewer(REPORT + "CHANGED: review/shards/api.md\n"), None)
+        self.assertEqual(shard["gate-held"], "PASS")
+        none = delegation.run_checks(reviewer(REPORT + "CHANGED: 无\n"), None)
+        self.assertEqual(none["gate-held"], "PASS")
+        moved = delegation.run_checks(reviewer(REPORT + "CHANGED: src/App.java\n"), None)
+        self.assertTrue(moved["gate-held"].startswith("FAIL"), moved["gate-held"])
+
     def test_an_empty_assumed_line_declares_nothing(self) -> None:
         checks = delegation.run_checks(reviewer(REPORT), None)
         self.assertTrue(checks["assumption-declared"].startswith("FAIL"), checks["assumption-declared"])

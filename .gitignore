@@ -31,6 +31,7 @@ state/*.lock
 /state/proposals/
 /state/lessons.yaml
 /state/lessons/
+/state/sediment.yaml
 /state/ledger.yaml
 /verify/target/
 

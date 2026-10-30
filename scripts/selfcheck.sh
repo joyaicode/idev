@@ -1867,6 +1867,14 @@ python3 "${KERNEL}/scripts/test_trace_derive.py" >/dev/null 2>&1 \
   || fail "trace append no longer lists the round's delegations from the records, or the signoff check reads words again (python3 scripts/test_trace_derive.py)"
 python3 "${KERNEL}/scripts/test_step_land.py" >/dev/null 2>&1 \
   || fail "workflow.py step / land no longer carry a delegated step from brief to record (python3 scripts/test_step_land.py)"
+python3 "${KERNEL}/scripts/test_browser_program.py" >/dev/null 2>&1 \
+  || fail "a browser program ran twice, or a click return counted as done (python3 scripts/test_browser_program.py)"
+python3 "${KERNEL}/scripts/test_ui_spec.py" >/dev/null 2>&1 \
+  || fail "a screen accepted two controls with the same name, or a click return stood in for the pending state (python3 scripts/test_ui_spec.py)"
+python3 "${KERNEL}/scripts/test_context_stage.py" >/dev/null 2>&1 \
+  || fail "a code preview included a function body, or a failed source erased the other (python3 scripts/test_context_stage.py)"
+python3 "${KERNEL}/scripts/test_sediment.py" >/dev/null 2>&1 \
+  || fail "one success was kept, or a registered script was executed (python3 scripts/test_sediment.py)"
 echo "OK  tier signoffs and single writer"
 
 echo "=== lock: a gate is answered by the person's 确认 ==="

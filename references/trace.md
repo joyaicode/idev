@@ -130,7 +130,7 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 |----|------|
 | `round` | 本轮窗口：`since` 是上一条 trace 的 `round.until`（旧 trace 用 `at`），`until` 是落盘时刻。一份留痕只进一条 trace |
 | `delegations[]` | 窗口里落下的委派留痕，每份一条：`agent` / `feature` / `step` / `attempt` / `role`（`writer` 或复核的 `verifier`）/ `status` / `record`。平铺副本和 run 目录里的同一份只算一次。条数就是留痕份数 |
-| `recorded[]` | 窗口里 `run.yaml` 记下的步：`feature` / `step` / `kind` / `status` / `by`（签字人，否则执行者，否则 `conductor`）/ `run`。人签门 PASS 另带 `mark`（`accepted_req` / `accepted_arch` / `accepted_plan` 记 `accepted`；`aligned`、`resolved` 记同名标记） |
+| `recorded[]` | 窗口里 `run.yaml` 记下的步：`feature` / `step` / `kind` / `status` / `evidence`（步骤证据路径，有才写）/ `verify_evidence`（复核证据路径，有才写）/ `by`（签字人，否则执行者，否则 `conductor`）/ `run`。人签门 PASS 另带 `mark`（`accepted_req` / `accepted_arch` / `accepted_plan` 记 `accepted`；`aligned`、`resolved` 记同名标记） |
 
 `recorded` 里有带 `mark` 的门、而 trace 没写 `signoff` 或写的是 `status: none` 时，`append` 按门补上 `signoff`：`status: recorded`、`marks`、`by` 是签字人、`evidence` 是 `<run.yaml>#<step>.signoff`。不在产品仓里跑（内核会话）时不生成这三段。
 

@@ -2,19 +2,24 @@ schema_version: 1
 tools:
   - id: stage-gate
     summary: 七视角拒过清单里可机检的那一半。调用时自己补 --feature。
+    limit: 不写签字，不改票。
     command: python3 scripts/stage-gate.py
     inputs: [feature]
   - id: req-ground
     summary: 核对一条需求落在哪些符号上。调用时自己补 --feature。
+    limit: 不改代码。
     command: python3 scripts/req-ground.py
   - id: hypothesis
     summary: 根因假设台账。调用时自己补子命令和 --feature。
+    limit: 不把假设当成根因。
     command: python3 scripts/hypothesis.py
   - id: lessons
     summary: 经验台账的召回、候选和升级。调用时自己补子命令。
+    limit: 召回不是结论，不能自己 promote。
     command: python3 scripts/lessons.py
   - id: realign
     summary: 需求订正后看全线有没有还挂在旧 item 上。调用时自己补 --feature。
+    limit: 不改需求正文。
     command: python3 scripts/realign.py
 groups:
   - id: evidence

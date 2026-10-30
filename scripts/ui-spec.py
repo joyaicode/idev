@@ -42,6 +42,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import kind_agents  # noqa: E402
 import safeyaml  # noqa: E402
+import ui_surface  # noqa: E402
 
 sys.path.insert(0, str(kind_agents.kernel_root() / "scripts" / "lib"))
 try:
@@ -88,7 +89,11 @@ SCHEMA = """\
 #
 # 可机检的部分见 --check:
 #   screen / intent 必填 · 每个 field 要 rule 或 required · 必填字段要 on_invalid ·
-#   每个 action 要 on_success 与 on_failure · 有 fields 就要有 action ·
+#   每个 action 要 name、on_success、on_failure、on_pending ·
+#   进行中和成功、失败和成功，各是一句不同的话 ·
+#   同一 screen、同一 scope 里 action name 只出现一次。scope 可省略，省略就是同一个范围 ·
+#   同一 screen 上的 field label 只出现一次 ·
+#   有 fields 就要有 action ·
 #   规则含主观词(合理/友好/流畅)即不可测 · 不许写实现细节(el-xxx / class / css)
 """
 
@@ -155,15 +160,7 @@ def check_ui(items: list, out: list[str]) -> None:
                 out.append(f"items[{iid}].ui.fields[{fname}] 必填却没写 on_invalid —— "
                            "用户填错了会看到什么?")
 
-        for a in actions:
-            if not isinstance(a, dict):
-                out.append(f"items[{iid}].ui.actions 有非 mapping 条目")
-                continue
-            aname = str(a.get("name") or "?")
-            for key, why in (("on_success", "成功后用户看到什么"),
-                             ("on_failure", "失败后用户看到什么、能不能重试")):
-                if not str(a.get(key) or "").strip():
-                    out.append(f"items[{iid}].ui.actions[{aname}] 缺 {key} —— {why}")
+        out.extend(ui_surface.action_findings(iid, actions))
 
         if fields and not actions:
             out.append(f"items[{iid}].ui 有 {len(fields)} 个输入项但没有 action —— "
@@ -176,6 +173,7 @@ def check_ui(items: list, out: list[str]) -> None:
                        "请求在路上时界面是什么样?(重复提交就在这里发生)")
         if actions and not states.get("error"):
             out.append(f"items[{iid}].ui.states 缺 error —— 请求失败时界面是什么样?")
+    out.extend(ui_surface.same_name(items))
 
 
 def to_spec(feature: str, items: list) -> dict:

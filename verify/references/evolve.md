@@ -9,7 +9,8 @@
 脚本与映射：[references/self-evolution.md](../../references/self-evolution.md)。  
 S8：`self-evolve-review`（别名：自进化 / 进化复盘）。  
 `bash ~/.cursor/skills/idev/scripts/evolve-review.sh` 只写草稿；`evolve-curator.sh` 归档超龄提案（默认不 `--apply`）。  
-**仍禁止**未确认改 Skill、分数门禁、LLM 自评盖章。
+**仍禁止**未确认改 Skill、分数门禁、LLM 自评盖章。  
+学习信号、落点，以及写出更新的一方不改验证，见 [self-evolution.md](../../references/self-evolution.md)「学习信号写到哪里」。
 
 
 入口台账：`~/.cursor/skills/idev/state/ledger.yaml`（`phase` / `conductor_revision` / `acceptance: chat-confirm`）。台账只有这一份，模块目录下不设台账。

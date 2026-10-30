@@ -1,7 +1,8 @@
 """Extract structured fields from a trace before prose is folded into memory.
 
-Phase 2 §2: structured facts stay on disk under .idev/timeline/; memory.md
-only keeps a one-line prose pointer.
+Phase 2 §2: the user citation (invoke), decisions, paths not taken,
+delegation outcomes, recorded step status and evidence paths, and call
+results stay under .idev/timeline/. memory.md keeps one prose line.
 """
 from __future__ import annotations
 
@@ -15,11 +16,17 @@ KEEP_KEYS = (
     "at",
     "feature",
     "intent",
+    "invoke",
     "route",
+    "rejected",
+    "decisions",
     "thinking",
     "opened",
     "extensions",
     "calls",
+    "delegations",
+    "recorded",
+    "check_feature",
 )
 
 

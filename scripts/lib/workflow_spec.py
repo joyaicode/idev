@@ -394,16 +394,17 @@ def check_catalog(data: Any, path: Path, errors: list[str]) -> dict[str, str]:
         errors.append(f"{path}: tools must be a non-empty list")
         return commands
     for i, tool in enumerate(tools):
-        _one_tool(tool, f"{path}: tools[{i}]", commands, errors)
+        _one_tool(tool, f"{path}: tools[{i}]", (commands, errors))
     _check_groups(data.get("groups"), commands, path, errors)
     return commands
 
 
-def _one_tool(tool: Any, where: str, commands: dict[str, str], errors: list[str]) -> None:
+def _one_tool(tool: Any, where: str, sink: tuple[dict[str, str], list[str]]) -> None:
+    commands, errors = sink
     if not isinstance(tool, dict):
         errors.append(f"{where} not a mapping")
         return
-    for key in sorted(set(tool) - {"id", "summary", "command", "inputs", "outputs"}):
+    for key in sorted(set(tool) - {"id", "summary", "command", "inputs", "outputs", "limit"}):
         errors.append(f"{where} unknown field {key!r}")
     tid = tool.get("id")
     if not isinstance(tid, str) or re.fullmatch(r"[a-z][a-z0-9-]*", tid) is None:
@@ -412,13 +413,17 @@ def _one_tool(tool: Any, where: str, commands: dict[str, str], errors: list[str]
     if tid in commands:
         errors.append(f"{where} duplicate tool {tid}")
         return
-    summary, command = tool.get("summary"), tool.get("command")
-    if not isinstance(summary, str) or not summary.strip():
-        errors.append(f"{where} summary is required")
-    if not isinstance(command, str) or not command.strip():
-        errors.append(f"{where} command is required")
+    _require_tool_text(tool, where, errors)
+    command = tool.get("command")
     commands[tid] = command if isinstance(command, str) else ""
     _check_ports(tool, where, errors)
+
+
+def _require_tool_text(tool: dict, where: str, errors: list[str]) -> None:
+    for key in ("summary", "command", "limit"):
+        value = tool.get(key)
+        if not isinstance(value, str) or not str(value).strip():
+            errors.append(f"{where} {key} is required")
 
 
 def _check_ports(tool: dict, where: str, errors: list[str]) -> None:

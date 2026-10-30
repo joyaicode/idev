@@ -106,7 +106,15 @@ class Enhance(unittest.TestCase):
         self.assertEqual(outputs, [])
         lines = workflow._tool_lines({"kind": "tool.step", "tool": "stage-gate"})
         self.assertIn("TOOL python3 scripts/stage-gate.py", lines)
+        self.assertIn("LIMIT 不写签字，不改票。", lines)
+        self.assertEqual(lines[0], "TOOL python3 scripts/stage-gate.py")
         self.assertIn("IN feature", lines)
+        missing: list[str] = []
+        spec.check_catalog({
+            "schema_version": 1,
+            "tools": [{"id": "x", "summary": "s", "command": "c"}],
+        }, Path("tools.yaml"), missing)
+        self.assertTrue(any("limit is required" in item for item in missing))
         errors: list[str] = []
         spec.check_catalog({
             "schema_version": 1,
@@ -153,7 +161,9 @@ class Enhance(unittest.TestCase):
                 "params": {},
                 "steps": [{"id": "look", "kind": "route.s4", "slots": ["scope"], "status": "pending"}],
             }
-            self.assertEqual(workflow.next_line(run)[0], "DIGEST match %s" % digest)
+            lines = workflow.next_line(run)
+            self.assertEqual(lines[0], "DIGEST match %s" % digest)
+            self.assertEqual(lines[-1], "PROGRESS closed=0/1 open=look")
             recipe_path.write_text("id: demo\nchanged: true\n", encoding="utf-8")
             self.assertTrue(workflow.digest_line(run).startswith("DIGEST drift "))
             body = (
@@ -170,16 +180,73 @@ class Enhance(unittest.TestCase):
             self.assertEqual(workflow.main(["param", "other=no", "--run", str(run_path)]), 2)
             self.assertNotIn("other:", run_path.read_text(encoding="utf-8"))
 
+    def test_progress_counts_closed_steps_and_names_open_ids(self):
+        skipped = {
+            "status": "running",
+            "steps": [
+                {"id": "skip", "kind": "route.s4", "status": "SKIPPED"},
+                {"id": "left", "kind": "route.s4", "status": "pending"},
+            ],
+        }
+        self.assertEqual(workflow.next_line(skipped)[-1], "PROGRESS closed=1/2 open=left")
+        branched = {
+            "status": "running",
+            "steps": [
+                {"id": "bad", "kind": "route.s4", "status": "FAIL", "branch_to": "left"},
+                {"id": "left", "kind": "route.s4", "status": "pending"},
+            ],
+        }
+        self.assertEqual(workflow.next_line(branched)[-1], "PROGRESS closed=1/2 open=left")
+        parallel = {
+            "status": "running",
+            "steps": [
+                {"id": "a", "kind": "route.s4", "status": "pending", "group": "g"},
+                {"id": "b", "kind": "route.s4", "status": "pending", "group": "g"},
+            ],
+        }
+        self.assertEqual(workflow.next_line(parallel)[-1], "PROGRESS closed=0/2 open=a,b")
+        done = {
+            "status": "done",
+            "steps": [
+                {"id": "a", "status": "PASS"},
+                {"id": "b", "status": "PASS"},
+            ],
+        }
+        self.assertEqual(workflow.next_line(done)[-1], "PROGRESS closed=2/2")
+
+    def test_brief_prints_progress_before_end(self):
+        import io
+        from contextlib import redirect_stdout
+        run = {
+            "status": "running",
+            "feature": "demo",
+            "steps": [{"id": "look", "kind": "route.s4", "status": "pending"}],
+        }
+        brief = {
+            "ticket_home": "/tmp/t",
+            "repo": "/tmp/r",
+            "stage": "s",
+            "risk_tier": "P1",
+            "label": "",
+            "with": {},
+            "must_read": "/tmp/m",
+            "idev_root": "/tmp/i",
+        }
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            workflow.print_brief(run, run["steps"][0], "idev-ops", 1, brief)
+        self.assertIn("PROGRESS closed=0/1 open=look\nEND BRIEF", buf.getvalue())
+
     def test_loop_status_is_shown_and_does_not_replace_the_step(self):
         step = {"id": "look", "kind": "route.s4", "react": {"candidates": ["stage-gate"]}}
         self.assertEqual(workflow._loop_line({"feature": "enhance-probe-absent"}, step), "LOOP absent")
         path = workflow.sink_dir("react") / "enhance-probe-open--look.yaml"
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("status: open\n", encoding="utf-8")
+        path.write_text("status: open\nmax_hops: 4\nhops:\n- {n: 1}\n- {n: 2}\n", encoding="utf-8")
         try:
-            self.assertEqual(workflow._loop_line({"feature": "enhance-probe-open"}, step), "LOOP open")
+            self.assertEqual(workflow._loop_line({"feature": "enhance-probe-open"}, step), "LOOP open hops=2/4")
             lines = workflow._step_lines({"feature": "enhance-probe-open", "params": {}}, step)
-            self.assertIn("LOOP open", lines)
+            self.assertIn("LOOP open hops=2/4", lines)
             self.assertTrue(any(line.startswith("DELEGATE") for line in lines))
         finally:
             if path.is_file():

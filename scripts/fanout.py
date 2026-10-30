@@ -5,7 +5,9 @@ The conductor asks this before delegating those activities. Fewer than two
 independent shards, overlapping writes, or a shared Maven module that has
 not opted in stay one agent. A FANOUT wave is still one workflow step and
 one run: each agent writes only its own shard file, and the conductor
-merges before record. When those shard files are already on disk, assess
+merges before record. Shards complement each other. Another shard's
+conclusion is not evidence, and the first shard to finish does not cancel
+the rest. When those shard files are already on disk, assess
 prints MERGE and does not ask for another agent.
 
     fanout.py assess --feature F --activity plan|run|selftest|rootcause|report

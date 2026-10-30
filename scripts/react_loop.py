@@ -19,8 +19,10 @@ Exit 0 means the loop is still open or finished cleanly.
 Exit 2 is a refused call (wrong tool, wrong state); the file is unchanged.
 Exit 3 is the predefined exit. stdout starts with `EXIT human` or `EXIT stop`.
 That also writes an inbox note tagged react-exhausted or react-tool-fail.
-`on_fail: skip` prints `SKIP <action>` and exits 0. `show` prints WHY, RESULT,
-and TOOL for each hop. It displays the record; it does not run the command.
+`on_fail: skip` prints `SKIP <action>` and exits 0. `show` prints
+`COUNT hops=<used>/<max>` before each hop's HOP, WHY, RESULT, TOOL, and LIMIT.
+The count is the length of the recorded hops. It displays the record;
+it does not run the command.
 """
 from __future__ import annotations
 
@@ -32,6 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import safeyaml  # noqa: E402
+import workflow_compose  # noqa: E402
 from product_sink import sink_dir  # noqa: E402
 
 DEFAULT_HOPS = 8
@@ -171,9 +174,13 @@ def require_registered(names: list[str]) -> None:
 def act_line(action: str) -> str:
     command = tool_commands().get(action, "")
     line = "ACT pending %s" % action
-    if command:
-        return "%s\nTOOL %s" % (line, command)
-    return line
+    if not command:
+        return line
+    shown = "%s\nTOOL %s" % (line, command)
+    limit = workflow_compose.tool_limit(action)
+    if not limit:
+        return shown
+    return "%s\nLIMIT %s" % (shown, limit)
 
 
 def cmd_open(args: argparse.Namespace) -> int:
@@ -347,6 +354,18 @@ def _show_hop(hop: dict) -> None:
     command = tool_commands().get(str(hop.get("action") or ""), "")
     if command:
         print("TOOL %s" % command)
+        limit = workflow_compose.tool_limit(str(hop.get("action") or ""))
+        if limit:
+            print("LIMIT %s" % limit)
+
+
+def _count_line(data: dict) -> str:
+    hops = data.get("hops")
+    used = len(hops) if isinstance(hops, list) else 0
+    cap = data.get("max_hops", DEFAULT_HOPS)
+    if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
+        cap = DEFAULT_HOPS
+    return "COUNT hops=%d/%d" % (used, cap)
 
 
 def _show_file(path: Path) -> int:
@@ -356,6 +375,7 @@ def _show_file(path: Path) -> int:
         return 2
     print("PATH %s" % path)
     print("STATUS %s" % data.get("status"))
+    print(_count_line(data))
     for hop in data.get("hops") or []:
         _show_hop(hop)
     return 0

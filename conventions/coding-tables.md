@@ -230,6 +230,7 @@ super-linter 是「仓内已有就跑」的例子，不是要新装的依赖。`
 - [ ] `check-feature.sh <feature> code` 已 PASS（含编码规范弱门禁）
 - [ ] 废弃符号已删；注释/文档与代码一致
 - [ ] Java：`problems-scan.sh` 无本轮黄条（`UNPROVEN` 不算干净）；Python / Go / Shell / JS / Vue：`lang-scan.sh` 无本轮发现（插件不在是 `UNPROVEN`）；前端：扩展根 `commands.lint_fix` 干净，没有这个键就问人；仓内若有 Checkstyle/PMD/SpotBugs 一并绿（§3.7）
+- [ ] 本轮启动的服务已按 [SKILL.md](SKILL.md)「会话收尾」关掉；本轮没启动则跳过
 
 违反本页 = `code` 拒过。  
 `review.report` 出门：`I*` / `O*` / UNPROVEN 已记即可，不要求本步已改，不跑 `check-feature code`。`review.fix` 用上表。

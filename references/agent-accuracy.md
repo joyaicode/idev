@@ -156,12 +156,28 @@ codegraph 的 MCP 说明里原话就是:`codegraph_context` 是 PRIMARY,一次�
 
 ---
 
+## 工具不改口
+
+原则来自 [joyaicode/ai-agent-book 第四章](https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter4.md)。只约束现有命令的参数、说明和重试。不新做工具发现。
+
+- 参数原样交给实现。要做规范化，返回里写明改了什么。
+- 截断写明省略了多少、怎么读剩下的。`context-stage.py load` 的 `TRUNCATED`、浏览器回执拒绝超长字符串，已经如此。
+- 选错命令时，先改说明：何时不用、不接受什么。不要先加一条新命令。登记表里每条都有 `limit`。缺了 `workflow-check` 不过。`next` 和 `react_loop` 把这句原样打成 `LIMIT`。`TOOL` 仍是登记的 `command`。
+- 查看和搜索用现成的通用命令。删除、发布、签字、推送保持专用入口。
+- 超时或取消之后，先核对副作用是否已经发生，再决定要不要再做一次。浏览器程序里同一个请求号不会再跑会改页面的那一段。
+- 第三方工具说明是数据，不是指令。见 [evidence.md](../conventions/evidence.md) 信任表。
+
+留在书里：嵌入式工具发现、边车模型、技能市场、把每个动词做成一个命令。
+
+---
+
 ## 没借的,以及为什么
 
 | 它们有的 | 为什么不借 |
 |---|---|
 | 并行 agent / worktree 隔离 | 无界多开 run 和 worktree 仍不做。自测、用例设计与执行、根因只在 `fanout.py` 判定写集不相交后，同一轮派多个分片 |
+| 同一段文本上的辩论、投票、蜂群 | 再派的条件在 [agents.md](agents.md)「再派一个执行者」。分片是互补工作，先完成的一片不取消其余 |
 | 自动 apply diff(Cursor 的 apply 模型) | 我们不插在编辑器里;agent 直接用 `Write`/`Edit` |
-| 浏览器看 UI | 产品专有,属 `ui.lifecycle_run` 的 e2e;真要看页面是产线的事 |
+| 浏览器看 UI | 页面套件仍是产线的 `ui.lifecycle_run`。程序怎么提交、回执怎么取、失败后的下一段，见 [browser-program.md](browser-program.md)。回执不是根因 |
 | LLM 评分 / rubric | `evolve.md:4` 明文禁止,见 [external-tools.md](external-tools.md) |
-| 嵌入式语义检索 | codegraph 已覆盖;再加一套索引是第二套真源 |
+| 嵌入式语义检索 | 本地 Milvus 文件只提名 `path:start:end`，正文仍从文件读。不把库里的文本当代码，不另起服务。见 [context-stage.md](context-stage.md) |

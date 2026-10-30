@@ -48,16 +48,16 @@
 
 | 字段 | 约束 |
 |------|------|
-| `candidates` | 非空 slug 列表，不可重复。每一个都必须是 `references/tools.yaml` 里的 `id`。新工具先登记 `id` / `summary` / `command`，再写进步骤 |
+| `candidates` | 非空 slug 列表，不可重复。每一个都必须是 `references/tools.yaml` 里的 `id`。新工具先登记 `id` / `summary` / `limit` / `command`，再写进步骤 |
 | `max_hops` | 可选整数，1 到 16，缺省 8。用尽走 `on_exhaust`，不再记一跳 |
 | `on_exhaust` | `human`（缺省）或 `stop`。只在跳数用尽时走 |
 | `on_fail` | `human`（缺省）、`stop` 或 `skip`。只在工具观察失败时走。`skip` 记下这一跳、循环保持 `open`、打出 `SKIP`、退出码 0，不写 inbox，也不自动再试 |
 
-一条配方可以编排别的配方和已登记工具。步骤恰好写 `kind`、`tool`、`tool_group`、`use` 里的一个。`tool` 是 `references/tools.yaml` 里的工具 id，展开后 kind 为 `tool.step`，`next` 打出 `TOOL <command>`，有 `inputs` / `outputs` 时再打 `IN` / `OUT`，不执行。`inputs` 里缺的名字和 `slots` 一样先 `ASK`。`tool_group` 按组里的顺序展开成多步。`use` 是另一条配方的 id：先查本目录，再查内核 `workflows/`，产品同 id 覆盖内核。展开后的步骤 id 是 `<本步 id>--<被引用步骤 id>`，多层引用就继续加前缀。
+一条配方可以编排别的配方和已登记工具。步骤恰好写 `kind`、`tool`、`tool_group`、`use` 里的一个。`tool` 是 `references/tools.yaml` 里的工具 id，展开后 kind 为 `tool.step`，`next` 打出 `TOOL <command>`，再打 `LIMIT`（这条做不到什么）。有 `inputs` / `outputs` 时再打 `IN` / `OUT`。`TOOL` 行等于登记的 `command`，不改写、不追加参数，也不执行。`inputs` 里缺的名字和 `slots` 一样先 `ASK`。`tool_group` 按组里的顺序展开成多步。`use` 是另一条配方的 id：先查本目录，再查内核 `workflows/`，产品同 id 覆盖内核。展开后的步骤 id 是 `<本步 id>--<被引用步骤 id>`，多层引用就继续加前缀。
 
 `use` 和 `tool_group` 可以带 `adjust`：`skip` 去掉成员，`replace` 只改成员的 `label` / `with` / `react`，`extend` 追加步骤（本身也可以是 `tool`、`tool_group` 或 `use`）。不写 `order` 时，追加接在剩下的成员后面。写了 `order` 就必须把剩下的成员和追加的步骤各列一次。引用自己、或 A 引用 B 再引用 A，都拒绝。嵌套超过 8 层拒绝。既有配方不写这些字段时，展开结果与原来的步骤相同。
 
-循环文件在 `state/react/<feature>--<step>.yaml`（产线是 `.idev/react/`）。`next` 的 `REACT_LOG` 是这个文件的路径；本轮 trace 的顶层 `react:` 抄它，`trace.py append` 把还没出现的跳抄进 `calls`（`kind: tool`，`args` 是登记的命令）。`react_loop.py show --feature <f>` 列出这个 feature 的循环。每一跳打出 `HOP`、`WHY`、`RESULT`、`TOOL`。这是回放记录，不重跑命令。脚本只校验和记跳，不调用模型，不改配方。用尽写 inbox 标签 `react-exhausted`。工具失败在 `on_fail` 不是 `skip` 时写 `react-tool-fail`，note 带 step、工具名和观察摘要。同类标签未消费地出现至少两次时，`evolve-review` 把它算作热标签并起草提案，提案里的「要改什么」仍待人填。出口码 3 的 stdout 以 `EXIT human` 或 `EXIT stop` 开头；码 2 是拒绝，文件不变。`start` 把配方文件的 sha256 前 16 位写入 run 的 `recipe_digest`。`next` 打 `DIGEST match`、`DIGEST drift` 或 `DIGEST missing`。drift 只说明文件已变，不改 run 里已经展开的步骤。有票且这一步声明了 `react` 时，`next` 再打 `LOOP absent|open|done|failed|exhausted`。这行不挡步骤。步骤比对仍按展开后的 id 和 kind。
+循环文件在 `state/react/<feature>--<step>.yaml`（产线是 `.idev/react/`）。`next` 的 `REACT_LOG` 是这个文件的路径；本轮 trace 的顶层 `react:` 抄它，`trace.py append` 把还没出现的跳抄进 `calls`（`kind: tool`，`args` 是登记的命令）。`react_loop.py show --feature <f>` 列出这个 feature 的循环。先打 `COUNT hops=<已用>/<上限>`，再逐跳打出 `HOP`、`WHY`、`RESULT`、`TOOL`、`LIMIT`。已用次数是记录里的跳数。这是回放记录，不重跑命令。脚本只校验和记跳，不调用模型，不改配方。用尽写 inbox 标签 `react-exhausted`。工具失败在 `on_fail` 不是 `skip` 时写 `react-tool-fail`，note 带 step、工具名和观察摘要。同类标签未消费地出现至少两次时，`evolve-review` 把它算作热标签并起草提案，提案里的「要改什么」仍待人填。出口码 3 的 stdout 以 `EXIT human` 或 `EXIT stop` 开头；码 2 是拒绝，文件不变。`start` 把配方文件的 sha256 前 16 位写入 run 的 `recipe_digest`。`next` 打 `DIGEST match`、`DIGEST drift` 或 `DIGEST missing`。drift 只说明文件已变，不改 run 里已经展开的步骤。有票且这一步声明了 `react` 时，`next` 再打 `LOOP absent`，或 `LOOP <status> hops=<已用>/<上限>`。已用和上限从循环文件数出。这行不挡步骤。步骤比对仍按展开后的 id 和 kind。
 
 `verify.plan`、`verify.run`，以及写集不是单独一份 `review.md` 的 `review.report`，`next` 多打一行 `FANOUT_ASSESS`。这是提醒先跑 `scripts/fanout.py assess`，不是新步骤。`SERIAL` 时这一步仍只派一个 agent。`FANOUT` 时同一条消息派每个分片，并对每片 `delegate <step> --shard <id>`；那张验证租约只覆盖该片路径。分片只写 assess 给出的路径。assess 打出 `MERGE` 且没有 `SHARD` 时草稿已经齐了，只跑 `fanout.py merge`，不要再派执行者。合并之后这一步只 `record` 一次。根因用 `--activity rootcause`，不从 `route.s4` 自动打出来。写集已经是 `review.md` 的审查步骤不打这一行。
 
@@ -135,7 +135,7 @@
 W=~/.cursor/skills/idev/scripts/workflow.py
 $W resolve <id>                                  # 产品扩展根优先，其次内核
 $W start <id> --feature <f> [--param k=v]        # 校验配方、绑参数、写 run.yaml，打印第一步
-$W next --feature <f>                            # NEXT 步骤、OPEN 落点页、COMMAND 取值键；有摘要时先打 DIGEST
+$W next --feature <f>                            # NEXT 步骤、OPEN 落点页、COMMAND 取值键；有摘要时先打 DIGEST；末尾打 PROGRESS closed=<已收口>/<总步数> open=<步骤 id>
 $W param k=v --feature <f>                       # 把缺的槽位写回当前开放步骤，再打 next
 $W record <step> PASS|FAIL|UNPROVEN|SKIPPED|BLOCKED --feature <f> [--evidence <路径>] [--note <原因>]
 $W step <step> --feature <f>                     # 委派步的入口：交给 agent（含写租约），打印机器填好的委派包

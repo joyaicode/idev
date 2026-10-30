@@ -33,6 +33,14 @@
 | UI 自动化 | `vue-testing-best-practices` | Playwright 与组件测试的分工。剧本生命周期仍走 `ui-playbook.py` |
 | 根因 | `vue-debug-guides` | 运行时错误、警告、异步失败、水合、响应式。同时打开 `vue-best-practices` 对照写法 |
 
+## 实现界面
+
+界面上用户看得到的字以 `ui` 块为准，格式是 `scripts/ui-spec.py --schema`。
+
+控件的可访问名称用 `actions[].name` 和 `fields[].label`。同名动作用 `scope` 标出它所在的对话框或表格，定位时先进入这个范围。进行中显示 `on_pending`，并停掉第二次提交。成功和失败用页面上读得到的字，并和进行中的那句不同。遮罩不拿来盖住本该点的那个控件。
+
+这段页面怎么被程序驱动，见 [browser-program.md](../references/browser-program.md)。
+
 ## 执行者
 
 | 执行者 | 打开的阶段 |

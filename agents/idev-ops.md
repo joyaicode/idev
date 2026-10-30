@@ -106,7 +106,11 @@ codegraph_impact <symbol> --depth 1         # 改它会波及谁
 `--depth 1` 是规约(`one-hop-only` 以「候选 hop > 1」为失败)。查不到(动态分发 / 反射 /
 配置路由)就**明说查不到**。
 
+要把某一段实现读进上下文时，先 `python3 $IDEV/scripts/context-stage.py preview --repo <仓根> --query "<现象>" --feature <f>`，再 `load` 一个 `path:start:end`。`codegraph_context` 仍是一次拿邻域；预览不代替 trace 和 impact。经验行去 `lessons.py recall`。本地 Milvus 只在 `index` 之后提名区间；`SOURCE rag` 为 `absent` 或 `fail: 索引过期` 时，仍以文件和 codegraph 为准。
+
 跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage ops`。有输出时，用打出的技能解释渲染、响应式、水合、路由、store 的机制。技能不能单独把猜想写成根因，证成仍走上面的台账。
+
+页面现象先取回执，再跑 `python3 $IDEV/scripts/browser-program.py scene` 看现场缺什么，然后 `advise` 决定下一段。收场时 `tally --lane` 把虚假成功、结果不明、失败、已核对分开计，不加总。回执只证明发生过什么。根因仍要 `file:line`，并且能红绿切换。字段和动作表在 `references/browser-program.md`。
 
 ## kind = route.s4(论证)
 
@@ -117,7 +121,7 @@ codegraph_impact <symbol> --depth 1         # 改它会波及谁
 3. **给方案,评估影响范围** — 改什么 / 不改什么;谁调用、谁契约、本地 vs 已发布。**要可检验**
 4. **设计用例**(编码交给 `idev-coder`):正确性 / 影响范围 / 验收三类
 5. **纵向验收** — 从发现层走到根因层(UI / Network / 网关 / OpenAPI / DAO / 部署物)再验一遍
-6. **收尾** — 反思哪条证据本该更早拿到;扫同类缺陷;未修的另开 issue,**不假装已修**
+6. **收尾** — 反思哪条证据本该更早拿到;扫同类缺陷;未修的另开 issue,**不假装已修**。本轮为排查启动的服务，按 `$IDEV/conventions/SKILL.md`「会话收尾」关掉后再交回
 
 涉及"加层 / 拆分 / 缓存 / 队列 / 重试 / 重写"的念头,先走 `$IDEV/conventions/canon.md` §1 协议,落到 `P`/`C`/`R`。
 
@@ -175,6 +179,7 @@ python3 $IDEV/scripts/failure_signature.py check --feature <f>
 15. 不要把接入登录/PIN/CORS 当 feature 缺陷去改业务;不要把集群 ISR / raft / 磁盘当控制台 bug。
 16. **编号只认一处**:`P`/`C`/`R` 认 `coding.md`;`T`/`A`/`F` 认 `canon.md`。
 17. 只测主路径、不测影响面、口头推理当验收 = 禁止。
+18. **一条探查失败要写下未试路径。** 整件事做不到，写在这些路径都有证据之后。认法在 `$IDEV/references/agents.md`「再派一个执行者」。
 
 
 ## 机检一览(回报缺这些字段会被打回)
@@ -376,8 +381,11 @@ python3 $IDEV/scripts/hypothesis.py set --feature <f> --id H1 \
 ```bash
 python3 $IDEV/scripts/lessons.py add --feature <f> --event <类型> \
   --scope "<系统/业务域>" --symptom "<现象>" --evidence "<依据>" \
-  --action "<动作>" --outcome "<结果>" --not-when "<何时不适用>"
+  --action "<动作>" --outcome "<结果>" --not-when "<何时不适用>" \
+  [--prefix <决策步.yaml>]
 ```
+
+有首错步时 `--prefix` 写下目标、环境、agent 与工具版本、首错前的文件、可接受动作和禁止动作。没有决策步不要造。形状在 [rootcause-guards.md](../references/rootcause-guards.md)。
 
 六问缺一条就不收 —— **六问不全的不是决策知识,是过程日志**,记了也不敢复用。
 其中 `not_when` 最常被跳过,而它正是边界:**没有边界的经验会被用在它不成立的地方,
@@ -408,5 +416,19 @@ python3 $IDEV/scripts/lessons.py promote --id L1 \
 
 **为什么卡这道门:** 错误结论一旦入库,会被后续分析反复引用 ——
 一次局部偏差就演变成系统性偏差。这和 `baseline` 不许 agent 自己 unseal 是同一个道理。
+
+记候选之前，先看学习信号够不够、这句话该写到哪里。全文在 [self-evolution.md](../references/self-evolution.md)「学习信号写到哪里」。
+
+同一做法要变成下次能重跑的脚本时，另记一条程序候选，不写进经验台账：
+
+```bash
+python3 $IDEV/scripts/sediment.py add --feature <f> --form program --trust reviewed \
+  --scope "<范围>" --claim "<做什么>" --not-when "<何时不适用>" \
+  --evidence <结果文件> --script <已有的.py或.sh>
+python3 $IDEV/scripts/sediment.py transform --feature <f> --id S1 \
+  --by <人> --repro <复现文件> --evidence <另一份结果>
+```
+
+`add` 永远是候选。只有一条结果时 `transform` 拒绝。事实、判断和外部内容不进这本账。留下时钉住脚本和结果的字节。脚本再改，原来的结果不能把它重新留下。命令不执行脚本，也不改提示词。全文 `references/sediment.md`。
 
 知识过时就 `retire --why <为什么>`。不清的话,下一轮会把它读成当前有效。

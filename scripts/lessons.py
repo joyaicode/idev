@@ -37,6 +37,14 @@ decision knowledge:
 applied where it does not hold, and that is how a correct lesson becomes a
 wrong one.
 
+## Decision prefix
+
+When the failure is one step, `--prefix` names a yaml file: the goal, the
+environment, the agent and tool versions, a file frozen before that step,
+the acceptable next actions, and the forbidden ones. `check` only looks at
+that shape. It does not run an agent, and a score cannot promote the lesson.
+A factual lesson leaves the block off.
+
 ## Recall advises, it does not decide
 
 `recall` prints lessons as **建议与约束**, never as answers: "when X, check
@@ -102,6 +110,21 @@ SCHEMA = """\
 #                                  ↑ 何时不适用:六问里最常被跳过的一条。
 #                                    没有边界的经验会被用在它不成立的地方,
 #                                    那正是一条正确经验变成错误经验的方式。
+#     prefix:                      # 可选。没有决策步就不要写
+#       goal: 把失败沉淀成下次还能核对的下一步
+#       env: 本机 idev 内核
+#       agent: 导体
+#       tools: scripts/lessons.py
+#       before: state/lessons/L2-before.md
+#       first_error:
+#         step: 写入经验
+#         kind: message            # message | tool
+#         category: 流程与规范缺失
+#         evidence: 当时的 schema 只有六问
+#         cause: 失败被写成建议
+#         consequence: 召回无法核对下一步
+#       accept: [有决策步就写 prefix]
+#       forbid: [把召回正文当作答案]
 #     from_feature: ticket-123     # 来自哪次排查
 #     confirmed_by: ""             # 人确认才填(promote 时写)
 #     repro: ""                    # 旁路复现的证据路径(promote 时写)
@@ -114,8 +137,14 @@ SCHEMA = """\
 #   二者缺一不得 authoritative。错误结论一旦入库会被后续分析反复引用 ——
 #   一次局部偏差就变成系统性偏差。
 #
+# 决策步的 prefix 只验形状:目标、环境、版本、首错前的非空文件、
+# 可接受动作、禁止动作要一起在。不执行 Agent,也不用分数决定 promote。
+# user-correction / failed-action 没写 prefix 时 check 警告,不因此失败。
+#
 # 召回(recall)给的是**建议与约束**,不是既定答案:
 #   「出现 X 时,先核对 Y,再下结论;若 Z 则不适用」
+# 同一 scope 上 action 不同时打 CONFLICT，被 --top 截掉的那一条也列出。
+# 不改旧行，不挑较新的一条当答案。check 只警告。
 # Agent 仍要回到当前证据自己走一遍 —— hypothesis.py 的六条强约束照常生效。
 #
 # 过时就清(retire):知识过期不清,下一轮会把它读成当前有效。
@@ -207,6 +236,124 @@ def find(lessons: list, lid: str) -> dict | None:
     return None
 
 
+PREFIX_TEXT = ("goal", "env", "agent", "tools", "before")
+ERROR_TEXT = ("step", "kind", "category", "evidence", "cause", "consequence")
+ERROR_KIND = ("message", "tool")
+PREFIX_EVENT = ("user-correction", "failed-action")
+
+
+def nonblank(value) -> str:
+    return str(value or "").strip()
+
+
+def string_list(value) -> list[str] | None:
+    if not isinstance(value, list) or not value:
+        return None
+    out = []
+    for item in value:
+        text = nonblank(item)
+        if not text:
+            return None
+        out.append(text)
+    return out
+
+
+def bound_root(repo: Path | None, feature: str | None) -> Path:
+    if feature:
+        if repo is not None:
+            return repo.resolve()
+        if os.environ.get("IDEV_PRODUCT_REPO"):
+            return Path(os.environ["IDEV_PRODUCT_REPO"]).resolve()
+        return Path.cwd().resolve()
+    return kind_agents.kernel_root()
+
+
+def before_file(root: Path, raw: str) -> str:
+    text = nonblank(raw)
+    if not text or text.startswith("/") or ".." in Path(text).parts:
+        return "before 必须是台账根下的相对路径"
+    path = (root / text).resolve()
+    try:
+        path.relative_to(root.resolve())
+    except ValueError:
+        return "before 必须是台账根下的相对路径"
+    if not path.is_file() or path.stat().st_size <= 0:
+        return f"before 不是非空文件: {text}"
+    return ""
+
+
+def error_problems(err) -> list[str]:
+    if not isinstance(err, dict):
+        return ["prefix.first_error 必须写明首错"]
+    problems = [f"prefix.first_error 缺 {key}" for key in ERROR_TEXT if not nonblank(err.get(key))]
+    kind = nonblank(err.get("kind"))
+    if kind and kind not in ERROR_KIND:
+        problems.append("prefix.first_error.kind 只能是 message 或 tool")
+    return problems
+
+
+def prefix_problems(prefix, root: Path) -> list[str]:
+    if not isinstance(prefix, dict):
+        return ["prefix 必须是一组字段"]
+    problems = [f"prefix 缺 {key}" for key in PREFIX_TEXT if not nonblank(prefix.get(key))]
+    if nonblank(prefix.get("before")):
+        bad = before_file(root, str(prefix.get("before") or ""))
+        if bad:
+            problems.append(bad)
+    problems.extend(error_problems(prefix.get("first_error")))
+    for key in ("accept", "forbid"):
+        if string_list(prefix.get(key)) is None:
+            problems.append(f"prefix.{key} 至少一条")
+    return problems
+
+
+def prefix_source(root: Path, raw: str) -> tuple[Path | None, str]:
+    text = nonblank(raw)
+    if not text or ".." in Path(text).parts:
+        return None, "prefix 文件必须在台账根下"
+    path = Path(text)
+    full = path.resolve() if path.is_absolute() else (root / path).resolve()
+    try:
+        full.relative_to(root.resolve())
+    except ValueError:
+        return None, "prefix 文件必须在台账根下"
+    return full, ""
+
+
+def load_prefix(path: Path) -> tuple[dict | None, str]:
+    data = safeyaml.mapping(path)
+    if not data:
+        return None, f"读不到 prefix: {path}"
+    return data, ""
+
+
+def read_prefix(args: argparse.Namespace) -> tuple[dict | None, str]:
+    root = bound_root(args.repo, args.feature)
+    path, err = prefix_source(root, args.prefix)
+    if err or path is None:
+        return None, err or "读不到 prefix"
+    data, err = load_prefix(path)
+    if err or data is None:
+        return None, err or "读不到 prefix"
+    problems = prefix_problems(data, root)
+    if not problems:
+        return data, ""
+    return None, "prefix 不完整:\n  " + "\n  ".join(problems)
+
+
+def print_prefix(prefix) -> None:
+    if not isinstance(prefix, dict):
+        return
+    err = prefix.get("first_error") if isinstance(prefix.get("first_error"), dict) else {}
+    accept = string_list(prefix.get("accept")) or []
+    forbid = string_list(prefix.get("forbid")) or []
+    print(f"   决策边界: 首错 {err.get('step')} ({err.get('kind')}) {err.get('cause')}")
+    print("   可接受: " + "；".join(accept))
+    print("   禁止: " + "；".join(forbid))
+    print(f"   后果不算主因: {err.get('consequence')}")
+    print("   这是要重新核对的边界，不是答案")
+
+
 def cmd_add(args: argparse.Namespace) -> int:
     path = ledger_path(args.repo, args.feature)
     data = load(path)  # for the six-question check below
@@ -217,6 +364,13 @@ def cmd_add(args: argparse.Namespace) -> int:
             print(f"  --{f.replace('_', '-')}   {SIX_Q[f]}", file=sys.stderr)
         print("\n六问不全的不是决策知识,是过程日志 —— 记了也不敢复用。", file=sys.stderr)
         return 2
+
+    prefix = None
+    if args.prefix:
+        prefix, err = read_prefix(args)
+        if err:
+            print("BLOCKED " + err, file=sys.stderr)
+            return 2
 
     item = {
         "id": next_id(data["lessons"]),
@@ -231,6 +385,8 @@ def cmd_add(args: argparse.Namespace) -> int:
         "uses": 0,
         "at": now(),
     }
+    if prefix is not None:
+        item["prefix"] = prefix
     # Built and appended under the lock: computing the id outside it would
     # give two concurrent adds the same L1.
     def build(fresh: dict) -> dict:
@@ -312,6 +468,25 @@ def cmd_retire(args: argparse.Namespace) -> int:
     return 0
 
 
+def same_scope_conflicts(items: list) -> list[list]:
+    """Same scope, different action. Retired rows stay on disk and do not conflict."""
+    grouped: dict[str, list] = {}
+    for item in items:
+        if not isinstance(item, dict) or str(item.get("status")) == "retired":
+            continue
+        key = str(item.get("scope") or "").strip()
+        if not key:
+            continue
+        grouped.setdefault(key, []).append(item)
+    found = []
+    for group in grouped.values():
+        actions = {str(item.get("action") or "").strip() for item in group}
+        actions.discard("")
+        if len(group) >= 2 and len(actions) >= 2:
+            found.append(group)
+    return found
+
+
 def cmd_recall(args: argparse.Namespace) -> int:
     path = ledger_path(args.repo, args.feature)
     data = load(path)
@@ -332,21 +507,41 @@ def cmd_recall(args: argparse.Namespace) -> int:
     # just "tried and confirmed before untried".
     hits.sort(key=lambda x: (str(x.get("status")) != "authoritative",
                              -safeyaml.as_int(x.get("uses"), 0)))
-    hits = hits[: args.top]
+    conflicts = same_scope_conflicts(hits)
+    shown = list(hits[: args.top])
+    shown_ids = {str(item.get("id")) for item in shown}
+    for group in conflicts:
+        ids = {str(item.get("id")) for item in group}
+        if not ids & shown_ids:
+            continue
+        for item in group:
+            iid = str(item.get("id"))
+            if iid not in shown_ids:
+                shown.append(item)
+                shown_ids.add(iid)
 
-    if not hits:
+    if not shown:
         print("(没有匹配的经验)")
         print()
         print("这不是坏消息 —— 没有先验就按证据从头走一遍,")
         print("排查完把有价值的路径用 `lessons.py add` 记成候选。")
         return 0
 
-    print(f"# 相关经验 {len(hits)} 条  (scope={args.scope or '*'})")
+    print(f"# 相关经验 {len(shown)} 条  (scope={args.scope or '*'})")
     print()
     print("**以下是建议与约束,不是答案。** 仍要回到当前证据验证 ——")
     print("历史结论生搬硬套,正是经验库最大的风险。")
     print()
-    for x in hits:
+    conflicted = False
+    for group in conflicts:
+        ids = [str(item.get("id")) for item in group]
+        if set(ids) & shown_ids:
+            print("CONFLICT " + " ".join(ids))
+            conflicted = True
+    if conflicted:
+        print("同一范围里动作不同。两条都看，用各自的「不适用于」区分。不要改旧行，也不要只留较新的一条。")
+        print()
+    for x in shown:
         mark = "权威" if str(x.get("status")) == "authoritative" else "候选(未经人确认)"
         print(f"## {x.get('id')}  [{mark}]  {EVENT_WHY.get(str(x.get('event')), '')}")
         print(f"   现象: {x.get('symptom')}")
@@ -354,12 +549,14 @@ def cmd_recall(args: argparse.Namespace) -> int:
         print(f"   依据: {x.get('evidence')}")
         print(f"   结果: {x.get('outcome')}")
         print(f"   **不适用于**: {x.get('not_when')}")
+        if x.get("prefix") is not None:
+            print_prefix(x.get("prefix"))
         if str(x.get("status")) != "authoritative":
             print("   ⚠ 这条还没经人确认,当成一个待验假设,不要当结论")
         print()
 
     if not args.no_count:
-        for x in hits:
+        for x in shown:
             real = find(data["lessons"], str(x.get("id")))
             if real is not None:
                 real["uses"] = safeyaml.as_int(real.get("uses"), 0) + 1
@@ -400,6 +597,21 @@ def cmd_check(args: argparse.Namespace) -> int:
                     "旁路复现一次,把证据路径填进 repro;或改回 candidate")
         if status == "retired" and not str(x.get("retired_why") or "").strip():
             warns.append(f"{lid}: retired 却没写 retired_why,下次有人会把它加回去")
+        prefix = x.get("prefix")
+        if prefix is not None:
+            root = bound_root(args.repo, args.feature)
+            errors.extend(f"{lid}: {problem}" for problem in prefix_problems(prefix, root))
+        elif str(x.get("event")) in PREFIX_EVENT:
+            warns.append(
+                f"{lid}: {x.get('event')} 没有 prefix。"
+                "这次纠正若落在某一步决策上，补上首错前的上下文、可接受动作和禁止动作；"
+                "纯事实不用造前缀")
+
+    for group in same_scope_conflicts(lessons):
+        ids = " ".join(str(item.get("id")) for item in group)
+        warns.append(
+            f"{ids}: 同一 scope 动作不同。recall 会打 CONFLICT。"
+            "不要改旧行，也不要只留较新的一条")
 
     cand = sum(1 for x in lessons if str(x.get("status")) == "candidate")
     auth = sum(1 for x in lessons if str(x.get("status")) == "authoritative")
@@ -419,7 +631,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         return 1
     print(f"lessons PASS {len(lessons)} 条({auth} 权威 / {cand} 候选)")
     print()
-    print("**台账干净 ≠ 经验正确。** 这里只查六问齐不齐、入库门禁有没有被绕过。")
+    print("**台账干净 ≠ 经验正确。** 这里只查六问齐不齐、prefix 形状齐不齐、入库门禁有没有被绕过。")
     print("经验本身对不对,要靠下一次排查回到证据验证它。")
     return 0
 
@@ -437,6 +649,7 @@ def main() -> int:
     p.add_argument("--event", choices=EVENT, default="verified")
     for f in SIX:
         p.add_argument(f"--{f.replace('_', '-')}", dest=f, help=SIX_Q[f])
+    p.add_argument("--prefix", help="决策步 yaml。没有决策步不要传")
     p.set_defaults(fn=cmd_add)
 
     p = sub.add_parser("promote", help="人确认 + 复现后入库")

@@ -14,7 +14,8 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | 标识 | idev 写入 `.idev/marker.yaml` 的 `marker: idev`。后续会话靠它认出这份持久化；`evolve: pilot` 的仓进入自进化。`extension_root` 是指向另一标记仓的相对路径 | [extension-config.md](extension-config.md) |
 | 阶段页 | `.idev/extensions.yaml` 里某一阶段要打开的产线文件。进入阶段用 `session-context.py`，点名的产品传 `--product` | [extension-config.md](extension-config.md) |
 | 执行产物 | idev 跑阶段时留下的 trace、复盘、inbox。在产线 `.idev/`，给定自进化参考；`docs/task/` 不是执行产物。过时原件先摘要进 `memory.md` 再删 | `scripts/execution-clean.sh` |
-| memory.md | 产线 `.idev/` 里纳入版本库的摘要。自进化引用满 2 次或满 3 代时更新。外部清理忽略目录时靠 `!.idev/memory.md` 留下来 | `.idev/memory.md` |
+| memory.md | 产线 `.idev/` 里纳入版本库的摘要。自进化引用满 2 次或满 3 代时更新。外部清理忽略目录时靠 `!.idev/memory.md` 留下来。它不是用户画像，也不进代码检索 | `.idev/memory.md` |
+| 跨会话的三层 | 原始证据只追加，知识要人确认，索引从源码重建。互相矛盾的轨迹并列留下 | [self-evolution.md](self-evolution.md) |
 | 提升到内核 | 人主动要求后，剥离产品专有内容，`kernel-promote-check.sh` 通过，才写入内核 | [scope.md](../conventions/scope.md) |
 | 试点例 | 核心页里若需要对照，必须带的标注。不是「某一个产品才是 pilot」 | `scripts/core-strip-check.sh` |
 | 票 / feature | 一次交付的单位。`<票目录>` 只认 `doc_home.py --key task`。已有规范文档时这一目录是 `docs/task/<feature>/`，否则是 `.idev/task/<feature>/`。状态在 `deliver.yaml` | `scripts/lib/doc_home.py` |
@@ -44,7 +45,11 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | P/C/R | 编码模式/气味/重构条件（P1–P17、C1–C15、R1–R6） | [coding-tables.md](../conventions/coding-tables.md) |
 | T/A/F | 架构范式/出门问题/AI 失败模式 | [canon.md](../conventions/canon.md) |
 | S8 配方 | 一条可被 AI 识别的流水线。产品构建的在 `<repo>/.idev/workflows/<id>.yaml`；idev `workflows/` 只留编排能力 | [workflow-schema.md](workflow-schema.md) |
+| 浏览器程序 | 一次提交的一段页面操作。回执按任务和请求号保存。会改页面的同一段程序只跑一次。失败后的下一段由该页的 `advise` 给出。不绑定某一个浏览器 | [browser-program.md](browser-program.md) |
+| 两阶段读 | 先列出符号和路径的薄目录，再加载一个行区间。本地 Milvus 用词和汉字双字两路召回后重排，正文仍从文件读 | [context-stage.md](context-stage.md) |
+| 知识沉淀 | 可重跑的做法先记成程序候选。两条内容不同的结果且经人确认才留下。事实仍走经验账。不执行脚本，不改提示词 | [sediment.md](sediment.md) |
 | 分片 | 同一步里按需拆开的独立工作。`fanout.py assess` 打出 `FANOUT` 才同时派多个 agent；每片只写自己的路径，导体 `merge` 后这一步只记一次。`SERIAL` 仍是一个 agent。第二份 run、人闸并行、产品代码写租约并行不做。验证租约可以按片发，每片只锁自己的路径 | `scripts/fanout.py` |
+| 再派 | 再开一个执行者。只在它能带回上一手生成时拿不到的信息：跑出来的结果、独立读到的产物和尺、写集不相交的另一片、带证据路径的领域约束。`STATUS: PASS` 是提议，批准在检查和证据上。下一轮只接失败项和证据路径 | [agents.md](agents.md) |
 | 交出口 / handoff | 产品专属、集群、脚手架类问题，交给对应产品 Skill | `SKILL.md` S7 |
 | UNPROVEN | 在 canon 自问里答不出时的标记，表示“未被证据证明”，须写进 RECORD | [canon.md](../conventions/canon.md) §5 |
 | `IDEV_ROOT` | 内核 checkout（`~/.cursor/skills/idev` 指向的这份）。Python 脚本用它整个挪走内核，agent 委派包里必填 | `scripts/lib/roots.py` |

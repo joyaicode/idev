@@ -231,6 +231,9 @@ python3 $IDEV/scripts/stage-gate.py --feature <f> --stage <stage>
 | `actions[].on_failure` | 失败后能不能重试、错误码显示在哪 |
 | `states.loading` | 请求在路上时界面什么样 —— **重复提交就在这里发生** |
 | `states.error` | 请求失败时界面什么样(不是空白页) |
+| `actions[].on_pending` | 进行中页面上的字。点击返回还不是完成 |
+| 动作名、字段标签 | 同一范围里各只出现一次。同名动作用 `scope` 分开 |
+| 进行中 / 成功 / 失败 | 这三句彼此不同，否则页面上看不出还在处理还是已经完成 |
 
 ```bash
 python3 $IDEV/scripts/ui-spec.py --feature <f>

@@ -936,25 +936,48 @@ def digest_line(run: dict) -> str:
     return "DIGEST %s %s" % (mark, stored)
 
 
+def _progress_line(run: dict) -> str:
+    """Closed steps over the run length, plus the ids still open.
+
+    Closed means the step will not be worked again: PASS, SKIPPED, UNPROVEN,
+    AUTO, or FAIL that already branched. It is not a pass count. Open ids come
+    from open_steps, so a parallel group lists every member still open.
+    """
+    steps = run.get("steps") or []
+    if not steps:
+        return ""
+    closed = sum(1 for step in steps if _settled(step))
+    opened = [str(step.get("id")) for step in open_steps(run) if step.get("id")]
+    line = "PROGRESS closed=%d/%d" % (closed, len(steps))
+    if opened:
+        line += " open=" + ",".join(opened)
+    return line
+
+
 def next_line(run: dict) -> list[str]:
     digest = digest_line(run)
     head = [digest] if digest else []
     if run["status"] in ("done", "aborted"):
-        return head + [f"RUN {run['status'].upper()}"]
-    opened = open_steps(run)
-    if not opened:
-        return head + ["RUN DONE"]
-    blocks = [_step_lines(run, step) for step in opened]
-    if len(blocks) == 1:
-        lines = blocks[0]
+        lines = [f"RUN {run['status'].upper()}"]
     else:
-        lines = [f"PARALLEL {opened[0].get('group')}"]
-        for i, block in enumerate(blocks):
-            if i:
-                lines.append("---")
-            lines.extend(block)
-    if run["status"] == "blocked":
-        lines.insert(0, "RUN BLOCKED; fix this step, then record it again")
+        opened = open_steps(run)
+        if not opened:
+            lines = ["RUN DONE"]
+        else:
+            blocks = [_step_lines(run, step) for step in opened]
+            if len(blocks) == 1:
+                lines = blocks[0]
+            else:
+                lines = [f"PARALLEL {opened[0].get('group')}"]
+                for i, block in enumerate(blocks):
+                    if i:
+                        lines.append("---")
+                    lines.extend(block)
+            if run["status"] == "blocked":
+                lines.insert(0, "RUN BLOCKED; fix this step, then record it again")
+    progress = _progress_line(run)
+    if progress:
+        lines.append(progress)
     return head + lines
 
 
@@ -999,6 +1022,19 @@ def step_snapshot(step: dict) -> dict:
     return {key: step[key] for key in keys if key in step}
 
 
+def _hop_budget(data: dict, step: dict) -> tuple[int, int]:
+    """Used hops and the cap, taken from the loop file. The step is only a fallback."""
+    hops = data.get("hops")
+    used = len(hops) if isinstance(hops, list) else 0
+    cap = data.get("max_hops")
+    if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
+        raw = step.get("react")
+        cap = raw.get("max_hops", 8) if isinstance(raw, dict) else 8
+    if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
+        cap = 8
+    return used, cap
+
+
 def _loop_line(run: dict, step: dict) -> str:
     if not isinstance(step.get("react"), dict):
         return ""
@@ -1010,7 +1046,8 @@ def _loop_line(run: dict, step: dict) -> str:
     if not path.is_file():
         return "LOOP absent"
     data = safeyaml.mapping(path) or {}
-    return "LOOP %s" % (data.get("status") or "absent")
+    used, cap = _hop_budget(data, step)
+    return "LOOP %s hops=%d/%d" % (data.get("status") or "absent", used, cap)
 
 
 def _tool_line(step: dict) -> str:
@@ -1024,8 +1061,12 @@ def _tool_lines(step: dict) -> list[str]:
     line = _tool_line(step)
     if not line:
         return []
-    inputs, outputs = workflow_compose.tool_contract(str(step.get("tool") or ""))
+    tool_id = str(step.get("tool") or "")
+    inputs, outputs = workflow_compose.tool_contract(tool_id)
     lines = [line]
+    limit = workflow_compose.tool_limit(tool_id)
+    if limit:
+        lines.append("LIMIT " + limit)
     if inputs:
         lines.append("IN " + ",".join(inputs))
     if outputs:
@@ -2112,6 +2153,7 @@ def prior_failure(run_path: Path, record: dict) -> str:
     if check and _report_status(_raw(check)) != "PASS":
         said += (f"。复核 {check.get('agent')} STATUS={_report_status(_raw(check)) or '?'},"
                  f"证据 {_report_evidence(_raw(check)) or '见复核留痕'}")
+    said += "。只改上面点名的失败项和证据路径，不重判上次产物，不索取上次推理。"
     return said
 
 
@@ -2162,6 +2204,9 @@ def print_brief(run: dict, step: dict, agent: str, attempt: int, brief: dict, ro
         print("只写: " + ", ".join(brief["writes"]))
     if brief.get("verifies"):
         print(f"复核对象: {brief['verifies']}(写手这次的回报与改动,独立判断,不改写手的代码)")
+    progress = _progress_line(run)
+    if progress:
+        print(progress)
     print("END BRIEF")
 
 

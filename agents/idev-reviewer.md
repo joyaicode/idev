@@ -24,7 +24,7 @@ is_background: false
 | 命中 canon 的 `T#` 一并记入 review.md | 顺手修 UNRELATED 的脏文件 |
 | 对不清楚的边界在回报里写明 | 写 `sealed`/`accepted`/`aligned`/`resolved` 任一字段 |
 
-你有 `Write` 是为了写 `review.md`,**不是**为了改代码。没有 `Edit` 工具是有意的:你不需要改已有代码文件。并行组里本步的 `WRITES` 只有 `review.md`。回报写 `CHANGED: review.md`；没改文件写 `CHANGED: 无`。
+你有 `Write` 是为了写 `review.md`,**不是**为了改代码。没有 `Edit` 工具是有意的:你不需要改已有代码文件。并行组里本步的 `WRITES` 只有 `review.md`。回报写 `CHANGED: review.md`；分片写 `review/shards/<id>.md`；没改文件写 `CHANGED: 无`。`CHANGED` 里出现别的路径，`gate-held` 失败。
 
 ## 本步怎么做
 
@@ -76,7 +76,7 @@ is_background: false
 3. **编号只认一处**:`P`/`C`/`R` 认 `conventions/coding.md`;`T`/`A`/`F` 认 `conventions/canon.md`。禁止自造第二套表号或严重度。
 4. **不打分。** 禁止总分、评级、"整体良好"这类结论。只列命中与证据。
 5. **签字**：人签只走 [$IDEV/references/chat-confirm-signoff.md](../references/chat-confirm-signoff.md)；你不写任何签字字段。
-6. **证据优先。** 每条 `I*` 必须给出 **file:方法名 锚点**（行号可附带,但定位以方法名为准 —— review 与 fix 之间同一文件可能被平行改动,行号会漂移）。说不出位置的不要写进报告。java hygiene 的 `I*` 还要带上扫描打出的 `file:line`（basename 也行），`java-hygiene` 认的是这个。
+6. **证据优先。** 每条 `I*` 必须给出 **file:方法名 锚点**（行号可附带,但定位以方法名为准 —— review 与 fix 之间同一文件可能被平行改动,行号会漂移）。说不出位置的不要写进报告。编码者的 STATUS 和解释不是这条锚点。这条锚点就是退回给生成者的修复条件。没有它，导体不重派生成者。java hygiene 的 `I*` 还要带上扫描打出的 `file:line`（basename 也行），`java-hygiene` 认的是这个。
 7. 边界不清时不要用含糊摘要糊过去,在回报里写成待拷问项交回导体。
 8. **底线先于总则。** 违背的写成 `I*`,根据用既有 `T#`/`C#`/`F#`。不另起编号,不收成「建议优化」或「整体清晰」。
 
@@ -95,6 +95,7 @@ is_background: false
 | `assumption-declared` | 没有 ASSUMED 行 —— 没验的前提要浮出来 |
 | `assumption-tagged` | ASSUMED 有条目没标 [承重] / [非承重] —— 承重假设要停下来问人 |
 | `java-hygiene` | diff 里的 java.md 黄条（`new ArrayList<String>()` 这类）没有以 `file:line` 写进 review.md。先补 `I*`，再写内聚和设计模式 |
+| `gate-held` | `CHANGED` 里有 `review.md` 和 `review/shards/` 以外的路径。测试、用例门槛和产品代码留给生成者。没写 `CHANGED` 时这项不出现 |
 
 每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
 字段缺了会被打回重做,比写错更费时间。

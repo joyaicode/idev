@@ -62,6 +62,105 @@
 | 把 5 个 agent 也做成 skill | skill 注入当前上下文,5 个一起注入就没有隔离了,等于回到单体 |
 | 省掉委派包里的字段"反正 agent 能猜" | 它猜不到。少一项它只能 `BLOCKED(brief)` 回来 |
 
+## 再派一个执行者
+
+再派一个执行者，只在它能带回**上一个在生成时拿不到的信息**。
+
+这一层认的新信息只有四样：
+
+| 新信息 | 落在哪 |
+|---|---|
+| 跑出来的结果：测试、命令、页面回执 | 当前执行者自己跑，或交给 `idev-verifier` 拿日志 |
+| 独立读到的产物和尺 | `idev-reviewer` 读 diff 和扫描输出；复核者读证据文件 |
+| 写集不相交的另一片工作 | `fanout.py` 打出 `FANOUT` 才派 |
+| 另一个领域的约束，并带证据路径 | `GUIDE`，或一次 `CONSULT` |
+
+能用一条命令拿到的结果，留在当前执行者。多这一跳换不回新信息的，也留在当前执行者。
+
+**模型可以提出完成，批准只发生在检查和证据上。** `STATUS: PASS` 是提议。`delegation.py` 的机检、证据路径、`check-feature` 才是批准。
+
+三种假象打回给原执行者，让它补证据：
+
+| 假象 | 认法 | 打回成 |
+|---|---|---|
+| 做了一部分就说全部做完 | 证据只覆盖本步的一块 | 补上没覆盖的那块再报 |
+| 一条路不通就说整步做不到 | 只试过一条，其余没写 | `BLOCKED`，写明未试路径 |
+| 口头办成，闭环没走完 | 没有日志、回执或文件能对上尺 | 没有证据路径的 PASS 不作数 |
+
+分片是互补的工作。另一片的结论不是证据。同一模型在同一份文件上的第二份意见也不是独立证据。写集不相交挡住的是同一文件被盖掉；跨文件把同一个不变量改矛盾，由导体在合并总账时核对。先完成的一片不取消其余。
+
+执行者之间传任务、已确认的事实、产物路径。思考过程留在留痕里。咨询不套娃：这份委派已经是 `咨询:`，再次 `BLOCKED(domain)` 就问人。执行者不派执行者。一轮最多 8 片，其余排队。循环停在检查和证据上。
+
+四块地方分开：
+
+| 区域 | 是什么 | 规则 |
+|---|---|---|
+| 执行者私有 | 留痕里的 brief / report 原文 | 别人的原文不作证据 |
+| 票目录 | 人看的工件 | 只写本步 `WRITES`；分片不改总账 |
+| 产品仓 | 源码 | 只改 `include: true` 的路径 |
+| 规程 | 本技能与 conventions | 执行者不改 |
+
+知识和流程上的差别，用按需打开的页。权限和写隔离，用现在这五个执行者。拆任务留在导体；执行者收到的是已经拆好的一步。
+
+留在书里、不进这一层：对同一段文本辩论或投票、为文风再拆执行者、无界子执行者、按赛马级联取消、每个执行者一个 worktree、跨组织的 Agent 协议、Agent 市场和社会模拟。
+
+## 这一轮之外到达的事
+
+原则来自 [joyaicode/ai-agent-book 第六章](https://github.com/joyaicode/ai-agent-book/blob/main/book/chapter6.md)。只约束现有的回合、后台命令和浏览器程序。不新做事件总线。
+
+- 常规的新消息，等到当前这条工具返回再一起看。用户说停，就不要开始下一个不可逆动作。已经做完的动作不因此撤销。
+- 启动成功不是做完。`queued`、`running` 和「任务已发起」不是成功。没有结果就不编造。
+- 迟到的结果对上原来的任务号或请求号。对不上就单独摆出，不并进当前结论。
+- 排着的几条更新都生效，不只最后一条。
+- 页面上的下一段，从现在的页面重新看起。上一张回执不能代替现在的页面。见 [browser-program.md](browser-program.md)。
+
+留在书里：语音、机器人、虚拟身份、心跳、用另一个模型给事件分类、世界模型。
+
+## 下一轮只接核实过的状态
+
+原则来自 [bojieli/ai-agent-book 第十章](https://github.com/bojieli/ai-agent-book/blob/main/book/chapter10.md)后半：循环停在独立验证，退回要带修复条件，转述会放大错误。只约束现有的重派、复核、配方和分片合并。不新做消息总线、进度文件、乐观锁或级联取消。
+
+下一轮只接这四件：
+
+| 件 | 现成的落点 |
+|---|---|
+| 原目标 | 委派包里的本步 kind 和 label |
+| 已核实的证据 | `prior_failure` 里的证据路径 |
+| 失败证据 | `prior_failure` 里未过的检查 |
+| 剩余工作 | 这些未过的检查，加上证据没盖住的那一块 |
+
+留痕里的 report 原文、思考过程和文件正文留在留痕里。`workflow.py` 的 `prior_failure` 只拼检查名和证据路径。
+
+没有检查名，也没有 `file:方法名`，就不重派生成者。先让审查者或复核者补上这个条件。生成者拿到条件之后只改那几项。不同意这些条件，写 `BLOCKED(logic)`。
+
+复核对照证据文件和尺。写手的推理不进复核包。`领域约束` 按 `delegation.py` 原样抄进下一份包。下游的 `FACTS` 指向证据文件或命令输出。上游 `GUIDE` 的句子不是来源。
+
+同一模型的第二份意见不是独立证据。合并时各片只交回自己的那一条，并且和派发时的 intent 一致；对不上，`fanout.py merge` 拒绝。各片的 `STATUS` 拼起来不是结论。导体打开证据文件再 `record`。
+
+顺序和并行已经写在配方里。`next` 打出的下一步就是这一跳。缺槽位走 `ASK`。片数上限在 `fanout.py`（一轮最多 8），循环上限在 `react_loop.py`（硬顶 16），无正文回合上限在 `turn-budget.py`。执行者改不了这些数，也不自己再派。同一次失败检查反复出现、又没有新证据路径，走现有的同签名三次和连续两次无变化。
+
+这一步要撤销另一个执行者本轮已经写入的产物，写 `BLOCKED(logic)`，由人定哪一边留下。
+
+独立密钥、步骤级价值树、多数表决留在书里。其余控制面的现有落点见下一节。
+
+## 控制面对上现有部件
+
+原则来自 [bojieli/ai-agent-book 第十章](https://github.com/bojieli/ai-agent-book/blob/main/book/chapter10.md)的数据平面和控制平面。只给现有部件对上号。不新做锁、总线或终止树。
+
+| 书里的做法 | 现有部件 |
+|---|---|
+| 同一文件不要被后写的盖掉 | 写租约一次一个写者。分片写集相交就 `SERIAL` |
+| 跨文件把同一个不变量改矛盾 | `merge` 对照派发时的 intent。assess 给总账记了指纹，分片改了它，`merge` 拒绝 |
+| 父级结束时子进程还在 | [会话收尾](../conventions/SKILL.md)只关本轮拉起的进程 |
+| 进度和卡住 | `prior_failure`、`LOOP` / `COUNT`、同签名三次、连续两次无变化 |
+| 执行者之间的消息 | 委派包、回报、`GUIDE` 原样抄。必读是这一步自己的落点页 |
+| 并发到顶 | 默认一轮 4 片，最多 8。多出来的是 `QUEUED`，不打断正在跑的片 |
+| 没核实的结果不进权威状态 | 分片文件在 `merge` 之前不是总账 |
+
+没有新的执行结果时，同一上下文里再看一遍，会把已经对的改错。生成者只改点名的失败项。现有检查判不了的，补证据或补这条检查。
+
+审查者的 `CHANGED` 只许 `review.md` 和 `review/shards/`。写了别的路径，`gate-held` 失败。规划留在主会话。执行者都是 `inherit`，不按难度再分模型档。
+
 ## 这一层是什么 / 不是什么
 
 | 是 | 不是 |
@@ -73,7 +172,7 @@
 
 `find_run()` 仍拒绝第二份活跃 run。人闸和 `lease: write` 一次只开一步。配方里同一个 `group`、并且 `writes` 两两不相交的 verify 步骤，从第一个未完成成员到组尾同时开放：`next` 打出 `PARALLEL`，`record` 和 `delegate` 接受组内任一未完成步骤。这是先订死写集再并行，对应 `conventions/canon.md` 对「先订接口再并行」的要求。`references/hitl-risk-tiers.md` 说的不内置并行 PR 阶段机仍然成立：组不是一条并行的合并流水线。
 
-自测、用例设计、用例执行、根因，以及写集还没钉死成一份 `review.md` 的审查，可以在**同一步**里按需拆开。导体先跑 `scripts/fanout.py assess`。少于两片、写集相交、或同一个 Maven 模块没有 `runner.parallel: true`，输出 `SERIAL`，仍然只派一个 agent。用例起草在 `arch.yaml` 里还没有两条 `case_intent` 时，改看 `review.md` 里已签收的 `I*`：签收项就是分片，不必等这一步自己把 intent 写出来。审查按改动的顶层模块分片深读；`coding-scan.sh` 是 `PREP`，导体先跑完。输出 `FANOUT` 时，同一条消息把每个 `SHARD` 派出去（Cursor 用 Task，Claude Code 用 Agent 工具），并且对每一片执行 `workflow.py delegate <step> --shard <id>`。那张验证租约只覆盖该片的 `WRITES`，不覆盖整棵票目录。不要对一个 `FANOUT` 步骤再打一张整票租约。每个委派包多三行：`分片`、`只写`、`范围`。分片只写 `WRITES` 里的路径。`verify/plan.yaml`、`arch.yaml`、`review.md` 和 `hypotheses.yaml` 只由导体的 `fanout.py merge` 改。assess 打出 `MERGE` 且没有 `SHARD` 时，草稿已经齐了，跑 merge，不要再派一个执行者去写这些总账。合并之后这一步只 `record` 一次。每一片的留痕用 `shard:`，文件落在 `delegations/<run_id>/<step>-<shard>-<attempt>.yaml`。另一片的结论不是证据。默认一轮 4 片，最多 8 片，其余是 `QUEUED`，合并后再 assess。这仍然是一份 run。`review.fix` 不拆。
+自测、用例设计、用例执行、根因，以及写集还没钉死成一份 `review.md` 的审查，可以在**同一步**里按需拆开。导体先跑 `scripts/fanout.py assess`。少于两片、写集相交、或同一个 Maven 模块没有 `runner.parallel: true`，输出 `SERIAL`，仍然只派一个 agent。用例起草在 `arch.yaml` 里还没有两条 `case_intent` 时，改看 `review.md` 里已签收的 `I*`：签收项就是分片，不必等这一步自己把 intent 写出来。审查按改动的顶层模块分片深读；`coding-scan.sh` 是 `PREP`，导体先跑完。输出 `FANOUT` 时，同一条消息把每个 `SHARD` 派出去（Cursor 用 Task，Claude Code 用 Agent 工具），并且对每一片执行 `workflow.py delegate <step> --shard <id>`。那张验证租约只覆盖该片的 `WRITES`，不覆盖整棵票目录。不要对一个 `FANOUT` 步骤再打一张整票租约。每个委派包多三行：`分片`、`只写`、`范围`。分片只写 `WRITES` 里的路径。`verify/plan.yaml`、`arch.yaml`、`review.md` 和 `hypotheses.yaml` 只由导体的 `fanout.py merge` 改。assess 打出 `MERGE` 且没有 `SHARD` 时，草稿已经齐了，跑 merge，不要再派一个执行者去写这些总账。合并之后这一步只 `record` 一次。每一片的留痕用 `shard:`，文件落在 `delegations/<run_id>/<step>-<shard>-<attempt>.yaml`。另一片的结论不是证据。分片是互补工作，先完成的一片不取消其余。默认一轮 4 片，最多 8 片，其余是 `QUEUED`，合并后再 assess。这仍然是一份 run。`review.fix` 不拆。再派的条件见「再派一个执行者」。
 
 `conventions/evidence.md:4` 已经为此留了口子:「复杂问题可并行多个 Agent,但不能用『另一个 Agent 猜过了』代替证据。」—— 所以每个 agent 的回报都必须带证据路径,**agent 说过不算证据**。
 
@@ -154,8 +253,9 @@
 2. `DELEGATE none` → 导体自己做这一步;`DELEGATE <agent>` → 组委派包(见下)
 3. **记下 `started_at`**,然后委派:Claude Code 用 Agent 工具,Cursor 用 `/<agent-name>`。
    没有 `FANOUT` 时一步只派一个 agent。`fanout.py assess` 打出 `FANOUT` 时,同一条消息派这一波的每个分片,不要等前一个回来再派下一个。`PREP` 由导体先跑完,再派分片。
-4. 收回报,**记下 `finished_at`**。核对 `STATUS` 与 `EVIDENCE`。**回报里没有证据路径的 PASS
-   不作数**,打回重做
+4. 收回报，**记下 `finished_at`**。打开 `EVIDENCE` 指向的文件，再核对 `STATUS`。没有证据路径的 PASS 不作数。
+   做了一部分就说全部做完、只试了一条路就说做不到、口头办成但没有对上尺的产物，都打回给原执行者补证据。
+   没有检查名或 `file:方法名` 的退回，先补修复条件，不重派生成者。认法在「再派一个执行者」和「下一轮只接核实过的状态」。
 5. **落委派留痕**(可调试的前提,见 [agents-evolve.md](agents-evolve.md)):
    ```bash
    python3 scripts/delegation.py write --feature <f>    # brief + report 原文走 stdin
@@ -221,6 +321,8 @@ artifact: <线上跑的那份产物路径;kind=ops.classify 必填>
 只写: <WRITES 里的路径>
 范围: <SCOPE 原文>
 ```
+
+`workflow.py step` 打出的委派包在 `END BRIEF` 前有一行 `PROGRESS closed=<已收口>/<总步数> open=<步骤 id>`。原样带上。已收口含跳过、未证明和失败后已改道，不是通过。
 
 `IDEV_ROOT` 对 `idev-coder` / `idev-verifier` / `idev-ops` 是**必填**:这三个要跑提效脚本
 (`scripts/failure_signature.py`、`scripts/hypothesis.py`),定义里以 `$IDEV` 引用它。
