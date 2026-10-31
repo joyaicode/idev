@@ -28,13 +28,13 @@ var (
 	grillLine     = regexp.MustCompile(`(?m)^convention:\s*grilling\s*$`)
 	grillingWord  = regexp.MustCompile(`(?i)\bgrilling\b`)
 	homeKeys      = map[string]bool{
-		"layout": true, "task": true, "deliver": true, "plan": true,
+		"layout": true, "task": true, "work": true, "deliver": true, "plan": true,
 		"prd": true, "spec": true, "test-case": true, "patrol": true,
 	}
 )
 
 // LocateTicket resolves a ticket path the way scripts/lib/doc_home.py does.
-// key is one of layout|task|deliver|plan|prd|spec|test-case|patrol.
+// key is one of layout|task|work|deliver|plan|prd|spec|test-case|patrol.
 // Returned paths are symlink-resolved when the target exists, so Go and
 // Python (Path.resolve) agree on macOS /var → /private/var.
 func (Local) LocateTicket(_ context.Context, repoRoot, feature, key string) (string, error) {
@@ -403,6 +403,10 @@ func homes(repo, feature string) (map[string]string, error) {
 		baseDocs = filepath.Join(repo, ".idev", "docs")
 		task = filepath.Join(repo, ".idev", "task", feature)
 	}
+	work := task
+	if layout == "product" {
+		work = filepath.Join(repo, ".idev", "task", feature)
+	}
 	spec, err := specFile(repo, feature, layout)
 	if err != nil {
 		return nil, err
@@ -410,6 +414,7 @@ func homes(repo, feature string) (map[string]string, error) {
 	return map[string]string{
 		"layout":    layout,
 		"task":      task,
+		"work":      work,
 		"deliver":   filepath.Join(task, "deliver.yaml"),
 		"plan":      filepath.Join(task, "verify", "plan.yaml"),
 		"prd":       filepath.Join(baseDocs, "prd", feature+".md"),
@@ -420,6 +425,11 @@ func homes(repo, feature string) (map[string]string, error) {
 }
 
 func layoutFor(repo, feature string) string {
+	// code-review is the whole-repo review process, not a product feature.
+	// It stays under .idev/task and is not an engineering document.
+	if feature == "code-review" {
+		return "native"
+	}
 	product := filepath.Join(repo, "docs", "task", feature)
 	native := filepath.Join(repo, ".idev", "task", feature)
 	productHit := hasTicket(product)

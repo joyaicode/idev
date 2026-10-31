@@ -135,7 +135,7 @@ STATUS = ("open", "proven", "disproven")
 
 def ledger_path(feature: str, repo: Path | None) -> Path:
     base = (repo or Path.cwd()).resolve()
-    return doc_home.homes(base, feature)["task"] / "hypotheses.yaml"
+    return doc_home.intermediate(base, feature, "hypotheses.yaml")
 
 
 def load(path: Path, feature: str) -> dict:

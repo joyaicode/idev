@@ -28,6 +28,13 @@ TMP="$(mktemp -d)"
 cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
+# Hermetic: delegation.py reads ${IDEV_DATA}/subagent-stops.jsonl for
+# changed-within-actual and stop linking. Without this the real ~/.idev leaks
+# in, and a clean CHANGED report fails or passes depending on what this
+# machine happened to record.
+export IDEV_DATA="${TMP}/idev-data"
+mkdir -p "${IDEV_DATA}"
+
 TICKET="${TMP}/.idev/task/${FEATURE}"
 mkdir -p "${TICKET}/workflow"
 : > "${TICKET}/review.md"
@@ -221,6 +228,8 @@ expect 1 "flag PASS without evidence" -- \
 contains "evidence-present" "names evidence-present"
 
 # an agent claiming it wrote a signoff field -> hard stop (exit 2)
+# GATE lines are present so deliver-gates passes and the case proves only
+# no-signoff-write (a case failing two checks proves neither).
 cat > "${TMP}/signoff.yaml" <<YAML
 step: advance
 kind: deliver.advance
@@ -230,6 +239,8 @@ report:
   raw: |
     STATUS: PASS
     EVIDENCE: ${TICKET}/review.md
+    GATE: check-feature req = PASS
+    GATE: stage-gate req = PASS
     CONCLUSION: 已写入 accepted: true
 YAML
 expect 2 "hard-stop on a claimed signoff write" -- \
@@ -247,6 +258,8 @@ report:
     STATUS: PASS
     EVIDENCE: ${TICKET}/review.md
     CHECKS: no-signoff-write=PASS
+    GATE: check-feature req = PASS
+    GATE: stage-gate req = PASS
     CONCLUSION: 未写 accepted,等导体请人签
 YAML
 expect 0 "a denial does not trip no-signoff-write" -- \

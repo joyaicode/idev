@@ -22,7 +22,7 @@
 
 | 产物 | 路径 | 人签字 |
 |------|------|--------|
-| 排障单 | `<票目录>/ops.yaml` | 分类后继续；关闭时 `resolved` + `by` |
+| 排障单 | `doc_home.py --key work` 的 `ops.yaml` | 分类后继续；关闭时 `resolved` + `by` |
 | debug / patrol | `<票目录>/verify/plan.yaml` | plan `accepted` |
 | 回退 | `deliver.yaml.stage` + `defect_origin` | 人确认 origin |
 

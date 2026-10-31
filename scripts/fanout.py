@@ -62,6 +62,15 @@ def task_of(feature: str, repo: Path | None) -> Path:
     return doc_home.homes(base, feature)["task"]
 
 
+def base_of(feature: str, activity: str, repo: Path | None) -> Path:
+    """Review and root-cause shards live in the work directory, not the deliverable ticket."""
+    base = (repo or Path.cwd()).resolve()
+    found = doc_home.homes(base, feature)
+    if activity in doc_home.PROCESS_ACTIVITIES:
+        return found["work"]
+    return found["task"]
+
+
 def manifest_path(task: Path, activity: str) -> Path:
     return task / "verify" / f"fanout-{activity}.yaml"
 
@@ -224,9 +233,17 @@ def _uncovered(intents: list[dict], cases: list[dict]) -> list[dict]:
     return open_rows
 
 
+def _review_path(task: Path) -> Path:
+    """Signed review text. A product ticket keeps it in the work directory."""
+    direct = task / "review.md"
+    if direct.is_file() or task.parent.name != "task":
+        return direct
+    return doc_home.intermediate(task.parent.parent, task.name, "review.md")
+
+
 def _signed_findings(task: Path) -> list[str]:
     """I* headings a person has already signed. Unsigned findings are not cases yet."""
-    path = task / "review.md"
+    path = _review_path(task)
     if not path.is_file():
         return []
     text = path.read_text(encoding="utf-8", errors="replace")
@@ -291,7 +308,7 @@ def _assess_plan_findings(task: Path, cap: int) -> dict:
         {
             "verify/plan.yaml": _fingerprint(plan_path),
             "arch.yaml": _fingerprint(task / "arch.yaml"),
-            "review.md": _fingerprint(task / "review.md"),
+            "review.md": _fingerprint(_review_path(task)),
         },
         "fewer than two signed findings still need a case",
     )
@@ -576,14 +593,18 @@ def assess(feature: str, activity: str, repo: Path | None = None, cap: int = DEF
         raise ValueError(activity)
     cap = min(max(int(cap), 1), MAX_CAP)
     task = task_of(feature, repo)
-    if not task.is_dir():
+    place = base_of(feature, activity, repo)
+    if activity in doc_home.PROCESS_ACTIVITIES:
+        if not task.is_dir() and not place.is_dir():
+            return _serial(activity, "no ticket")
+    elif not task.is_dir():
         return _serial(activity, "no ticket")
     if activity == "plan":
         return assess_plan(task, cap)
     if activity == "report":
-        return assess_report(task, (repo or Path.cwd()).resolve(), cap)
+        return assess_report(place, (repo or Path.cwd()).resolve(), cap)
     if activity == "rootcause":
-        return assess_rootcause(task, cap)
+        return assess_rootcause(place, cap)
     return assess_cases(task, activity, cap)
 
 
@@ -624,8 +645,8 @@ def render(result: dict, feature: str) -> str:
 
 
 def write_manifest(feature: str, result: dict, repo: Path | None) -> Path | None:
-    task = task_of(feature, repo)
-    if not task.is_dir():
+    task = base_of(feature, str(result.get("activity") or ""), repo)
+    if not task.is_dir() and str(result.get("activity") or "") not in doc_home.PROCESS_ACTIVITIES:
         return None
     path = manifest_path(task, result["activity"])
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -936,7 +957,7 @@ def merge(feature: str, activity: str, repo: Path | None = None) -> int:
     if activity not in ACTIVITIES:
         print(f"BLOCKED unknown activity {activity}", file=sys.stderr)
         return 2
-    task = task_of(feature, repo)
+    task = base_of(feature, activity, repo)
     path = manifest_path(task, activity)
     result = _load(path)
     if result.get("decision") != "FANOUT" or result.get("activity") != activity:

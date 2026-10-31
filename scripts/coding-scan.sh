@@ -132,7 +132,7 @@ if [ "$has_go" = 1 ]; then
 fi
 
 echo "=== 架构范式 ==="
-echo "  idev: ${IDEV}/conventions/canon.md  (T1-T12 念头表 / A1-A8 出门)"
+echo "  idev: ${IDEV}/conventions/canon.md  (T1-T13 念头表 / A1-A8 出门)"
 echo "  涉及加层/拆分/缓存/队列/重写 → 按 canon §1 协议扫 §2 信号，review.md 按 §7 模板记 T#"
 
 echo "=== size (coding-tables §2.4) ==="

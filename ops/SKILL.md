@@ -10,7 +10,7 @@ parent: idev
 先**分类**，再取证。红绿只调用 verify 模块（`debug` / `patrol`）。  
 先跑 `python3 ~/.cursor/skills/idev/scripts/session-context.py --repo <仓根> --feature <feature> --scenario S6 --stage ops [--product <点名的产品>]`，打开每一行 `OPEN`。路径写入 trace 的 `extensions`（没有页就写 `extensions: []`）和 `opened`。  
 特征缺陷回退 deliver 的 `req` / `arch` / `code`。接入坑和集群故障**交出去**，不要抄进本模块。  
-`ops.yaml` 写在 `<票目录>/`。`<票目录>` 只认 `doc_home.py --key task`。
+`ops.yaml`、`hypotheses.yaml`、`lessons.yaml` 写在 `doc_home.py --key work`。这是根因过程，不进工程文档。交付物仍认 `--key task`。
 
 ## 本阶段 5 步（先做这些）
 
@@ -39,7 +39,7 @@ parent: idev
 
 ## Hard rules
 
-1. **先分类再动手。** 写 `<票目录>/ops.yaml` 的 `kind`。`unknown` 不准给结论，也不准改代码。
+1. **先分类再动手。** 写 `doc_home.py --key work` 的 `ops.yaml` 的 `kind`。`unknown` 不准给结论，也不准改代码。
 2. **猜想须复现。** 对齐 `verify-with-cases`。未在用户同一现象上红过一次 → 不写根因。
 3. **先认环境/产物。** 要齐：现象 + 哪套环境 + 哪份产物 + 可观察物。对不上就停。
 4. **红绿只走 verify。** `kind=feature` → `mode=debug`；`kind=patrol` → `mode=patrol`（无包拒跑）。不要第二套断言引擎。

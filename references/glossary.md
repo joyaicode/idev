@@ -18,7 +18,7 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | 跨会话的三层 | 原始证据只追加，知识要人确认，索引从源码重建。互相矛盾的轨迹并列留下 | [self-evolution.md](self-evolution.md) |
 | 提升到内核 | 人主动要求后，剥离产品专有内容，`kernel-promote-check.sh` 通过，才写入内核 | [scope.md](../conventions/scope.md) |
 | 试点例 | 核心页里若需要对照，必须带的标注。不是「某一个产品才是 pilot」 | `scripts/core-strip-check.sh` |
-| 票 / feature | 一次交付的单位。`<票目录>` 只认 `doc_home.py --key task`。已有规范文档时这一目录是 `docs/task/<feature>/`，否则是 `.idev/task/<feature>/`。状态在 `deliver.yaml` | `scripts/lib/doc_home.py` |
+| 票 / feature | 一次交付的单位。`<票目录>` 只认 `doc_home.py --key task`。已有规范文档时这一目录是 `docs/task/<feature>/`，否则是 `.idev/task/<feature>/`。审查和根因的中间文件认 `--key work`，已有规范文档时是 `.idev/task/<feature>/`。整仓代码审查的票目录也是 `.idev/task/code-review/`。状态在 `deliver.yaml` | `scripts/lib/doc_home.py` |
 | stage | 票所处阶段：`req-review → req → arch → code → test → done ⇄ ops` | [deliver/SKILL.md](../deliver/SKILL.md) |
 | 前置 | 架构方案 `design.md` 里、六节之前的一节。写影响范围内的既有问题、需求行数和既有问题行数。有既有问题就问人。小于本需求改动的 1/5 或边界分得开，只用来建议本次不修。判据只在 deliver 的架构阶段 | [deliver/SKILL.md](../deliver/SKILL.md) |
 | ReAct 关节 | 配方步骤上可选的 `react`。动作只能来自该步候选，且候选必须已在 `references/tools.yaml` 登记；用尽或工具失败走 `human` 或 `stop`。没声明的步骤不进循环 | [workflow-schema.md](workflow-schema.md) |
@@ -42,7 +42,7 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | 中控台 | 本机页面。看当前任务、架构、agent、耗时、skill 调起，并把窗口内的件数摊开。点一件数可带上依据，写下改关口、改这一步、补观测或质疑基线。下一轮由导体读取。不签字、不派工、不打分 | `scripts/console.py` |
 | S1–S8 | 场景码，见 `SKILL.md` 决策树 | `SKILL.md` |
 | H1–H6 | 非门禁不停规则（旧称 C1–C6） | [invoke.md](invoke.md) |
-| P/C/R | 编码模式/气味/重构条件（P1–P17、C1–C15、R1–R6） | [coding-tables.md](../conventions/coding-tables.md) |
+| P/C/R | 编码模式/气味/重构条件（P1–P17、C1–C19、R1–R6） | [coding-tables.md](../conventions/coding-tables.md) |
 | T/A/F | 架构范式/出门问题/AI 失败模式 | [canon.md](../conventions/canon.md) |
 | S8 配方 | 一条可被 AI 识别的流水线。产品构建的在 `<repo>/.idev/workflows/<id>.yaml`；idev `workflows/` 只留编排能力 | [workflow-schema.md](workflow-schema.md) |
 | 浏览器程序 | 一次提交的一段页面操作。回执按任务和请求号保存。会改页面的同一段程序只跑一次。失败后的下一段由该页的 `advise` 给出。不绑定某一个浏览器 | [browser-program.md](browser-program.md) |

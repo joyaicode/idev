@@ -17,9 +17,12 @@ steps:
   - id: advance
     kind: deliver.advance
     label: 当前阶段允许动作
+  - id: stage-gate
+    tool: stage-gate
+    label: 拒过清单机检（TOOL 行只打印；导体补 --feature/--stage 跑，record 后结果进请签 proof）
   - id: gate
     kind: human.gate
     label: 若本步含停问点则请签
     with:
       will_write: ["当前 stage 的签收字段（按 chat-confirm 列出；本步无停问点则无）"]
-      proof: "check-feature.sh <feature> <stage> 结果"
+      proof: "check-feature.sh <feature> <stage> + stage-gate 双检结果（stage-gate 为上一步 TOOL，record 后自动并入）"

@@ -1701,10 +1701,12 @@ echo "=== lock: unbound tickets count only outside the kernel ==="
 UB="$(mktemp -d)"
 mkdir -p "$UB/.idev/traces"
 printf 'scenario: S8\nfeature: "-"\ncalls:\n  - name: deliver/SKILL.md\n' > "$UB/.idev/traces/t.yaml"
-python3 "${KERNEL}/scripts/audit_traces_lib.py" "$UB/.idev/traces" 5 | grep -q '^| `feature: -` 未绑票 | 1 ' \
+UB_OUT="$(python3 "${KERNEL}/scripts/audit_traces_lib.py" "$UB/.idev/traces" 5 || true)"
+grep -q '^| `feature: -` 未绑票 | 1 ' <<<"$UB_OUT" \
   || { rm -rf "$UB"; fail "product trace with feature - must count as unbound"; }
 rm -rf "$UB"
-python3 "${KERNEL}/scripts/audit_traces_lib.py" "${KERNEL}/state/traces" 50 | grep -q '^| `feature: -` 未绑票 | 0 ' \
+K_OUT="$(python3 "${KERNEL}/scripts/audit_traces_lib.py" "${KERNEL}/state/traces" 50 || true)"
+grep -q '^| `feature: -` 未绑票 | 0 ' <<<"$K_OUT" \
   || fail "kernel conductor traces must not count as unbound"
 echo "OK  unbound scope"
 
@@ -1760,9 +1762,9 @@ gate_out="$(python3 "${KERNEL}/scripts/workflow-check.py" "$WFT/nogate.yaml" 2>&
   printf '%s\n' 'step: review' 'attempt: 1' 'kind: review.report' 'agent: idev-reviewer' 'report:' \
     '  raw: "STATUS: PASS\nEVIDENCE: r.md\n"' > "$DEL/review-1.yaml"
   "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null || exit 144
-  "$W" record g PASS --feature demo --by tester --quote 继续 >/dev/null 2>&1 && exit 15
+  "$W" record g PASS --feature demo --by mallory --quote 确认 >/dev/null 2>&1 && exit 15
   "$W" record g PASS --feature demo --by assistant --quote 确认 >/dev/null 2>&1 && exit 16
-  "$W" record g PASS --feature demo --by tester --quote 确认 | grep -q '^NEXT r ' || exit 17
+  "$W" record g PASS --feature demo --by tester --quote 继续 | grep -q '^NEXT r ' || exit 17
   "$W" record r FAIL --feature demo >/dev/null || exit 18
   "$W" start demo-flow --feature demo >/dev/null 2>&1 && exit 19
   "$W" record r PASS --feature demo | grep -q '^RUN DONE' || exit 20

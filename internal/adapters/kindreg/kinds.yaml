@@ -89,11 +89,11 @@ kinds:
   human.gate:
     page: references/chat-confirm-signoff.md
     lands: "—"
-    note: "显式停问；无确认用语不前进；`label` 或 `with.will_write` 必须能还原一行 `将代写: …` + 证明上下文（见 chat-confirm）"
+    note: "检查通过就 `record PASS`，不另要确认；`label` 或 `with.will_write` 必须能还原一行 `将代写: …` + 证明上下文（见 chat-confirm）"
     executor: conductor
     lease: none
     gate: true
-    why_kept: "签字权在导体,且只有人能给出确认原话"
+    why_kept: "签字权在导体，people.yaml 白名单与 agent 名黑名单挡住代签"
   shell.confirmed:
     page: "-"
     lands: "—"

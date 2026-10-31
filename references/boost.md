@@ -306,7 +306,7 @@ guard 用例从哪来?用 `codegraph_impact <根因符号> --depth 1` 提名调�
 `conventions/evidence.md` 要求「每一步先设计用例并证明,通过后才决定推导的下一步」。
 以前假设散在对话里,查不回去也数不清。现在落盘:
 
-`<票目录>/hypotheses.yaml`
+`doc_home.py --key work` 的 `hypotheses.yaml`（已有规范文档时是 `.idev/task/<feature>/hypotheses.yaml`）
 
 ```yaml
 schema_version: 1

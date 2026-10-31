@@ -7,7 +7,7 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 
 不要把 GoF 23 名录、《Clean Code》章节或《重构》全书手法目录抄进产品仓。
 
-上游原则层：[canon.md](canon.md)（T1–T12）。命中“加一层 / 拆分 / 缓存 / 重写”类念头先走 canon §1 协议（§2 信号 + §4 念头），再回本页落到 P/C/R。
+上游原则层：[canon.md](canon.md)（T1–T13）。命中“加一层 / 拆分 / 缓存 / 重写”类念头先走 canon §1 协议（§2 信号 + §4 念头），再回本页落到 P/C/R。
 
 裁决先于模式：**YAGNI + Rule of Three。** 第 1 次写具体；第 2 次仍可并列；第 3 次才抽。会说过度设计就简化。  
 结构变、行为不变时走 [coding-tables.md](coding-tables.md) §3；缺测试护栏或与加功能混做 = 不准重构。
@@ -101,9 +101,9 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 
 | 编号 | 含义 | 全表 |
 |------|------|------|
-| `T1`–`T12` / `A1`–`A8` / `F1`–`F7` | 架构原则 / 架构出门 / Agent 失败模式 | [canon.md](canon.md) |
+| `T1`–`T13` / `A1`–`A8` / `F1`–`F7` | 架构原则 / 架构出门 / Agent 失败模式 | [canon.md](canon.md) |
 | `P1`–`P17` | 场景 → 模式 | [coding-tables.md](coding-tables.md) §1 |
-| `C1`–`C15` | 气味 → 纠正 | [coding-tables.md](coding-tables.md) §2 |
+| `C1`–`C19` | 气味 → 纠正 | [coding-tables.md](coding-tables.md) §2 |
 | `R1`–`R6` | 重构满足条件 | [coding-tables.md](coding-tables.md) §3 |
 
 仓内 `<票目录>/current.md`、clean-code 票、`review.md` **必须用上表编号**。禁止另起「表号 / 气味码 / 模式码」。  

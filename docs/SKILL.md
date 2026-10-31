@@ -30,11 +30,12 @@ parent: idev
 
 ```bash
 python3 ~/.cursor/skills/idev/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key task
+python3 ~/.cursor/skills/idev/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key work
 ```
 
-`--key` 还可以是 `prd`、`spec`、`test-case`、`patrol`、`deliver`、`plan`。
+`--key task` 是交付票。`--key work` 是审查和根因过程。其余键：`prd`、`spec`、`test-case`、`patrol`、`deliver`、`plan`。
 
-仓库已经同时有 Matt Pocock 的 feature slug 和 grilling 时，新文档归进规范目录。同一文件也在 `.idev/` 时，读规范目录里的那份，副本留在磁盘上，不覆盖规范正文。
+仓库已经同时有 Matt Pocock 的 feature slug 和 grilling 时，交付物归进规范目录。同一份交付物也在 `.idev/` 时，读规范目录里的那份，副本留在磁盘上，不覆盖规范正文。审查和根因的中间文件读 `--key work`。
 
 还没有这套文档时，不在仓库根新建 `docs/`。阶段状态写 `.idev/task/<feature>/`，人读稿写 `.idev/docs/` 下同名相对路径。问句仍按 grilling 写。票只存在于一边时，留在那边。
 
@@ -53,7 +54,9 @@ Rule 10 里其余目录（`docs/adr/`、`docs/convention/`、`docs/agents/`、`d
 
 产线 `AGENTS.md` 或 `docs/agents/issue-tracker.md` 写了 `docs/specs/` 时，规格目录就是复数 `docs/specs/`，不要改名成 `docs/spec/`。没写时用上表的 `docs/spec/`。`.idev/docs/` 下一律用 `spec/`。另一种拼法下只有一份时仍读那份。两份同时在时，以规格目录那份为准：把另一份里还没有的正文并入，然后删除另一份。巡检包是同一测试设计目录下的 `<feature>-patrol.yaml`。
 
-idev 的阶段文件都放在票目录里，文件名以各模块契约为准：交付看 `deliver/references/deliver-schema.md`（`baseline.yaml`、`req.yaml`、`deliver.yaml` 等），验证看 `verify/references/plan-schema.md`（`verify/plan.yaml`、`unproven.md`），排障看 `ops/references/ops-schema.md`（`ops.yaml`），配方看 `references/workflow-schema.md`（`workflow/run.yaml`、`lessons/`）。另有本页的 `grill.md` 和编码评审 `review.md`。契约里没有的文件名不要临场新建。规范目录里还可以有 setup-agents-docs 的 `issues/`。
+交付物放在票目录里，文件名以各模块契约为准：交付看 `deliver/references/deliver-schema.md`（`baseline.yaml`、`req.yaml`、`deliver.yaml` 等），验证看 `verify/references/plan-schema.md`（`verify/plan.yaml`、`unproven.md`），配方看 `references/workflow-schema.md`（`workflow/run.yaml`）。另有本页的 `grill.md`。契约里没有的文件名不要临场新建。规范目录里还可以有 setup-agents-docs 的 `issues/`。
+
+审查和根因分析的中间文件用 `doc_home.py --key work`，已有规范文档时固定是 `.idev/task/<feature>/`：`review.md`、`review/`、`hypotheses.yaml`、`lessons.yaml`、`ops.yaml`、`lessons/`。最终交付物才写入上面的工程文档。两边同时存在时，过程文件读 `.idev` 那份；只有旧的票目录里还有一份时，先读那份。
 
 ## 体例
 
@@ -68,7 +71,7 @@ idev 的阶段文件都放在票目录里，文件名以各模块契约为准：
 | 需求 | `docs/prd/<feature>.md` | `baseline.yaml` 的 `goal` / `items` / `non_goal` | 同一批 item id。问句只在 `grill.md` |
 | 设计 | `<票目录>/design.md` 六节 | `arch.yaml` | 目标节只照抄 `goal` 一句。配置若新增，方案里给一句解释和一例 |
 | 测试用例 | `docs/test-case/<feature>.md` | `verify/plan.yaml` | 一条 `case_intent` 一条 case。步骤只在 plan |
-| Review | `<票目录>/review.md` | — | 少做 / 多做 / 编码规范 / 扫描。编码规范节由 `idev-reviewer` 写 |
+| Review | `doc_home.py --key work` 的 `review.md` | — | 少做 / 多做 / 编码规范 / 扫描。编码规范节由 `idev-reviewer` 写。这是过程文件，不进工程文档 |
 | 测试报告 | `<票目录>/verify/report.md` | `plan.yaml` 的 `cases[].status` | 只索引 PASS / FAIL / UNPROVEN，不重写用例正文 |
 
 改了 item、slice 或 case 的 id，同一轮改所有引用。人读稿和机读稿对不上时，以密封基线为准，改人读稿。
@@ -77,9 +80,11 @@ idev 的阶段文件都放在票目录里，文件名以各模块契约为准：
 
 | 路径 | 是什么 |
 |---|---|
-| `<票目录>/review.md` | idev 编码评审，code 阶段对照基线 |
+| `doc_home.py --key work` 的 `review.md` | idev 编码评审，code 阶段对照基线。过程文件 |
 | `<票目录>/reviews/` | checklist 记录，有真实 checklist 才建 |
 | `.idev/reviews/` | 执行残留。`execution-clean` 只删这里 |
+
+整仓代码审查过程不记入工程文档。feature `code-review` 的票目录固定是 `.idev/task/code-review/`，不进 `docs/`。有交付物的 feature 也一样：审查和根因过程写 `--key work`，交付物写 `--key task` 与人读文档。
 
 ## 问句
 

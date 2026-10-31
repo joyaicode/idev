@@ -8,6 +8,7 @@
 | 你听到的 | 走 | 不要 |
 |----------|----|------|
 | 新需求、另开票、没有 `deliver.yaml` | **S1** | 直接 `lite-change` |
+| 还没写成可证伪需求的想法 | 先写下反对证据；停下来就是结果 | 直接建票，或用分数决定做不做 |
 | 小改 / 轻量 / 小修；已有票且**不改** goal/baseline/架构 | **S8** `lite-change` | 从 S1 重跑全生命周期 |
 | 只跑自测 | **S8** `dev-selftest` | 问要不要提测（除非人说提测） |
 | 提测包 / 正式测 | **S8** `test-pack`（须 `stage=test`） | 跳阶段硬推 |
@@ -19,6 +20,8 @@
 
 **只开：** `conventions/SKILL.md`（定类）→ `deliver/SKILL.md` → **自动打开** [docs/SKILL.md](../docs/SKILL.md) 与 grilling（缺则先 `scripts/link-companion-skills.sh`）。  
 **禁开：** verify / ops / lifecycle 长文。
+
+想法还没有可证伪的 item 时不建票。反对证据和「不做」都写下来。决定做了，才走下面的步骤，不自动开票。
 
 1. 打开 [docs/SKILL.md](../docs/SKILL.md) 后落票。票里放 `grill.md`、`baseline.yaml`、`deliver.yaml`（`stage: req-review`）。
 2. **自动唤起 grilling**：把正确性/合理性/边界/非目标写成 `grill.md`，按当前编制一次问完。只有回答打开这轮没写到的新分叉才再开一轮。回答不是确认。`review_questions` 与 `objections` 保持空。冲突不得默许。frontier 未空不准请签。问谁见 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
@@ -43,7 +46,7 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> lite-change
 1. `preflight.inputs` — 票/路径可读  
 2. `route.s4` — 确认不改 goal/baseline；定界  
 3. `deliver.code_pass` — 只改 `include: true`  
-4. 同一波 `group: check`：`verify.plan` 写 `verify/plan.yaml`，`verify.run` 写 `verify/selftest.md`，`review.report` 写 `review.md`，验收索引写 `verify/accept.md`  
+4. 同一波 `group: check`：`verify.plan` 写 `verify/plan.yaml`，`verify.run` 写 `verify/selftest.md`，`review.report` 写 `doc_home.py --key work` 的 `review.md`，验收索引写 `verify/accept.md`  
 5. 计划无信号则 `gate-plan` 记 `AUTO`（H4）  
 6. `review.fix` 改掉全部 `I*`  
 7. `verify.run` 复跑：回写 `plan.yaml` 的 status，并重写 `selftest.md` 与 `accept.md`，然后停在实现审核  

@@ -65,6 +65,14 @@ def reviewer(raw: str) -> dict:
     }
 
 
+def deliver(raw: str) -> dict:
+    return {
+        "agent": "idev-deliver", "kind": "deliver.advance", "step": "advance",
+        "brief": {"ticket_home": "t", "repo": "r", "stage": "code", "must_read": "m"},
+        "report": {"status": "PASS", "raw": raw},
+    }
+
+
 class EmptyFieldStaysEmpty(unittest.TestCase):
     def test_no_field_pattern_reads_past_its_line(self) -> None:
         fields = line_fields(delegation, delegation_return, agent_metrics, langfuse_export)
@@ -85,6 +93,23 @@ class EmptyFieldStaysEmpty(unittest.TestCase):
         self.assertEqual(none["gate-held"], "PASS")
         moved = delegation.run_checks(reviewer(REPORT + "CHANGED: src/App.java\n"), None)
         self.assertTrue(moved["gate-held"].startswith("FAIL"), moved["gate-held"])
+
+    def test_deliver_gate_lines_carry_both_verdicts(self) -> None:
+        head = "STATUS: PASS\nEVIDENCE: docs/task/x/advance.md\n"
+        both = delegation.run_checks(deliver(
+            head + "GATE: check-feature x code = PASS\nGATE: stage-gate code = PASS\n"), None)
+        self.assertEqual(both["deliver-gates"], "PASS")
+        skipped = delegation.run_checks(deliver(
+            head + "GATE: check-feature x code = PASS\nGATE: stage-gate code = 不适用\n"), None)
+        self.assertEqual(skipped["deliver-gates"], "PASS")
+        bare = delegation.run_checks(deliver(head), None)
+        self.assertTrue(bare["deliver-gates"].startswith("FAIL"), bare["deliver-gates"])
+        unreadable = delegation.run_checks(deliver(
+            head + "GATE: check-feature x code = PASS\nGATE: stage-gate code 结论未回\n"), None)
+        self.assertTrue(unreadable["deliver-gates"].startswith("FAIL"), unreadable["deliver-gates"])
+        contradiction = delegation.run_checks(deliver(
+            head + "GATE: check-feature x code = PASS\nGATE: stage-gate code = FAIL(3处)\n"), None)
+        self.assertTrue(contradiction["deliver-gates"].startswith("FAIL"), contradiction["deliver-gates"])
 
     def test_an_empty_assumed_line_declares_nothing(self) -> None:
         checks = delegation.run_checks(reviewer(REPORT), None)

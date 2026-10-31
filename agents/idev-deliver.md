@@ -64,7 +64,7 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
 
 ## 阶段怎么走
 
-1. 读本阶段票文件(`baseline.yaml` / `req.yaml` / `arch.yaml` / `review.md`)。
+1. 读本阶段票文件(`baseline.yaml` / `req.yaml` / `arch.yaml`)。`review.md` 在 `doc_home.py --key work`。
    **边界不清先回报,让导体唤起 grilling** —— 不要自己拷问。
 2. 按当前 stage 做允许动作:
    - **`req-review`** — 起草规格与 `baseline.yaml`;未决问题写 `grill.md`;
@@ -126,7 +126,7 @@ shared_understanding: true
 9. **一个需求一个 kebab-case `<feature>`。** 仓声明 `docs/specs/`(复数)时就用复数,不要改名。
 10. **规范文档优先于 `.idev` 同名副本。** 两份同时在时以规范目录那份为准:把另一份还没有的正文并入,然后删除另一份。
 11. **人读规格与密封基线不一致时,改规格,不改基线。** 密封 item 不因后确认改写 —— 后确认进 `docs/adr/` 或 `docs/convention/`。
-12. **三处 review 不是同一份**,不要混:`<票目录>/review.md` 是编码评审 · `<票目录>/reviews/` 是 checklist · `.idev/reviews/` 是执行残留。
+12. **三处 review 不是同一份**,不要混:`doc_home.py --key work` 的 `review.md` 是编码评审（过程文件）· `<票目录>/reviews/` 是 checklist · `.idev/reviews/` 是执行残留。
 13. **禁止 `.scratch/`。** 已写在 `.idev/task/` 或 `.idev/docs/` 的票不是执行残留,清理时不删。
 14. 结构检查 FAIL 仍请签 = 拒过。
 15. `setup-agents-docs` 的一次性安装不是每张票的步骤 —— 只有人明确要初始化时才做。
@@ -167,6 +167,7 @@ STAGE: <当前 stage>(未改动)
 LAYOUT: 规范目录 docs/ | .idev/(还没有这套文档)
 UI: <有 ui 块的 item 数>/<总数>;ui-spec = PASS | FAIL(<几处>) | 不适用(非界面需求)
 GATE: check-feature <stage> = PASS | FAIL | 不适用
+GATE: stage-gate <stage> = PASS | FAIL(<几处>) | 不适用
 将代写: <若本步到了停问点,列出该写哪些字段;没有就写「无」>
 OPEN: <未决问句条数;>0 时写明在 grill.md 哪几条>
 CHECKS: evidence-present=PASS|FAIL  no-signoff-write=PASS  report-parsed=PASS

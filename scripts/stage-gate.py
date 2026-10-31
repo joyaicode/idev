@@ -427,10 +427,18 @@ def main() -> int:
             # ticket does not drown in "not written yet".
             probe = {"req-review": "baseline.yaml", "req": "req.yaml", "arch": "arch.yaml",
                      "code": "review.md", "test": "verify/plan.yaml", "ops": "ops.yaml"}[s]
-            if not (home / probe).exists():
+            if s in ("code", "ops"):
+                if not doc_home.intermediate(repo.resolve(), args.feature, probe).is_file():
+                    continue
+            elif not (home / probe).exists():
                 continue
         ran.append(s)
-        GATES[s](home, findings)
+        gate_home = home
+        if s == "code":
+            gate_home = doc_home.intermediate(repo.resolve(), args.feature, "review.md").parent
+        elif s == "ops":
+            gate_home = doc_home.intermediate(repo.resolve(), args.feature, "ops.yaml").parent
+        GATES[s](gate_home, findings)
 
     # A corrected baseline needs realign as well: stage-gate reads each
     # stage's own file, so it cannot see that a PASS case is still anchored

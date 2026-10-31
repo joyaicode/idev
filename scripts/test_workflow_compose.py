@@ -40,7 +40,10 @@ class Compose(unittest.TestCase):
             data = workflow_compose.safeyaml.mapping(path)
             steps, errors = workflow_compose.composed_steps(data, workflow_compose.recipes_under(path))
             self.assertEqual(errors, [], path.name)
-            want = [(step["id"], step["kind"]) for step in data["steps"]]
+            want = [
+                (step["id"], step.get("kind") or ("tool.step" if step.get("tool") else None))
+                for step in data["steps"]
+            ]
             got = [(step["id"], step["kind"]) for step in steps]
             self.assertEqual(got, want, path.name)
 

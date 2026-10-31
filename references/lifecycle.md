@@ -52,3 +52,5 @@ req-review → req → arch → code → test → done ⇄ ops
 ## 外部框架对照
 
 aisel（ai-software-engineering-lifecycle）概念如何映射到本生命周期、哪些采纳哪些不采纳：[aisel-mapping.md](aisel-mapping.md)。
+
+Spec Kit 的 specify / plan / tasks / implement / converge，以及缺陷和想法入口，哪些落在本生命周期、哪些不采纳：[spec-kit-mapping.md](spec-kit-mapping.md)。

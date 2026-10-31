@@ -13,7 +13,7 @@
 
 | 名 | 必填 | 说明 |
 |----|------|------|
-| `feature` | 否 | 默认 `code-review`。工件落在 `doc_home.py --repo <被审查仓> --feature <feature> --key task` 给出的目录。配方 `needs_ticket: false`，不要求 `deliver.yaml` |
+| `feature` | 否 | 默认 `code-review`。工件只落在 `.idev/task/code-review/`（`doc_home.py --key task` 对这个 feature 固定走这里）。不写入 `docs/`。配方 `needs_ticket: false`，不要求 `deliver.yaml` |
 
 ## 步骤顺序（硬）
 
@@ -42,7 +42,7 @@ review.report → human.gate → verify.plan → human.gate → review.fix → v
 1. 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo根>`。输出里 `java hygiene` 的每一条 **blocking** `file:line`，以及同一次扫描末尾 `problems` 和 `lang` 插件的每一条 `file:line`，先写成 `I*`（分片则写进该模块的 `### FINDING`，位置含 `file:line`），再写总则、五轴、内聚。`note` 不打回。`problems` 或 `lang` 退出码不是 0，或输出 `UNPROVEN`，这一步不算扫完。这两层不安装 IntelliJ、JDK、ruff、golangci-lint、shellcheck、eslint 或 Node。漏记 blocking 时 `delegation.py` 的 `java-hygiene` 打回这份报告。范围是相对 merge-base 的 diff 加工作区，不是整仓存量；整仓另跑 `java_hygiene.py --all`。`next` 若打出 `FANOUT_ASSESS report`，先跑那条 assess。`FANOUT` 时导体先跑扫描（`PREP`），再按模块各派一个审查者，每片只写 `review/shards/<模块>.md`，用 `### FINDING` / `### UNPROVEN`，不写 `review.md`、不编 `I*`。每片 `workflow.py delegate report --shard <id>`。全部回来后 `fanout.py merge`，再把这一步 `record` 一次。改动的源码模块少于两个时仍是一个审查者。写集已经钉成一份 `review.md` 的步骤不走这条分片。
 2. 跑 `python3 ~/.cursor/skills/idev/scripts/session-context.py --repo <repo根> --feature <feature> --scenario S8 --stage code`。点了产品名就加 `--product`。打开每一行 `OPEN`，并把路径写入 trace 的 `extensions`（没有页就写 `extensions: []`）与 `opened`。没有 `OPEN` 就不打开产线 pack。
 3. 打开 [coding.md](../conventions/coding.md) §0 与文首**底线**、**规范总则**、[coding-tables.md](../conventions/coding-tables.md) §1/§2/§3 与 §2.4（含变更级粗筛）；按栈打开 `java.md` 与 `code-review-skill` 指南。底线先判：把问题做复杂、关键路径没有异常处理或降级、无依据或绕路、平铺直叙、只有 get/set 的哑对象、说不出换来什么的文件和行，写成 `I*`，落既有 `T#`/`C#`/`F#`。
-4. 写票目录里的 `review.md`（`doc_home.py --key task`）：
+4. 写 `review.md`（`doc_home.py --key work`；`code-review` 上 work 与票目录是同一处）：
    - **正式发现 `I1`…**：`P#` / `C#` / `R#`，或 `landing` / `identity` / `config` 已有条文。每条：位置（**file:方法名 锚点为主，行号只作辅助**——review 与 fix 之间同一文件可能被平行改动，行号会漂移）、根据、修复建议。进默认修复清单。
    - **意见 `O1`…**：五轴对不上编号的观感。入库，**不进**默认清单。
    - **UNPROVEN**：未打开的范围内文件（可按目录汇总，不必列每一个）。
@@ -81,3 +81,4 @@ review.report → human.gate → verify.plan → human.gate → review.fix → v
 - 不把意见默认当成必须改
 - 不假装整仓逐文件已读
 - 不自动 `promote`、不改其它票的密封基线
+- 不把审查过程写入工程文档（`docs/`）。过程只留 `.idev/task/code-review/`

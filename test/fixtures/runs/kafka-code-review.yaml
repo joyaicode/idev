@@ -1,7 +1,7 @@
 schema_version: 1
 run_id: 01M5KXTKM5YWKJBE067A3B1WV4
 workflow_id: code-review
-recipe: /Users/wangwei794/go/src/github.com/idev/workflows/code-review.yaml
+recipe: /Users/alice/idev/workflows/code-review.yaml
 feature: code-review
 status: done
 started_at: '2026-10-23T16:25:19+08:00'

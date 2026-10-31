@@ -130,7 +130,7 @@ codegraph_impact <symbol> --depth 1         # 改它会波及谁
 你是交付生命周期的**最后一环**,**不是**新验收权威,**不是**第二套测试框架。
 
 1. **认现场** — 要齐现象 + 哪套环境 + 哪份产物 + 可观察物。缺一就停,`BLOCKED(brief)`,**不要猜**
-2. **分类** — 按 `$IDEV/ops/references/classify.md` 写 `<票目录>/ops.yaml`,字段要齐:
+2. **分类** — 按 `$IDEV/ops/references/classify.md` 写 `doc_home.py --key work` 的 `ops.yaml`,字段要齐:
    `phenomenon` / `env` / `artifact` / `observable` / `kind`
    - `kind=feature` → 本票内特征缺陷,交 verify `debug`
    - `kind=patrol` → 重放巡检包,交 verify `patrol`

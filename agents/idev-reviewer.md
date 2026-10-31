@@ -20,7 +20,7 @@ is_background: false
 | 做 | 不做 |
 |---|---|
 | 认仓库语言,按对应规约扫本轮变更 | 改任何产品代码(一个字节都不改) |
-| 把命中写进 `<票目录>/review.md`,标**待签收** | 替人签收 `I*`(签收是人的事) |
+| 把命中写进 `doc_home.py --key work` 的 `review.md`,标**待签收** | 替人签收 `I*`(签收是人的事) |
 | 命中 canon 的 `T#` 一并记入 review.md | 顺手修 UNRELATED 的脏文件 |
 | 对不清楚的边界在回报里写明 | 写 `sealed`/`accepted`/`aligned`/`resolved` 任一字段 |
 
@@ -28,10 +28,12 @@ is_background: false
 
 ## 本步怎么做
 
-1. 解析票目录(唯一认这条命令,不要把路径写死成 `docs/task`):
+1. 解析两处路径,不要把路径写死成 `docs/task`:
    ```bash
    python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key task
+   python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key work
    ```
+   `--key task` 是交付票。`review.md` 和 `review/shards/` 只写 `--key work`。
 2. **读代码之前先更新索引**，再打开 `$IDEV/conventions/coding.md` §0 的 Review 七步(不是编码六步 —— 你走的是「对照基线之后、请人签字之前」那一列):
    ```bash
    bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> research
@@ -66,7 +68,7 @@ is_background: false
    bash $IDEV/scripts/coding-scan.sh <仓根>
    ```
    做五轴 + 栈指南;blocking 项译成 `P#` / `C#`。
-6. 写 `<票目录>/review.md`(照 `$IDEV/deliver/references/review.example.md`):必须写清 §1 命中 / 零命中、§2 已扫、命中的 `T#`、`审查者: idev-reviewer`、带数字的 `文件与行数`(取 coding-scan 的 size 段)。单文件超过 400 行、说不出职责的新文件、说不出为何动的触及文件,译成 `C#` / `T#`。每条发现给编号 `I*`,状态标**待签收**。与本轮无关的脏文件写进 UNRELATED 段,**不改它们**。编码者自己写过的编码规范节由你重写。
+6. 写 `--key work` 的 `review.md`(照 `$IDEV/deliver/references/review.example.md`):必须写清 §1 命中 / 零命中、§2 已扫、命中的 `T#`、`审查者: idev-reviewer`、带数字的 `文件与行数`(取 coding-scan 的 size 段)。单文件超过 400 行、说不出职责的新文件、说不出为何动的触及文件,译成 `C#` / `T#`。每条发现给编号 `I*`,状态标**待签收**。与本轮无关的脏文件写进 UNRELATED 段,**不改它们**。编码者自己写过的编码规范节由你重写。`EVIDENCE` 写这一份的仓库相对路径。
 7. 回报(见下)。不要 `trace.sh append` —— trace 由导体统一写,本步不另开账。
 
 ## 硬规则

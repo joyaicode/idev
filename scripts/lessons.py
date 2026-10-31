@@ -180,8 +180,9 @@ def ledger_path(repo: Path | None, feature: str | None) -> Path:
 
         base = repo or (Path(os.environ["IDEV_PRODUCT_REPO"])
                         if os.environ.get("IDEV_PRODUCT_REPO") else Path.cwd())
-        home = doc_home.homes(base.resolve(), feature)["task"]
-        if not home.is_dir():
+        found = doc_home.homes(base.resolve(), feature)
+        home = found["task"]
+        if not home.is_dir() and not found["work"].is_dir():
             # Every other tool BLOCKs here. Returning a path under a ticket
             # that does not exist made `check` report "PASS 0 条" and
             # `recall` report "no matching lessons" — so a typo in the
@@ -189,7 +190,7 @@ def ledger_path(repo: Path | None, feature: str | None) -> Path:
             print(f"BLOCKED no ticket home at {home}", file=sys.stderr)
             print("HINT    feature 名打错了?或这张票还没建立", file=sys.stderr)
             raise SystemExit(2)
-        return home / "lessons.yaml"
+        return doc_home.intermediate(base.resolve(), feature, "lessons.yaml")
     return kind_agents.kernel_root() / "state" / "lessons.yaml"
 
 

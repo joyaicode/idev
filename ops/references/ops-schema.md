@@ -4,7 +4,7 @@
 
 | 产物 | 路径 | 家 |
 |------|------|-----|
-| 排障单 | `<票目录>/ops.yaml` | 本契约 |
+| 排障单 | `doc_home.py --key work` 的 `ops.yaml` | 本契约。过程文件，不进工程文档 |
 | 红绿 | `<票目录>/verify/plan.yaml` | verify 模块 |
 | 回退指针 | `<票目录>/deliver.yaml` | deliver 模块 |
 | 巡检包 | `doc_home.py --key patrol` | verify `promote` |

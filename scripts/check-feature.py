@@ -24,7 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import idev_bin  # noqa: E402
-from doc_home import homes, layout_for, reconcile_spec  # noqa: E402
+from doc_home import homes, intermediate, layout_for, reconcile_spec  # noqa: E402
 from ticketless import skips_baseline  # noqa: E402
 from ticket_yaml import (
     TicketYamlError,
@@ -1138,7 +1138,7 @@ def main() -> int:
     req = load_ticket(root / "req.yaml", errors)
     arch = load_ticket(root / "arch.yaml", errors)
     plan = load_ticket(root / "verify" / "plan.yaml", errors)
-    ops = load_ticket(root / "ops.yaml", errors)
+    ops = load_ticket(intermediate(repo, args.feature, "ops.yaml"), errors)
 
     tier = scalar(deliver, "risk_tier") or "P1"
     # Every tier seals the baseline and accepts req in one signoff at the
@@ -1332,17 +1332,17 @@ def main() -> int:
             ok("deliver-eval.md exists")
 
     if args.stage == "code":
-        review = root / "review.md"
+        review = intermediate(repo, args.feature, "review.md")
         review_text = review.read_text(encoding="utf-8") if review.is_file() else ""
         if not review.is_file() or not review_text.strip():
-            fail("missing %s" % (root / "review.md").relative_to(repo).as_posix(), errors)
+            fail("missing %s" % review.relative_to(repo).as_posix(), errors)
         else:
             ok("review.md exists")
             check_review_coding(review_text, errors)
 
     if args.stage == "ops":
         if not ops:
-            fail("missing %s" % (root / "ops.yaml").relative_to(repo).as_posix(), errors)
+            fail("missing %s" % intermediate(repo, args.feature, "ops.yaml").relative_to(repo).as_posix(), errors)
         else:
             ok("ops.yaml exists")
             for field in ("phenomenon", "env", "artifact", "observable"):

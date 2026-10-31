@@ -13,6 +13,15 @@ docs/task grill.md), read and write:
     docs/test-case/<feature>.md
     docs/task/<feature>/
 
+Review and root-cause work produce intermediate files. Those files
+always live under ``.idev/task/<feature>/`` (``--key work``). A final
+deliverable is what enters the product's engineering docs (``docs/prd``,
+``docs/spec`` or ``docs/specs``, ``docs/test-case``, and the issue
+tracker under ``docs/task``). The two homes do not replace each other.
+
+Feature ``code-review`` is only that process, so its ticket home is the
+work directory too.
+
 A repo whose AGENTS.md or issue tracker names ``docs/specs/`` keeps its
 specs there; that declaration overrides the setup-agents-docs default.
 Those files win when the same name also exists under ``.idev/``.
@@ -88,8 +97,42 @@ def _has_ticket(path: Path) -> bool:
     return (path / "verify" / "plan.yaml").is_file()
 
 
+# Review and root-cause intermediates. Not engineering documents.
+PROCESS_ACTIVITIES = frozenset({"report", "rootcause"})
+PROCESS_KINDS = frozenset({
+    "review.report", "ops.classify", "route.s4", "ui.fix_deposit",
+})
+# The whole-repo review recipe has no deliverable ticket of its own.
+_PROCESS_ONLY = frozenset({"code-review"})
+
+
+def work_dir(repo: Path, feature: str) -> Path:
+    """Review and root-cause intermediates. Always under .idev."""
+    return repo / ".idev" / "task" / feature
+
+
+def intermediate(repo: Path, feature: str, name: str) -> Path:
+    """Where one intermediate file is read.
+
+    New files belong under ``--key work``. A copy that still sits only on
+    the deliverable ticket is read from there until it is moved.
+    """
+    found = homes(repo, feature)
+    primary = found["work"] / name
+    legacy = found["task"] / name
+    if primary == legacy or primary.exists() or not legacy.exists():
+        return primary
+    return legacy
+
+
 def layout_for(repo: Path, feature: str) -> str:
-    """Return ``product`` when Matt Pocock + grilling docs apply, else ``native``."""
+    """Return ``product`` when Matt Pocock + grilling docs apply, else ``native``.
+
+    ``code-review`` is the whole-repo review process. It stays under
+    ``.idev/task/`` and is not an engineering document.
+    """
+    if feature in _PROCESS_ONLY:
+        return "native"
     product = repo / "docs" / "task" / feature
     native = repo / ".idev" / "task" / feature
     product_hit = _has_ticket(product)
@@ -154,9 +197,11 @@ def homes(repo: Path, feature: str) -> dict:
     else:
         base_docs = repo / ".idev" / "docs"
         task = repo / ".idev" / "task" / feature
+    work = task if layout != "product" else work_dir(repo, feature)
     return {
         "layout": layout,
         "task": task,
+        "work": work,
         "deliver": task / "deliver.yaml",
         "plan": task / "verify" / "plan.yaml",
         "prd": base_docs / "prd" / ("%s.md" % feature),
@@ -173,7 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--key",
         default="task",
-        choices=["layout", "task", "deliver", "plan", "prd", "spec", "test-case", "patrol"],
+        choices=["layout", "task", "work", "deliver", "plan", "prd", "spec", "test-case", "patrol"],
     )
     args = parser.parse_args(argv)
     repo = Path(args.repo).expanduser().resolve()

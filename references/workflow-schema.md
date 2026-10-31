@@ -102,7 +102,7 @@
 
 ## run 实例（仓内）
 
-路径：有票时是 `doc_home.py --key task` 解析出的 `<票目录>/workflow/run.yaml`。`needs_ticket: false` 且没给 `--feature` 时，落 `product_sink.py workflow-runs`（产品仓 `.idev/workflow-runs/<id>-<时间>.yaml`；没有当前产品才是内核 `state/workflow-runs/`）。
+路径：有票时是 `doc_home.py --key task` 解析出的 `<票目录>/workflow/run.yaml`。`code-review` 的票目录是 `.idev/task/code-review/`，不进 `docs/`。`needs_ticket: false` 且没给 `--feature` 时，落 `product_sink.py workflow-runs`（产品仓 `.idev/workflow-runs/<id>-<时间>.yaml`；没有当前产品才是内核 `state/workflow-runs/`）。
 
 | 字段 | 约束 |
 |------|------|
@@ -174,8 +174,8 @@ $W abort --note <原因> --feature <f>
 
 `ui.fix_deposit` 落盘（禁止 `.scratch/`）：
 
-1. 教训写 `<票目录>/lessons/<YYYYMMDD>-<case-slug>.md`：现象、根因证据、修复、防再发。`<票目录>` 只认 `doc_home.py --key task`
-2. 索引追加：`<票目录>/lessons/README.md`
+1. 教训写 `doc_home.py --key work` 的 `lessons/<YYYYMMDD>-<case-slug>.md`：现象、根因证据、修复、防再发。这是根因过程，不进工程文档
+2. 索引追加：同一 `--key work` 目录下的 `lessons/README.md`
 3. 回填 `e2e/inventory.json` 的 `wave` / `required`，再跑 `ui.coverage_lock`
 4. 可复用且已剔除产品专有逻辑 → idev 核心（evidence / coding / docs）。仍绑协议 / 仓 / 服务码 → 该产品 pack 或产品仓，不要进核心。
 

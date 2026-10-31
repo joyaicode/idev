@@ -1004,12 +1004,27 @@ def _fanout_activity(step: dict) -> str:
     return ""
 
 
-def fanout_shard_ids(run_path: Path, step: dict) -> list[str] | None:
+def fanout_manifest(run_path: Path, activity: str, repo: Path | None) -> Path:
+    """Review and root-cause manifests sit with the other intermediate files."""
+    legacy = ticket_of(run_path) / "verify" / f"fanout-{activity}.yaml"
+    if activity not in doc_home.PROCESS_ACTIVITIES or repo is None:
+        return legacy
+    data = safeyaml.mapping(run_path) or {}
+    feature = str(data.get("feature") or "")
+    if not feature or feature == "-":
+        return legacy
+    work = doc_home.homes(repo, feature)["work"] / "verify" / f"fanout-{activity}.yaml"
+    if work.is_file() or not legacy.is_file():
+        return work
+    return legacy
+
+
+def fanout_shard_ids(run_path: Path, step: dict, repo: Path | None = None) -> list[str] | None:
     """Shard ids when this step's manifest says FANOUT. None when it does not."""
     activity = _fanout_activity(step)
     if not activity:
         return None
-    path = ticket_of(run_path) / "verify" / f"fanout-{activity}.yaml"
+    path = fanout_manifest(run_path, activity, repo)
     data = safeyaml.mapping(path) if path.is_file() else None
     if not data or data.get("decision") != "FANOUT":
         return None
@@ -1542,7 +1557,7 @@ def cmd_record(args: argparse.Namespace) -> int:
             return
         held = step.get("lease") or {}
         purpose = lease_purpose(run, step) if status == "PASS" else None
-        shard_ids = fanout_shard_ids(path, step) or []
+        shard_ids = fanout_shard_ids(path, step, session_repo(args.repo)) or []
         shard_maps = step.get("shard_leases") or {}
         shard_lease_ids = sorted(
             str((shard_maps.get(sid) or {}).get("id") or "") for sid in shard_ids
@@ -1749,7 +1764,7 @@ def cmd_record(args: argparse.Namespace) -> int:
                 )
         held = step.get("lease") or {}
         purpose = lease_purpose(run, step) if status == "PASS" else None
-        shard_ids = fanout_shard_ids(path, step) or []
+        shard_ids = fanout_shard_ids(path, step, session_repo(args.repo)) or []
         shard_maps = step.get("shard_leases") or {}
         if purpose and shard_ids:
             missing = [
@@ -1961,11 +1976,11 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
             marked.update(
                 agent=verifier, lease="verify", verify=True,
                 tier=risk_tier_of(run, path), feature_id=feature_id(run, path),
-                shard="",
+                shard="", kind=step["kind"], slug=str(run.get("feature") or ""),
             )
             return run
         if shard:
-            ids = fanout_shard_ids(path, step) or []
+            ids = fanout_shard_ids(path, step, session_repo(args.repo)) or []
             if shard not in ids:
                 raise Blocked(
                     f"{args.step} has no FANOUT shard {shard}; "
@@ -1980,12 +1995,12 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
             if own.get("token"):
                 raise Blocked(f"{args.step} shard {shard} already holds lease {own['id']}")
             activity = _fanout_activity(step)
-            manifest = safeyaml.mapping(ticket_of(path) / "verify" / f"fanout-{activity}.yaml") or {}
+            manifest = safeyaml.mapping(fanout_manifest(path, activity, session_repo(args.repo))) or {}
             item = next((row for row in manifest.get("shards") or [] if row.get("id") == shard), None)
             if not isinstance(item, dict):
                 raise Blocked(f"{args.step} shard {shard} disappeared from the manifest; assess again")
             marked["writes"] = [str(w) for w in (item.get("writes") or [])]
-        elif fanout_shard_ids(path, step):
+        elif fanout_shard_ids(path, step, session_repo(args.repo)):
             if getattr(args, "open", False):
                 print(
                     f"SKIP {args.step} is FANOUT; "
@@ -2004,6 +2019,7 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
         marked.update(
             agent=agent, lease=lease_purpose(run, step), tier=risk_tier_of(run, path),
             feature_id=feature_id(run, path), shard=shard,
+            kind=step["kind"], slug=str(run.get("feature") or ""),
         )
         return run
 
@@ -2020,7 +2036,16 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
     purpose = marked["lease"]
     ticket = None
     if purpose == "verify":
-        ticket = ticket_dir_repo_relative(path, session_repo(args.repo))
+        repo = session_repo(args.repo)
+        ticket = ticket_dir_repo_relative(path, repo)
+        slug = str(marked.get("slug") or "")
+        if (marked.get("kind") in doc_home.PROCESS_KINDS and repo is not None
+                and slug and slug != "-"):
+            work = doc_home.work_dir(repo.resolve(), slug)
+            try:
+                ticket = work.relative_to(repo.resolve()).as_posix()
+            except ValueError:
+                pass
         if shard:
             import fanout  # noqa: PLC0415 - shard globs only
             try:

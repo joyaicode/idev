@@ -1,5 +1,11 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-10-31：审查和根因分析的中间文件进 `.idev/task/<feature>/`（`doc_home.py --key work`）：`review.md`、`review/`、`hypotheses.yaml`、`lessons.yaml`、`ops.yaml`。最终交付物才写入使用 idev 的工程文档（`docs/prd`、`docs/spec` 或 `docs/specs`、`docs/test-case`、`docs/task` 里的交付票与 issue）。已有规范文档时，`--key task` 仍是交付票。`code-review` 没有交付物，票目录就是 work。人要求：quote「两者不冲突，review或者问题根因分析过程中会产生大量中间文件，这些中间文件都要放在.idev中，最终输出交付物时，才进使用idev的工程文档中。」
+
+- 2026-10-31：整仓代码审查过程不记入工程文档。feature `code-review` 的票目录固定为 `.idev/task/code-review/`，仓库已有 `docs/` 也不再写入 `docs/task/code-review/`。人要求：quote「code review 过程不记入工程文档」。
+
+- 2026-10-31：Spec Kit 的核心过程对照写进 `references/spec-kit-mapping.md`。采纳的是：存量仓只写有界变更和必须保持的行为；规约冲突时改这张票；对照代码时尺只认密封基线、方案和 slice，勾选和「已经实现」不是证据，少做和部分补上、多做删掉、与基线相反则停；点名的复现没跑不能写成通过；想法要有反对证据，停下来不建票。不搬 `.specify/`、覆盖率、评分卡、用默认值猜掉澄清、自动追加任务直到 Converged、以及从规格生成实现。人要求：quote「深入研究 https://github.github.com/spec-kit/ 沉淀核心能力到idev中」。人确认：by wangwei794，quote「确认」，2026-10-31T16:10+08:00。`parse_confirm` 收下。无票、无 A 类闸，不写 `sealed` / `accepted` / `aligned`。
+
 - 2026-10-30：控制面对上现有部件。写租约、分片指纹、会话收尾、`prior_failure`、委派包和 `QUEUED` 就是书里的锁、终止、进度和总线。审查者 `CHANGED` 只许 `review.md` 和 `review/shards/`，`gate-held` 挡住改测试和门槛。同一上下文里不再审查自己刚写的产物。独立密钥、步骤级价值树、多数表决留在书里。人要求：quote「继续深度挖掘和沉淀」。
 - 2026-10-30：留下的程序钉住脚本、结果和复现的字节。文件再变，`check` 失败，召回写明不要当成现行能力。脚本变了还用原来的结果，`transform` 拒绝。没有钉住字节的已留下条目不能在原地补钉。不执行脚本。人要求：quote「继续深度挖掘和沉淀」。
 

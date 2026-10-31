@@ -14,9 +14,9 @@
 | 阶段指针 / 回退 | `<票目录>/deliver.yaml` | 本契约 |
 | 可执行验收 | `<票目录>/verify/plan.yaml` | idev verify 模块 |
 | 未决问句 | `<票目录>/grill.md` | grilling 的问句；`sealed: true` 时 frontier 必须已空。方案有未决分叉时才另写 `## arch` 轮 |
-| Review | `<票目录>/review.md` | code 阶段对照基线。编码规范节由 `idev-reviewer` 写。不是 `reviews/`，也不是 `.idev/reviews/` |
+| Review | `doc_home.py --key work` 的 `review.md` | code 阶段对照基线。过程文件，不进工程文档。编码规范节由 `idev-reviewer` 写。不是 `reviews/`，也不是 `.idev/reviews/` |
 | 阶段计数 | `<票目录>/deliver-eval.md` | 每阶段结束；只计件数 |
-| 排障单 | `<票目录>/ops.yaml` | ops 模块；红绿仍在 verify |
+| 排障单 | `doc_home.py --key work` 的 `ops.yaml` | ops 模块的过程文件；红绿仍在 verify |
 
 扩展加本文件登记表。不兼容升 `schema_version` + ADR。未知字段忽略。  
 需求、设计、测试用例、Review、测试报告的体例（精简、同一事实、人机同一批 id）只看 [docs/SKILL.md](../../docs/SKILL.md)。  

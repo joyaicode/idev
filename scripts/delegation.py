@@ -105,6 +105,14 @@ NO_TRIGGER = re.compile(r"(?i)^\s*(?:无|none|-)\s*(?:[(（].*)?$")
 STRUCT_GATE = re.compile(r"§\s*3|满足条件|两顶帽子")
 APPLIED = re.compile(r"运用|纠正|已改|当轮改")
 
+# deliver 双门禁：check-feature（规约符合）+ stage-gate（experts.md 拒过清单里
+# 可机检的那一半）。idev-deliver.md 要求请签前两条各写一行 GATE，但这两行
+# 以前没人读 —— 跑没跑全靠自觉。下面这对正则把「写了没有、结论读不读得出」
+# 变成机检（deliver-gates）。
+GATE_LINE = delegation_return.line_field("GATE")
+GATE_TOOL = re.compile(r"\b(check-feature|stage-gate)\b")
+GATE_VERDICT = re.compile(r"=\s*(PASS|FAIL|不适用)\b")
+
 # references/boost.md 第零节: 本地事实优先。文档会过时而且过时的时候不会
 # 告诉你,所以凡是要下判断的步骤都得交代事实是从哪来的。
 FACTS_LINE = delegation_return.line_field("FACTS")
@@ -331,6 +339,33 @@ def check_accuracy(record: dict) -> dict[str, str]:
                 "PASS" if ARTIFACT_LINE.search(raw)
                 else "FAIL:no ARTIFACT: MATCH|AHEAD|UNKNOWN line (artifact-match.py)"
             )
+
+    if agent == "idev-deliver" and kind == "deliver.advance":
+        # 两条 GATE 行是请签前的双门禁记录:check-feature(规约符合)与
+        # stage-gate(experts.md 拒过清单可机检的那一半)。行写没写、结论
+        # 读不读得出、STATUS=PASS 却带 FAIL 的自相矛盾,以前没人读。
+        named = set()
+        verdicts = []
+        for line in GATE_LINE.findall(raw):
+            tool = GATE_TOOL.search(line)
+            verdict = GATE_VERDICT.search(line)
+            if tool:
+                named.add(tool.group(1))
+            verdicts.append(verdict.group(1) if verdict else None)
+        if len(named) < 2:
+            out["deliver-gates"] = (
+                "FAIL:GATE 行缺门 —— check-feature 与 stage-gate 各留一行,"
+                "形如 'GATE: stage-gate <stage> = PASS'")
+        elif any(v is None for v in verdicts):
+            out["deliver-gates"] = (
+                "FAIL:GATE 行读不出结论 —— 每行须以 "
+                "'= PASS | FAIL(<几处>) | 不适用' 收尾")
+        elif "FAIL" in verdicts and report_status(record) == "PASS":
+            out["deliver-gates"] = (
+                "FAIL:STATUS=PASS 但 GATE 有 FAIL —— 门禁 FAIL 应回 "
+                "BLOCKED(logic)(见 idev-deliver.md BLOCKED 分类),不是硬签")
+        else:
+            out["deliver-gates"] = "PASS"
 
     if agent == "idev-reviewer":
         # The reviewer reads independent evidence. Naming any other file in

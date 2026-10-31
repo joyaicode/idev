@@ -54,7 +54,7 @@ parent: idev
     `req` 及之后：slice.must 原文锁 + 上一阶段 `semantic_gate`；`test` 维表六族须覆盖；`ops` 内含外送 Skill 检查。
 12. **reopen：** `baseline.revision + 1`，旧 item id 不装新含义；下游 accepted 作废。
 13. **`sealed` / `accepted` / `aligned` 必须带人名 `by:`。** 解析见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。禁止 `agent` / `ai`。
-14. **编码只改 `arch.yaml` 里 `include: true` 的路径。** 其它脏文件写入 `review.md` 的 UNRELATED，不准顺手改。Review 落票目录里的 `review.md`（同一条 `doc_home.py --key task`）。编码规范节由 `idev-reviewer` 写，编码者自写不算。
+14. **编码只改 `arch.yaml` 里 `include: true` 的路径。** 其它脏文件写入 `review.md` 的 UNRELATED，不准顺手改。Review 落 `doc_home.py --key work` 的 `review.md`。编码规范节由 `idev-reviewer` 写，编码者自写不算。
 15. **每阶段结束写票目录里的 `deliver-eval.md`**（件数，照 [deliver-eval.example.md](references/deliver-eval.example.md)）。路径仍由 `doc_home.py --key task` 决定。
 16. **人写 `aligned` 之后进入 `done`。** 不自动 `promote`；人没提提升 / 巡检包 / promote 则不问。
 17. **无当前停问点不请签，也不结束本轮。** 自测跑完且检查通过就写实现审核并进入提测，不另问要不要提测。用例计划不单独请签。跑证没齐就在同一轮继续跑。
@@ -69,7 +69,7 @@ parent: idev
 
 ### req-review（需求评审）
 
-1. 对照 CONTEXT / ADR / 现有契约起草规格与 `baseline.yaml`（[baseline.example.yaml](references/baseline.example.yaml)）。落盘前打开 [docs/SKILL.md](../docs/SKILL.md)。未决问题写该票的 `grill.md`（`convention: grilling`）。
+1. 对照 CONTEXT / ADR / 现有契约起草规格与 `baseline.yaml`（[baseline.example.yaml](references/baseline.example.yaml)）。落盘前打开 [docs/SKILL.md](../docs/SKILL.md)。未决问题写该票的 `grill.md`（`convention: grilling`）。存量仓不先补整仓规格。这张票只写这次有界变更，以及必须保持不变的现有行为。原则用已有规约和契约，不为了填满模板新写一套。
 2. 正确性、合理性、边界、细节、非目标：全部写成 `grill.md` 里的问句。文件放哪认 [docs/SKILL.md](../docs/SKILL.md)。`review_questions` 保持空列表。冲突不得默许。
 3. **自动唤起 grilling（硬）：** 本阶段一进入「定边界 / 清异议」就打开并执行 `~/.cursor/skills/grilling/SKILL.md`。按当前编制把能问的一次问完，每题带推荐答案，挂在选项上的后续写在同一轮。只有回答打开这轮没写到的新分叉才再来一轮。回答不是确认用语。推迟项写进 `non_goal`。`objections` 保持空。缺 grilling 先跑 `scripts/link-companion-skills.sh`。**禁止**用「自己拷问」或跳过 grilling 直接请签。问谁见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。
 4. frontier 空之后不停在本阶段。直接起草拆解。需求通过的那一次确认在 `req` 末。
@@ -100,7 +100,7 @@ parent: idev
 
 ### code
 
-1. 只改 `include: true` 的文件。写 `review.md`（[review.example.md](references/review.example.md)）。多做删掉；少做补；像基线写错 → `baseline-conflict`，**停**。前置节写明不进本次的既有问题，不放进这次 diff。方案写明随本次改掉的，在 `review.md` 标明是既有问题，不写成基线新义务。
+1. 只改 `include: true` 的文件。写 `review.md`（[review.example.md](references/review.example.md)）。尺只认密封基线、方案和 slice。勾选、任务完成标记和「已经实现」都不是证据。少做和部分补上；多做删掉；与基线相反 → `baseline-conflict`，**停**，不准改基线或方案去迁就代码。已经对齐就不要再添剩余工作。方案没点名的路径不算这次范围。前置节写明不进本次的既有问题，不放进这次 diff。方案写明随本次改掉的，在 `review.md` 标明是既有问题，不写成基线新义务。
 2. **写前匹配、写中纠正。** 打开 [coding.md](../conventions/coding.md) 文首底线与 §0；扫表时再开 [coding-tables.md](../conventions/coding-tables.md)。用本轮变化扫 §1，命中第一行就运用，禁止行当场拒绝。每新增函数扫 §2，命中当轮改掉。底线：不把问题做复杂；关键路径当轮写异常处理与降级；无依据的代码不写；逻辑和注释顺着读能指出重点；不新开只有 get/set 的业务类型。
 3. **独立 Review。** 编码之后，与用例、自测、验收索引同一波委派 `idev-reviewer`，只写 `review.md` 的编码规范节（`审查者: idev-reviewer`，`文件与行数` 带数字）。按 [coding-tables.md](../conventions/coding-tables.md) §3.8 跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo>`。这一波汇合后、请实现审核之前，`I*` 由 `review.fix` 改掉（`accept_all_findings`），没有 `I*` 则这一步 `SKIPPED`，证据指向 `review.md`。不另设人闸。
 4. **架构通过后在同一轮连续做完这些事，中间不请签、不等「继续」：** 跑证还没齐就继续跑，不把「补跑证 / 再审查」写成 `next`。编码之后同一波做完四件：按 `case_intents` 起草 `verify/plan.yaml`（每条意图一条 case，`goal` 复制基线），自测只写 `verify/selftest.md`，审查只写 `review.md`，验收索引只写 `verify/accept.md`。要加一条 case，先补 `case_intent` 和 `design.md` 的用例节。计划无 `SIGNAL` 记 `AUTO`（每个档位）；有 `SIGNAL` 先记下，不要为此停下来。然后改掉 `I*`。`review.fix` 之后再跑一次 selftest：把 case `status` 回写 `verify/plan.yaml`，并重写 `verify/selftest.md` 和 `verify/accept.md`。这一步的跑证才算数。`check-feature.sh <feature> code` 通过、复跑有跑证、且审查者已写入之后，就写 `semantic_gate.code` 并把 `stage` 改为 `test`，同一轮进入提测。不另问要不要提测。

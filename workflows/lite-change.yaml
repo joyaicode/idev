@@ -76,4 +76,4 @@ steps:
     label: 实现审核（自测已跑完；确认后才提测，这里不签测试结果）
     with:
       will_write: ["deliver.semantic_gate.code", "deliver.stage=test"]
-      proof: "check-feature code；refresh 回写后的 PASS/FAIL/UNPROVEN"
+      proof: "check-feature code + stage-gate code；refresh 回写后的 PASS/FAIL/UNPROVEN"

@@ -36,6 +36,55 @@ func TestLocateTicketNativeLayout(t *testing.T) {
 	}
 }
 
+func TestCodeReviewStaysOutOfProductDocs(t *testing.T) {
+	repo := t.TempDir()
+	tracker := filepath.Join(repo, "docs", "agents", "issue-tracker.md")
+	must(t, os.MkdirAll(filepath.Dir(tracker), 0o755))
+	must(t, os.WriteFile(tracker, []byte("Issues live in docs/task/.\n\ngrilling\n"), 0o644))
+	plan := filepath.Join(repo, "docs", "task", "code-review", "verify", "plan.yaml")
+	must(t, os.MkdirAll(filepath.Dir(plan), 0o755))
+	must(t, os.WriteFile(plan, []byte("cases: []\n"), 0o644))
+	native := filepath.Join(repo, ".idev", "task", "code-review")
+	must(t, os.MkdirAll(native, 0o755))
+
+	layout, err := workspace.Local{}.LocateTicket(context.Background(), repo, "code-review", "layout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if layout != "native" {
+		t.Fatalf("layout = %s, want native", layout)
+	}
+	got, err := workspace.Local{}.LocateTicket(context.Background(), repo, "code-review", "task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(repo, ".idev", "task", "code-review")
+	if mustResolve(t, got) != mustResolve(t, want) {
+		t.Fatalf("task = %s, want %s", got, want)
+	}
+	py := runDocHome(t, repo, "code-review", "task")
+	if mustResolve(t, got) != mustResolve(t, py) {
+		t.Fatalf("LocateTicket %q != doc_home.py %q", got, py)
+	}
+	feature, err := workspace.Local{}.LocateTicket(context.Background(), repo, "widget", "layout")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if feature != "product" {
+		t.Fatalf("widget layout = %s, want product", feature)
+	}
+	wantWork := filepath.Join(repo, ".idev", "task", "widget")
+	must(t, os.MkdirAll(wantWork, 0o755))
+	work, err := workspace.Local{}.LocateTicket(context.Background(), repo, "widget", "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	py = runDocHome(t, repo, "widget", "work")
+	if mustResolve(t, work) != mustResolve(t, py) {
+		t.Fatalf("work %q != doc_home.py %q", work, py)
+	}
+}
+
 func TestLocateTicketMatchesDocHomePython(t *testing.T) {
 	repo := t.TempDir()
 	feat := "parity"

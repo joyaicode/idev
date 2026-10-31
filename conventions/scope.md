@@ -19,7 +19,7 @@ idev 第一次把该产线的状态写入 `.idev/` 时，一起写下 `marker.ya
 
 `marker.yaml` 可写相对路径 `extension_root`，指向另一个带 `marker: idev`、自己不再委派的仓；绝对路径拒绝。阶段页、流水线、交出口、检查读扩展根，trace 仍写会话仓。`extensions.yaml` 的页可写字符串（所有产品都开），或 `{path, products: [id]}`。过滤用 `--product` 点名的产品；没点名时用会话仓 marker 的 id，不是扩展根的 id。产品仓 `.idev/traces/` 的 trace 必须有 `extensions` 字段（没有页就写 `[]`）；有列表时每一项都必须出现在 `opened`，否则审计 HARD。
 
-产线文档在交付时打开 [docs/SKILL.md](../docs/SKILL.md)。目录认 setup-agents-docs（Matt Pocock），问句认 grilling。已经有这两套时，交付记录和人读文档用 `docs/task/<feature>/`、`docs/prd`、`docs/spec`、`docs/test-case`；同一文件也在 `.idev/` 时，规范目录优先。还没有这套文档时，阶段状态写 `.idev/task/<feature>/`，不在仓库根新建 `docs/`。只写在一边的票留在原处。目录由 `scripts/lib/doc_home.py` 解析。
+产线文档在交付时打开 [docs/SKILL.md](../docs/SKILL.md)。目录认 setup-agents-docs（Matt Pocock），问句认 grilling。已经有这两套时，交付物用 `docs/task/<feature>/`、`docs/prd`、`docs/spec`、`docs/test-case`。同一份交付物也在 `.idev/` 时，读规范目录里的那份。还没有这套文档时，阶段状态写 `.idev/task/<feature>/`，不在仓库根新建 `docs/`。只写在一边的票留在原处。审查和根因分析的中间文件写 `.idev/task/<feature>/`（`doc_home.py --key work`）。两边同时有过程文件时，读 `.idev` 那份。最终交付物才进入使用 idev 的工程文档。整仓代码审查没有交付物，票目录也是 `.idev/task/code-review/`。目录由 `scripts/lib/doc_home.py` 解析。
 
 执行产物（`traces/`、`reviews/`、`inbox/`）不进版本库。自进化读它们。热集合始终留下：最新 20 条 trace、带 `latest` 或 `status.env` 的复盘、未消费的 inbox、仍打开的提案。除此之外，同一文件被复盘或提案点名满 2 次，或距上次整理已满 3 代（每次真实 `evolve-review` 算一代），先把一行摘要写入 `.idev/memory.md`，再删除原件。已关闭提案走同一条。超 30 天且在最新 50 条以外的残留，仍可由 `execution-clean.sh` 按时间窗清理，删除前同样写入 `memory.md`。默认只预览，`--apply` 才删除。真实复盘结束时对当前产品和已发现的试点自动 `--compact --apply`。`memory.md` 与交出口、流水线、类页、`marker.yaml` 纳入版本库，不在删除范围内。产品仓用 `.idev/*` 忽略残留时，必须保留 `!.idev/memory.md`，这样 `git clean` 清掉忽略文件时摘要还在。
 

@@ -18,7 +18,7 @@
 
 | 业界 / 开源 | idev 对应 |
 |-------------|-----------|
-| Spec Kit：specify → plan → tasks → implement | baseline seal → req → arch → code |
+| Spec Kit：specify → plan → tasks → implement → converge | 密封基线 → req → arch → code。取舍全文 [spec-kit-mapping.md](spec-kit-mapping.md) |
 | OpenSpec：提案/规格/设计后再任务 | grilling + arch.accepted 后才 code |
 | Promote / 巡检包 | `verify/scripts/promote.sh`（人触发） |
 | CI 绿 + 证明物 | `check-feature` + plan evidence；**不**替代仓内 CI |

@@ -30,14 +30,16 @@ is_background: false
 | 用 codegraph 查影响面再动手 | 手工猜影响面,或 `--depth` 开到 2 以上 |
 | 命中第一行就运用,**当轮**改掉 | 命中只记账不改(= 拒过) |
 | 改完立刻跑最小相关测试 | 攒到最后一次性跑 |
-| 像基线写错 → `baseline-conflict` 并**停** | 自己改 goal / baseline 正文 |
+| 像基线写错 → `baseline-conflict` 并**停** | 自己改 goal / baseline 正文，或用勾选和「已经实现」当作做完 |
 
 ## 本步怎么做
 
-1. **票目录**:
+1. **票目录**（交付物）和过程目录（`review.md`）分开认:
    ```bash
    python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key task
+   python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key work
    ```
+   `review.md` 只写 `--key work`。
 
 2. **§0 三项交代(硬性,先想清再动手)** —— 打开 `$IDEV/conventions/coding.md` §0:
    - `CHANGE_KIND`:一句话说清本轮变化属于哪类(校验 / 换协议 / 追加行为 / 加头 / 两通道 / 纯结构 / 结构+行为)
@@ -71,7 +73,7 @@ is_background: false
 4. **Vue 语言尺** —— 写代码前跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage code`。没有输出就跳过。打开每一行 `VUE open` 的技能并按其工作流做，包括它点名的必读参考。`VUE if` 只在本轮碰到该行主题时打开。`VUE MISSING` 就停。规范问题和不合理的组件、状态边界当轮改掉。实现 `ui` 块时按 `conventions/vue.md`「实现界面」。
 
 5. **按本步 kind 改**:
-   - `deliver.code_pass` — 实现本阶段代码。多做的删掉,少做的补上
+   - `deliver.code_pass` — 实现本阶段代码。少做和部分补上，多做删掉。对照只认密封基线、方案和 slice；方案没点名的路径不算这次范围。已经对齐就不要再添剩余工作。全文在 `deliver/SKILL.md` 的 code 第 1 条
    - `review.fix` — 委派包 `with.accept_all_findings: true`（交付主路径，实现审核前）时，改全部 `I*`。没有这个字段时，**只改已签收的 `I*`**（及人显式纳入的 `O*`），未签收的不动
    - `ui.playbook_sync` — 按 `e2e/inventory.json` 建设或进化 wave / helper,只打本轮资源。
      剧本要走完 `create → read → change → restore → cleanup`,实体名带
