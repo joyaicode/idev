@@ -3,13 +3,12 @@
 
     context-stage.py --schema
     context-stage.py preview --repo DIR --query TEXT [--feature F] [--top N]
-    context-stage.py load --repo DIR --id PATH:START:END
+    context-stage.py load --repo DIR --id PATH:START:END [--feature F --step S]
 
 Codegraph supplies symbol locations. A ticket lesson ledger supplies file
-paths already written in evidence. A local Milvus file nominates spans whose
-text shares fragments with the query. Reciprocal rank fusion (k=60) reorders
-paths that appear in more than one list. The Milvus file is a nomination
-index: load still reads the file bytes.
+paths already written in evidence. Reciprocal rank fusion (k=60) reorders
+paths that appear in both lists. A third lane — a local Milvus file that
+nominated spans by text — retired on 2026-11-03; see attic/MOVED.md.
 
 Preview prints names, paths, and one-line symptoms. Load prints one line
 range and the file sha256. Lesson text stays in lessons.py recall.
@@ -32,7 +31,7 @@ sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "lib"))
 import doc_home  # noqa: E402
 import lessons  # noqa: E402
-import rag_milvus  # noqa: E402
+import read_ledger  # noqa: E402
 
 RRF_K = 60
 MAX_LINES = 80
@@ -51,14 +50,13 @@ SCHEMA = """\
 # preview --repo DIR --query TEXT [--feature F] [--top N]
 #   top 为 1 到 20，默认 8
 #   标准输出：PREVIEW、SOURCE、若干行
-#   kind=symbol 或 kind=rag 的 id 是 path:start:end，可交给 load
+#   kind=symbol 的 id 是 path:start:end，可交给 load
 #   kind=lesson 的 id 以 lesson: 开头，load 拒绝
-# index --repo DIR
-#   把源码片段写入 .idev/rag/milvus.db。不写函数体。
-#   源文件变了，旧库就过期，preview 不再用它。
 # load --repo DIR --id PATH:START:END
 #   最多 80 行。更长则 TRUNCATED，并给出下一段 id
 #   sha256 是整个文件的
+#   同时给 --feature 和 --step 时记入 workflow/reads.yaml
+#   下一次 attempt 的委派包重放 sha256 仍一致的区间
 #
 # SOURCE 的第三列：ok | absent | fail: 原因
 # 一个来源失败不抹掉另一个来源。两个都失败且没有行，退出码 1。
@@ -87,11 +85,10 @@ def add_rrf(scores: dict[str, float], ranked: list[str]) -> None:
         scores[path] = scores.get(path, 0.0) + 1.0 / (RRF_K + rank)
 
 
-def fuse(symbol_paths: list[str], lesson_paths: list[str], rag_paths: list[str] | None = None) -> dict[str, float]:
+def fuse(symbol_paths: list[str], lesson_paths: list[str]) -> dict[str, float]:
     scores: dict[str, float] = {}
     add_rrf(scores, symbol_paths)
     add_rrf(scores, lesson_paths)
-    add_rrf(scores, list(rag_paths or []))
     return scores
 
 
@@ -302,24 +299,6 @@ def build_catalog(symbols: list[dict], mentions: list[dict], scores: dict[str, f
     return rows
 
 
-def tag_rag(row: dict, paths: set[str]) -> dict:
-    sources = str(row.get("sources") or "")
-    if row.get("kind") == "symbol" and row["path"] in paths and not sources.endswith("+rag"):
-        return {**row, "sources": sources + "+rag"}
-    return row
-
-
-def extra_rag(rows: list[dict], hits: list[dict]) -> list[dict]:
-    seen = {row["id"] for row in rows}
-    return [hit for hit in hits if hit["id"] not in seen]
-
-
-def with_rag(rows: list[dict], hits: list[dict]) -> list[dict]:
-    paths = {hit["path"] for hit in hits}
-    marked = [tag_rag(row, paths) for row in rows]
-    return marked + extra_rag(marked, hits)
-
-
 def emit_preview(query: str, statuses: list[tuple[str, str]], rows: list[dict]) -> None:
     print(f"PREVIEW\t{cell(query)}")
     for name, status in statuses:
@@ -366,14 +345,12 @@ def refuse_preview(repo: Path, args: argparse.Namespace) -> int | None:
 def assemble(repo: Path, args: argparse.Namespace) -> tuple[list[dict], list[tuple[str, str]]]:
     symbols, codegraph_status = codegraph_rows(repo, args.query, args.top)
     mentions, lesson_status = lesson_source(repo, args.feature, args.query)
-    rag_hits, rag_status = rag_milvus.search_repo(repo, args.query, args.top)
     scores = fuse(
         [row["path"] for row in symbols],
         lesson_path_order(mentions),
-        [row["path"] for row in rag_hits],
     )
-    rows = with_rag(build_catalog(symbols, mentions, scores), rag_hits)
-    statuses = [("codegraph", codegraph_status), ("lessons", lesson_status), ("rag", rag_status)]
+    rows = build_catalog(symbols, mentions, scores)
+    statuses = [("codegraph", codegraph_status), ("lessons", lesson_status)]
     return rows[: args.top], statuses
 
 
@@ -385,18 +362,6 @@ def cmd_preview(args: argparse.Namespace) -> int:
     rows, statuses = assemble(repo, args)
     emit_preview(args.query, statuses, rows)
     return finish(preview_status(statuses, rows))
-
-
-def cmd_index(args: argparse.Namespace) -> int:
-    repo = Path(args.repo).resolve()
-    if not repo.is_dir():
-        print("REFUSED\trepo", file=sys.stderr)
-        return 2
-    status = rag_milvus.index_repo(repo)
-    print(f"INDEX\t{status}")
-    if not status.startswith("ok"):
-        return 1
-    return finish(0)
 
 
 def parse_span(span_id: str) -> tuple[str, int, int] | None:
@@ -472,7 +437,17 @@ def cmd_load(args: argparse.Namespace) -> int:
         print("REFUSED\tspan", file=sys.stderr)
         return 1
     emit_load(span_id, *loaded)
+    remember_span(args, span_id, loaded[0])
     return finish(0)
+
+
+def remember_span(args: argparse.Namespace, span_id: str, digest: str) -> None:
+    feature = str(getattr(args, "feature", "") or "")
+    step = str(getattr(args, "step", "") or "")
+    if not feature or not step:
+        return
+    task = doc_home.homes(Path(args.repo).resolve(), feature)["task"]
+    read_ledger.note(task, step, span_id, digest)
 
 
 def add_preview(sub) -> None:
@@ -484,16 +459,12 @@ def add_preview(sub) -> None:
     preview.set_defaults(fn=cmd_preview)
 
 
-def add_index(sub) -> None:
-    indexed = sub.add_parser("index")
-    indexed.add_argument("--repo", required=True)
-    indexed.set_defaults(fn=cmd_index)
-
-
 def add_load(sub) -> None:
     load = sub.add_parser("load")
     load.add_argument("--repo", required=True)
     load.add_argument("--id", required=True)
+    load.add_argument("--feature", default="")
+    load.add_argument("--step", default="")
     load.set_defaults(fn=cmd_load)
 
 
@@ -502,7 +473,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--schema", action="store_true")
     sub = parser.add_subparsers(dest="cmd")
     add_preview(sub)
-    add_index(sub)
     add_load(sub)
     args = parser.parse_args(argv)
     if args.schema:

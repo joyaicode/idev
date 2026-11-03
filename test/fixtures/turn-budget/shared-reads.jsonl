@@ -1,0 +1,3 @@
+{"role": "user", "message": {"content": [{"type": "text", "text": "<user_query>\nshared reads\n</user_query>"}]}}
+{"role": "assistant", "message": {"content": [{"type": "text", "text": "一起看"}, {"type": "tool_use", "name": "Read", "input": {"path": "f0"}}, {"type": "tool_use", "name": "Read", "input": {"path": "f1"}}, {"type": "tool_use", "name": "Read", "input": {"path": "f2"}}, {"type": "tool_use", "name": "Read", "input": {"path": "f3"}}]}}
+{"role": "assistant", "message": {"content": [{"type": "text", "text": "一起看"}, {"type": "tool_use", "name": "Read", "input": {"path": "f4"}}, {"type": "tool_use", "name": "Read", "input": {"path": "f5"}}, {"type": "tool_use", "name": "Read", "input": {"path": "f6"}}, {"type": "tool_use", "name": "Read", "input": {"path": "f7"}}]}}

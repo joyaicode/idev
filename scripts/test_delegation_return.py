@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 import unittest
@@ -15,9 +16,26 @@ sys.path.insert(0, str(HERE / "lib"))
 import delegation_return as dret  # noqa: E402
 
 VALID = HERE.parent / "api" / "schemas" / "testdata" / "delegation-return" / "valid" / "coder-pass.json"
+# These four go through jsonschema. requirements.txt lists it as a single-lock
+# dependency: missing it skips this one check rather than stopping the run, and
+# selfcheck.sh prints that out loud. The test file has to honour the same grade
+# — otherwise running it directly errors while selfcheck calls it green, which
+# is exactly the inconsistency that grading was supposed to remove. The other
+# two cases never reach the validator, so they keep running.
+HAVE_SCHEMA = importlib.util.find_spec("jsonschema") is not None
+SCHEMA_CASES = frozenset({
+    "test_valid_fixture_passes",
+    "test_block_in_report_passes_check",
+    "test_invalid_block_fails",
+    "test_signoff_writes_must_be_empty",
+})
 
 
 class ExtractAndValidate(unittest.TestCase):
+    def setUp(self) -> None:
+        if not HAVE_SCHEMA and self._testMethodName in SCHEMA_CASES:
+            self.skipTest("jsonschema 未安装；python3 -m pip install --user -r requirements.txt")
+
     def test_valid_fixture_passes(self) -> None:
         data = json.loads(VALID.read_text(encoding="utf-8"))
         self.assertEqual(dret.validate(data), [])

@@ -50,6 +50,18 @@ testdata/rapid/
 # Go fuzz corpora are cached in GOCACHE; a seed worth keeping goes in the
 # test as an f.Add.
 testdata/fuzz/
+
+# Reading material behind the conventions work. The books and their OCR are
+# large and reproducible — the book is on the shelf, the OCR can be run again.
+# What comes out of a close reading is neither: a 精读缺口 report is hours of
+# reading checked against the real source, and nothing regenerates it. So the
+# raw material is excluded and the distilled output stays trackable. Without
+# the split, the 592K that matters has no history while one `git add .` would
+# put 190M that does not into it permanently.
+/scripts/docs/*.pdf
+/scripts/docs/notes/*-OCR.txt
+/scripts/docs/notes/*-全文.txt
+
 # idev: execution residue stays untracked; durable product characteristics stay
 .idev/*
 !.idev/memory.md

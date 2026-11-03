@@ -180,4 +180,4 @@ codegraph 的 MCP 说明里原话就是:`codegraph_context` 是 PRIMARY,一次�
 | 自动 apply diff(Cursor 的 apply 模型) | 我们不插在编辑器里;agent 直接用 `Write`/`Edit` |
 | 浏览器看 UI | 页面套件仍是产线的 `ui.lifecycle_run`。程序怎么提交、回执怎么取、失败后的下一段，见 [browser-program.md](browser-program.md)。回执不是根因 |
 | LLM 评分 / rubric | `evolve.md:4` 明文禁止,见 [external-tools.md](external-tools.md) |
-| 嵌入式语义检索 | 本地 Milvus 文件只提名 `path:start:end`，正文仍从文件读。不把库里的文本当代码，不另起服务。见 [context-stage.md](context-stage.md) |
+| 嵌入式语义检索 | 不做。本地 Milvus 那一路 2026-11-03 退役（零使用，见 `attic/MOVED.md`）。读实现走两阶段读的 codegraph 与 lessons 两路，正文仍从文件读。见 [context-stage.md](context-stage.md) |

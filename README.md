@@ -35,7 +35,7 @@
 | `references/feedback-loop.md` | 双向反馈环：下游质疑上游 · 订正后全线对准 · 交付后跟进 |
 | `scripts/lessons.py` | 经验台账：六问必答 · 决策步可附 prefix · 候选→人确认+复现→权威 · 召回只给建议 |
 | `scripts/sediment.py` | 程序候选：两条不同结果+人确认才留下。事实仍走经验账。不执行脚本 |
-| `scripts/context-stage.py` | 两阶段读：薄目录再加载一个区间。本地 Milvus 文件只提名区间 |
+| `scripts/context-stage.py` | 两阶段读：薄目录再加载一个区间。两路来源 codegraph 与 lessons |
 | `references/rootcause-guards.md` | 根因六条强约束：来源/时间窗/穿透/双证据/快照/排除举证 |
 | `scripts/artifact-match.py` | 运维:产物与源码是否同源（MATCH/AHEAD/UNKNOWN） |
 | `scripts/realign.py` | 需求订正后查七类漂移，给出向前的重做顺序 |
@@ -47,7 +47,7 @@
 | `scripts/stage-gate.py` | 七视角把关：experts.md 拒过清单里可机检的那一半（`--list`） |
 | `scripts/delegation.py` | 委派留痕：write / check / replay / timeline / eval |
 | `scripts/agent-metrics.py` · `agent-review.sh` | 跨票指标 · 定期复盘（只起草不 land） |
-| `scripts/failure_signature.py` · `hypothesis.py` · `turn-budget.py` | 提效：失败签名归一化 · 假设台账 · 首句前的无正文回合 |
+| `scripts/failure_signature.py` · `hypothesis.py` · `turn-budget.py` | 提效：失败签名归一化 · 假设台账 · 回合预算（无正文回合 + 串行只读比率；零参数读本会话转录） |
 | `references/agents.md` · `agents-playbook.md` | 委派契约（是什么）· 唤起与配合最佳实践（怎么用） |
 | `references/boost.md` | 提效：**本地事实优先**（文档会过时）· §0 交代 · 签名归一化 · 假设台账 |
 | `references/code-agent.md` · `scripts/repl.py` | 用代码表达推理：计算的源码与输出落成证据 |

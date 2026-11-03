@@ -41,6 +41,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Say it once, instead of letting every yaml lock below fail for the same reason
+# — and letting the negative locks pass for it, since a non-zero exit is exactly
+# what they expect. Only yaml stops the run: every idev contract is yaml, so
+# without it almost nothing below means anything. jsonschema backs a single lock
+# and is skipped at that lock instead of stopping everything. pymilvus is not
+# checked at all any more — the local vector lane retired on 2026-11-03
+# (attic/MOVED.md).
+echo "=== preflight: the python this run uses has what the contracts need ==="
+if ! python3 -c "import yaml" 2>/dev/null; then
+  echo "BLOCKED python3 is missing pyyaml" >&2
+  echo "  this run used $(python3 -c 'import sys; print(sys.executable)')" >&2
+  echo "  install it for that interpreter, then run selfcheck again:" >&2
+  echo "    python3 -m pip install --user -r ${KERNEL}/requirements.txt" >&2
+  exit 2
+fi
+echo "OK  preflight"
+
 python3 - <<PY
 from pathlib import Path
 import shutil
@@ -1229,6 +1246,9 @@ echo "OK  recipe doc"
 echo "=== lock: self-evolution scripts + workflow ==="
 for f in \
   "${KERNEL}/references/self-evolution.md" \
+  "${KERNEL}/references/process-eval.md" \
+  "${KERNEL}/references/scaffolds.yaml" \
+  "${KERNEL}/scripts/process-eval.py" \
   "${KERNEL}/scripts/evolve-review.sh" \
   "${KERNEL}/scripts/evolve-curator.sh" \
   "${KERNEL}/scripts/install-weekly-evolve.sh" \
@@ -1238,6 +1258,7 @@ do
 done
 [ -x "${KERNEL}/scripts/evolve-review.sh" ] || fail "evolve-review.sh not executable"
 [ -x "${KERNEL}/scripts/evolve-curator.sh" ] || fail "evolve-curator.sh not executable"
+[ -x "${KERNEL}/scripts/process-eval.py" ] || fail "process-eval.py not executable"
 # dry-run must not fail
 bash "${KERNEL}/scripts/evolve-review.sh" --dry-run >"${SCRATCH}"/idev-evolve-dry.out 2>&1 \
   || fail "evolve-review --dry-run failed"
@@ -1793,8 +1814,12 @@ python3 "${KERNEL}/scripts/test_hooks.py" >/dev/null 2>&1 \
 IDEV_DATA="$(mktemp -d "${TMPDIR:-/tmp}/idev-timing.XXXXXX")" \
   python3 "${KERNEL}/hooks/timing_coverage.py" >/dev/null 2>&1 \
   || fail "subagent-stops timing coverage lock broke (hooks/timing_coverage.py)"
-python3 "${KERNEL}/scripts/test_delegation_return.py" >/dev/null 2>&1 \
-  || fail "structured delegation-return schema check broke (python3 scripts/test_delegation_return.py)"
+if python3 -c "import jsonschema" 2>/dev/null; then
+  python3 "${KERNEL}/scripts/test_delegation_return.py" >/dev/null 2>&1 \
+    || fail "structured delegation-return schema check broke (python3 scripts/test_delegation_return.py)"
+else
+  echo "SKIP delegation-return schema (no jsonschema: python3 -m pip install --user jsonschema)"
+fi
 python3 "${KERNEL}/scripts/test_outcome_metrics.py" >/dev/null 2>&1 \
   || fail "outcome-metrics WIP/rework counts broke (python3 scripts/test_outcome_metrics.py)"
 python3 "${KERNEL}/scripts/test_phase2.py" >/dev/null 2>&1 \
@@ -1849,6 +1874,10 @@ bash "${KERNEL}/test/check-feature-tiers.sh" >/dev/null 2>&1 \
   || fail "check-feature tier rules broke (bash test/check-feature-tiers.sh)"
 python3 "${KERNEL}/scripts/test_signals.py" >/dev/null 2>&1 \
   || fail "signal / answer rules broke (python3 scripts/test_signals.py)"
+python3 "${KERNEL}/scripts/test_nudge.py" >/dev/null 2>&1 \
+  || fail "a nudge recorded a stop or asked again (python3 scripts/test_nudge.py)"
+python3 "${KERNEL}/scripts/test_process_eval.py" >/dev/null 2>&1 \
+  || fail "process-eval corrected a real hold or edited the skill (python3 scripts/test_process_eval.py)"
 python3 "${KERNEL}/scripts/test_staffing.py" >/dev/null 2>&1 \
   || fail "staffing mode or the role check on a gate broke (python3 scripts/test_staffing.py)"
 python3 "${KERNEL}/scripts/test_concurrency.py" >/dev/null 2>&1 \
@@ -1907,10 +1936,23 @@ must_fail ping.jsonl 'ping segment=1'
 must_fail longblock.jsonl 'long_block=120000'
 must_fail suite.jsonl 'suite_block=180000'
 must_fail doctor.jsonl 'suite_block=120000'
+# One read per round is its own failure, with or without a sentence between.
+must_fail serial-reads.jsonl 'serial_reads=8 rounds=8'
+# The Claude Code shape: top-level type, message.role, Bash as the shell,
+# and a tool result that does not open a segment. Before this was read, every
+# check here passed a transcript with a 159-round silent streak in it.
+must_fail claude-shape.jsonl 'long_block=120000'
+must_fail claude-shape.jsonl 'serial_reads=9'
+must_fail claude-shape.jsonl 'streak=10 segment=1'
 python3 "$TB" "${FIX}/green.jsonl" >/dev/null || fail "green turn budget must pass"
 python3 "$TB" "${FIX}/spoken-block.jsonl" >/dev/null || fail "a long command that already spoke must pass"
 python3 "$TB" "${FIX}/suite-bg.jsonl" >/dev/null || fail "a suite started in the background must pass"
 python3 "$TB" "${FIX}/doctor-bg.jsonl" >/dev/null || fail "a doctor started in the background must pass"
+python3 "$TB" "${FIX}/shared-reads.jsonl" >/dev/null || fail "the same reads shared in one message must pass"
+# The edges a fixture cannot show: a write command passing as a read, a repo
+# name with a dot in it, a HANDOFF that forgets it is not a stop.
+python3 "${KERNEL}/scripts/test_turn_cost.py" >/dev/null 2>&1 \
+  || fail "turn-cost locks broke: read-only判定 / 比率 / 转录格式 / 会话定位 (python3 scripts/test_turn_cost.py)"
 echo "OK  turn budget"
 
 echo "=== lock: the conductor's cold start stays within budget ==="

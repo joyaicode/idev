@@ -38,7 +38,7 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 | `route.module` | `conventions` \| `deliver` \| `verify` \| `ops` \| `handoff` |
 | `route.scenario` | `S1`…`S8`（**必写**；缺省当 S1） |
 | `route.why` | 为何选这个、不选其它（一句） |
-| `invoke.trigger` | 本轮如何进入口：用户原话关键片段 / `@idev` / 旧名别名 / 隐式续作 |
+| `invoke.trigger` | 本轮如何进入口：用户原话关键片段 / `@idev` / 旧名别名 / 隐式续作。**留空时 `append` 从本会话转录取人原话填上**（压成单行、限长 200）；已经写了就不动 |
 | `invoke.matched` | 命中了哪条路由信号（表格行语义，一句） |
 | `thinking.summary` | 路由前的思考压缩（2～4 句：信号 → 排除 → 选定） |
 
@@ -61,7 +61,7 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 | `thinking.uncertainty` | 仍不确定什么；没有则空 |
 | `thinking.steps[]` | 有序思考步骤：`n` + `do`（做了什么判断）+ `so`（因此怎样） |
 | `calls[]` | 本轮已发生的调用：`kind` + `name` + 可选 `args` / `result` |
-| `opened[]` | 本轮深读的规约/模块页或关键仓文件（短路径） |
+| `opened[]` | 本轮深读的规约/模块页或关键仓文件（短路径）。**整段缺失或为空时 `append` 从本会话转录填上**本轮 `Read` 过、且位于内核下的页；已经写了就不动 |
 | `extensions` | 本轮 `session-context.py` 打出的 `OPEN` 路径。产品仓 `.idev/traces/` 且该仓 `marker: idev` 时必须有这个字段，没有页就写 `extensions: []`；缺字段周审计记 HARD。内核 `state/traces/` 是导体自己的会话，不要求这个字段。有列表时每一项必须出现在 `opened` |
 | `stop` | 等人的点；没有则空 |
 | `next` | 本轮真要停时的下一手。没有停点就空，并在同一轮做掉 |
@@ -122,7 +122,7 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 
 | `signoff` | **本轮若写入** `sealed` / `accepted` / `aligned` / `resolved`，或记了 `chose: chat-confirm-signoff`，**则必填**；否则写 `status: none` 或整段省略 |
 
-### `append` 生成的三段
+### `append` 从记录生成的段
 
 导体只写意图、理由和思考。下面三段由 `append` 从记录生成，手写的同名段会被覆盖：
 
@@ -133,6 +133,12 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 | `recorded[]` | 窗口里 `run.yaml` 记下的步：`feature` / `step` / `kind` / `status` / `evidence`（步骤证据路径，有才写）/ `verify_evidence`（复核证据路径，有才写）/ `by`（签字人，否则执行者，否则 `conductor`）/ `run`。人签门 PASS 另带 `mark`（`accepted_req` / `accepted_arch` / `accepted_plan` 记 `accepted`；`aligned`、`resolved` 记同名标记） |
 
 `recorded` 里有带 `mark` 的门、而 trace 没写 `signoff` 或写的是 `status: none` 时，`append` 按门补上 `signoff`：`status: recorded`、`marks`、`by` 是签字人、`evidence` 是 `<run.yaml>#<step>.signoff`。不在产品仓里跑（内核会话）时不生成这三段。
+
+另有两处**只在留空时**补、写了就不动，与上面三段覆盖式不同：`invoke.trigger` 取本会话转录里的人原话，`opened[]` 取本轮 `Read` 过的内核页。两者都是事实的逐字复制，导体再打一遍只是输出开销。
+
+**`calls[]` 不自动填。** 一条命令算不算一次调用、归哪个 `kind`，那是判断不是事实；trace 是审计记录，填错比缺失更糟 —— 这正是下面「不准伪造 `calls`」那条的另一面。`route.why`、`invoke.matched`、`thinking.summary` 同理，脚本一律不填：一份推理由脚本写出来的 trace 什么也没记下。
+
+补完之后 `append` 还会多打两行（都不改退出码，不挡本轮）：本会话助手轮数到 `HANDOFF_ROUNDS`（100）时打 `HANDOFF`，提示可以收口新开会话；轮数够 `BUDGET_FROM_ROUND`（6）时跑一次 `turn-budget.py`，超了预算打 `WARN 回合预算: …`。
 
 ### `signoff` 块（v2 增补）
 

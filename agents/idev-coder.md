@@ -66,7 +66,9 @@ is_background: false
    python3 $IDEV/scripts/context-stage.py load --repo <仓根> --id <path:start:end>
    ```
 
-   目录里没有函数体。经验行不是答案，正文仍走 `lessons.py recall`。要用正文里的词补符号检索时，先 `python3 $IDEV/scripts/context-stage.py index --repo <仓根>`。没有这份本地库，`SOURCE rag` 是 `absent`，符号照常列。库过期就重新 index，不要把过期提名当现行代码。
+   目录里没有函数体。经验行不是答案，正文仍走 `lessons.py recall`。两路来源：`codegraph` 给符号位置，`lessons` 给该票的经验行；任一路 `absent` 或 `fail` 时另一路照常列。
+
+   仓内已有 `.ua/knowledge-graph.json` 或 `.understand-anything/knowledge-graph.json` 时，再打开 `~/.cursor/skills/understand-anything/SKILL.md`，用图提名要 `load` 的文件。没有图就不建。图上的摘要不是这段实现的正文。
 
    同一做法要收成可重跑脚本时，用 `python3 $IDEV/scripts/sediment.py add --form program` 记成候选，并指向已经存在的脚本。一条成功不能留下。改过已经留下的脚本之后，原来的结果不能再把它留下。全文 `references/sediment.md`。
 
@@ -74,7 +76,7 @@ is_background: false
 
 5. **按本步 kind 改**:
    - `deliver.code_pass` — 实现本阶段代码。少做和部分补上，多做删掉。对照只认密封基线、方案和 slice；方案没点名的路径不算这次范围。已经对齐就不要再添剩余工作。全文在 `deliver/SKILL.md` 的 code 第 1 条
-   - `review.fix` — 委派包 `with.accept_all_findings: true`（交付主路径，实现审核前）时，改全部 `I*`。没有这个字段时，**只改已签收的 `I*`**（及人显式纳入的 `O*`），未签收的不动
+   - `review.fix` — 委派包 `with.accept_all_findings: true`（`lite-change` 与 `code-review`）时，改全部 `I*`。没有这个字段时，**只改已签收的 `I*`**（及人显式纳入的 `O*`），未签收的不动
    - `ui.playbook_sync` — 按 `e2e/inventory.json` 建设或进化 wave / helper,只打本轮资源。
      剧本要走完 `create → read → change → restore → cleanup`,实体名带
      `AUTOTEST`/`E2E_` 标记,cleanup 放 `afterEach`/`finally`。写完自检:

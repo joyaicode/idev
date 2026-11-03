@@ -6,12 +6,15 @@ import argparse
 import datetime as dt
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kind_agents import AGENTS  # noqa: E402
 from product_sink import product_repo, sink_dir  # noqa: E402
+import session_transcript  # noqa: E402
+import workflow_spec  # noqa: E402
 
 
 MODULES = ("conventions", "deliver", "verify", "ops", "handoff")
@@ -271,6 +274,11 @@ def validate(text: str, *, for_append: bool = False) -> list[str]:
 
     if ver == "2" and for_append:
         errors.extend(signoff_errors(text))
+        errors.extend(workflow_spec.nudge_errors(
+            field(block(text, "invoke"), "trigger"),
+            field(text, "stop"),
+            field(text, "next"),
+        ))
     return errors
 
 
@@ -1032,6 +1040,185 @@ def attach_round(text: str, folder: Path) -> tuple[str, str]:
     return text, ""
 
 
+HANDOFF_ROUNDS = 100
+# Below this many rounds no budget check can fire: serial_reads needs six
+# rounds carrying a read, a streak needs nine. Holding off is not skipping
+# the check — it is not paying for one that cannot have a verdict yet.
+BUDGET_FROM_ROUND = 6
+
+
+def session_rounds() -> tuple[int, int]:
+    """This session's assistant rounds, and the context size of the last one.
+
+    The lookup lives in lib/session_transcript.py so the folder-name rule —
+    slashes and dots both become dashes — has one home. Only the round count
+    decides whether a HANDOFF prints: a round count is something a person can
+    check by hand, a token count is not. The size rides along to be shown.
+    """
+    return session_transcript.session()
+
+
+def handoff_line(text: str, rounds: int, ctx: int) -> str:
+    feature = field(text, "feature") or "-"
+    route = block(text, "route")
+    stage = field(route, "stage") or "-"
+    size = " ctx=%d" % ctx if ctx else ""
+    return (
+        "HANDOFF rounds=%d%s feature=%s stage=%s"
+        " — 证据已落盘。要新开会话就从这张票的 stage 接着跑，不必重述本轮。"
+        "这不是停点，同一轮可以接着做。" % (rounds, size, feature, stage)
+    )
+
+
+TRIGGER_RE = re.compile(r"(?m)^(?P<indent>[ \t]+)trigger:[ \t]*(?P<value>.*)$")
+TRIGGER_LIMIT = 200
+
+
+def _one_line(words: str, limit: int = TRIGGER_LIMIT) -> str:
+    """The person's words as one safe double-quoted scalar.
+
+    First line only, clipped, with backslashes and quotes escaped. A trigger
+    is what set this round off, not a transcript of it — and a newline or a
+    stray quote written straight into the yaml would turn a trace that could
+    be written into one that cannot.
+    """
+    spoken = words.strip()
+    line = spoken.splitlines()[0].strip() if spoken else ""
+    if len(line) > limit:
+        line = line[:limit].rstrip() + "…"
+    return '"%s"' % line.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def merge_facts(text: str) -> str:
+    """Fill invoke.trigger from the person's own words when it is still empty.
+
+    The trigger is those words verbatim and the transcript already holds them,
+    so the conductor typing them out again is output cost and nothing else —
+    the largest single field in a trace, on every round.
+
+    Judgements are never filled. route.why, invoke.matched and
+    thinking.summary stay the conductor's: a trace whose reasoning a script
+    wrote records nothing. This is the same line attach_round draws when it
+    says the conductor writes intent, why and thinking.
+
+    This runs on every round, so it must not be able to turn a writable trace
+    into a failing one. The filled text is kept only when it validates no
+    worse than what came in, and any surprise leaves the text alone.
+    """
+    try:
+        invoke = block(text, "invoke")
+        if not invoke or field(invoke, "trigger"):
+            return text
+        match = TRIGGER_RE.search(text)
+        if not match:
+            return text
+        words = session_transcript.last_prompt(session_transcript.newest())
+        if not words.strip():
+            return text
+        filled = "%s%strigger: %s%s" % (
+            text[:match.start()], match.group("indent"), _one_line(words), text[match.end():],
+        )
+        if len(validate(filled, for_append=True)) <= len(validate(text, for_append=True)):
+            return filled
+    except Exception:
+        return text
+    return text
+
+
+KERNEL_ROOT = Path(__file__).resolve().parents[1]
+OPENED_LIMIT = 40
+READ_PATH_KEYS = ("file_path", "path", "filePath", "notebook_path")
+
+
+def _kernel_relative(raw: str) -> str:
+    """The path as a kernel-relative page, or "" when it is not one.
+
+    Whether a file sits under the kernel is a path comparison — a fact. It is
+    the one filter applied here, because cold-start-size.py reads `opened` to
+    say how often a kernel page is really needed, and a product source file
+    tells it nothing.
+    """
+    text = raw.strip()
+    if not text:
+        return ""
+    try:
+        resolved = Path(text).expanduser().resolve()
+        return resolved.relative_to(KERNEL_ROOT).as_posix()
+    except (OSError, ValueError):
+        return ""
+
+
+def merge_opened(text: str, folder: Path) -> str:
+    """List the kernel pages this round opened, from the transcript itself.
+
+    A conductor writing this by hand under-reports: the kernel's own SKILL.md
+    shows `opened` on 17% of rounds, which is not what happened. Reading a
+    file is a fact, so it can be filled.
+
+    `calls[]` is deliberately *not* filled the same way. Deciding whether a
+    shell command counts as a call, and under which kind, is a judgement —
+    and a trace is an audit record, so a wrong entry is worse than a missing
+    one. 「不准伪造调用」 means the conductor still writes calls.
+
+    Only an absent or empty list is filled, and any surprise leaves the text
+    alone: this runs on every round.
+    """
+    try:
+        if block(text, "opened").strip():
+            return text
+        uses = session_transcript.tool_uses(
+            session_transcript.newest(), previous_until(folder),
+            dt.datetime.now().astimezone(),
+        )
+        pages: list[str] = []
+        for name, raw in uses:
+            if name not in ("Read", "NotebookRead"):
+                continue
+            for key in READ_PATH_KEYS:
+                page = _kernel_relative(str(raw.get(key) or ""))
+                if page and page not in pages:
+                    pages.append(page)
+                    break
+        if not pages:
+            return text
+        body = "opened:\n" + "".join(
+            "  - %s\n" % _scalar(page) for page in pages[:OPENED_LIMIT]
+        )
+        filled = _replace_block(text, "opened", body)
+        if len(validate(filled, for_append=True)) <= len(validate(text, for_append=True)):
+            return filled
+    except Exception:
+        return text
+    return text
+
+
+def budget_line() -> str:
+    """What turn-budget.py says about this session, as one line, or "".
+
+    That judgement had no caller: it needed a transcript path handed to it,
+    and nobody goes digging in ~/.claude/projects. Running it where the round
+    is already being written closes that gap. A warning, never a block —
+    「不为观测另停」 — and a budget that cannot be computed says nothing.
+
+    Run as a subprocess on purpose: `append` is the round's write path, and
+    turn-budget failing should not take it down. The cost is re-reading the
+    transcript in that child, which is why the caller holds off until there
+    are enough rounds for a verdict to be possible at all.
+    """
+    script = Path(__file__).resolve().parent / "turn-budget.py"
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script)],
+            capture_output=True, text=True, timeout=20, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if proc.returncode != 1:
+        return ""
+    spoken = [line for line in proc.stdout.splitlines() if line.strip()]
+    return ("回合预算: " + "; ".join(spoken[:3])) if spoken else ""
+
+
 def cmd_append(path: str) -> int:
     """Write a round YAML projection. Audit spans live in the DB; this file is
     an export. A write miss prints WARN and exits 0 so it cannot unwind a
@@ -1051,6 +1238,8 @@ def cmd_append(path: str) -> int:
     text, round_warn = attach_round(text, folder)
     if round_warn:
         print("WARN  " + round_warn, file=sys.stderr)
+    text = merge_facts(text)
+    text = merge_opened(text, folder)
     errors = validate(text, for_append=True)
     if errors:
         for e in errors:
@@ -1071,6 +1260,13 @@ def cmd_append(path: str) -> int:
     print("wrote %s" % dest)
     print(render(text))
     print(render_path(text, name=dest.name))
+    rounds, ctx = session_rounds()
+    if rounds >= HANDOFF_ROUNDS:
+        print(handoff_line(text, rounds, ctx))
+    if rounds >= BUDGET_FROM_ROUND:
+        budget = budget_line()
+        if budget:
+            print("WARN  " + budget, file=sys.stderr)
     return 0
 
 

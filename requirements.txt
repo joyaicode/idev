@@ -1,0 +1,26 @@
+# idev 的 python 依赖。装进当前 python3：
+#
+#     python3 -m pip install --user -r requirements.txt
+#
+# 为什么需要这份声明：2026-11-01 homebrew 把 `python3` 切到 python@3.15，而这些
+# 包一直装在系统 3.9 上。于是 safeyaml.py 对每一处 yaml 锁报 BLOCKED，selfcheck
+# 在第 425 行退出，11 条锁以看起来互不相干的方式失败，negative 锁还因为「期望非 0
+# 退出」而把 BLOCKED 当成通过。依赖隐式存在时，换解释器就是这个后果。
+#
+# 跑 `bash scripts/selfcheck.sh`，它的 preflight 会先说清缺什么、用的哪个解释器。
+
+# 硬依赖。每一份 idev 契约都是 yaml（24 个脚本 import 它），缺了几乎每条锁都
+# 失去意义，所以 preflight 只拦这一个，并停住整个 run。
+pyyaml>=6.0
+
+# 单条锁依赖。lib/delegation_return.py 用它校验委派回报的 schema，只此一处。
+# 缺了 selfcheck 在那条锁上打 SKIP 并告诉你怎么装，不阻断其余。
+jsonschema>=4.18
+
+# pymilvus 已退役（2026-11-03），不要装。本地 Milvus Lite 检索零使用：163 份内核
+# trace 命中 6 份全是开发它本身，产品仓 228 份 trace 零命中。代码在
+# attic/scripts/rag_milvus.py，接回来的完整步骤在 attic/MOVED.md。
+# 提案：state/proposals/20261103-retire-local-rag.md
+
+# 不是 idev 的依赖，列在这里是为了别再被误装：requests 与 numpy 被 0 个脚本
+# import。它们曾出现在系统 3.9 里只是碰巧。
