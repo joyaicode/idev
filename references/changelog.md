@@ -1,5 +1,9 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-11-07：《领域驱动设计》第 15–17 章精读收口，全书 17 章读完。第 15 章精炼、第 16 章大比例结构、第 17 章综合运用共 30 条对照后只落 1 条：`conventions/domain-modeling.md` 新增「核心域与通用子领域（可检查）」检查项，要求 arch 方案识别核心域（CORE DOMAIN）与通用子领域（GENERIC SUBDOMAIN），精力优先投入核心域，不为通用子领域开发「万能」模型。大比例结构（EVOLVING ORDER / SYSTEM METAPHOR / RESPONSIBILITY LAYER / KNOWLEDGE LEVEL / PLUGGABLE COMPONENT FRAMEWORK）、首先评估六步与架构团队人员配置经对照不重复落，理由见 `state/proposals/20261107-ddd-ch15-17-gaps.md`。不新增编号、门禁或第二套测试框架。人要求：quote「所有任务在未完成前，一率按"好的，按推荐进行"，遇到确认或批准，一率批准，直到完成所有任务」。
+
+- 2026-11-07：按需增量知识检索 CLI 落地（P0 基线 + P1 MVP）。`scripts/knowledge.py` 四子命令（sync/search/read/doctor）用 SQLite FTS5 + 自建 CJK bigram 切词做全文检索，索引放 `state/knowledge-index/`（gitignore，可删重建）；白名单 P0 只含 joypaas（docs/design + .idev/pack + .cursor + docs/adr），验收问题集 15 条在 `state/knowledge-questions.yaml`。检索时自动增量同步、过期即失效（内容 hash 逐文件比对）、read 返回前再验 hash、越界文件（密钥/.env/依赖目录/构建产物）一律排除。单元测试 11 条全过（删除/失效/越界/read-hash 复核/doctor 孤儿），验收问题集 Top-5 命中 12/15（80%），三条 miss 是中文/中英同义边界（工单 vs 审批单、Handler SPI vs 审批处理器、elasticsearch vs 弹性搜索），已逐条标注；不引入向量、MCP、常驻服务或独立知识平台。提案见 `state/proposals/20261108-knowledge-search-cli.md`。人要求：quote「好的，按推荐进行」，并沿用工作期间自动同意。
+
 - 2026-11-07：七本工程 / 架构 / 编码规范书籍精读收口，本轮再补 4 处真源缺口。`conventions/canon.md` T8 增补宽收严发，T10 增补消息消费拓扑与跨系统事务离线并发，T11 增补输出克制，A4 同步点名消费拓扑与离线并发；`agents/idev-coder.md`、`agents/idev-deliver.md` 分别补 F4 / F7 的阶段触发。Web性能报告及其缺口已随 `12ab1c4` 入库；本提交补齐其余六份报告、修正第 15–21 本索引，并在 Effective Java 与大型网站报告中标注已由 `12ab1c4` 提前落地的缺口。其余主题经对照由既有 T/A/F 与 P/C/R 承载，理由见各报告。人要求：quote「继续精读未读的书籍，并炼化沉淀到idev中」。
 
 - 2026-11-07：阶段专家标准升级为唯一权威落点。`experts.md` 明确产物质量、效率路径、拒过清单三段读法，并为每个阶段补不降质的最快路径；五名执行者与 deliver 入口改为按这三件套执行。`stage-gate --list` 修复为输出各阶段真实规则 ID，并用 agent-smoke 锁住。不新增专家角色、编号、门禁或第二份专家页。人要求：quote「沉淀到idev中，做为最权威的专家指导各阶段的工作，提升阶段产物质量和效率。」

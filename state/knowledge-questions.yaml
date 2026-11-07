@@ -1,0 +1,100 @@
+# 验收问题集：人工标注应命中来源，用于 knowledge.py 的 Top-5 来源命中验收。
+# 验收门槛：Top-5 来源命中 >= 90%。覆盖五类场景：中文同义、权限码、环境差异、
+# 退役知识、冲突结论。这是验收工具，不是产品知识；改问题集不触发产品仓变更。
+#
+# 字段：id / query（真实会问的话）/ expect（预期命中来源，repo 相对路径）/
+#       note（场景说明，含已知边界）。
+
+- id: q01
+  query: 审批单如何创建
+  expect:
+    - docs/adr/0001-approval-ticket-gateway.md
+    - docs/design/joypaas-access-layer/approval.md
+  note: 中文同义边界——文档用「工单/建单」而非「审批单/创建」，bigram 无同义词表；短查询「审批单」可命中 approval.md
+
+- id: q02
+  query: 审批流同步还是异步
+  expect:
+    - docs/adr/0010-approval-sync-async.md
+  note: 决策记录
+
+- id: q03
+  query: 资源预算怎么算
+  expect:
+    - docs/adr/0009-resource-budget.md
+  note: 决策记录
+
+- id: q04
+  query: 数据范围鉴权
+  expect:
+    - docs/design/joypaas-access-layer/requires-data-scope.md
+    - docs/design/joypaas-access-layer/custom-data-scope-roles.md
+  note: 权限码/数据范围
+
+- id: q05
+  query: 监控告警
+  expect:
+    - docs/design/developer-guide/features/monitor.md
+    - docs/adr/0008-app-center-alarms-from-uwc.md
+  note: 中文同义（监控/告警/巡检）
+
+- id: q06
+  query: 本地开发启动参数
+  expect:
+    - .cursor/skills/joypaas-product-onboard/references/local-jvm-args.md
+    - docs/design/developer-guide/getting-started.md
+  note: 环境差异（本地/联调/生产）
+
+- id: q07
+  query: 请求身份
+  expect:
+    - docs/design/developer-guide/features/identity.md
+  note: 中文同义（身份/RequestVars）
+
+- id: q08
+  query: 异步任务重跑
+  expect:
+    - .idev/pack/agent-knowledge/knowledge/04-async-task.md
+  note: 中文同义（异步/在途/重跑）
+
+- id: q09
+  query: 多产品网关
+  expect:
+    - docs/design/joypaas-access-layer/gateway.md
+  note: 中文同义（网关/接入层）
+
+- id: q10
+  query: 审批处理器 SPI
+  expect:
+    - docs/adr/0003-approval-handler-spi.md
+  note: 中英同义边界——文档用英文「Handler SPI」，中文「审批处理器」不匹配；改问英文 handler spi 可命中
+
+- id: q11
+  query: 单管理员数据范围角色
+  expect:
+    - docs/adr/0007-paasapp-single-admin-and-source-scoped-roles.md
+  note: 权限码/角色
+
+- id: q12
+  query: 应用中心告警
+  expect:
+    - docs/adr/0008-app-center-alarms-from-uwc.md
+  note: 中文同义（应用中心/UWC/告警）
+
+- id: q13
+  query: 平台上下文
+  expect:
+    - docs/design/developer-guide/features/platform-context.md
+  note: 中文同义（上下文/平台上下文）
+
+- id: q14
+  query: 前端联调
+  expect:
+    - docs/design/developer-guide/day-to-day.md
+  note: 环境差异（前端/联调）
+
+- id: q15
+  query: 弹性搜索
+  expect:
+    - .idev/pack/references/product-gates-elasticsearch.md
+  note: 中文同义边界——文档用英文 elasticsearch，中文「弹性搜索」预期零命中，需先修分词或改问英文词

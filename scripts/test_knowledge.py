@@ -43,6 +43,19 @@ class Tokenize(unittest.TestCase):
         )
 
 
+class SearchQuery(unittest.TestCase):
+    def test_drops_how_filler(self):
+        query = knowledge._search_query("审批单如何创建")
+        self.assertIn('"审批"', query)
+        self.assertIn('"创建"', query)
+        self.assertNotIn('"如何"', query)
+        self.assertNotIn('"何创"', query)
+
+    def test_expands_chinese_english_technical_synonyms(self):
+        self.assertIn('"handler"', knowledge._search_query("审批处理器 SPI"))
+        self.assertIn('"elasticsearch"', knowledge._search_query("弹性搜索"))
+
+
 class KnowledgeTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -100,6 +113,15 @@ class KnowledgeTest(unittest.TestCase):
         _, out = self._search("审批单")
         self.assertIn("docs/adr/0001.md", out)
         _, out = self._search("不存在的词")
+        self.assertIn("零命中", out)
+
+    def test_search_auto_syncs_new_and_deleted_sources(self):
+        self._write("docs/design/arch.md", "# 架构\n\n实例账本\n")
+        _, out = self._search("账本")
+        self.assertIn("docs/design/arch.md", out)
+
+        (self.repo / "docs/design/arch.md").unlink()
+        _, out = self._search("账本")
         self.assertIn("零命中", out)
 
     def test_search_json(self):

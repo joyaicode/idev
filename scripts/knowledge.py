@@ -48,6 +48,11 @@ EXCLUDE_SUFFIXES = {".lock", ".pyc", ".class", ".jar", ".war", ".png", ".jpg",
 
 CJK_RE = re.compile(r"[\u4e00-\u9fff]+")
 WORD_RE = re.compile(r"[a-z0-9]+")
+QUERY_FILLERS = ("如何",)
+QUERY_SYNONYMS = {
+    "处理器": "handler",
+    "弹性搜索": "elasticsearch",
+}
 
 
 def tokenize(text: str) -> str:
@@ -161,17 +166,16 @@ def _resolve_repo(repo_arg: str) -> Path:
     return Path(repo_arg).resolve()
 
 
-def cmd_sync(args: argparse.Namespace) -> int:
-    repo = _resolve_repo(args.repo)
+def _sync_repo(repo: Path) -> tuple[str, tuple[int, int, int, int]] | None:
+    """Sync one repo; None means the repo is not whitelisted."""
     name = repo.name
     dirs = WHITELIST.get(name)
     if not dirs:
-        print(f"no whitelist for repo '{name}'", file=sys.stderr)
-        return 1
+        return None
     with _lock():
         conn = _connect()
         try:
-            added = updated = deleted = 0
+            added = updated = deleted = skipped = 0
             seen: set[str] = set()
             for d in dirs:
                 base = repo / d
@@ -194,7 +198,13 @@ def cmd_sync(args: argparse.Namespace) -> int:
                     if row is not None and row[1] == st.st_mtime and row[2] == st.st_size:
                         seen.add(rel)
                         continue
-                    content = _read_text(f)
+                    try:
+                        content = _read_text(f)
+                    except OSError as exc:
+                        # 读失败不崩整轮：跳过该条，doctor 会报「源不可读」。
+                        print(f"skip unreadable {rel}: {exc}", file=sys.stderr)
+                        skipped += 1
+                        continue
                     h = sha256(content)
                     if row is None:
                         _upsert(conn, name, rel, content, h, st.st_mtime, st.st_size)
@@ -210,12 +220,25 @@ def cmd_sync(args: argparse.Namespace) -> int:
             conn.commit()
         finally:
             conn.close()
-    print(f"sync {name}: +{added} ~{updated} -{deleted}")
+    return name, (added, updated, deleted, skipped)
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    repo = _resolve_repo(args.repo)
+    result = _sync_repo(repo)
+    if result is None:
+        print(f"no whitelist for repo '{repo.name}'", file=sys.stderr)
+        return 1
+    name, (added, updated, deleted, skipped) = result
+    print(f"sync {name}: +{added} ~{updated} -{deleted} !{skipped}")
     return 0
 
 
 def _search_query(q: str) -> str:
-    terms = tokenize(q).split()
+    for filler in QUERY_FILLERS:
+        q = q.replace(filler, "")
+    expanded = [english for chinese, english in QUERY_SYNONYMS.items() if chinese in q]
+    terms = list(dict.fromkeys(tokenize(q).split() + expanded))
     if not terms:
         return ""
     # OR 语义 + bm25 排序：长查询切出的 bigram 里含跨词边界的噪声 token，
@@ -227,6 +250,9 @@ def _search_query(q: str) -> str:
 def cmd_search(args: argparse.Namespace) -> int:
     repo = _resolve_repo(args.repo)
     name = repo.name
+    if _sync_repo(repo) is None:
+        print(f"no whitelist for repo '{name}'", file=sys.stderr)
+        return 1
     fts_q = _search_query(args.query)
     if not fts_q:
         print("empty query", file=sys.stderr)
@@ -280,6 +306,18 @@ def cmd_read(args: argparse.Namespace) -> int:
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     problems: list[str] = []
+    # 索引完整性
+    if DB_PATH.is_file():
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            try:
+                ok = conn.execute("PRAGMA integrity_check").fetchone()
+                if ok != ("ok",):
+                    problems.append(f"索引损坏: {ok}")
+            finally:
+                conn.close()
+        except sqlite3.DatabaseError as exc:
+            problems.append(f"索引打不开: {exc}")
     # FTS5 探针
     try:
         probe = sqlite3.connect(":memory:")
