@@ -63,16 +63,32 @@ if [ -z "${REPO}" ]; then
 fi
 REPO="$(cd "${REPO}" && pwd -P)"
 
-if [ ! -d "${REPO}/.codegraph" ]; then
-  echo "codegraph-sync: no .codegraph under ${REPO}; skip ${REASON}" >&2
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+INDEX_DIR_NAME="$(trim "${CODEGRAPH_DIR:-}")"
+if [ -z "${INDEX_DIR_NAME}" ]; then
+  INDEX_DIR_NAME=".codegraph"
+fi
+case "${INDEX_DIR_NAME}" in
+  "."|".."|/*|*/*|*\\*) INDEX_DIR_NAME=".codegraph" ;;
+esac
+INDEX_DIR="${REPO}/${INDEX_DIR_NAME}"
+
+if [ ! -d "${INDEX_DIR}" ]; then
+  echo "codegraph-sync: no ${INDEX_DIR_NAME} under ${REPO}; skip ${REASON}" >&2
   exit 0
 fi
 
 fingerprint() {
-  python3 - "${REPO}" <<'PY'
+  python3 - "${REPO}" "${INDEX_DIR_NAME}" <<'PY'
 import hashlib, os, subprocess, sys
 
-repo = sys.argv[1]
+repo, index_dir_name = sys.argv[1], sys.argv[2]
 exts = (
     ".go", ".py", ".java", ".kt", ".kts", ".scala",
     ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".vue",
@@ -112,12 +128,12 @@ if inside:
         changed = git("diff", "HEAD", "--name-only", "-z").stdout.split(b"\0")
         extra = git("ls-files", "--others", "--exclude-standard", "-z").stdout.split(b"\0")
         paths = [p.decode("utf-8", "surrogateescape") for p in changed + extra if p]
-        paths = [p for p in paths if is_code(p)]
+        paths = [p for p in paths if is_code(p) and not p.startswith(index_dir_name + "/")]
 
 if not inside or not head:
     found = []
     for dirpath, dirnames, filenames in os.walk(repo):
-        dirnames[:] = [d for d in dirnames if d not in (".git", ".codegraph")]
+        dirnames[:] = [d for d in dirnames if d not in (".git", index_dir_name)]
         for name in filenames:
             full = os.path.join(dirpath, name)
             rel = os.path.relpath(full, repo)
@@ -140,7 +156,7 @@ PY
 }
 
 CURRENT="$(fingerprint)"
-STAMP="${REPO}/.codegraph/sync-stamp"
+STAMP="${INDEX_DIR}/sync-stamp"
 if [ "${FORCE}" -eq 0 ] && [ -f "${STAMP}" ] && [ "$(cat "${STAMP}")" = "${CURRENT}" ]; then
   echo "codegraph-sync: code unchanged; skip ${REASON}" >&2
   exit 0

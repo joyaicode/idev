@@ -34,6 +34,7 @@ LOG="$TMP/calls"
 export HOME="$TMP/home"
 export PATH="$BIN:/usr/bin:/bin"
 export CODEGRAPH_LOG="$LOG"
+unset CODEGRAPH_DIR
 
 : > "$LOG"
 bash "$SYNC" --repo "$TMP/repo" agent >"$TMP/out" 2>"$TMP/err" || bad "first sync should exit 0"
@@ -63,6 +64,19 @@ bash "$SYNC" --repo "$TMP/repo" promote >/dev/null 2>"$TMP/err" || bad "missing 
 grep -q "no .codegraph" "$TMP/err" && ok "missing index skips" || bad "missing index should skip"
 [ ! -s "$LOG" ] && ok "missing index does not call codegraph" || bad "missing index called codegraph"
 
+mkdir -p "$TMP/repo/.codegraph-joycode"
+: > "$LOG"
+CODEGRAPH_DIR=.codegraph-joycode bash "$SYNC" --repo "$TMP/repo" agent >/dev/null 2>"$TMP/err" || bad "override first sync should exit 0"
+grep -q "index updated before agent" "$TMP/err" && ok "override first run updates" || bad "override first run should update"
+[ -s "$LOG" ] && ok "override first run calls codegraph" || bad "override first run did not call codegraph"
+[ -f "$TMP/repo/.codegraph-joycode/sync-stamp" ] && ok "override stamp written" || bad "override stamp missing"
+
+: > "$LOG"
+CODEGRAPH_DIR=.codegraph-joycode bash "$SYNC" --repo "$TMP/repo" research >/dev/null 2>"$TMP/err" || bad "override second sync should exit 0"
+grep -q "code unchanged; skip research" "$TMP/err" && ok "override unchanged skips" || bad "override unchanged should skip"
+[ ! -s "$LOG" ] && ok "override unchanged does not call codegraph" || bad "override unchanged called codegraph"
+
+rm -rf "$TMP/repo/.codegraph-joycode"
 mkdir -p "$TMP/repo/.codegraph"
 printf 'x\n' >> "$TMP/repo/main.go"
 rm -f "$BIN/codegraph"
