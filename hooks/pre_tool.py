@@ -111,6 +111,11 @@ def refuse_engine_python(command: str) -> str:
 
 def refuse_git_push(command: str) -> str:
     if command and GIT_PUSH.search(command):
+        # IDEV_ALLOW_AGENT_PUSH=1 lets an explicitly instructed agent push
+        # (user said "push"/"change the hook" in-session). Default still
+        # refuses so the silent push stays stopped without opt-in.
+        if (os.environ.get("IDEV_ALLOW_AGENT_PUSH") or "").strip() == "1":
+            return ""
         # A person can still push from their own terminal. Inside the agent we
         # stop the silent push; an explicit gate-approved path is stage 1.6+.
         return "refusing git push from the agent; a person pushes after the gate"
