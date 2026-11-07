@@ -153,7 +153,7 @@ for name in sorted(os.listdir(prop)) if os.path.isdir(prop) else []:
         mtime = os.path.getmtime(p)
     except OSError:
         continue
-    m = re.search(r"^status:\s*(\S+)", text, re.M)
+    m = re.search(r"^\s*[-*]?\s*status:\s*(\S+)", text, re.M)
     status = (m.group(1) if m else "unknown").strip().strip('"').lower()
     if status in closed:
         continue
