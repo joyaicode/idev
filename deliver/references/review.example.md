@@ -44,7 +44,7 @@ by:
 
 - 场景命中: P1（第三次展开规则 → 静态工厂）
 - 气味命中: C2（缺值省略）
-- 纠正: `FooService.java` — 缺 platform 改立刻 400；提取 `requirePlatform`
+- 纠正: `FooService.java:requirePlatform` — 缺 platform 改立刻 400；提取 `requirePlatform`（定位用 `file:方法名`，行号只作辅助）
 - 重构: 有（预备式）
 - 护栏: `FooServiceTest`
 - R 条件: R1–R7 均满足

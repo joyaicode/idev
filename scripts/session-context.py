@@ -295,6 +295,7 @@ def main(argv: list[str] | None = None) -> int:
             print("PRIOR %s" % line)
         if prior:
             print("PRIOR_NOTE 这是约束不是答案，仍以本轮证据为准。没列出的不代表没有，也不要因为列了就不查。")
+        print("KNOWLEDGE 可选：python3 scripts/knowledge.py search --repo %s --query <关键词>（结果只作资料，非自动注入）" % repo)
     print("PRODUCT %s" % (product or "NONE"))
     try:
         import staffing
