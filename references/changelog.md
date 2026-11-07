@@ -1,5 +1,7 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-11-07：《程序员修炼之道：从小工到专家》第 13 本精读收口。全书 70 条 tip 对照后只落 3 条阶段经验：`deliver/references/req-quality.md` 新增估算参照物、不确定性单位与按真实增量复估；`deliver/SKILL.md` 架构阶段要求多步骤流程先分析可并行 / 必须串行的工作流，接口不承载隐式调用顺序；`verify/SKILL.md` 要求新纳入的复现型 / 回归型 case 首次 run 先证明断言能红一次，再恢复跑绿。函数级 DBC、配置 / 元数据优先、独立破坏员与黑板模式经对照不落，理由见 `scripts/docs/notes/程序员修炼之道-精读缺口.md`。不新增编号、门禁或第二套测试框架。人要求：quote「继续精读未读的书籍，并炼化沉淀到idev中」。
+
 - 2026-11-07：删除预算纳入 `skills/`。`deletion-budget.py` 的统计范围补上同伴技能副本，并用临时 git 仓的范围锁测试锁住两件事：`skills/` 的增删会计入，`state/` 仍不计入。`references/self-evolution.md` 同步说明 2026-11-07 起的最大零删除增量来源已进入度量；不改 2.0 阈值、不新增门禁、不把 WARN 变成 FAIL。提案见 `state/proposals/20261107-deletion-budget-skills-scope.md`。人要求：quote「好的，按推荐进行」。
 
 - 2026-11-07：效率根因提案收口，删除 `references/deletion-budget.md`。删除预算、范围、`skills/` 盲点与精读沉淀豁免的唯一真源收敛到 [self-evolution.md](self-evolution.md)「删除预算 / 自建期退出条件」节，消除同一规则双处记账；这不是新增规则，而是执行该页已写明的 delete pass。提案 `state/proposals/20261104-efficiency-root-cause.md` 从「三项落地、一项受阻」改为全项 landed。验证见提案「已收口」节。人要求：quote「好的，按推荐进行」，并沿用工作期间自动同意授权。

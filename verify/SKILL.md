@@ -79,7 +79,7 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 ### 2. run
 
 1. 读 plan：`accepted != true` 则拒跑。**不跑 `check-feature verify-plan`，不把该项 FAIL 当运行门禁，不请人再签。**
-2. 只跑 `cases[].accepted == true` 且 runner 可执行的项。日志：`{module}/target/verify/<case-id>/`。开跑前按 mode 跑 `fanout.py assess --activity selftest` 或 `--activity run`。`SERIAL` 就一个 verifier 跑完。`FANOUT` 时每个分片只写自己的 `verify/shards/<activity>-<id>.yaml` 和 `verify/evidence/<case-id>/`，不写 `plan.yaml`。同一 Maven 模块默认不拆；`runner.parallel: true` 才拆，导体先跑 `PREP`。分片如果撞上 `target/` 锁，把这条记成 `FAIL` 并留下日志，由导体单独重跑这一片，不要自己再拉起别的 agent。导体 `merge` 只回写 `status` 和 `evidence`。
+2. 只跑 `cases[].accepted == true` 且 runner 可执行的项。日志：`{module}/target/verify/<case-id>/`。新纳入的复现型 / 回归型 case 首次 run 时，先用已知坏输入或在可回滚工作区最小还原缺陷，证明目标断言能红一次；红灯日志留在该 case evidence，恢复后同一 case 跑绿才写 `PASS`。普通既绿功能测试不强求破坏验证。开跑前按 mode 跑 `fanout.py assess --activity selftest` 或 `--activity run`。`SERIAL` 就一个 verifier 跑完。`FANOUT` 时每个分片只写自己的 `verify/shards/<activity>-<id>.yaml` 和 `verify/evidence/<case-id>/`，不写 `plan.yaml`。同一 Maven 模块默认不拆；`runner.parallel: true` 才拆，导体先跑 `PREP`。分片如果撞上 `target/` 锁，把这条记成 `FAIL` 并留下日志，由导体单独重跑这一片，不要自己再拉起别的 agent。导体 `merge` 只回写 `status` 和 `evidence`。
 3. 回写每条 `status` + `evidence`。追加 `revisions[]`。
 4. 写同目录 `report.md`：索引过了什么、`UNPROVEN` 什么、`human_signoff` 仍 `PENDING` 什么。不准把人签项写成 PASS。不重写用例正文。体例见 [docs/SKILL.md](../docs/SKILL.md)。
 5. 写 `## conductor-eval` 计数（见 [evolve.md](references/evolve.md)）。诚实性检查失败必须写明，不得用「全面通过」盖住。

@@ -93,7 +93,7 @@ parent: idev
    每一条都写明位置、是规范还是缺陷、行数。分得开是指能指出哪些符号只属于需求、哪些只属于既有问题，不会落在同一处改动里。比例小于 1/5、又落在本需求必须改的同一处的，可以随本次改掉，方案里单独标明，不写成基线新义务。边界分得开的不放进 `include`。
    前置节的既有问题按上面的判据决定，不另开一次架构签字。没有重大缺陷，并且（比例小于 1/5，或者和本次改动分得开）→ `scope_debt.decision=mark`，只在方案里标明。有重大缺陷，或比例达到 1/5 且边界分不开 → `decision=fix-first`，并按下面的子需求另开一张票。两条都能用证据判定时直接写 `decision`，不写 `pending`，不问人。行数是 `UNPROVEN`、分不开定不了、或重大缺陷定不了时，`decision` 写 `pending`，`recommend` 写倾向，作为 B 类信号并进当前编制的一次决策包（[chat-confirm-signoff.md](../references/chat-confirm-signoff.md)）。选项只有「先修」和「本次不修」。一条都没有时 `decision` 写 `mark`。`pending` 未决时不写 `arch.accepted`，不进入本需求编码。
 4. **先给整包。** 不要在交出方案之前先开一轮必答拷问，也不要为了过门造一个问句。有矛盾、冲突、不清楚或未决分叉才打开 grilling，问句写在 `grill.md` 的 `## arch` 轮。没有这些就不写这一轮。需求轮的 `frontier` 保持 `empty`。要不要先修既有问题，不是这种方案分叉，不写进 `## arch`。
-5. **架构范式自查**：按 [canon.md](../conventions/canon.md) §1 协议扫 §2 信号与 §4 念头，§5 必答 A1–A8，§7 模板记账；答不出的项标 `UNPROVEN` 并写进 `design.md` 的方案节。真有分叉就在 arch 轮里问完。
+5. **架构范式自查**：按 [canon.md](../conventions/canon.md) §1 协议扫 §2 信号与 §4 念头，§5 必答 A1–A8，§7 模板记账；答不出的项标 `UNPROVEN` 并写进 `design.md` 的方案节。真有分叉就在 arch 轮里问完。多步骤业务流程或服务协作先分析工作流：标出真正必须串行的边；可并行事项不得因实现顺序变成隐式调用顺序，对象在任一可调用时刻保持有效状态（T3 / T4 / T10 / C23）。
 4a. **领域建模透镜（涉及新概念时）**：本轮引入新领域概念 / 跨模块术语时，先过 [conventions/domain-modeling.md](../conventions/domain-modeling.md) 建通用语言；术语不一致先对齐再出方案，术语表随票走。无新概念可跳过。
 6. `check-feature.sh <feature> arch`。方案已经摊开，没有未决分叉、矛盾、冲突或不清楚，前置节已写明、`scope_debt.decision` 不是 `pending` 之后，就写 `arch.accepted` 并进入 `code`。`decision` 是 `fix-first` 时，子需求还没 `done` 就不写这次通过，也不进入本需求编码。这次通过不包含用例计划。
 

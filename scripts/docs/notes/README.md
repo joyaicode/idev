@@ -39,6 +39,7 @@
 | 代码大全（第一版中译，全书第 1–33 章） | `代码大全-精读缺口.md` | T1 T3 T4 T5 T6 T8 T9 T10 T11 T12 T14 · C1 C2（default 增补）C5 C7 C9 C10 C12 C13 C26 C31 · P1 P5 · R4 R6 R7 · F5 · A1–A8 |
 | 设计模式：可复用面向对象软件的基础（GoF，全书第 1–6 章与附录 A–C） | `设计模式：可复用面向对象软件的基础-精读缺口.md` | T1 T3 T4 T5 T7 T9 T10 T12 T14 · C19 C22 C23 C27 · P1–P14 P19 · F1 · A4 |
 | 测试驱动开发（Kent Beck，全书第 1–32 章与附录 A–B） | `测试驱动开发-精读缺口.md` | T1 T3 T4 T5 T6 T7 T8 T12 T14 · C1 C6 C19–C30 · P1–P8 P12 P13 P15 · R1 R2 R4 R5 R7 · F1 F2 F5 · A1 A5 A6 A8 |
+| 程序员修炼之道：从小工到专家（Andrew Hunt / David Thomas，全书 70 条 tip） | `程序员修炼之道-精读缺口.md` | T1 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 · A1 A3 A4 A5 A8 · C2 C7 C13 C19 C22 C23 C26 C27 C28 C29 C30 · P5 P6 P18 · R1 R2 R3 R4 R5 R6 R7 · F5 |
 
 ## 读一本书的流程
 
