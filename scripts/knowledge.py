@@ -35,8 +35,12 @@ DB_PATH = INDEX_DIR / "knowledge.db"
 LOCK_PATH = INDEX_DIR / "knowledge.lock"
 
 # 白名单：仓库名 -> 要索引的相对目录。P0 只做 joypaas 单产品，证明收益后再扩。
+# idev 自身 2026-11-07 入列：精读书籍的炼化产物（conventions 真源两页、notes 精读缺口）
+# 是「指导与决策」检索面的一部分——编码规约的执行召回走 canon §2/§4 触发行，
+# 但按主题找条目、找哪本书覆盖了什么，仍需要一条检索路。
 WHITELIST: dict[str, list[str]] = {
     "joypaas": ["docs/design", ".idev/pack", ".cursor", "docs/adr"],
+    "idev": ["conventions", "scripts/docs/notes", "deliver", "references", "docs"],
 }
 
 # 越界排除：白名单外的路径、密钥 / .env / 依赖目录 / 构建产物一律不索引。
@@ -45,6 +49,9 @@ EXCLUDE_PARTS = {".git", ".env", "node_modules", "__pycache__", "build", "dist",
 EXCLUDE_SUFFIXES = {".lock", ".pyc", ".class", ".jar", ".war", ".png", ".jpg",
                     ".jpeg", ".gif", ".svg", ".pdf", ".zip", ".tar", ".gz",
                     ".tgz", ".db", ".sqlite", ".sqlite3"}
+# 精读层的原始材料（README 三层约定：不入库、可再生）不索引——OCR 全文噪声大，
+# 会把精读缺口的命中挤出 Top-N；要查原文走书。
+EXCLUDE_STEMS = {"-OCR", "-全文"}
 
 CJK_RE = re.compile(r"[\u4e00-\u9fff]+")
 WORD_RE = re.compile(r"[a-z0-9]+")
@@ -83,11 +90,14 @@ def sha256(text: str) -> str:
 
 
 def _excluded(rel: str) -> bool:
-    """越界判定：依赖目录、密钥、构建产物、二进制后缀不索引。"""
+    """越界判定：依赖目录、密钥、构建产物、二进制后缀、OCR 原始材料不索引。"""
     parts = set(Path(rel).parts)
     if parts & EXCLUDE_PARTS:
         return True
+    stem = Path(rel).stem
     if Path(rel).suffix.lower() in EXCLUDE_SUFFIXES:
+        return True
+    if any(stem.endswith(s) for s in EXCLUDE_STEMS):
         return True
     return False
 
