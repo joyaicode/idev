@@ -9,7 +9,7 @@ parent: idev
 阶段：`req-review` → `req` → `arch` → `code` → `test` → `done` ⇄ `ops`。  
 先拷问密封**原始需求基线**；后面只许对齐，不许改写。红绿只调用 verify 模块。  
 投产后的现象走 ops 模块（先分类，再 debug 或 handoff）。  
-每阶段按 [experts.md](references/experts.md) 拒过，不是扮演专家说话。  
+每阶段按 [experts.md](references/experts.md) 的产物质量、效率路径与拒过清单执行，不是扮演专家说话。
 停哪里、怎么签、何时 `AUTO`：只认 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)。
 
 ## 本阶段 5 步（先做这些）

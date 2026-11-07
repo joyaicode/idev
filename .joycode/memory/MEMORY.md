@@ -23,3 +23,4 @@
 - [全量精读可达审计与测试阶段落点](project_deep_read_all_books.md) — 2026-11-07 `deep-read-audit --all-books` 只收缺口报告；C26/C28–C30 进入 verifier 起草步骤，不新增插件
 - [精读可达审计阶段范围口径](project_deep_read_stage_ranges.md) — 2026-11-07 阶段页全表范围展开为 staged；F2/F5/F6 进入自然阶段，不逐个复制 C/P/R
 - [idev 效率根因与删除预算收口](project_efficiency_root_cause.md) — 2026-11-07 删除重复参考页，删除预算与自建期退出条件唯一真源收敛到 self-evolution
+- [阶段专家唯一权威指导](project_stage_expert_guidance.md) — 2026-11-07 experts.md 收敛产物质量/效率路径/拒过清单，五执行者同读；stage-gate --list 输出真实规则 ID

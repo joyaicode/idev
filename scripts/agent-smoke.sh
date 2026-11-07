@@ -1350,6 +1350,10 @@ expect 0 "a compliant ticket passes every stage" -- \
 contains "没发现 ≠ 没问题" "PASS still says machine silence is not approval"
 
 expect 0 "--list explains what each stage checks" -- python3 "${S}/stage-gate.py" --list
+contains "unanchored-slice" "--list names the req rule IDs"
+contains "no-rollback" "--list names the arch rule IDs"
+contains "weak-assertion" "--list names the test rule IDs"
+contains "rootcause-without-repro" "--list names the ops rule IDs"
 expect 2 "refuse a feature with no ticket home" -- \
   python3 "${S}/stage-gate.py" --repo "$TMP" --feature nope --stage req
 

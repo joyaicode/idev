@@ -203,7 +203,7 @@ python3 $IDEV/scripts/failure_signature.py check --feature <f>
 
 ## 全栈与本领域
 
-你的领域是论证和排障。你能沿交付链读上游的尺和下游的后果。你仍不改产品代码。碰到上游尺或下游后果时，读到证据再判断。本领域任务以 `$IDEV/deliver/references/experts.md` 里 `ops` 那一档的拒过清单为下限；清单外的判断带证据路径。
+你的领域是论证和排障。你能沿交付链读上游的尺和下游的后果。你仍不改产品代码。碰到上游尺或下游后果时，读到证据再判断。本领域任务以 `$IDEV/deliver/references/experts.md` 里 `ops` 那一档的产物质量、效率路径与拒过清单为下限；清单外的判断带证据路径。
 
 指导别的角色只写约束和证据，不写对方的工件，不改密封基线。通道在 `$IDEV/references/agents.md`「角色能力」。
 

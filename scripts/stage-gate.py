@@ -368,20 +368,74 @@ GATES = {
     "ops": gate_ops,
 }
 
+# --list is the reader-facing index of the checks above. It names the Finding
+# rule so a human can grep the same token in a failing ticket and in this map.
+CHECK_LIST = {
+    "req-review": (
+        "inputs: baseline 缺失或写坏",
+        "no-items: 没有 items",
+        "untestable-acceptance / untestable-must / vague-goal: goal、must、acceptance 含主观词",
+        "unmeasurable-acceptance: 验收没有数字或显式比较",
+        "no-acceptance: 缺验收",
+        "solution-as-requirement: 解决方案冒充需求",
+        "open-objections: objections 未清空",
+        "not-grounded: 已密封却无 grounding",
+        "ui-not-specified: 界面需求缺 ui 块",
+    ),
+    "req": (
+        "inputs: req.yaml 缺失或写坏",
+        "no-slices: 没有 slices",
+        "story-too-big: 故事 > 8 点",
+        "unanchored-slice: slice 不挂 baseline_item_id",
+        "dropped-baseline-item: 丢掉基线 item",
+    ),
+    "arch": (
+        "inputs: arch.yaml 缺失或写坏",
+        "unanchored-intent: case_intent 不挂 item",
+        "no-impact: 要改多处却无 impact_candidates",
+        "no-rollback: 无回退 / 灰度 / 开关",
+    ),
+    "code": (
+        "inputs: review.md 缺失",
+        "placeholder-codes: review 仍是 P? / C?",
+        "hit-not-applied: 命中 P/C 只记账未改",
+    ),
+    "test": (
+        "inputs: verify/plan.yaml 缺失或写坏",
+        "no-cases: 没有 cases",
+        "pass-without-evidence: PASS 无证据",
+        "unanchored-case: case 不挂 item（ticketless 除外）",
+        "weak-assertion: 弱断言",
+    ),
+    "ops": (
+        "inputs: ops.yaml 缺失或写坏",
+        "scene-incomplete: 现场四件不齐",
+        "conclusion-before-classify: kind=unknown 却写根因",
+        "rootcause-without-repro: 根因未复现",
+        "production-write: 提到生产写操作",
+    ),
+}
+
 
 def gate_check() -> list[str]:
-    """STAGES 与 GATES 必须一一对应。
+    """STAGES, GATES, and CHECK_LIST must name the same stages.
 
     A stage listed but not wired silently checks nothing; a gate not listed
-    never runs under --all. Either way the gap is invisible at the call site.
+    never runs under --all; a stage missing from --list makes the help lie.
+    Either way the gap is invisible at the call site.
     """
     out = []
     for s in STAGES:
         if s not in GATES:
             out.append(f"{s} 在 STAGES 里但没有 gate 函数 —— 它什么都不查")
+        if s not in CHECK_LIST:
+            out.append(f"{s} 在 STAGES 里但 --list 不显示它")
     for s in GATES:
         if s not in STAGES:
             out.append(f"{s} 有 gate 函数但不在 STAGES 里 —— --all 不会跑它")
+    for s in CHECK_LIST:
+        if s not in STAGES:
+            out.append(f"{s} 出现在 --list 里但没有 gate 函数")
     return out
 
 
@@ -397,8 +451,10 @@ def main() -> int:
     if args.list:
         print("stage-gate — experts.md 拒过清单里可机检的那一半\n")
         for s in STAGES:
-            print(f"  {s}")
-        print("\n不可机检的那一半(拆解是否忠实、架构是否合理、用例是否有意义)")
+            print(f"{s}:")
+            for check in CHECK_LIST[s]:
+                print(f"  - {check}")
+        print("\n不可机检的那一半(产物质量、效率路径、拆解是否忠实、架构是否合理、用例是否有意义)")
         print("仍在 deliver/references/experts.md,交人与 grill。")
         print("\n**有发现 = 这里一定有问题;没发现 ≠ 这里没问题。**")
         return 0
