@@ -1,5 +1,9 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-11-07：恢复《Effective Java 中文版（第 2 版）》三条已签字落源（T3 异常翻译、T8 失败原子性、T14 保护性拷贝）。`8152e13` 曾把它们误回退为「建议落点」，但 `state/proposals/20261107-effective-java-gaps.md` 仍为 landed，且未同步提案或变更记录；本条恢复真源、报告「已落地」标注与提案状态的一致性，不新增编号或门禁。
+
+- 2026-11-07：《代码整洁之道》第 14–16 章 + 附录 A–B、《修改代码的艺术》第 3/5/7/9–12/16–22 章、《重构》第 5–14 章 72 个手法逐条精读收口，本轮落 2 处真源缺口：`conventions/canon.md` T10 增补死锁避免（多把锁 / 多资源按固定、一致的次序获取，消除循环等待）；`conventions/coding-tables.md` C21 增补命令/查询分离（CQS）双向覆盖（查询函数夹带可观察副作用 → 拆查询 + 修改，缓存等不可观察副作用豁免）。其余手法经对照由既有 T/C/P/R 承载或属机械步骤 / 设计取向差异不落，理由见 `state/proposals/20261108-conventions-cleancode-ch14-16-appendix-gaps.md`、`20261108-conventions-legacycode-ch3-22-gaps.md`、`20261108-conventions-refactoring-ch5-14-gaps.md`。不新增编号、门禁或第二套测试框架。人要求：quote「好的，按推荐进行」。
+
 - 2026-11-07：《领域驱动设计》第 15–17 章、结束语与附录精读收口，全书 17 章读完。第 15 章精炼、第 16 章大比例结构、第 17 章综合运用共 30 条对照后只落 1 条：`conventions/domain-modeling.md` 新增「核心域与通用子领域（可检查）」检查项，要求 arch 方案识别核心域（CORE DOMAIN）与通用子领域（GENERIC SUBDOMAIN），精力优先投入核心域，不为通用子领域开发「万能」模型。结束语补 4 条项目复盘/DDD 标志/未来展望，附录补 3 条模式语言、模式模板与查阅层记录；这些与既有 A1–A4、P1/P2 和提案裁定同向，不重复落。大比例结构（EVOLVING ORDER / SYSTEM METAPHOR / RESPONSIBILITY LAYER / KNOWLEDGE LEVEL / PLUGGABLE COMPONENT FRAMEWORK）、首先评估六步与架构团队人员配置经对照不重复落，理由见 `state/proposals/20261107-ddd-ch15-17-gaps.md`。不新增编号、门禁或第二套测试框架。人要求：quote「所有任务在未完成前，一率按"好的，按推荐进行"，遇到确认或批准，一率批准，直到完成所有任务」。
 
 - 2026-11-07：按需增量知识检索 CLI 落地（P0 基线 + P1 MVP）。`scripts/knowledge.py` 四子命令（sync/search/read/doctor）用 SQLite FTS5 + 自建 CJK bigram 切词做全文检索，索引放 `state/knowledge-index/`（gitignore，可删重建）；白名单 P0 只含 joypaas（docs/design + .idev/pack + .cursor + docs/adr），验收问题集 15 条在 `state/knowledge-questions.yaml`。search 前自动增量同步；查询侧去除「如何」填充词，并对「处理器→handler」「弹性搜索→elasticsearch」做最小中英同义扩展。过期即失效（内容 hash 逐文件比对）、read 返回前再验 hash、越界文件（密钥/.env/依赖目录/构建产物）一律排除。单元测试 14 条全过（自动同步、删除、失效、越界、read-hash 复核、doctor 孤儿），真实 joypaas 问题集 Top-5 来源命中 15/15，doctor 正常；不引入向量、MCP、常驻服务或独立知识平台。提案见 `state/proposals/20261108-knowledge-search-cli.md`。人要求：quote「好的，按推荐进行」，并沿用工作期间自动同意。
