@@ -41,6 +41,7 @@ DECLINED = {
     "C2": "与合法的可选分支同形，分不出来",
     "C3": "要看调用图才能分清薄适配与无谓转手",
     "C25": "要先知道哪些 string 是领域概念",
+    "C32": "要先知道方法是否可覆写（virtual / final / private），正则分不出来",
 }
 
 # C12: canon.md §2「新增函数名含 util / helper / manager / common / data / tmp」
