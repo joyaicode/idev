@@ -37,6 +37,7 @@ state/*.lock
 /state/sediment.yaml
 /state/ledger.yaml
 /state/knowledge-index/
+/state/knowledge-questions.yaml
 /verify/target/
 
 # Go build and test residue. bin/idev is built locally (workflow.py looks there).
