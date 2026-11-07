@@ -164,6 +164,13 @@ class KnowledgeTest(unittest.TestCase):
         _, out = self._search("正常文档")
         self.assertIn("ok.md", out)
 
+    def test_exclude_raw_material_stems(self):
+        # 精读层原始材料（README 三层约定：不入库、可再生）不索引，
+        # 避免 OCR/全文噪声把精读缺口的命中挤出 Top-N。
+        self.assertTrue(knowledge._excluded("scripts/docs/notes/代码整洁之道-OCR.txt"))
+        self.assertTrue(knowledge._excluded("scripts/docs/notes/重构-全文.txt"))
+        self.assertFalse(knowledge._excluded("scripts/docs/notes/代码整洁之道-精读缺口.md"))
+
     def test_doctor_reports_orphan(self):
         self._write("docs/design/arch.md", "# 架构\n\n实例账本\n")
         self._sync()
@@ -181,6 +188,14 @@ class KnowledgeTest(unittest.TestCase):
         rc, out = _run(knowledge.cmd_sync, repo=str(other), feature="")
         self.assertEqual(rc, 1)
         self.assertIn("no whitelist", out)
+
+    def test_idev_whitelist_repo(self):
+        idev = self.root / "idev"
+        (idev / "conventions").mkdir(parents=True)
+        (idev / "conventions" / "canon.md").write_text("# canon\n\n实例账本\n", encoding="utf-8")
+        rc, out = _run(knowledge.cmd_sync, repo=str(idev), feature="")
+        self.assertEqual(rc, 0)
+        self.assertIn("+1", out)
 
 
 if __name__ == "__main__":
