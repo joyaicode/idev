@@ -41,6 +41,13 @@
 | 测试驱动开发（Kent Beck，全书第 1–32 章与附录 A–B） | `测试驱动开发-精读缺口.md` | T1 T3 T4 T5 T6 T7 T8 T12 T14 · C1 C6 C19–C30 · P1–P8 P12 P13 P15 · R1 R2 R4 R5 R7 · F1 F2 F5 · A1 A5 A6 A8 |
 | 程序员修炼之道：从小工到专家（Andrew Hunt / David Thomas，全书 70 条 tip） | `程序员修炼之道-精读缺口.md` | T1 T3 T4 T5 T6 T7 T8 T9 T10 T11 T12 T13 T14 · A1 A3 A4 A5 A8 · C2 C7 C13 C19 C22 C23 C26 C27 C28 C29 C30 · P5 P6 P18 · R1 R2 R3 R4 R5 R6 R7 · F5 |
 | 程序员的职业素养（Robert C. Martin，全书第 1–14 章与附录） | `程序员的职业素养-精读缺口.md` | T6 T12 · C26 C28 C29 C30 · F5 |
+| Web 性能权威指南（Ilya Grigorik，全书 18 章 331 页） | `Web性能权威指南-精读缺口.md` | A1 A2 A3 A4 A6 A8 · C1 C31 · F1 F4 F5 F6 F7 · P1 P19 · R1 R7 · T1 T6 T8 T9 T10 T11 T13 T14 |
+| Effective Java 中文版（第 2 版，Joshua Bloch，全书 11 章 78 条 + 附录） | `EffectiveJava中文版第2版-精读缺口.md` | C2 C7 C23 C25 C27 · F2 F4 · P1 P2 P4 P5 P6 P14 P15 · T1 T3 T4 T5 T7 T8 T9 T10 T11 T12 T14 |
+| 高效程序员的 45 个习惯（Venkat Subramaniam / Andy Hunt，全书第 1–9 章、附录 A 与 45 个习惯） | `高效程序员的45个习惯-精读缺口.md` | A1 A3 A8 · C1 C3 C5 C7 C16 C17 C22 C24 C26 C27 C28 C30 C31 · F1 F2 F4 F5 F7 · P1 P6 P18 P19 · R1 R7 · T1 T2 T3 T5 T6 T8 T9 T11 T12 T14 |
+| 大型网站技术架构（李智慧，全书第 1–16 章、附录 A/B 与后记） | `大型网站技术架构-精读缺口.md` | A4 A6 A8 · C1 C26 C28 C29 C30 C31 · F1 F7 · T1 T3 T4 T8 T9 T10 T11 T12 |
+| UNIX 编程艺术（Eric S. Raymond，全书 20 章、4 部分） | `UNIX编程艺术-精读缺口.md` | C1 C2 C6 C7 C12 C22 C23 · P5 P15 P18 · T1 T2 T3 T4 T5 T7 T8 T9 T10 T11 T14 |
+| 企业应用架构模式（Martin Fowler，全书引言 + 第 1–18 章共 51 个模式） | `企业应用架构模式-精读缺口.md` | A1 A2 A4 · C2 C13 C25 C27 C30 · F1 · P3 P5 P6 P15 P18 P19 · T1 T3 T4 T5 T8 T9 T10 T11 T14 |
+| 企业集成模式：设计、构建及部署消息传递解决方案（Gregor Hohpe / Bobby Woolf，全书引言 + 14 章正文与参考文献） | `企业集成模式-精读缺口.md` | A2 A3 · T4 T7 T8 T10 T11 T12 T13 |
 
 ## 读一本书的流程
 
