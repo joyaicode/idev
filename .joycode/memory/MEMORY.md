@@ -17,6 +17,7 @@
 - [GoF设计模式精读收口](project_gof_notes.md) — 《设计模式：可复用面向对象软件的基础》全书于 2026-11-07 完成第 11 本精读，真缺口 0
 - [测试驱动开发精读收口](project_tdd_notes.md) — 《测试驱动开发》全书于 2026-11-07 完成第 12 本精读，真缺口 0
 - [程序员修炼之道精读收口](project_pragmatic_programmer_notes.md) — 《程序员修炼之道》70 条 tip 于 2026-11-07 完成第 13 本精读，真缺口 3 条均落阶段页（估算迭代 / 架构工作流并发 / 复现测试红一次）
+- [程序员的职业素养精读收口](project_cleancoder_notes.md) — 《程序员的职业素养》第 1–14 章与附录于 2026-11-07 完成第 14 本精读，真缺口 1 条落 req-quality §5（预估不是承诺 / 延迟风险当轮暴露）
 - [Python C9 存量清理收口](project_c9_cleanup.md) — 2026-11-07 清理 84 处真实嵌套并修正 7 处表达式 if 误报，当前全仓 Python C9=0；C7/C12 另算
 - [阶段入口已过闸经验注入](project_stage_prior_art.md) — 2026-11-07 已过闸经验/程序同时进入阶段入口与委派包，候选不进执行上下文；PyYAML 缺失时安静降级
 - [全量精读可达审计与测试阶段落点](project_deep_read_all_books.md) — 2026-11-07 `deep-read-audit --all-books` 只收缺口报告；C26/C28–C30 进入 verifier 起草步骤，不新增插件
