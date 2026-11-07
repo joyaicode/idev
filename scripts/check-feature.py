@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import idev_bin  # noqa: E402
+import annotate  # noqa: E402
 from doc_home import homes, intermediate, layout_for, reconcile_spec  # noqa: E402
 from ticketless import skips_baseline  # noqa: E402
 from ticket_yaml import (
@@ -340,7 +341,7 @@ def _hint_semantic_backfill(root, deliver, missing):
         "req": "req.accepted=true" if req_ok else "req not accepted",
         "arch": "arch.accepted=true" if arch_ok else "arch not accepted",
     }
-    print("HINT semantic_gate backfill candidates (human confirm still required; do not auto-write):")
+    print("HINT semantic_gate backfill candidates (write a passed gate only for a stage that already passed; by is a person, not an agent):")
     for st in missing:
         print("  - %s  evidence: %s" % (st, evidence.get(st, "n/a")))
     print("HINT dry-run: check-feature.sh <feature> <stage> --backfill-semantic-gate-dry-run")
@@ -853,6 +854,35 @@ def check_plan_tracks_arch(arch: dict, plan: dict, errors: list[str], require_pl
         ok("plan cases match case_intents")
 
 
+def check_annotations(repo: Path, feature: str, errors: list[str]) -> None:
+    """What a person wrote in the margin of the plan, and whether it was dealt with.
+
+    A review comment written into the document itself is the cheapest
+    round trip there is: the person points at the line instead of
+    describing it, and the next round has something to check against.
+    So the same rule that already covers an open question covers an open
+    annotation — SKILL.md hard rule 3 forbids writing sealed/accepted
+    while something is still unclear, and an annotation is a person
+    saying exactly that.
+
+    Settling one does not need a human to nod: the agent handles it,
+    records how, and this gate goes green. What it cannot do is make the
+    annotation disappear.
+    """
+    try:
+        found = annotate.findings(repo, feature)
+    except SystemExit:
+        return          # no ticket home — the other checks already say so
+    except Exception as exc:  # noqa: BLE001
+        print(f"WARN 标注检查跳过: {exc}")
+        return
+    if not found:
+        ok("annotations settled and recorded")
+        return
+    for line in found:
+        fail(line, errors)
+
+
 def check_grill(root: Path, baseline: dict, errors: list[str], sealing: bool = False) -> None:
     """grill.md is the only question write-up. A sealed baseline must close it.
 
@@ -1024,6 +1054,27 @@ def tracked_generatedverify(repo: Path) -> list[str]:
 DESIGN_HEADINGS = ("目标", "方案", "契约", "影响面", "回退", "用例")
 
 
+def _named_ids(entries: list) -> list[str]:
+    ids: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        iid = str(entry.get("id") or "").strip()
+        if iid:
+            ids.append(iid)
+    return ids
+
+
+def _check_ids_in_prose(
+    ids: list[str], prose: str, document: str, noun: str, errors: list[str]
+) -> None:
+    for iid in ids:
+        if iid in prose:
+            ok(f"{document} names {iid}")
+        else:
+            fail(f"{document} missing {noun} {iid}", errors)
+
+
 def check_doc_form(
     repo: Path, feature: str, root: Path, arch: dict, plan: dict | None, baseline: dict | None, errors: list
 ) -> None:
@@ -1083,25 +1134,283 @@ def check_doc_form(
         prd = repo / "docs" / "prd" / f"{feature}.md"
         if prd.is_file():
             prose = prd.read_text(encoding="utf-8")
-            for item in baseline.get("items") or []:
-                iid = str(item.get("id") or "").strip() if isinstance(item, dict) else ""
-                if not iid:
-                    continue
-                if iid in prose:
-                    ok(f"prd names {iid}")
-                else:
-                    fail(f"docs/prd/{feature}.md missing item {iid}", errors)
+            _check_ids_in_prose(
+                _named_ids(baseline.get("items") or []),
+                prose,
+                f"docs/prd/{feature}.md",
+                "item",
+                errors,
+            )
     cases_md = repo / "docs" / "test-case" / f"{feature}.md"
     if cases_md.is_file():
         prose = cases_md.read_text(encoding="utf-8")
-        for intent in intents:
-            iid = str(intent.get("id") or "").strip()
-            if not iid:
-                continue
-            if iid in prose:
-                ok(f"test-case names {iid}")
-            else:
-                fail(f"docs/test-case/{feature}.md missing case_intent {iid}", errors)
+        _check_ids_in_prose(
+            _named_ids(intents),
+            prose,
+            f"docs/test-case/{feature}.md",
+            "case_intent",
+            errors,
+        )
+
+
+def check_req_stage(
+    args: argparse.Namespace,
+    baseline,
+    req,
+    b_rev: str,
+    items: list[str],
+    errors: list[str],
+) -> None:
+    if args.stage not in ("req", "arch", "code", "test"):
+        return
+    if not req:
+        fail("missing req.yaml", errors)
+        return
+    if scalar(req, "baseline_revision") != b_rev:
+        fail(
+            "req.baseline_revision %s != baseline.revision %s"
+            % (scalar(req, "baseline_revision"), b_rev),
+            errors,
+        )
+    else:
+        ok("req.baseline_revision matches")
+    slice_ids = section_ids(req, "slices")
+    refs = field_list(req, "slices", "baseline_item_id")
+    missing = [i for i in items if i not in refs]
+    if missing:
+        fail("baseline items with no slice: %s" % ",".join(missing), errors)
+    else:
+        ok("every baseline item has a slice")
+    extra = [r for r in refs if r not in items]
+    if extra:
+        fail("slice baseline_item_id not in baseline: %s" % ",".join(extra), errors)
+    else:
+        ok("no unknown baseline_item_id in req")
+    if len(refs) != len(slice_ids):
+        fail("each slice must have exactly one baseline_item_id", errors)
+    check_slice_must_lock(baseline, req, errors)
+
+
+def check_arch_stage(
+    args: argparse.Namespace, arch, b_rev: str, items: list[str], errors: list[str]
+) -> None:
+    if args.stage not in ("arch", "code", "test"):
+        return
+    if not arch:
+        fail("missing arch.yaml", errors)
+        return
+    if scalar(arch, "baseline_revision") != b_rev:
+        fail("arch.baseline_revision mismatch", errors)
+    else:
+        ok("arch.baseline_revision matches")
+    intent_refs = field_list(arch, "case_intents", "baseline_item_id")
+    missing = [i for i in items if i not in intent_refs]
+    if missing:
+        fail("baseline items with no case_intent: %s" % ",".join(missing), errors)
+    else:
+        ok("every baseline item has a case_intent")
+    bad = [str(h) for h in collect_hops(arch) if h > 1]
+    if bad:
+        fail("arch impact hop > 1: %s" % ",".join(bad), errors)
+    else:
+        ok("impact hops <= 1")
+    if not scalar(arch, "approach") or not scalar(arch, "non_approach"):
+        fail("arch.approach and arch.non_approach must both be set", errors)
+    else:
+        ok("arch approach set")
+    if args.stage == "arch" and nonempty_list(arch, "open_questions"):
+        print("SIGNAL arch open_questions still open")
+
+
+def check_plan_stage(
+    args: argparse.Namespace,
+    root: Path,
+    baseline,
+    plan,
+    req,
+    tier: str,
+    items: list[str],
+    errors: list[str],
+) -> None:
+    if args.stage not in ("code", "test", "verify-plan"):
+        return
+    if not plan:
+        fail("missing verify/plan.yaml", errors)
+        return
+    if args.stage == "test" and scalar(plan, "mode") != "test":
+        fail(
+            "plan.mode must be test at test stage (got %s)"
+            % (scalar(plan, "mode") or "empty"),
+            errors,
+        )
+    elif args.stage == "test":
+        ok("plan.mode is test")
+    if args.stage in ("verify-plan", "test"):
+        b_goal = scalar(baseline, "goal")
+        p_goal = scalar(plan, "goal")
+        if not p_goal:
+            fail("plan.goal empty", errors)
+        elif b_goal and p_goal != b_goal:
+            fail("plan.goal diverges from baseline.goal (semantic drift)", errors)
+        else:
+            ok("plan.goal matches baseline.goal")
+    cases = entries(plan, "cases")
+    if args.stage == "test":
+        check_unproven_surfaces(root, plan, cases, errors)
+    if args.stage == "verify-plan":
+        check_correctness_runner(plan, errors)
+        for signal in plan_signals(
+            plan, items, bool(baseline) and not skips_baseline(root)
+        ):
+            print("SIGNAL %s" % signal)
+    if args.stage == "test":
+        check_auto_record("plan", plan, tier, root, errors, tiers=PLAN_AUTO_TIERS)
+    case_refs = [c["baseline_item_id"] for c in cases if c["baseline_item_id"]]
+    missing = [i for i in items if i not in case_refs]
+    if missing:
+        fail("baseline items with no plan case: %s" % ",".join(missing), errors)
+    else:
+        ok("every baseline item has a plan case")
+    extra = [r for r in case_refs if r not in items]
+    if extra:
+        fail("plan baseline_item_id not in baseline: %s" % ",".join(extra), errors)
+    fake_pass = [
+        c["id"]
+        for c in cases
+        if c["status"] == "PASS"
+        and c["evidence"] in ("", "not run", "not-run", "UNPROVEN")
+    ]
+    if fake_pass:
+        fail("PASS without run evidence: %s" % ",".join(fake_pass), errors)
+    else:
+        ok("no PASS without run evidence")
+    if req:
+        slice_map = {s["id"]: s["baseline_item_id"] for s in entries(req, "slices")}
+        no_slice = [c["id"] for c in cases if not c["slice_id"]]
+        if no_slice:
+            fail("plan cases missing slice_id: %s" % ",".join(no_slice), errors)
+        else:
+            ok("every plan case has slice_id")
+        unknown = [c["id"] for c in cases if c["slice_id"] and c["slice_id"] not in slice_map]
+        if unknown:
+            fail("plan slice_id not in req: %s" % ",".join(unknown), errors)
+        else:
+            ok("plan slice_id exists in req")
+        mismatch = [
+            c["id"]
+            for c in cases
+            if c["slice_id"] in slice_map
+            and c["baseline_item_id"] != slice_map[c["slice_id"]]
+        ]
+        if mismatch:
+            fail("plan baseline_item_id != req slice: %s" % ",".join(mismatch), errors)
+        else:
+            ok("plan baseline_item_id matches req slice")
+    if any(h > 1 for h in collect_hops(plan)):
+        fail("plan impact hop > 1", errors)
+
+
+def check_ops_stage(
+    args: argparse.Namespace,
+    repo: Path,
+    root: Path,
+    patrol: Path,
+    baseline,
+    ops,
+    tier: str,
+    errors: list[str],
+) -> None:
+    if args.stage != "ops":
+        return
+    if not ops:
+        fail("missing %s" % intermediate(repo, args.feature, "ops.yaml").relative_to(repo).as_posix(), errors)
+        return
+    ok("ops.yaml exists")
+    for field in ("phenomenon", "env", "artifact", "observable"):
+        if not scalar(ops, field):
+            fail("ops.%s empty" % field, errors)
+        else:
+            ok("ops.%s set" % field)
+    kind = scalar(ops, "kind")
+    if kind not in OPS_KINDS:
+        fail("ops.kind unknown: %s" % kind, errors)
+    else:
+        ok("ops.kind = %s" % kind)
+    status = scalar(ops, "status")
+    if status not in OPS_STATUSES:
+        fail("ops.status unknown: %s" % status, errors)
+    if kind == "unknown":
+        fail("ops.kind is still unknown", errors)
+    if kind in ("onboard", "runtime"):
+        if not scalar(ops, "handoff"):
+            fail("ops.handoff required for kind=%s" % kind, errors)
+        else:
+            ok("ops.handoff set")
+    if kind in ("feature", "patrol"):
+        if scalar(baseline, "sealed") != "true":
+            fail("baseline.sealed is not true", errors)
+        else:
+            ok("baseline sealed")
+        suspects = yaml_str_list(ops, "suspect_item_ids")
+        items = section_ids(baseline, "items")
+        extra = [s for s in suspects if s not in items]
+        if extra:
+            fail("suspect_item_ids not in baseline: %s" % ",".join(extra), errors)
+        elif kind == "feature" and not suspects:
+            fail("kind=feature needs suspect_item_ids", errors)
+        else:
+            ok("suspect_item_ids in baseline")
+        b_rev = scalar(baseline, "revision")
+        if scalar(ops, "baseline_revision") and scalar(ops, "baseline_revision") != b_rev:
+            fail("ops.baseline_revision mismatch", errors)
+    if kind == "patrol":
+        if not patrol.is_file():
+            fail("missing %s" % patrol.relative_to(repo).as_posix(), errors)
+        else:
+            ok("patrol pack exists")
+    origin = scalar(ops, "defect_origin")
+    if origin and origin not in ("req", "arch", "code"):
+        fail("ops.defect_origin must be req|arch|code", errors)
+    if scalar(ops, "resolved") == "true" and scalar(ops, "auto"):
+        check_auto_record("ops", ops, tier, root, errors)
+        check_ledger_settled(repo, args.feature, errors)
+    elif scalar(ops, "resolved") == "true":
+        who = scalar(ops, "by")
+        if agent_signoff(who):
+            fail("resolved=true requires human by", errors)
+        else:
+            ok("resolved has human by")
+
+
+def check_deliver_stage(deliver, errors: list[str]) -> None:
+    if not deliver:
+        return
+    rt = scalar(deliver, "risk_tier")
+    if rt and rt not in ("P0", "P1", "P2"):
+        fail("deliver.risk_tier must be P0|P1|P2", errors)
+    stage = scalar(deliver, "stage")
+    if stage not in (
+        "",
+        "req-review",
+        "req",
+        "arch",
+        "code",
+        "test",
+        "done",
+        "ops",
+    ):
+        fail("deliver.stage unknown: %s" % stage, errors)
+    aligned = scalar(deliver, "aligned")
+    if aligned == "true" or stage == "done":
+        who = scalar(deliver, "by")
+        if agent_signoff(who):
+            fail("aligned/done requires human by", errors)
+        else:
+            ok("aligned/done has human by")
+        if stage == "done" and aligned != "true":
+            fail("stage=done requires aligned: true", errors)
+        elif stage == "done":
+            ok("stage=done with aligned: true")
 
 
 def main() -> int:
@@ -1133,6 +1442,9 @@ def main() -> int:
     run_stage_extensions(repo, args.stage, errors, args.product.strip())
     run_product_checks(repo, args.stage, errors)
 
+    if args.stage in ("req-review", "req", "arch"):
+        check_annotations(repo, args.feature, errors)
+
     deliver = load_ticket(root / "deliver.yaml", errors)
     baseline = load_ticket(root / "baseline.yaml", errors)
     req = load_ticket(root / "req.yaml", errors)
@@ -1163,155 +1475,22 @@ def main() -> int:
         b_rev = scalar(baseline, "revision")
         items = section_ids(baseline, "items")
 
-        if args.stage in ("req", "arch", "code", "test"):
-            if not req:
-                fail("missing req.yaml", errors)
-            else:
-                if scalar(req, "baseline_revision") != b_rev:
-                    fail(
-                        "req.baseline_revision %s != baseline.revision %s"
-                        % (scalar(req, "baseline_revision"), b_rev),
-                        errors,
-                    )
-                else:
-                    ok("req.baseline_revision matches")
-                slice_ids = section_ids(req, "slices")
-                refs = field_list(req, "slices", "baseline_item_id")
-                missing = [i for i in items if i not in refs]
-                if missing:
-                    fail("baseline items with no slice: %s" % ",".join(missing), errors)
-                else:
-                    ok("every baseline item has a slice")
-                extra = [r for r in refs if r not in items]
-                if extra:
-                    fail("slice baseline_item_id not in baseline: %s" % ",".join(extra), errors)
-                else:
-                    ok("no unknown baseline_item_id in req")
-                if len(refs) != len(slice_ids):
-                    fail("each slice must have exactly one baseline_item_id", errors)
-                check_slice_must_lock(baseline, req, errors)
-
+        check_req_stage(args, baseline, req, b_rev, items, errors)
         if args.stage in ("req", "arch", "code", "test"):
             check_semantic_recorded(
                 deliver, args.stage, errors, root=root,
                 deferred=("req-review",) if sealing else (),
             )
-
-        if args.stage in ("arch", "code", "test"):
-            if not arch:
-                fail("missing arch.yaml", errors)
-            else:
-                if scalar(arch, "baseline_revision") != b_rev:
-                    fail("arch.baseline_revision mismatch", errors)
-                else:
-                    ok("arch.baseline_revision matches")
-                intent_refs = field_list(arch, "case_intents", "baseline_item_id")
-                missing = [i for i in items if i not in intent_refs]
-                if missing:
-                    fail("baseline items with no case_intent: %s" % ",".join(missing), errors)
-                else:
-                    ok("every baseline item has a case_intent")
-                bad = [str(h) for h in collect_hops(arch) if h > 1]
-                if bad:
-                    fail("arch impact hop > 1: %s" % ",".join(bad), errors)
-                else:
-                    ok("impact hops <= 1")
-                if not scalar(arch, "approach") or not scalar(arch, "non_approach"):
-                    fail("arch.approach and arch.non_approach must both be set", errors)
-                else:
-                    ok("arch approach set")
-                if args.stage == "arch" and nonempty_list(arch, "open_questions"):
-                    print("SIGNAL arch open_questions still open")
-
+        check_arch_stage(args, arch, b_rev, items, errors)
         if args.stage in ("arch", "code", "test"):
             check_design(root, baseline, arch, errors)
             check_arch_grill(root, errors)
             check_plan_tracks_arch(arch, plan, errors, require_plan=args.stage != "arch")
         elif args.stage == "verify-plan" and arch:
             check_plan_tracks_arch(arch, plan, errors, require_plan=False)
-
-        if args.stage in ("code", "test", "verify-plan"):
-            if not plan:
-                fail("missing verify/plan.yaml", errors)
-            else:
-                if args.stage == "test" and scalar(plan, "mode") != "test":
-                    fail("plan.mode must be test at test stage (got %s)" % (scalar(plan, "mode") or "empty"), errors)
-                else:
-                    if args.stage == "test":
-                        ok("plan.mode is test")
-
-                if args.stage in ("verify-plan", "test"):
-                    b_goal = scalar(baseline, "goal")
-                    p_goal = scalar(plan, "goal")
-                    if not p_goal:
-                        fail("plan.goal empty", errors)
-                    elif b_goal and p_goal != b_goal:
-                        fail(
-                            "plan.goal diverges from baseline.goal (semantic drift)",
-                            errors,
-                        )
-                    else:
-                        ok("plan.goal matches baseline.goal")
-
-                cases = entries(plan, "cases")
-                if args.stage == "test":
-                    check_unproven_surfaces(root, plan, cases, errors)
-                if args.stage == "verify-plan":
-                    check_correctness_runner(plan, errors)
-                    for signal in plan_signals(plan, items, bool(baseline) and not skips_baseline(root)):
-                        print("SIGNAL %s" % signal)
-                if args.stage == "test":
-                    check_auto_record("plan", plan, tier, root, errors, tiers=PLAN_AUTO_TIERS)
-                case_refs = [c["baseline_item_id"] for c in cases if c["baseline_item_id"]]
-                missing = [i for i in items if i not in case_refs]
-                if missing:
-                    fail("baseline items with no plan case: %s" % ",".join(missing), errors)
-                else:
-                    ok("every baseline item has a plan case")
-                extra = [r for r in case_refs if r not in items]
-                if extra:
-                    fail("plan baseline_item_id not in baseline: %s" % ",".join(extra), errors)
-                fake_pass = [
-                    c["id"]
-                    for c in cases
-                    if c["status"] == "PASS"
-                    and c["evidence"] in ("", "not run", "not-run", "UNPROVEN")
-                ]
-                if fake_pass:
-                    fail("PASS without run evidence: %s" % ",".join(fake_pass), errors)
-                else:
-                    ok("no PASS without run evidence")
-                if req:
-                    slice_map = {
-                        s["id"]: s["baseline_item_id"] for s in entries(req, "slices")
-                    }
-                    no_slice = [c["id"] for c in cases if not c["slice_id"]]
-                    if no_slice:
-                        fail("plan cases missing slice_id: %s" % ",".join(no_slice), errors)
-                    else:
-                        ok("every plan case has slice_id")
-                    unknown = [
-                        c["id"] for c in cases if c["slice_id"] and c["slice_id"] not in slice_map
-                    ]
-                    if unknown:
-                        fail("plan slice_id not in req: %s" % ",".join(unknown), errors)
-                    else:
-                        ok("plan slice_id exists in req")
-                    mismatch = [
-                        c["id"]
-                        for c in cases
-                        if c["slice_id"] in slice_map
-                        and c["baseline_item_id"] != slice_map[c["slice_id"]]
-                    ]
-                    if mismatch:
-                        fail(
-                            "plan baseline_item_id != req slice: %s" % ",".join(mismatch),
-                            errors,
-                        )
-                    else:
-                        ok("plan baseline_item_id matches req slice")
-                if any(h > 1 for h in collect_hops(plan)):
-                    fail("plan impact hop > 1", errors)
+        check_plan_stage(
+            args, root, baseline, plan, req, tier, items, errors
+        )
 
     if args.stage in ("arch", "code", "test", "verify-plan"):
         check_doc_form(
@@ -1341,93 +1520,12 @@ def main() -> int:
             check_review_coding(review_text, errors)
 
     if args.stage == "ops":
-        if not ops:
-            fail("missing %s" % intermediate(repo, args.feature, "ops.yaml").relative_to(repo).as_posix(), errors)
-        else:
-            ok("ops.yaml exists")
-            for field in ("phenomenon", "env", "artifact", "observable"):
-                if not scalar(ops, field):
-                    fail("ops.%s empty" % field, errors)
-                else:
-                    ok("ops.%s set" % field)
-            kind = scalar(ops, "kind")
-            if kind not in OPS_KINDS:
-                fail("ops.kind unknown: %s" % kind, errors)
-            else:
-                ok("ops.kind = %s" % kind)
-            status = scalar(ops, "status")
-            if status not in OPS_STATUSES:
-                fail("ops.status unknown: %s" % status, errors)
-            if kind == "unknown":
-                fail("ops.kind is still unknown", errors)
-            if kind in ("onboard", "runtime"):
-                if not scalar(ops, "handoff"):
-                    fail("ops.handoff required for kind=%s" % kind, errors)
-                else:
-                    ok("ops.handoff set")
-            if kind in ("feature", "patrol"):
-                if scalar(baseline, "sealed") != "true":
-                    fail("baseline.sealed is not true", errors)
-                else:
-                    ok("baseline sealed")
-                suspects = yaml_str_list(ops, "suspect_item_ids")
-                items = section_ids(baseline, "items")
-                extra = [s for s in suspects if s not in items]
-                if extra:
-                    fail("suspect_item_ids not in baseline: %s" % ",".join(extra), errors)
-                elif kind == "feature" and not suspects:
-                    fail("kind=feature needs suspect_item_ids", errors)
-                else:
-                    ok("suspect_item_ids in baseline")
-                b_rev = scalar(baseline, "revision")
-                if scalar(ops, "baseline_revision") and scalar(ops, "baseline_revision") != b_rev:
-                    fail("ops.baseline_revision mismatch", errors)
-            if kind == "patrol":
-                if not patrol.is_file():
-                    fail("missing %s" % patrol.relative_to(repo).as_posix(), errors)
-                else:
-                    ok("patrol pack exists")
-            origin = scalar(ops, "defect_origin")
-            if origin and origin not in ("req", "arch", "code"):
-                fail("ops.defect_origin must be req|arch|code", errors)
-            if scalar(ops, "resolved") == "true" and scalar(ops, "auto"):
-                check_auto_record("ops", ops, tier, root, errors)
-                check_ledger_settled(repo, args.feature, errors)
-            elif scalar(ops, "resolved") == "true":
-                who = scalar(ops, "by")
-                if agent_signoff(who):
-                    fail("resolved=true requires human by", errors)
-                else:
-                    ok("resolved has human by")
+        check_ops_stage(
+            args, repo, root, patrol, baseline, ops, tier, errors
+        )
         run_outbound_skills_check(repo, errors)
 
-    if deliver:
-        rt = scalar(deliver, "risk_tier")
-        if rt and rt not in ("P0", "P1", "P2"):
-            fail("deliver.risk_tier must be P0|P1|P2", errors)
-        stage = scalar(deliver, "stage")
-        if stage not in (
-            "",
-            "req-review",
-            "req",
-            "arch",
-            "code",
-            "test",
-            "done",
-            "ops",
-        ):
-            fail("deliver.stage unknown: %s" % stage, errors)
-        aligned = scalar(deliver, "aligned")
-        if aligned == "true" or stage == "done":
-            who = scalar(deliver, "by")
-            if agent_signoff(who):
-                fail("aligned/done requires human by", errors)
-            else:
-                ok("aligned/done has human by")
-            if stage == "done" and aligned != "true":
-                fail("stage=done requires aligned: true", errors)
-            elif stage == "done":
-                ok("stage=done with aligned: true")
+    check_deliver_stage(deliver, errors)
 
     forged = []
     for label, text in (

@@ -25,6 +25,8 @@
 
 **自进化复盘：** 原话含「自进化 / 进化复盘 / evolve review / hermes 复盘」→ S8 `workflows/self-evolve-review.yaml`（只写提案草稿，不改 Skill）。详见 [self-evolution.md](self-evolution.md)。
 
+**流程机制：** 停下来问人之前跑 `python3 scripts/process-eval.py stop`。`now=CORRECT` 当轮按既有规则做。要改规则才起草。详见 [process-eval.md](process-eval.md)。
+
 **小改捷径：** 原话含「轻量改动 / 小改 / 小修 / lite change」→ 优先 S8 `workflows/lite-change.yaml`（见 [operator-cheatsheet.md](operator-cheatsheet.md) §3、[lite-change-pitfalls.md](lite-change-pitfalls.md)）。不改 goal/baseline；禁止跳签与自动 promote。
 
 
@@ -53,7 +55,7 @@ grilling 不是可选追问，而是**订死边界与不清楚处**的默认动�
 3. `arch` 已经交出方案之后，仍有未决分叉。没有分叉就不要为了过门造一轮问句
 4. 人原话表达不确定、要定界、要拷问细节
 
-**frontier 未空之前：** 不要请签需求通过，不要代写 `sealed` / `accepted`。共享理解由需求通过那一次确认写入，不单独再请一次。
+**frontier 未空之前：** 不要写需求通过，不要代写 `sealed` / `accepted`。共享理解由需求通过写入，不单独再问一次。
 
 ## 自动打开产线文档技能
 
@@ -67,7 +69,7 @@ grilling 不是可选追问，而是**订死边界与不清楚处**的默认动�
 
 | 码 | 做法 |
 |----|------|
-| H1 | 无当前停问点：不请签。下一步已确定就在同一轮做，不把 trace 的 `next` 当停点 |
+| H1 | 无当前停问点：不请签。下一步已确定就在同一轮做，不把 trace 的 `next` 当停点。「验收」「继续」先跑 `scripts/nudge.py`；`NUDGE proceed` 不记 stop，不改密封基线条目 |
 | H2 | 人没提提升 / 巡检包 / promote → 不问 `promote.sh` |
 | H3 | 导体 feedback tag：仅入口**直接**落到 verify 且 trial；deliver / ops 调用 verify 不问 |
 | H4 | 已 accepted 的 plan 再 `run`：不重跑 `verify-plan`、不请再签 |
@@ -99,7 +101,7 @@ bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>
 ```
 
 `stage`：`req-review` \| `req` \| `arch` \| `code` \| `test` \| `verify-plan` \| `ops`。非 0 退出不准签字（含对话确认代写）。  
-`verify-plan` **只在起草或调整用例、请人 `accepted`（或 P1/P2 记 `AUTO`）时**跑。已 accepted 的 plan 再 `run` 不重跑、不请签。
+`verify-plan` **只在起草或调整用例时**跑。无 `SIGNAL` 记 `AUTO`。已 accepted 的 plan 再 `run` 不重跑、不请签。
 
 签字与决策怎么记：[chat-confirm-signoff.md](chat-confirm-signoff.md)。
 

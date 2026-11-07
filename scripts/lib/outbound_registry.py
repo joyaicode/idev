@@ -371,11 +371,11 @@ def _cmd_pack_link(args: argparse.Namespace) -> int:
     repo = (args.repo or "").strip()
     if repo:
         handoff = load_handoff(repo)
+        hid = str((handoff or {}).get("id") or "").strip()
+        if handoff and pack and hid and pack != hid:
+            print("FAIL: --pack %s does not match product handoff %s" % (pack, hid), file=sys.stderr)
+            return 2
         if handoff:
-            hid = str(handoff.get("id") or "").strip()
-            if pack and hid and pack != hid:
-                print("FAIL: --pack %s does not match product handoff %s" % (pack, hid), file=sys.stderr)
-                return 2
             link = handoff.get("link_from_repo") or {}
             print(json.dumps({
                 "required": _as_str_list(link.get("required")),

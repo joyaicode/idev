@@ -214,17 +214,16 @@ def from_report(path: Path, flows: list[Flow]) -> list[Conflict]:
             title = str(node.get("title") or node.get("name") or "")
             err = json.dumps(node.get("errors") or node.get("error") or "", ensure_ascii=False)
             loc = str(node.get("file") or node.get("location") or "")
-            if AUTH_FAIL.search(err):
-                fname = Path(loc).name or title
-                flow = by_name.get(fname)
-                declared = [s for s, _ in (flow.requires if flow else [])]
-                if not declared:
-                    out.append(Conflict(
-                        "runtime-state-failure", "auth", "(上游某个 flow)", fname or title,
-                        f"运行时报鉴权相关失败,而 {fname or title} 没有声明它需要的状态 —— "
-                        "这更可能是前置状态不对,不是被测代码的缺陷",
-                        "先补 `// @requires: auth <on|off>`,再决定 branch 还是 reorder。"
-                        "**在确认是状态问题之前,不要把它当成产品 bug 去改代码**"))
+            fname = Path(loc).name or title
+            flow = by_name.get(fname)
+            declared = [s for s, _ in (flow.requires if flow else [])]
+            if AUTH_FAIL.search(err) and not declared:
+                out.append(Conflict(
+                    "runtime-state-failure", "auth", "(上游某个 flow)", fname or title,
+                    f"运行时报鉴权相关失败,而 {fname or title} 没有声明它需要的状态 —— "
+                    "这更可能是前置状态不对,不是被测代码的缺陷",
+                    "先补 `// @requires: auth <on|off>`,再决定 branch 还是 reorder。"
+                    "**在确认是状态问题之前,不要把它当成产品 bug 去改代码**"))
             for v in node.values():
                 visit(v)
         elif isinstance(node, list):

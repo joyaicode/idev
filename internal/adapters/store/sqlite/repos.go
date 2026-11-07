@@ -677,11 +677,11 @@ func (r runRepo) replaceSteps(ctx context.Context, rn run.Run) error {
 
 func (r runRepo) Get(ctx context.Context, runID string) (run.Run, int64, error) {
 	var (
-		out            run.Run
-		version        int64
-		status         string
-		drift          int
-		featureID      string
+		out       run.Run
+		version   int64
+		status    string
+		drift     int
+		featureID string
 	)
 	err := r.tx.QueryRowContext(ctx, `SELECT id, workflow_id, feature_id, status, drift, version
 		FROM runs WHERE id = ?`, runID).Scan(
@@ -704,11 +704,11 @@ func (r runRepo) Get(ctx context.Context, runID string) (run.Run, int64, error) 
 	defer rows.Close()
 	for rows.Next() {
 		var (
-			st                                 run.Step
-			state                              string
-			evidence, note, writer, verifier   sql.NullString
-			approval                           sql.NullString
-			writes                             string
+			st                               run.Step
+			state                            string
+			evidence, note, writer, verifier sql.NullString
+			approval                         sql.NullString
+			writes                           string
 		)
 		if err := rows.Scan(&st.ID, &st.Kind, &state, &st.Attempt, &evidence, &note,
 			&writer, &verifier, &approval, &st.Group, &writes); err != nil {
@@ -735,6 +735,9 @@ type leaseRepo struct{ tx *sql.Tx }
 const leaseColumns = `id, purpose, feature_id, run_id, step_id, agent, fencing_token, write_paths_json, expires_at`
 
 func (l leaseRepo) Issue(ctx context.Context, ls lease.Lease, tokenHash string) error {
+	if err := l.refuseOverlappingWrite(ctx, ls); err != nil {
+		return err
+	}
 	paths, err := json.Marshal(nonNil(ls.WritePaths))
 	if err != nil {
 		return err
@@ -753,6 +756,43 @@ func (l leaseRepo) Issue(ctx context.Context, ls lease.Lease, tokenHash string) 
 		return err
 	}
 	return nil
+}
+
+func (l leaseRepo) refuseOverlappingWrite(ctx context.Context, ls lease.Lease) error {
+	if ls.Purpose != lease.PurposeWrite {
+		return nil
+	}
+	where := `status = 'active' AND purpose = 'write' AND `
+	var arg string
+	if ls.Feature != "" {
+		where += `feature_id = ?`
+		arg = ls.Feature
+	} else {
+		where += `feature_id IS NULL AND run_id = ?`
+		arg = ls.RunID
+	}
+	rows, err := l.tx.QueryContext(ctx, `SELECT write_paths_json FROM leases WHERE `+where, arg)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return err
+		}
+		var held []string
+		if raw != "" {
+			if err := json.Unmarshal([]byte(raw), &held); err != nil {
+				return err
+			}
+		}
+		if lease.WriteSetsConflict(held, ls.WritePaths) {
+			return &ports.ConflictError{Kind: ports.ConflictLeaseHeld,
+				Detail: "another agent holds the write lease on " + ls.Feature}
+		}
+	}
+	return rows.Err()
 }
 
 func (l leaseRepo) scan(row interface{ Scan(...any) error }) (lease.Lease, error) {
@@ -998,8 +1038,8 @@ func (d delegRepo) RecordVerification(
 
 func (d delegRepo) scan(row interface{ Scan(...any) error }) (ports.Delegation, error) {
 	var (
-		rec                            ports.Delegation
-		packet, ret, checks, issuedAt  string
+		rec                           ports.Delegation
+		packet, ret, checks, issuedAt string
 	)
 	err := row.Scan(&rec.ID, &rec.RunID, &rec.StepID, &rec.Attempt, &rec.Agent,
 		&rec.LeaseID, &packet, &ret, &checks, &rec.State, &rec.Outcome, &rec.Via, &issuedAt)

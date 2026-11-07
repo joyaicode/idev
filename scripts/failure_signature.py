@@ -13,13 +13,20 @@ That was all there, but counting it was left to whoever was watching. This
 makes it decidable.
 
     failure_signature.py sig    --log <path|->
-    failure_signature.py append --feature F --log <path> --delta N [--result FAIL|PASS]
+    failure_signature.py append --feature F --log <path> [--delta N] [--result FAIL|PASS]
     failure_signature.py check  --feature F
     failure_signature.py line   --feature F     # the one-line record evidence.md asks for
 
 The ledger is <ticket home>/fix-attempts.yaml. check exits 2 when a
 tripwire fires: that is the signal to stop stacking patches and escalate,
 not a score.
+
+The second tripwire asks two things of a round: did the code actually
+change, and is this patch only a rerun of the last proposal. Both are
+measured from git rather than typed in — a number the loop types about
+itself is the one number the loop has an interest in getting wrong.
+--delta still wins when given, for fixtures and non-git trees; without
+git the round falls back to what was passed and says so.
 
 Normalization is a heuristic and it is deliberately conservative: it strips
 what is known to vary per run and keeps everything else, so two different
@@ -30,8 +37,10 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -173,6 +182,81 @@ def read_log(arg: str) -> str:
     return path.read_text(encoding="utf-8", errors="replace")
 
 
+# Lines of a diff that change between two runs of the same patch and say
+# nothing about what the patch does. Stripped before fingerprinting, for
+# the same reason VOLATILE is stripped before signing a log.
+DIFF_NOISE = [
+    (re.compile(r"(?m)^index [0-9a-f]+\.\.[0-9a-f]+.*$"), "index"),
+    (re.compile(r"(?m)^@@ -[\d,]+ \+[\d,]+ @@"), "@@"),
+    (re.compile(r"(?m)[ \t]+$"), ""),
+]
+
+
+# idev's own bookkeeping lives in .idev/ and this ledger is written inside
+# it on every round, so measuring the tree without excluding it would make
+# every round look like a change — the loop would never see its own brake.
+EXCLUDE = ("." , ":(exclude).idev")
+
+
+def git(base: Path, *args: str) -> str | None:
+    """git output, or None when this is not a git checkout / git is absent."""
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(base), *args],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    return done.stdout
+
+
+def untracked(base: Path, porcelain: str) -> list[str]:
+    rels = (line[3:].strip() for line in porcelain.splitlines() if line.startswith("?? "))
+    return sorted(rel for rel in rels if rel != ".idev" and not rel.startswith(".idev/"))
+
+
+def measure(base: Path) -> tuple[int, str] | None:
+    """(lines changed, patch fingerprint) for the working tree, or None without git.
+
+    A new file nobody ran `git add` on is still a change, so untracked
+    entries count too: their lines when they are files, one when they are
+    directories — the tripwire only asks whether the number is zero.
+    """
+    diff = git(base, "diff", "HEAD", "--", *EXCLUDE)
+    porcelain = git(base, "status", "--porcelain", "--", *EXCLUDE)
+    if diff is None or porcelain is None:
+        return None
+
+    numstat = git(base, "diff", "HEAD", "--numstat", "--", *EXCLUDE) or ""
+    delta = 0
+    for row in numstat.splitlines():
+        cells = row.split("\t")
+        if len(cells) < 2:
+            continue
+        for cell in cells[:2]:
+            if cell.isdigit():          # "-" marks a binary file
+                delta += int(cell)
+
+    news = untracked(base, porcelain)
+    for rel in news:
+        path = base / rel
+        if path.is_dir():
+            delta += 1
+            continue
+        try:
+            delta += len(path.read_text(encoding="utf-8", errors="replace").splitlines())
+        except OSError:
+            delta += 1
+
+    body = diff
+    for pattern, repl in DIFF_NOISE:
+        body = pattern.sub(repl, body)
+    body += "\n" + "\n".join(news)
+    return delta, hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
 def tripwires(attempts: list[dict]) -> list[str]:
     """Which bounded-fix lines are crossed. Empty = keep going."""
     hits: list[str] = []
@@ -215,14 +299,38 @@ def cmd_append(args: argparse.Namespace) -> int:
     data = load(path, args.feature)
     sig = args.signature or signature(read_log(args.log))
 
-    prior = data["attempts"][-1].get("signature") if data["attempts"] else None
+    prior = data["attempts"][-1] if data["attempts"] else {}
+    prior_sig = prior.get("signature") if prior else None
+    prior_print = str(prior.get("patch_fingerprint") or "")
+
+    measured = measure((repo or Path.cwd()).resolve())
+    if measured is None:
+        print("WARN not a git checkout; code change is whatever --delta said", file=sys.stderr)
+        delta, fingerprint = (args.delta or 0), ""
+    else:
+        delta, fingerprint = measured
+        if args.delta is not None:
+            delta = args.delta
+
+    # Two different questions, and git answers the second one better than a
+    # signature can: the signature says the failure looks the same, the
+    # fingerprint says this patch *is* the last patch.
+    if fingerprint and prior_print:
+        semantic_change = fingerprint != prior_print
+    elif prior_sig is not None:
+        semantic_change = sig != prior_sig
+    else:
+        semantic_change = True
+
     entry = {
         "at": now(),
         "signature": sig,
-        "delta": args.delta,
-        "semantic_change": (sig != prior) if prior is not None else True,
+        "delta": delta,
+        "semantic_change": semantic_change,
         "result": args.result,
     }
+    if fingerprint:
+        entry["patch_fingerprint"] = fingerprint
     if args.note:
         entry["note"] = args.note
     data["attempts"].append(entry)
@@ -297,7 +405,8 @@ def main() -> int:
     p.add_argument("--feature", required=True)
     p.add_argument("--log", help="log file, or - for stdin")
     p.add_argument("--signature", help="use this signature instead of deriving one")
-    p.add_argument("--delta", type=int, default=0, help="lines of code changed this round")
+    p.add_argument("--delta", type=int, default=None,
+                   help="lines of code changed this round; omit to measure the working tree with git")
     p.add_argument("--result", default="FAIL", choices=["FAIL", "PASS"])
     p.add_argument("--note")
     p.set_defaults(fn=cmd_append)

@@ -1,0 +1,16 @@
+schema_version: 1
+scaffolds:
+  - id: stop-on-nudge
+    guards: 人只说继续、验收、确认或通过之后，上一轮仍停在一个非决策问题上
+    where: references/chat-confirm-signoff.md
+    cost: 人再花一轮只为说继续
+    remove: 上游仍要求人说继续才往下走的句子
+    keep: nudge 校验，以及催办不改写密封基线
+    min_fires: 2
+  - id: context-replay
+    guards: 新上下文重试时忘了已经读过的文件
+    where: references/agents.md
+    cost: attempt 大于 1 时把原文重放进委派包
+    remove: 失败原因不是没读文件时仍整段重放
+    keep: 没读时的重放，以及 prior_failure
+    min_fires: 2

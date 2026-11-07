@@ -12,7 +12,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import source_diff  # noqa: E402
+import canon_smells  # noqa: E402
+
+# Only C12 applies to shell: no getter chains, no catch, and `if/fi` is not
+# a brace language the nesting detector can walk.
+_DECL = re.compile(r"(?m)^[ \t]*(?:function[ \t]+)?(?P<name>[A-Za-z_]\w*)[ \t]*\(\)[ \t]*\{")
 
 _EXP = re.compile(r"\$\{[A-Za-z0-9_]+\}|\$[A-Za-z_][A-Za-z0-9_]*|\$[0-9]|\$[@*]")
 _HEREDOC = re.compile(r"<<-?[ \t]*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
@@ -217,6 +223,7 @@ def inspect_text(text: str, rel: str) -> list[tuple[str, int, str]]:
         if _disabled(text, match.start()):
             continue
         hits.append((rel, _line(text, match.start()), "变量没有加引号"))
+    hits.extend(canon_smells.naming_hits(masked, rel, _DECL))
     return hits
 
 

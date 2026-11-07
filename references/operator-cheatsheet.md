@@ -54,7 +54,7 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> <workflow_id> [--pr
 ## 3. 轻量模式（小改动）
 
 同时满足：已有票且 `stage` 在 `code` / `test`（或人说小改）；**不**改 goal / baseline / 架构；改动面已 `include` 或人指定。  
-走 S8 **`lite-change`**（定界 → 编码 → 同一波用例/自测/审查/验收索引 → 改审查意见 → 复跑回写 → 实现审核）。禁止改密封正文、跳阶段、自动 `sealed`/`accepted`、不问就 promote。  
+走 S8 **`lite-change`**（定界 → 编码 → 同一波用例/自测/审查/验收索引 → 改审查意见 → 复跑回写 → 实现审核）。禁止改密封正文、跳阶段、检查没过就写 `accepted`、不问就 promote。  
 踩坑：[lite-change-pitfalls.md](lite-change-pitfalls.md)。
 
 ## 3.5 自测、实现审核、提测、结果、巡检
@@ -76,6 +76,7 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> <workflow_id> [--pr
 | 动作 | 怎么走 |
 |------|--------|
 | 复盘挖信号 | S8 `self-evolve-review` 或 `bash ~/.cursor/skills/idev/scripts/evolve-review.sh` |
+| 停问前看这一步 | `python3 ~/.cursor/skills/idev/scripts/process-eval.py stop --stop "<将问的话>"` |
 | 归档超龄提案 | `bash ~/.cursor/skills/idev/scripts/evolve-curator.sh`（落地归档加 `--apply`） |
 | 清理执行残留 | `bash ~/.cursor/skills/idev/scripts/execution-clean.sh`（删除加 `--apply`）。`--compact` 在引用满 2 次或满 3 代时先写入 `.idev/memory.md` 再删热集合以外的文件。不碰 `docs/task`、打开的提案和 `memory.md` |
 | nudge | 修缺口 / inbox 同类 tag≥2 / HARD>0 / 人要沉淀 → **一句话**问要不要写提案 |

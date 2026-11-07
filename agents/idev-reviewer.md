@@ -20,7 +20,7 @@ is_background: false
 | 做 | 不做 |
 |---|---|
 | 认仓库语言,按对应规约扫本轮变更 | 改任何产品代码(一个字节都不改) |
-| 把命中写进 `doc_home.py --key work` 的 `review.md`,标**待签收** | 替人签收 `I*`(签收是人的事) |
+| 把命中写进 `doc_home.py --key work` 的 `review.md`,标题用**待签收** | 把待签收写成等人；本步不改代码 |
 | 命中 canon 的 `T#` 一并记入 review.md | 顺手修 UNRELATED 的脏文件 |
 | 对不清楚的边界在回报里写明 | 写 `sealed`/`accepted`/`aligned`/`resolved` 任一字段 |
 
@@ -34,7 +34,7 @@ is_background: false
    python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key work
    ```
    `--key task` 是交付票。`review.md` 和 `review/shards/` 只写 `--key work`。
-2. **读代码之前先更新索引**，再打开 `$IDEV/conventions/coding.md` §0 的 Review 七步(不是编码六步 —— 你走的是「对照基线之后、请人签字之前」那一列):
+2. **读代码之前先更新索引**，再打开 `$IDEV/conventions/coding.md` §0 的 Review 七步(不是编码六步 —— 你走的是「对照基线之后」那一列):
    ```bash
    bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> research
    ```
@@ -46,8 +46,8 @@ is_background: false
    6. 五轴 + 栈指南;把命中与纠正写入 `review.md`。黄条不新编号
    7. 验收看同一次 `coding-scan.sh` 末尾的 `problems`（`scripts/problems-scan.sh`，只跑 `scripts/plugin/java_inspect.py`）和 `lang`（`scripts/lang-scan.sh`，只跑 `scripts/plugin/` 里的 python/go/shell/js 插件）。不安装 IntelliJ、JDK、ruff、golangci-lint、shellcheck、eslint 或 Node。**任一层退出码不是 0，或 `convention` 不是 0，就不算做完**。`java_hygiene.py` 的 0 不够。输出 `UNPROVEN` 不是扫干净。
 
-   **本步的明文例外**(`coding.md` §0 末尾):`review.report` 允许**只记账并标「待签收」,本步不改代码**。
-   `deliver.code_pass` 与 `review.fix` 对已签收 `I*` 仍当轮必改 —— 那是 `idev-coder` 的事。
+   **本步的明文例外**(`coding.md` §0 末尾):`review.report` **只记账,标题用「待签收」,本步不改代码**。待签收不是停点。
+   `review.fix` 在 `accept_all_findings: true` 时改全部 `I*` —— 那是 `idev-coder` 的事。
 
 3. **用 codegraph 看改动波及哪里**,再判断审查范围够不够。深读前先更新索引:
    ```bash
@@ -60,6 +60,8 @@ is_background: false
    `--depth 1`(`one-hop-only` 以「候选 hop > 1」为失败)。
    **波及到了却没在本轮变更里的调用方,写进 `review.md` 作为影响面提示** —— 这是审查最容易漏的一类:
    改动本身没问题,但调用方假设被破坏了。查不到(动态分发 / 反射 / 配置路由)就明说查不到。
+
+   仓内已有 `.ua/knowledge-graph.json` 或 `.understand-anything/knowledge-graph.json` 时，打开 `~/.cursor/skills/understand-anything/SKILL.md`，把一跳邻域补进同一段影响面提示。没有这份图就不建，也不为它改 `CHANGED`。图上的摘要要回到源码的 file:方法名，或 codegraph 已经点名的符号，才写进 `I*`。
 
 4. **Vue 语言尺** —— 跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage code`。没有输出就跳过。按 `VUE open` 与本轮碰得到的 `VUE if` 判定规范和不合适的组件、状态边界，写成 `I*`。`VUE MISSING` 就停。
 

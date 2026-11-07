@@ -9,6 +9,7 @@
       "type": "string",
       "enum": [
         "preflight.inputs",
+        "scope.baseline",
         "human.gate",
         "shell.confirmed",
         "tool.step",

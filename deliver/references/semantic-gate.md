@@ -3,9 +3,9 @@
 `check-feature` 锁两件可机检的事，**不判断口号是否可证伪**。结构绿 ≠ 语义锁死。其余仍须人扫句子：
 
 1. `req` 及之后：每条 `slice.must` 与对应 item 的 `must`（无则 `must_not`）原文一致（空白归一）。换词 = FAIL。
-2. `req` / `arch` / `code` / `test`：`deliver.yaml` 里**上一阶段**的 `semantic_gate.<stage>.passed: true` + 人名 `by`。`test` 的上一阶段含 `code`（实现审核）。与当次确认一起写入；Agent 不得代填。
+2. `req` / `arch` / `code` / `test`：`deliver.yaml` 里**上一阶段**的 `semantic_gate.<stage>.passed: true` + 名单里的人 `by`。`test` 的上一阶段含 `code`（实现审核）。与这一关同一轮写入。`by` 不写成 agent；名单只有一个人就写这个人，不问。
 
-**本表必须人扫脚本锁不住的句子**；Agent 请签前打印。人未确认不准 `sealed` / `accepted` / `aligned`。
+本表是脚本锁不住的句子。句子不过就不写这一关。句子过了就写 `sealed` / `accepted` / `aligned`，不另请人确认。
 
 对照尺：密封 `baseline.yaml` 的 `goal` / `non_goal` / `items[].must`。
 
@@ -32,7 +32,7 @@
 - [ ] 用例、实现与 review「少做/多做」对照基线；多做已删或 UNRELATED
 - [ ] 未用代码「修正」需求；像基线错 → `baseline-conflict` 停
 - [ ] 编码规范命中已改（P#/C#/R# + §3.8），不是只记账
-- [ ] 自测跑证在；这次确认进入提测，不另问要不要提测
+- [ ] 自测跑证在；检查通过就进入提测，不另问要不要提测
 
 ## test → aligned
 

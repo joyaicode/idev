@@ -41,16 +41,16 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> lite-change
 
 （在产品仓目录执行，或设 `IDEV_REPO`。）BLOCKED → 列缺项后停，不准编造覆盖率。
 
-没有 `PARALLEL` 时只开当前 step 对应的一页。`next` 打出 `PARALLEL` 时，本轮同时派这一波里的每个 `DELEGATE`，每个回报只记自己的 step。
+没有 `PARALLEL` 时只开当前 step 对应的一页。`next` 打出 `PARALLEL` 时，本轮同时派这一波里的每个 `DELEGATE`，每个回报只记自己的 step。`drive` 已经打出每个 `BRIEF` 时按 `BRIEF` 派。
 
 1. `preflight.inputs` — 票/路径可读  
-2. `route.s4` — 确认不改 goal/baseline；定界  
+2. `scope.baseline` — 确认密封基线的 goal / non_goal / sealed 与 HEAD 一致；不一致就停。论证仍走 `route.s4`  
 3. `deliver.code_pass` — 只改 `include: true`  
 4. 同一波 `group: check`：`verify.plan` 写 `verify/plan.yaml`，`verify.run` 写 `verify/selftest.md`，`review.report` 写 `doc_home.py --key work` 的 `review.md`，验收索引写 `verify/accept.md`  
 5. 计划无信号则 `gate-plan` 记 `AUTO`（H4）  
 6. `review.fix` 改掉全部 `I*`  
-7. `verify.run` 复跑：回写 `plan.yaml` 的 status，并重写 `selftest.md` 与 `accept.md`，然后停在实现审核  
-8. **默认结束。** 人没说「提测」不问 `mode=test`（H6）；不自动 promote。
+7. `verify.run` 复跑：回写 `plan.yaml` 的 status，并重写 `selftest.md` 与 `accept.md`。检查通过就写实现审核并进入提测，不请人  
+8. **默认结束。** 不自动 promote。
 
 踩坑：[lite-change-pitfalls.md](lite-change-pitfalls.md)。
 
@@ -60,8 +60,8 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> lite-change
 
 - 没有 `PARALLEL` 时每轮一个执行模块；`PARALLEL` 那一波每个 `DELEGATE` 各开自己的页。红绿只走 verify。  
 - 边界未订死 / 有 open_questions / 请签前仍有分叉 → **自动 grilling**；未完成前不准请签。  
-- 无本轮确认用语不得写 `sealed` / `accepted` / `aligned`。  
-- 签字前结构检查 FAIL → 不准请签。  
+- 检查通过且没有未决分叉就写 `sealed` / `accepted` / `aligned`。解封、回退、promote、push 仍要点名。  
+- 结构检查 FAIL → 不准写这一关。  
 - 无 Mac 真源 / 无仓路径 → 停，不顶替执行。
 
 ## 何时升级 / 换轨

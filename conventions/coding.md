@@ -7,9 +7,10 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 
 不要把 GoF 23 名录、《Clean Code》章节或《重构》全书手法目录抄进产品仓。
 
-上游原则层：[canon.md](canon.md)（T1–T13）。命中“加一层 / 拆分 / 缓存 / 重写”类念头先走 canon §1 协议（§2 信号 + §4 念头），再回本页落到 P/C/R。
+上游原则层：[canon.md](canon.md)（T1–T14）。命中“加一层 / 拆分 / 缓存 / 重写”类念头先走 canon §1 协议（§2 信号 + §4 念头），再回本页落到 P/C/R。
 
 裁决先于模式：**YAGNI + Rule of Three。** 第 1 次写具体；第 2 次仍可并列；第 3 次才抽。会说过度设计就简化。  
+YAGNI 的例外：预置与否看「重构距离」——把简单方案事后重构成灵活方案相当容易的维度，只写当下；预先看不到简单重构办法的维度（安全等），设计期按风险预置。  
 结构变、行为不变时走 [coding-tables.md](coding-tables.md) §3；缺测试护栏或与加功能混做 = 不准重构。
 
 **底线（架构方案、编码与 Review 共用；先于规范总则；命中仍落 `P#`/`C#`/`T#`/`F#`，不另起编号）**
@@ -19,7 +20,7 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 1. **大道至简**：设计和实现只解决本轮那一句话里的问题，不把问题拆成框架、分层或通用流程（**T1** / **P6** / **C3** / **F1**）。关键路径是：这条失败会让基线要求的结果错或没有。这种路径当轮写明失败条件、怎么停或怎么降、日志在哪（**T8** / **T11** / **C7**）。降级只服务这条路径，不另起开关、重试框架或兜底体系。没有这条关键路径，就不加 `catch`、默认值、重试。
 2. **易用性**：读代码的人能说出它做什么、从哪进、失败时怎样，不用先读包装（**T2** / **T3** / **T5**）。以后加行为，沿现有类型和契约加一条，不改已有分支的含义，不把两条通道并成一条（**T4** / **P16**）。「方便扩展」不是现在留 `IXxx`、钩子或配置开关（**T1** / **P6**）。
 3. **禁止随意发挥**：每一段新代码都要指得出依据：基线 item、本轮那一句话、已有实现里的第三次重复，或这条路径上已经看到的失败。指不出就删（**T1** / **C6** / **F1** / **F2**）。禁止毫无根据的分支和参数，禁止绕开直白写法的技巧。抓得住的只有三件：本轮要改的行为、失败时怎么停或怎么降、调用方怎么用。
-4. **码如文字**：架构方案和代码都顺着读就能看见重点。逻辑像一篇短文：这件事要达成什么，关键步骤是什么，失败时怎样。注释只写代码看不出的那一句（为什么、哪条不变量），不复述下一行在做什么（**C5**）。平铺直叙、读完说不出重点，是拒过（**T3** / **T5** / **C1**）。
+4. **码如文字**：架构方案和代码都顺着读就能看见重点。逻辑像一篇短文：这件事要达成什么，关键步骤是什么，失败时怎样。注释只写代码看不出的那一句（为什么、哪条不变量），不复述下一行在做什么（**C5**）。涉及可变状态或循环 / 累积器，测试必含改写效果与不变式断言（**T14** / **C20**）。平铺直叙、读完说不出重点，是拒过（**T3** / **T5** / **C1**）。
 5. **最小实现，禁止哑对象**：用最少的代码实现目标。权衡只写这一轮真正碰到的：性能（**T9**，无基线不优化）、并发安全（**T10**）、易使用、易扩展（底线 2，不预埋钩子）。文件数和行数说不出换来什么就是膨胀（规范总则 1，[coding-tables.md](coding-tables.md) §2.4）。哑对象、贫血模型是拒过：类型只有 get/set，没有校验、归一、派生或不变量，再拆成许多文件，读起来看不到重点（**T3** / **C11** / **C12**；Java 见 [java.md](java.md) 准则 3）。协议形状（请求、响应、Mapping）可以只有字段，业务判断不放在那里。
 
 **规范总则（编码与 Review 共用；底线先判这段代码该不该有，总则再判留下来的写得紧不紧；命中落 `P#`/`C#`/`T#`，不另起编号）**
@@ -42,11 +43,11 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 3. 用这句话扫 [coding-tables.md](coding-tables.md) §1，命中**第一行**就停，按「运用」做，按「不要」拒绝。
 4. 零命中 → 写具体类型，**不准**为对称先上模式。
 5. 每新增一个函数 / 导出，立刻扫 [coding-tables.md](coding-tables.md) §2 + §2.4 量化阈值；命中当场改，不准留到「写完再说」。气味驱动的结构整理按 §3 小步做。
-6. 写完按文首**底线**和**规范总则**回扫本轮 diff：问题没有被拆复杂，关键路径有失败处理与降级，扩展不改底层，无依据的段落已删，顺着读能指出重点，没有新的只有 get/set 的业务类型；净增的文件数和行数说得出换来什么、一文件一变更理由、单文件行数、每个新文件一种职责、每个触及文件为何必须动、条件链过了 §1、语法糖用了。
+6. 写完按文首**底线**和**规范总则**回扫本轮 diff：问题没有被拆复杂，关键路径有失败处理与降级，扩展不改底层，无依据的段落已删，顺着读能指出重点，没有新的只有 get/set 的业务类型；净增的文件数和行数说得出换来什么、一文件一变更理由、单文件行数、每个新文件一种职责、每个触及文件为何必须动、条件链过了 §1、语法糖用了。自测自底向上：先测被调用者（最底层纯函数），再测调用方组装；跳层直接测顶层，失败定位不到层，不算自测。
 
 **Review（对照基线之后、请人签字之前）**
 
-编码者自己写的「编码规范」节不算 Review。这一节由 `idev-reviewer` 写，并写上 `审查者: idev-reviewer`。自测有跑证之后、实现审核之前做完。不另设人闸。交付主路径上 `review.fix` 的 `with.accept_all_findings: true` 表示全部 `I*` 当轮改；`code-review` 配方没有这个字段，仍只改已签收项。
+编码者自己写的「编码规范」节不算 Review。这一节由 `idev-reviewer` 写，并写上 `审查者: idev-reviewer`。自测有跑证之后、实现审核之前做完。不另设人闸。`lite-change` 与 `code-review` 的 `review.fix` 都带 `with.accept_all_findings: true`，全部 `I*` 当轮改。
 
 1. 先跑 `bash ~/.cursor/skills/idev/scripts/coding-scan.sh <repo>`。它先打出 `java_hygiene.py` 的 **blocking** 行（[java.md](java.md)：构造上的显式类型参数改成 `<>`、`Collections.<T>emptyMap()` 这类可以推断的工厂、`valueOf` 装箱、compiler=8 的 `List.of`、`src/main` 里从未使用的简单 getter、模块已有 Lombok 时仍手写的 `return field`、`Collections.sort` → `List.sort`、`Comparator.comparing`、循环里的 `Thread.sleep`、40 行内相同的日志句子），再跑 `problems-scan.sh`（只跑随 idev 带上的 `scripts/plugin/java_inspect.py`，不安装 IntelliJ，不安装 JDK）。有 Python、Go、Shell、JS/Vue 改动时，同一次扫描再跑 `lang-scan.sh`（只跑 `scripts/plugin/` 里的 `python_inspect.py`、`go_inspect.py`、`shell_inspect.py`、`js_inspect.py`，不安装 ruff、golangci-lint、shellcheck、eslint 或 Node，不下载）。**每一条 blocking、每一条 problems 和每一条 lang 的 `file:line` 先写成 `I*`，再写别的。** 漏一条，或 problems、lang 退出码不是 0，这一步就不算做完。高内聚、低耦合、设计模式、五轴不能代替这些行。`note` 只留 `Collectors.<T>toList()` 这类 Java 8 经常推断失败的调用，不打回。输出 `UNPROVEN` 时不是扫干净。
 2. 先过文首**底线**，再扫**规范总则**五条（含 [coding-tables.md](coding-tables.md) §2.4：净增行、单文件行数、新增文件、触及文件、一文件一理由）；命中译成 `T#`/`P#`/`C#`/`F#`。把问题做复杂、关键路径没有异常处理或降级、无依据或绕路、平铺直叙、只有 get/set 的哑对象、说不出换来什么的文件和行，都是拒过。
@@ -54,9 +55,9 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 4. 逐条扫 §2：命中必须当轮改掉，只记账不算过。
 5. 若有重构：核对 §3 满足条件与「两顶帽子」；混做加功能 / 无护栏绿 = 拒过。
 6. 五轴 + 栈指南。把命中与纠正写入 `review.md`「编码规范」节（模板见 review.example）；写五轴 / 栈指南 / 增强扫描。黄条不新编号，`I*` 的根据写 java.md 那一行的提示名。
-7. 验收看同一次 `coding-scan.sh` 末尾的 `problems` 和 `lang`。两边都是退出码 0，且插件 `convention` 为 0，才算这层扫完。退出码 2 是 `UNPROVEN`（插件文件不在）。`java_hygiene.py` 的 0、`python3 -m compileall` 的 0、以及「工具没装就跳过」，都不够。Java 插件另外看未收进 `try (` 的流、没有调用的私有方法、至少两处调用都是同一字面量的私有形参。Python 插件看 `== None`、裸 `except:`、可变默认参数。Go 插件看循环里的 `time.Sleep`。返回值丢掉与否要类型，正则分不清剩余参数和错误，不报。Shell 插件看分词位置上没加引号的变量；引号、命令替换里的引号、heredoc、`[[ ]]`、`$(( ))`，以及写了 `shellcheck disable=SC2086` 的那一处不算。JS/Vue 插件看 `==` / `!=`（已经是 `===` / `!==` 的不算）、`var`、以及 `v-for` 缺少 `key`。前端已有的 `lint-fix` 仍要跑。`delegation.py` 的 `java-hygiene` 只对照正则子集打回漏记的 Java `file:line`。
+7. 验收看同一次 `coding-scan.sh` 末尾的 `problems` 和 `lang`。两边都是退出码 0，且插件 `convention` 为 0，才算这层扫完。退出码 2 是 `UNPROVEN`（插件文件不在）。`java_hygiene.py` 的 0、`python3 -m compileall` 的 0、以及「工具没装就跳过」，都不够。Java 插件另外看未收进 `try (` 的流、没有调用的私有方法、至少两处调用都是同一字面量的私有形参。Python 插件看 `== None`、裸 `except:`、可变默认参数。Go 插件看循环里的 `time.Sleep`。返回值丢掉与否要类型，正则分不清剩余参数和错误，不报。Shell 插件看分词位置上没加引号的变量；引号、命令替换里的引号、heredoc、`[[ ]]`、`$(( ))`，以及写了 `shellcheck disable=SC2086` 的那一处不算。JS/Vue 插件看 `==` / `!=`（已经是 `===` / `!==` 的不算）、`var`、以及 `v-for` 缺少 `key`。五个插件共用 `scripts/plugin/canon_smells.py`，另看 §2 里形状可判的四条：`C22` 跨对象 getter 链（流式 / builder 链不算）、`C12` 函数名含 util / helper / manager / common / data / tmp、`C9` `if` 嵌套超两层（`} else if` 不算新层）、`C7` 吞掉失败的 `catch`（只认空块与 `return []` / `{}` / `false`；`null` / `None` 是「没找到」，不算）。Go 不查 `C7`（`if err != nil { return nil }` 是惯例），Python 不查 `C22`（没有 getter 惯例），Shell 只查 `C12`。`C2` / `C3` / `C25` 仍不进插件：它们的形状分不清正当写法，误报的代价高于漏报。前端已有的 `lint-fix` 仍要跑。`delegation.py` 的 `java-hygiene` 只对照正则子集打回漏记的 Java `file:line`。
 
-**例外（仅 S8 `review.report`）**：报告步允许只记账并标「待签收」，本步不改代码。`review.fix` 在 `accept_all_findings: true` 时改全部 `I*`；否则只改已签收 `I*`。全文 [workflow-code-review.md](../references/workflow-code-review.md) 与 [lite-change](../workflows/lite-change.yaml)。
+**例外（仅 S8 `review.report`）**：报告步只记账，标题用「待签收」，本步不改代码。待签收不是等人签收。`review.fix` 在 `accept_all_findings: true` 时改全部 `I*`；否则只改已签收 `I*`。全文 [workflow-code-review.md](../references/workflow-code-review.md) 与 [lite-change](../workflows/lite-change.yaml)。
 
 命令式代码读一遍说不出失败条件 = 还在兜底 = §2 命中。
 
@@ -101,10 +102,10 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 
 | 编号 | 含义 | 全表 |
 |------|------|------|
-| `T1`–`T13` / `A1`–`A8` / `F1`–`F7` | 架构原则 / 架构出门 / Agent 失败模式 | [canon.md](canon.md) |
-| `P1`–`P17` | 场景 → 模式 | [coding-tables.md](coding-tables.md) §1 |
-| `C1`–`C19` | 气味 → 纠正 | [coding-tables.md](coding-tables.md) §2 |
-| `R1`–`R6` | 重构满足条件 | [coding-tables.md](coding-tables.md) §3 |
+| `T1`–`T14` / `A1`–`A8` / `F1`–`F7` | 架构原则 / 架构出门 / Agent 失败模式 | [canon.md](canon.md) |
+| `P1`–`P19` | 场景 → 模式 | [coding-tables.md](coding-tables.md) §1 |
+| `C1`–`C31` | 气味 → 纠正 | [coding-tables.md](coding-tables.md) §2 |
+| `R1`–`R7` | 重构满足条件 | [coding-tables.md](coding-tables.md) §3 |
 
 仓内 `<票目录>/current.md`、clean-code 票、`review.md` **必须用上表编号**。禁止另起「表号 / 气味码 / 模式码」。  
 产品仓自己的编码页是四准则 / SPI / 运行时，不是第二套 P/C 表。
@@ -118,7 +119,7 @@ Java 四准则 / SPI 仍在该仓规约页。Qodana 表：[java.md](java.md)。�
 - [ ] §2 全表扫过，命中已改
 - [ ] §2.4 量化阈值已扫（函数≤20行 / 嵌套≤2 / 参数≤3 / 复杂度≤10 / 无三次重复 / 单文件≤400行 / 新增文件各有一种职责 / 触及文件说得出为何动 / 净增行可解释 / 一文件一理由）；超线已改或 `review.md` 写清理由并落 `C#`
 - [ ] `review.md` 写了 `审查者: idev-reviewer` 和带数字的 `文件与行数`
-- [ ] 若有结构调整：§3 R1–R6 满足，且 `review.md` 写了重构动机与护栏
+- [ ] 若有结构调整：§3 R1–R7 满足，且 `review.md` 写了重构动机与护栏
 - [ ] 已按 §3.8 做增强扫描（`coding-scan.sh` + 五轴 + 栈指南）；blocking 已改
 - [ ] `review.md` 用本页 `P#`/`C#`/`R#`；写了命中行与纠正；写了五轴 / 栈指南 / 增强扫描
 - [ ] `check-feature.sh <feature> code` 已 PASS（含编码规范弱门禁）

@@ -24,6 +24,8 @@ mkdir -p "${DST}/verify"
 
 FAILURES="${SCRATCH}/.selfcheck-failures"
 : > "${FAILURES}"
+UNRUN="${SCRATCH}/.selfcheck-unrun"
+: > "${UNRUN}"
 DONE=""
 
 cleanup() {
@@ -53,7 +55,9 @@ if ! python3 -c "import yaml" 2>/dev/null; then
   echo "BLOCKED python3 is missing pyyaml" >&2
   echo "  this run used $(python3 -c 'import sys; print(sys.executable)')" >&2
   echo "  install it for that interpreter, then run selfcheck again:" >&2
-  echo "    python3 -m pip install --user -r ${KERNEL}/requirements.txt" >&2
+  echo "  install it for that interpreter — the command is in that file's header," >&2
+  echo "  including the extra flag homebrew's PEP 668 python needs:" >&2
+  echo "    ${KERNEL}/requirements.txt" >&2
   exit 2
 fi
 echo "OK  preflight"
@@ -108,6 +112,112 @@ run() {
   "${CHECK[@]}" --repo "${FIX}" --feature "${FEATURE}" --stage "${stage}"
 }
 
+# A negative lock that only looks at the exit code passes for any failure,
+# including ones with nothing to do with what it guards. That is not
+# hypothetical — the preflight above exists because one global cause
+# (python3 without pyyaml) made every one of these pass at once, each for
+# the wrong reason, and the comment there admits it. So name the reason the
+# lock is about and check the output for it. When it fails for something
+# else, print the FAIL lines: a negative lock that stopped testing its own
+# subject should say what it is testing instead.
+expect_fail() {
+  local stage="$1" want="$2" what="$3"
+  local out
+  if out=$(run "${stage}" 2>&1); then
+    fail "${what}"
+    return
+  fi
+  _reason_or_fail "${out}" "${want}" "${what}"
+}
+
+# Same rule, for the negative locks that run their own command instead of
+# going through run() — a subshell, or one carrying its own env assignment,
+# neither of which can be handed over as argv. `aligned forge` below has
+# done this by hand since it was written; this is that shape, named.
+expect_fail_sh() {
+  local want="$1" what="$2" code="$3"
+  local out
+  if out=$(eval "${code}" 2>&1); then
+    fail "${what}"
+    return
+  fi
+  _reason_or_fail "${out}" "${want}" "${what}"
+}
+
+_reason_or_fail() {
+  local out="$1" want="$2" what="$3"
+  printf '%s' "${out}" | grep -q -- "${want}" && return
+  printf '%s\n' "${out}" | grep -E '^(FAIL|BLOCKED|ERROR)' | sed 's/^/       /'
+  fail "${what} — it did fail, but not for ${want}"
+}
+
+# A test that skipped its cases is green for a reason that has nothing to do
+# with the code. Five locks (auto gate, hooks, record findings, step land,
+# idev bin) skip themselves when the Go toolchain is absent, and
+# `>/dev/null 2>&1` meant they did it in silence — failing visibly, like the
+# pyyaml outage did, is the better accident. So record what did not execute
+# and report it next to the verdict, where it cannot be scrolled past.
+# Which tests need this is not remembered: test-roster.py fails any file
+# that can skip while selfcheck still mutes it.
+run_test() {
+  local script="$1"
+  local out ran sk
+  if ! out=$(python3 "${KERNEL}/scripts/${script}" 2>&1); then
+    printf '%s\n' "${out}" | tail -20
+    return 1
+  fi
+  sk=$(printf '%s' "${out}" | grep -oE 'skipped=[0-9]+' | grep -oE '[0-9]+' | head -1)
+  [ -n "${sk}" ] || return 0
+  ran=$(printf '%s' "${out}" | grep -oE '^Ran [0-9]+' | grep -oE '[0-9]+' | head -1)
+  if [ -n "${ran}" ] && [ "${sk}" -ge "${ran}" ]; then
+    unrun "${script}: all ${ran} cases skipped, so this lock did not run"
+  else
+    unrun "${script}: ${sk} of ${ran:-?} cases skipped"
+  fi
+  return 0
+}
+
+# A lock that did not execute. Not a failure — a missing optional dependency
+# is allowed — but it must not read as a pass either.
+unrun() {
+  echo "selfcheck SKIP: $*" >&2
+  printf '%s\n' "$*" >> "${UNRUN}"
+}
+
+# CI's python job runs these three; nothing local did. healthcheck has
+# refs-check, but nothing runs healthcheck either. 0.7 seconds for all
+# three, and they catch the cheapest failures there are: a script that does
+# not parse, an agent definition out of step with the kind table, a doc link
+# pointing at nothing. First, for the same reason go build is near-first.
+echo "=== lock: scripts parse, agents and refs agree ==="
+bash "${KERNEL}/scripts/syntax-check.sh" >"${SCRATCH}/idev-syntax.out" 2>&1 \
+  || { tail -20 "${SCRATCH}/idev-syntax.out"; fail "a script does not parse (bash scripts/syntax-check.sh)"; }
+python3 "${KERNEL}/scripts/agents-check.py" >"${SCRATCH}/idev-agents.out" 2>&1 \
+  || { tail -20 "${SCRATCH}/idev-agents.out"; fail "agent definitions or the kind table broke (python3 scripts/agents-check.py)"; }
+bash "${KERNEL}/scripts/refs-check.sh" >"${SCRATCH}/idev-refs2.out" 2>&1 \
+  || { tail -20 "${SCRATCH}/idev-refs2.out"; fail "a documentation cross-reference broke (bash scripts/refs-check.sh)"; }
+echo "OK  scripts, agents and refs"
+
+# CI builds, vets and tests the Go side; selfcheck never touched it, so a
+# compile error or a broken Go test was a push away from being noticed. That
+# is not hypothetical: `TestPythonChecksAreEitherPortedOrListedAsDeferred`
+# was red on HEAD — two Python checks ported to neither the Go set nor the
+# deferred list — and nothing local would have said so. 23 seconds for all
+# three. `-race` stays in CI; this is the fast lane.
+echo "=== lock: the Go side builds, vets and tests ==="
+if command -v go >/dev/null 2>&1; then
+  (cd "${KERNEL}" && go build ./...) >"${SCRATCH}/idev-go.out" 2>&1 \
+    || { tail -20 "${SCRATCH}/idev-go.out"; fail "go build failed (go build ./...)"; }
+  (cd "${KERNEL}" && go vet ./...) >"${SCRATCH}/idev-go.out" 2>&1 \
+    || { tail -20 "${SCRATCH}/idev-go.out"; fail "go vet failed (go vet ./...)"; }
+  (cd "${KERNEL}" && go test -count=1 ./...) >"${SCRATCH}/idev-go.out" 2>&1 \
+    || { grep -E '^(---|FAIL|\s+[a-z_]+\.go:)' "${SCRATCH}/idev-go.out" | head -20
+         fail "go test failed (go test ./...)"; }
+  echo "OK  go build, vet and test"
+else
+  unrun "go build / vet / test: no go toolchain"
+fi
+
 echo "=== positive stages ==="
 for s in req-review req arch verify-plan code ops; do
   echo "--- $s ---"
@@ -119,14 +229,14 @@ python3 - <<PY
 from pathlib import Path
 Path("${DST}/design.md").rename(Path("${DST}/design.md.bak"))
 PY
-if run arch; then fail "expected FAIL when design.md is missing"; fi
+expect_fail arch "design.md" "expected FAIL when design.md is missing"
 python3 - <<PY
 from pathlib import Path
 Path("${DST}/design.md.bak").rename(Path("${DST}/design.md"))
 PY
 
 echo "=== negative: test stage with mode=selftest ==="
-if run test; then fail "expected FAIL on test stage when plan.mode is selftest"; fi
+expect_fail test "selftest" "expected FAIL on test stage when plan.mode is selftest"
 
 echo "=== positive: test stage with mode=test ==="
 python3 - <<PY
@@ -152,7 +262,7 @@ from pathlib import Path
 p = Path("${DST}/verify/plan.yaml")
 p.write_text(p.read_text().replace("mode: selftest", "mode: test", 1))
 PY
-if run test; then fail "expected FAIL when unproven surfaces missing"; fi
+expect_fail test "unproven" "expected FAIL when unproven surfaces missing"
 python3 - <<PY
 from pathlib import Path
 import shutil
@@ -166,7 +276,7 @@ import shutil
 shutil.copy(Path("${DST}/baseline.yaml"), Path("${DST}/baseline.yaml.bak"))
 Path("${DST}/baseline.yaml").write_text("sealed: [\n")
 PY
-if run req-review; then fail "expected FAIL on invalid baseline YAML"; fi
+expect_fail req-review "while parsing" "expected FAIL on invalid baseline YAML"
 python3 - <<PY
 from pathlib import Path
 Path("${DST}/baseline.yaml").write_text(Path("${DST}/baseline.yaml.bak").read_text())
@@ -178,7 +288,7 @@ python3 - <<PY
 from pathlib import Path
 Path("${DST}/deliver-eval.md").unlink()
 PY
-if run code; then fail "expected FAIL when deliver-eval.md missing"; fi
+expect_fail code "deliver-eval" "expected FAIL when deliver-eval.md missing"
 python3 - <<PY
 from pathlib import Path
 import shutil
@@ -197,7 +307,7 @@ if start >= 0 and end > start:
 else:
     raise SystemExit("selfcheck fixture missing 编码规范 section")
 PY
-if run code; then fail "expected FAIL when review.md missing 编码规范"; fi
+expect_fail code "编码规范" "expected FAIL when review.md missing 编码规范"
 python3 - <<PY
 from pathlib import Path
 import shutil
@@ -210,7 +320,7 @@ python3 - <<PY
 from pathlib import Path
 Path("${DST}/review.md").write_text("# R\n\n## 编码规范\n\n- 场景命中: P?\n- 气味命中: C?\n- 纠正:\n\n## 本轮允许改的路径\n\n")
 PY
-if run code; then fail "expected FAIL on P?/C? placeholders"; fi
+expect_fail code "P?" "expected FAIL on P?/C? placeholders"
 python3 - <<PY
 from pathlib import Path
 import shutil
@@ -224,7 +334,7 @@ p = Path("${DST}/review.md")
 t = p.read_text()
 p.write_text(t.replace("- 重构: 无", "- 重构: 有（预备式）", 1))
 PY
-if run code; then fail "expected FAIL on refactor without guard"; fi
+expect_fail code "护栏" "expected FAIL on refactor without guard"
 python3 - <<PY
 from pathlib import Path
 import shutil
@@ -237,7 +347,7 @@ from pathlib import Path
 p = Path("${DST}/req.yaml")
 p.write_text(p.read_text().split("  - id: no-replay-change")[0])
 PY
-if run req; then fail "expected FAIL after dropping B3"; fi
+expect_fail req "B3" "expected FAIL after dropping B3"
 
 python3 - <<PY
 from pathlib import Path
@@ -255,7 +365,7 @@ p.write_text(p.read_text().replace(
     1,
 ))
 PY
-if run verify-plan; then fail "expected FAIL on rewritten plan.goal"; fi
+expect_fail verify-plan "goal" "expected FAIL on rewritten plan.goal"
 
 python3 - <<PY
 from pathlib import Path
@@ -267,7 +377,7 @@ Path("${DST}/verify/plan.yaml").write_text(text)
 PY
 
 echo "=== negative: PASS with evidence not run ==="
-if run verify-plan; then fail "expected FAIL on PASS + not run"; fi
+expect_fail verify-plan "PASS without run evidence" "expected FAIL on PASS + not run"
 
 python3 - <<PY
 from pathlib import Path
@@ -279,7 +389,7 @@ p.write_text(p.read_text().replace("kind: feature", "kind: unknown", 1))
 PY
 
 echo "=== negative: ops kind unknown ==="
-if run ops; then fail "expected FAIL on kind=unknown"; fi
+expect_fail ops "unknown" "expected FAIL on kind=unknown"
 
 python3 - <<PY
 from pathlib import Path
@@ -289,7 +399,7 @@ Path("${DST}/ops.yaml").write_text(text)
 PY
 
 echo "=== negative: onboard without handoff ==="
-if run ops; then fail "expected FAIL on onboard without handoff"; fi
+expect_fail ops "handoff" "expected FAIL on onboard without handoff"
 
 python3 - <<PY
 from pathlib import Path
@@ -309,7 +419,7 @@ p.write_text(p.read_text().replace(
     1,
 ))
 PY
-if run req; then fail "expected FAIL on slice must drift"; fi
+expect_fail req "slice" "expected FAIL on slice must drift"
 python3 - <<PY
 from pathlib import Path
 import shutil
@@ -327,7 +437,7 @@ if start < 0 or end < start:
     raise SystemExit("selfcheck fixture missing semantic_gate")
 p.write_text(text[:start] + text[end:])
 PY
-if run req; then fail "expected FAIL when semantic_gate missing"; fi
+expect_fail req "semantic_gate" "expected FAIL when semantic_gate missing"
 python3 - <<PY
 from pathlib import Path
 import shutil
@@ -345,7 +455,7 @@ Path("${DST}/unproven.md").write_text(
     "- dimension: ui-prototype\n  reason: none\n"
 )
 PY
-if run test; then fail "expected FAIL when boundary surface missing"; fi
+expect_fail test "boundary" "expected FAIL when boundary surface missing"
 python3 - <<PY
 from pathlib import Path
 import shutil
@@ -360,7 +470,7 @@ mkdir -p "${FIX}/.idev"
 printf '%s\n' 'schema_version: 1' 'marker: idev' 'id: acme' 'evolve: pilot' > "${FIX}/.idev/marker.yaml"
 printf '%s\n' 'id: acme' 'required:' '  - {label: onboard, names: [acme-onboard]}' > "${FIX}/.idev/handoff.yaml"
 rm -rf "${FIX}/.cursor/skills/acme-onboard"
-if IDEV_OUTBOUND_NO_HOME=1 run ops; then fail "expected FAIL when the product handoff skill is missing"; fi
+expect_fail_sh "handoff" "expected FAIL from check-feature when the product handoff skill is missing" 'IDEV_OUTBOUND_NO_HOME=1 run ops'
 rm -f "${FIX}/.idev/handoff.yaml" "${FIX}/.idev/marker.yaml"
 
 echo "=== positive: product without handoff does not require another product's skills ==="
@@ -374,9 +484,7 @@ bash "${ROOT}/outbound-skills-check.sh" --repo "${FIX}" \
 echo "=== negative: outbound-skills-check without the product skill ==="
 printf '%s\n' 'schema_version: 1' 'marker: idev' 'id: acme' 'evolve: pilot' > "${FIX}/.idev/marker.yaml"
 printf '%s\n' 'id: acme' 'required:' '  - {label: onboard, names: [acme-onboard]}' > "${FIX}/.idev/handoff.yaml"
-if IDEV_OUTBOUND_NO_HOME=1 bash "${ROOT}/outbound-skills-check.sh" --repo "${FIX}"; then
-  fail "expected FAIL when the product handoff skill is missing"
-fi
+expect_fail_sh "handoff" "expected FAIL from check-feature when the product handoff skill is missing" 'IDEV_OUTBOUND_NO_HOME=1 bash "${ROOT}/outbound-skills-check.sh" --repo "${FIX}"'
 rm -f "${FIX}/.idev/handoff.yaml" "${FIX}/.idev/marker.yaml"
 
 TRACE=(python3 "${ROOT}/trace.py")
@@ -395,7 +503,7 @@ text = Path("${KERNEL}/references/trace.example.yaml").read_text()
 text = text.replace('why: "deliver.yaml.stage=code; user asked to implement include paths, not a phenomenon."', "why: \"\"", 1)
 Path("${BAD}").write_text(text)
 PY
-if "${TRACE[@]}" check "${BAD}"; then fail "expected FAIL on empty route.why"; fi
+expect_fail_sh "route.why empty" "expected FAIL on empty route.why" '"${TRACE[@]}" check "${BAD}"'
 
 echo "=== negative: v2 missing thinking.summary ==="
 python3 - <<PY2
@@ -404,7 +512,7 @@ text = Path("${KERNEL}/references/trace.example.yaml").read_text()
 text = text.replace('summary: "看到 stage=code 与「补测试」诉求；排除 ops（无现象）与直接 verify（plan 未 accepted）；先走 deliver/code，并打开 java 规约。"', 'summary: ""', 1)
 Path("${BAD}").write_text(text)
 PY2
-if "${TRACE[@]}" check "${BAD}"; then fail "expected FAIL on empty thinking.summary"; fi
+expect_fail_sh "thinking.summary empty" "expected FAIL on empty thinking.summary" '"${TRACE[@]}" check "${BAD}"'
 
 echo "=== positive: trace append + last ==="
 "${TRACE[@]}" append "${KERNEL}/references/trace.example.yaml" >/dev/null \
@@ -534,11 +642,11 @@ skill = src.replace(
 )
 bad.joinpath("idev-trace-skill.yaml").write_text(skill)
 PYOBS
-if "${TRACE[@]}" check "${SCRATCH}/idev-trace-how.yaml"; then fail "expected FAIL on invoke.how"; fi
-if "${TRACE[@]}" check "${SCRATCH}/idev-trace-edge.yaml"; then fail "expected FAIL on one-sided hop"; fi
-if "${TRACE[@]}" check "${SCRATCH}/idev-trace-duration.yaml"; then fail "expected FAIL on duration_s"; fi
-if "${TRACE[@]}" check "${SCRATCH}/idev-trace-delegate.yaml"; then fail "expected FAIL on unknown delegate"; fi
-if "${TRACE[@]}" check "${SCRATCH}/idev-trace-skill.yaml"; then fail "expected FAIL on skill item without name"; fi
+expect_fail_sh "invoke.how unknown" "expected FAIL on invoke.how" '"${TRACE[@]}" check "${SCRATCH}/idev-trace-how.yaml"'
+expect_fail_sh "calls.from and calls.to" "expected FAIL on one-sided hop" '"${TRACE[@]}" check "${SCRATCH}/idev-trace-edge.yaml"'
+expect_fail_sh "duration_s" "expected FAIL on duration_s" '"${TRACE[@]}" check "${SCRATCH}/idev-trace-duration.yaml"'
+expect_fail_sh "decisions.delegate unknown" "expected FAIL on unknown delegate" '"${TRACE[@]}" check "${SCRATCH}/idev-trace-delegate.yaml"'
+expect_fail_sh "invoke.skills item missing name" "expected FAIL on skill item without name" '"${TRACE[@]}" check "${SCRATCH}/idev-trace-skill.yaml"'
 
 echo "=== positive: observation coverage is not a hard alarm ==="
 OBS_DIR="$(mktemp -d "${TMPDIR:-/tmp}/idev-trace-obs.XXXXXX")"
@@ -740,11 +848,13 @@ if rg -q '先走仓库 `joypaas-frontend-test`' \
   fail "plan-schema still treats joypaas-frontend-test as the only cookie skill"
 fi
 
-echo "=== lock: no module-level ledgers (only entry state/ledger.yaml) ==="
+echo "=== lock: no module-level ledgers (entry ledger stays local) ==="
+# state/ledger.yaml is the one local entry ledger, deliberately untracked below.
+# A clean checkout therefore has no file here; requiring one would contradict the
+# published-tree residue lock.
 for m in deliver verify ops docs; do
   [ ! -e "${KERNEL}/${m}/state/ledger.yaml" ] || fail "module ledger must not exist: ${m}/state/ledger.yaml"
 done
-[ -f "${KERNEL}/state/ledger.yaml" ] || fail "missing entry ledger state/ledger.yaml"
 
 echo "=== positive: unknown IDEV_PILOT does not require a kernel pack ==="
 IDEV_PILOT=example IDEV_OUTBOUND_NO_HOME=1 bash "${ROOT}/outbound-skills-check.sh" --repo "${FIX}" \
@@ -823,16 +933,14 @@ echo "=== lock: product intermediates stay out of the kernel ==="
 SINK="${KERNEL}/scripts/lib/product_sink.py"
 PROMO="${KERNEL}/scripts/kernel-promote-check.sh"
 HERE="$(python3 "$SINK" traces)"
-# product_sink.kernel_root() resolves symlinks, so when ~/.cursor/skills/idev
-# is a symlink into a checkout this comes back as the physical path and never
-# contains ".cursor/skills/idev". Accept either shape — what this lock is
-# really asserting is that a conductor cwd sinks into the kernel's own
-# state/traces rather than into a product repo.
-case "$HERE" in
-  */.cursor/skills/idev/state/traces) ;;
-  */idev/state/traces) ;;
-  *) fail "conductor cwd should sink traces to kernel state/traces, got $HERE" ;;
-esac
+# product_sink.kernel_root() resolves symlinks. Compare against the physical
+# kernel root itself; matching a directory *name* such as `*/idev` would make
+# the lock fail in any clean worktree whose checkout directory is not called
+# `idev`.
+KERNEL_PHYS="$(cd "$KERNEL" && pwd -P)"
+if [ "$HERE" != "${KERNEL_PHYS}/state/traces" ]; then
+  fail "conductor cwd should sink traces to kernel state/traces, got $HERE"
+fi
 PREPO="$(mktemp -d "${TMPDIR:-/tmp}/idev-product.XXXXXX")"
 git -C "$PREPO" init -q
 PREPO="$(cd "$PREPO" && pwd -P)"
@@ -880,12 +988,25 @@ grep -q 'id: kept' "$PREPO/.idev/marker.yaml" || { rm -rf "$PREPO"; fail "later 
 grep -q 'evolve: pilot' "$PREPO/.idev/marker.yaml" || { rm -rf "$PREPO"; fail "later save must not rewrite evolve"; }
 rm -rf "$PREPO"
 printf '%s\n' 'routes stay generic' > "${TMPDIR:-/tmp}/idev-promote-ok.md"
-bash "$PROMO" "${TMPDIR:-/tmp}/idev-promote-ok.md" >/dev/null \
-  || fail "kernel-promote-check should pass a generic draft"
 printf '%s\n' 'call JoypaasAppService here' > "${TMPDIR:-/tmp}/idev-promote-bad.md"
-if bash "$PROMO" "${TMPDIR:-/tmp}/idev-promote-bad.md" >/dev/null; then
+# The negative lock is only meaningful when a pilot actually supplies strip
+# tokens. A clean checkout has no ignored outbound install ledger, and reading
+# one would make this lock depend on the machine instead of the tree. Build a
+# one-repo pilot in temporary storage for both sides of the check.
+PROMO_PILOT="$(mktemp -d "${TMPDIR:-/tmp}/idev-promote-pilot.XXXXXX")"
+mkdir -p "${PROMO_PILOT}/.idev"
+printf '%s\n' 'schema_version: 1' 'marker: idev' 'id: selfcheck-pilot' 'evolve: pilot' \
+  > "${PROMO_PILOT}/.idev/marker.yaml"
+printf '%s\n' 'JoypaasAppService' > "${PROMO_PILOT}/.idev/strip-tokens.txt"
+if ! IDEV_DISCOVER_ROOTS="$PROMO_PILOT" bash "$PROMO" "${TMPDIR:-/tmp}/idev-promote-ok.md" >/dev/null; then
+  rm -rf "$PROMO_PILOT"
+  fail "kernel-promote-check should pass a generic draft"
+fi
+if IDEV_DISCOVER_ROOTS="$PROMO_PILOT" bash "$PROMO" "${TMPDIR:-/tmp}/idev-promote-bad.md" >/dev/null; then
+  rm -rf "$PROMO_PILOT"
   fail "kernel-promote-check should reject an unstripped product draft"
 fi
+rm -rf "$PROMO_PILOT"
 echo "OK  product .idev sink + kernel promote gate"
 
 echo "=== lock: stage extensions follow the marker ==="
@@ -1307,9 +1428,7 @@ cases:
     status: FAIL
     evidence: x
 YAML
-if (cd "$PROMOTE_FIX" && bash "${ROOT}/../verify/scripts/promote.sh" promo); then
-  fail "expected promote refuse on FAIL cases"
-fi
+expect_fail_sh "plan has FAIL cases" "expected promote refuse on FAIL cases" '(cd "$PROMOTE_FIX" && bash "${ROOT}/../verify/scripts/promote.sh" promo)'
 cat > "$PROMOTE_FIX/docs/task/promo/verify/plan.yaml" <<'YAML'
 schema_version: 1
 feature: promo
@@ -1402,17 +1521,13 @@ items:
 review_questions: []
 objections: []
 YAML
-if (cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review); then
-  fail "expected sealed baseline without grill.md to fail"
-fi
+expect_fail_sh "grill.md" "expected sealed baseline without grill.md to fail" '(cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review)'
 cat > "$GRILL/docs/task/grill-demo/grill.md" <<'EOF'
 convention: grilling
 frontier: empty
 shared_understanding: true
 EOF
-if (cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review); then
-  fail "expected keyword-only grill.md to fail"
-fi
+expect_fail_sh "grill" "expected keyword-only grill.md to fail" '(cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review)'
 cat > "$GRILL/docs/task/grill-demo/grill.md" <<'EOF'
 convention: grilling
 The phrase frontier: empty appears, and shared_understanding: true is quoted.
@@ -1420,9 +1535,7 @@ The phrase frontier: empty appears, and shared_understanding: true is quoted.
 ❓ **Q1** - **x**: y
 ➡️ z
 EOF
-if (cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review); then
-  fail "expected prose mentioning frontier to fail"
-fi
+expect_fail_sh "frontier" "expected prose mentioning frontier to fail" '(cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review)'
 cat > "$GRILL/docs/task/grill-demo/grill.md" <<'EOF'
 convention: grilling
 frontier: open
@@ -1431,9 +1544,7 @@ shared_understanding: false
 ❓ **Q1** - **x**: y
 ➡️ z
 EOF
-if (cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review); then
-  fail "expected open grill.md to block a sealed baseline"
-fi
+expect_fail_sh "grill" "expected open grill.md to block a sealed baseline" '(cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review)'
 mkdir -p "$GRILL/docs/spec"
 printf 'restates the sealed baseline\n' > "$GRILL/docs/spec/grill-demo.md"
 cat > "$GRILL/docs/task/grill-demo/grill.md" <<'EOF'
@@ -1443,9 +1554,7 @@ shared_understanding: true
 
 note ❓ then ➡️
 EOF
-if (cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review); then
-  fail "expected stray question marks to fail"
-fi
+expect_fail_sh "question" "expected stray question marks to fail" '(cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review)'
 cat > "$GRILL/docs/task/grill-demo/grill.md" <<'EOF'
 convention: grilling
 frontier: empty
@@ -1455,9 +1564,7 @@ frontier: open
 ❓ **Q1** - **scope**: still asking
 ➡️ unsure
 EOF
-if (cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review); then
-  fail "expected a second frontier line to fail"
-fi
+expect_fail_sh "frontier" "expected a second frontier line to fail" '(cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review)'
 cat > "$GRILL/docs/task/grill-demo/grill.md" <<'EOF'
 convention: grilling
 frontier: empty
@@ -1473,9 +1580,7 @@ from pathlib import Path
 p = Path("$GRILL/docs/task/grill-demo/baseline.yaml")
 p.write_text(p.read_text().replace("review_questions: []", "review_questions:\n  - id: Q1\n    status: open\n    text: still open"))
 PY
-if (cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review); then
-  fail "expected open baseline question to fail even when grill.md is closed"
-fi
+expect_fail_sh "question" "expected open baseline question to fail even when grill.md is closed" '(cd "$GRILL" && python3 "${ROOT}/check-feature.py" --repo "$GRILL" --feature grill-demo --stage req-review)'
 rm -rf "$GRILL"
 echo "OK  grill.md"
 
@@ -1806,19 +1911,20 @@ WFU="$(mktemp -d)"
   printf '%s\n' "$out" | grep -q 'auto_tiers needs a gate a machine check can pass' || exit 32
 ) || { code=$?; rm -rf "$WFU"; fail "workflow.py AUTO gate broke (case $code)"; }
 rm -rf "$WFU"
-python3 "${KERNEL}/scripts/test_auto_gate.py" >/dev/null 2>&1 \
+run_test test_auto_gate.py \
   || fail "record AUTO passed a gate on something other than the check it ran (python3 scripts/test_auto_gate.py)"
-python3 "${KERNEL}/scripts/test_hooks.py" >/dev/null 2>&1 \
+run_test test_hooks.py \
   || fail "client hooks install or the four oversteps broke (python3 scripts/test_hooks.py)"
 # Fixture: missing log → 100%. Live ~/.idev is not consulted (may predate §4).
 IDEV_DATA="$(mktemp -d "${TMPDIR:-/tmp}/idev-timing.XXXXXX")" \
   python3 "${KERNEL}/hooks/timing_coverage.py" >/dev/null 2>&1 \
   || fail "subagent-stops timing coverage lock broke (hooks/timing_coverage.py)"
 if python3 -c "import jsonschema" 2>/dev/null; then
-  python3 "${KERNEL}/scripts/test_delegation_return.py" >/dev/null 2>&1 \
+  run_test test_delegation_return.py \
     || fail "structured delegation-return schema check broke (python3 scripts/test_delegation_return.py)"
 else
-  echo "SKIP delegation-return schema (no jsonschema: python3 -m pip install --user jsonschema)"
+  echo "SKIP delegation-return schema (no jsonschema: install per ${KERNEL}/requirements.txt)"
+  unrun "delegation-return schema: no jsonschema (install per requirements.txt)"
 fi
 python3 "${KERNEL}/scripts/test_outcome_metrics.py" >/dev/null 2>&1 \
   || fail "outcome-metrics WIP/rework counts broke (python3 scripts/test_outcome_metrics.py)"
@@ -1876,7 +1982,7 @@ python3 "${KERNEL}/scripts/test_signals.py" >/dev/null 2>&1 \
   || fail "signal / answer rules broke (python3 scripts/test_signals.py)"
 python3 "${KERNEL}/scripts/test_nudge.py" >/dev/null 2>&1 \
   || fail "a nudge recorded a stop or asked again (python3 scripts/test_nudge.py)"
-python3 "${KERNEL}/scripts/test_process_eval.py" >/dev/null 2>&1 \
+run_test test_process_eval.py \
   || fail "process-eval corrected a real hold or edited the skill (python3 scripts/test_process_eval.py)"
 python3 "${KERNEL}/scripts/test_staffing.py" >/dev/null 2>&1 \
   || fail "staffing mode or the role check on a gate broke (python3 scripts/test_staffing.py)"
@@ -1884,9 +1990,9 @@ python3 "${KERNEL}/scripts/test_concurrency.py" >/dev/null 2>&1 \
   || fail "concurrent start or decide lost the single-writer rule (python3 scripts/test_concurrency.py)"
 python3 "${KERNEL}/scripts/test_record_paths.py" >/dev/null 2>&1 \
   || fail "a guard reads delegation records from somewhere the writer does not put them (python3 scripts/test_record_paths.py)"
-python3 "${KERNEL}/scripts/test_record_findings.py" >/dev/null 2>&1 \
+run_test test_record_findings.py \
   || fail "record PASS ignored the delegation's machine checks, or a verification took an attempt (python3 scripts/test_record_findings.py)"
-python3 "${KERNEL}/scripts/test_idev_bin.py" >/dev/null 2>&1 \
+run_test test_idev_bin.py \
   || fail "the idev binary resolver ignored IDEV_BIN or ran a stale build (python3 scripts/test_idev_bin.py)"
 python3 "${KERNEL}/scripts/test_report_lines.py" >/dev/null 2>&1 \
   || fail "a report field reader took its value from the next line (python3 scripts/test_report_lines.py)"
@@ -1896,7 +2002,7 @@ python3 "${KERNEL}/scripts/test_suggest_review.py" >/dev/null 2>&1 \
   || fail "SUGGEST naming one kernel thing twice no longer raises a review signal (python3 scripts/test_suggest_review.py)"
 python3 "${KERNEL}/scripts/test_trace_derive.py" >/dev/null 2>&1 \
   || fail "trace append no longer lists the round's delegations from the records, or the signoff check reads words again (python3 scripts/test_trace_derive.py)"
-python3 "${KERNEL}/scripts/test_step_land.py" >/dev/null 2>&1 \
+run_test test_step_land.py \
   || fail "workflow.py step / land no longer carry a delegated step from brief to record (python3 scripts/test_step_land.py)"
 python3 "${KERNEL}/scripts/test_browser_program.py" >/dev/null 2>&1 \
   || fail "a browser program ran twice, or a click return counted as done (python3 scripts/test_browser_program.py)"
@@ -1916,7 +2022,10 @@ if command -v go >/dev/null 2>&1; then
     || fail "lease channel broke (bash test/lease-channel.sh)"
   echo "OK  gate and lease channels"
 else
-  echo "SKIP gate channel (no go toolchain)"
+  # This lock has always guarded on `go`, and always said so — but a line
+  # 2000 lines up is not a verdict. Route it through the same summary
+  # as every other lock that did not execute.
+  unrun "gate/lease channel: no go toolchain"
 fi
 
 echo "=== lock: a turn speaks before it stalls ==="
@@ -1962,6 +2071,58 @@ python3 "${KERNEL}/scripts/cold-start-size.py" --kernel "${KERNEL}" >"${SCRATCH}
   || { cat "${SCRATCH}/idev-cold-start.out"; fail "conductor cold start over budget (python3 scripts/cold-start-size.py)"; }
 echo "OK  cold start"
 
+# §2's own heading promises 「不依赖你"想没想到"」. A rule reachable only by
+# someone who already decided to open it does not keep that promise. Same
+# family as refs-check and agents-check: the kernel's own sources agreeing
+# with each other, not a judgement about anyone's code.
+echo "=== lock: every rule can be reached without remembering it ==="
+python3 "${KERNEL}/scripts/trigger-check.py" --kernel "${KERNEL}" >"${SCRATCH}/idev-trigger.out" 2>&1 \
+  || { cat "${SCRATCH}/idev-trigger.out"; fail "a canon rule has no §2 signal and no §4 thought (python3 scripts/trigger-check.py)"; }
+echo "OK  rule reachability"
+
+# The locks above name their tests one by one, so each failure can say what
+# broke. That leaves the roster itself to memory: on 2026-11-03, 23 of 47
+# test files were named nowhere, and one of them held two real cases and no
+# `unittest.main()` — passing because running it ran nothing. Same family as
+# rule reachability: a check reachable only by someone who thought of it.
+echo "=== lock: every test is reached, and runs when it is ==="
+python3 "${KERNEL}/scripts/test-roster.py" --kernel "${KERNEL}" >"${SCRATCH}/idev-test-roster.out" 2>&1 \
+  || { cat "${SCRATCH}/idev-test-roster.out"; fail "a test is named nowhere, asserts nothing, or broke (python3 scripts/test-roster.py)"; }
+echo "OK  test roster"
+
+# record.sh calls itself the safety net for the whole migration — "Without
+# them 'the Go port behaves the same' is an opinion" — and nothing ran it.
+# README pairs it with this script as 「两本引擎账…两本都要绿」, which holds
+# only as long as someone remembers the second book exists. It did drift:
+# on 2026-11-04 `--verify` reported 10 of 53 different, and two of those had
+# been unreproducible by construction since `trace append` started reading
+# the caller's own transcript. 13 seconds is a cheap way to not find that
+# out by accident.
+echo "=== lock: the golden snapshots still match ==="
+bash "${KERNEL}/test/golden/record.sh" --verify >"${SCRATCH}/idev-golden.out" 2>&1 \
+  || { tail -30 "${SCRATCH}/idev-golden.out"; fail "golden snapshots drifted (bash test/golden/record.sh --verify)"; }
+echo "OK  golden snapshots"
+
+# 486 assertions over the delegation layer's scripts and contracts, no model
+# needed, 27 seconds. CI ran it as a step of its own right after this script;
+# nothing local did, so a contract broken here waited for a push to surface.
+# Folded in rather than listed in two places — CI gets it by running selfcheck.
+echo "=== lock: delegation layer smoke ==="
+bash "${KERNEL}/scripts/agent-smoke.sh" >"${SCRATCH}/idev-smoke.out" 2>&1 \
+  || { tail -30 "${SCRATCH}/idev-smoke.out"; fail "agent-smoke broke (bash scripts/agent-smoke.sh)"; }
+echo "OK  delegation smoke"
+
+
 DONE=1
 [ ! -s "${FAILURES}" ] || exit 1
-echo "selfcheck PASS"
+# A pass with locks that never executed is not the same pass. Say which, and
+# say it here rather than 2000 lines up where nobody is still reading.
+if [ -s "${UNRUN}" ]; then
+  echo
+  echo "这些锁本次没有执行（依赖缺失，不等于通过）："
+  sed 's/^/  - /' "${UNRUN}"
+  echo
+fi
+# The runtime is part of the verdict: a local gate nobody waits for is a
+# gate nobody runs. Print it so the next lock added here shows its cost.
+echo "selfcheck PASS (${SECONDS}s)"

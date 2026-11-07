@@ -9,7 +9,7 @@ aliases:
   - lite-change
   - 对这个 diff 走轻量
 summary: >-
-  小改捷径（不改 goal/baseline）：定界论证 → 编码纪律 → 同一波起草用例、自测、独立审查、验收索引 → 改掉 I* → 复跑并回写用例状态。计划无信号则自动过，不单独请签。审查不另设人闸。跑完停在实现审核；通过后才走 test-pack。禁止跳签、改密封正文、自动 promote。产线自己的小改踩坑写在该仓 .idev/pack/，挂到 extensions.yaml 的 code 阶段，由 session-context 打开。
+  小改捷径（不改 goal/baseline）：范围谓词 → 编码纪律 → 同一波起草用例、自测、独立审查、验收索引 → 改掉 I* → 复跑并回写用例状态。计划无信号则自动过。审查不签收。检查通过就写实现审核并进入提测，不请人。禁止改密封正文、自动 promote。产线自己的小改踩坑写在该仓 .idev/pack/，挂到 extensions.yaml 的 code 阶段，由 session-context 打开。
 risk_tier: P1
 params:
   - name: feature
@@ -27,7 +27,7 @@ steps:
     kind: preflight.inputs
     label: 前置探针（票/路径/配方依赖可读；缺则 BLOCKED）
   - id: scope-guard
-    kind: route.s4
+    kind: scope.baseline
     label: 确认不改 goal/baseline；小范围论证后改码
   - id: code-pass
     kind: deliver.code_pass
@@ -73,7 +73,7 @@ steps:
     label: 审查修改之后复跑，回写 plan.yaml 的 status，并重写 selftest.md 与 accept.md
   - id: gate-review
     kind: human.gate
-    label: 实现审核（自测已跑完；确认后才提测，这里不签测试结果）
+    label: 实现审核（检查通过就写并进入提测，不请人，这里不签测试结果）
     with:
       will_write: ["deliver.semantic_gate.code", "deliver.stage=test"]
       proof: "check-feature code + stage-gate code；refresh 回写后的 PASS/FAIL/UNPROVEN"

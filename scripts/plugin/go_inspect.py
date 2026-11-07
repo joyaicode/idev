@@ -7,11 +7,16 @@ toolchain, and it does not download.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import source_diff  # noqa: E402
+import canon_smells  # noqa: E402
+
+_DECL = re.compile(r"\bfunc\s+(?:\([^)]*\)\s*)?(?P<name>\w+)\s*\(")
 
 
 def _mask(text: str) -> str:
@@ -90,6 +95,11 @@ def inspect_text(text: str, rel: str) -> list[tuple[str, int, str]]:
         elif pending and ch == "\n":
             pending = False
         i += 1
+    # C7 is not checked for Go: `if err != nil { return nil }` is the idiom,
+    # not a swallowed failure, and flagging it would drown the report.
+    hits.extend(canon_smells.chain_hits(masked, rel))
+    hits.extend(canon_smells.naming_hits(masked, rel, _DECL))
+    hits.extend(canon_smells.nesting_hits(masked, rel))
     return hits
 
 

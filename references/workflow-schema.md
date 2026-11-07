@@ -42,7 +42,7 @@
 | `branch` | 可选。`pass` / `fail` 指向后面的步骤 id。带 `group` 的步骤不能写，落点若在组里必须是该组第一步。`record` 按刚记下的状态跳过去，中间未完成的步骤记 `SKIPPED`。落点已经记完则拒绝。`FAIL` 同时写 `branch_to`，这一步不再把 run 停成 `blocked` |
 | `react` | 可选。这一步是动态关节。没有它，配方行为与以前相同。`human.gate` 和带 `group` 的步骤不能写。`use` / `tool_group` 上不能写，要改成员就用 `adjust` |
 
-组里多于一步未完成时，`next` 先打 `PARALLEL <group>`，再按配方顺序列出每个未完成成员。`record` 和 `delegate` 接受其中任一步。组后面的步骤要等组内全部记完。这一步已经有委派时，回报要有 `CHANGED`；列出 `writes` 之外的路径，`record` 拒绝。没改文件写 `CHANGED: 无`。波次打开时给票目录留一份哈希。之后票里多出来的、且不在这一波任一 `writes` 里的文件，`record` 也拒绝。`workflow.py delegate --open` 一次委派当前波里每一个 agent 步骤。
+组里多于一步未完成时，`next` 先打 `PARALLEL <group>`，再按配方顺序列出每个未完成成员。`record` 和 `delegate` 接受其中任一步。组后面的步骤要等组内全部记完。这一步已经有委派时，回报要有 `CHANGED`；列出 `writes` 之外的路径，`record` 拒绝。没改文件写 `CHANGED: 无`。波次打开时给票目录留一份哈希。之后票里多出来的、且不在这一波任一 `writes` 里的文件，`record` 也拒绝。`workflow.py delegate --open` 一次委派当前波里每一个 agent 步骤。`workflow.py drive` 打出 `PARALLEL` 时已经为每个执行者打出委派包，并跑过各自的 assess。
 
 `react` 把自由循环收成这一步声明的工具候选集。`next` 打出 `REACT candidates=… max_hops=… on_exhaust=… on_fail=…`，并打出可直接照抄的 `REACT_OPEN`、`REACT_ACT`、`REACT_OBSERVE`、`REACT_FINISH`、`REACT_SHOW`。这些行只打印，不执行工具。
 
@@ -57,9 +57,9 @@
 
 `use` 和 `tool_group` 可以带 `adjust`：`skip` 去掉成员，`replace` 只改成员的 `label` / `with` / `react`，`extend` 追加步骤（本身也可以是 `tool`、`tool_group` 或 `use`）。不写 `order` 时，追加接在剩下的成员后面。写了 `order` 就必须把剩下的成员和追加的步骤各列一次。引用自己、或 A 引用 B 再引用 A，都拒绝。嵌套超过 8 层拒绝。既有配方不写这些字段时，展开结果与原来的步骤相同。
 
-循环文件在 `state/react/<feature>--<step>.yaml`（产线是 `.idev/react/`）。`next` 的 `REACT_LOG` 是这个文件的路径；本轮 trace 的顶层 `react:` 抄它，`trace.py append` 把还没出现的跳抄进 `calls`（`kind: tool`，`args` 是登记的命令）。`react_loop.py show --feature <f>` 列出这个 feature 的循环。先打 `COUNT hops=<已用>/<上限>`，再逐跳打出 `HOP`、`WHY`、`RESULT`、`TOOL`、`LIMIT`。已用次数是记录里的跳数。这是回放记录，不重跑命令。脚本只校验和记跳，不调用模型，不改配方。用尽写 inbox 标签 `react-exhausted`。工具失败在 `on_fail` 不是 `skip` 时写 `react-tool-fail`，note 带 step、工具名和观察摘要。同类标签未消费地出现至少两次时，`evolve-review` 把它算作热标签并起草提案，提案里的「要改什么」仍待人填。出口码 3 的 stdout 以 `EXIT human` 或 `EXIT stop` 开头；码 2 是拒绝，文件不变。`start` 把配方文件的 sha256 前 16 位写入 run 的 `recipe_digest`。`next` 打 `DIGEST match`、`DIGEST drift` 或 `DIGEST missing`。drift 只说明文件已变，不改 run 里已经展开的步骤。有票且这一步声明了 `react` 时，`next` 再打 `LOOP absent`，或 `LOOP <status> hops=<已用>/<上限>`。已用和上限从循环文件数出。这行不挡步骤。步骤比对仍按展开后的 id 和 kind。
+循环文件在 `state/react/<feature>--<step>.yaml`（产线是 `.idev/react/`）。`next` 的 `REACT_LOG` 是这个文件的路径；本轮 trace 的顶层 `react:` 抄它，`trace.py append` 把还没出现的跳抄进 `calls`（`kind: tool`，`args` 是登记的命令）。`react_loop.py show --feature <f>` 列出这个 feature 的循环。先打 `COUNT hops=<已用>/<上限>`，再逐跳打出 `HOP`、`WHY`、`RESULT`、`TOOL`、`LIMIT`。已用次数是记录里的跳数。这是回放记录，不重跑命令。脚本只校验和记跳，不调用模型，不改配方。用尽写 inbox 标签 `react-exhausted`。工具失败在 `on_fail` 不是 `skip` 时写 `react-tool-fail`，note 带 step、工具名和观察摘要。同类标签未消费地出现至少两次时，`evolve-review` 把它算作热标签并起草提案，提案里的「要改什么」仍待人填。出口码 3 的 stdout 以 `EXIT human` 或 `EXIT stop` 开头；码 2 是状态不对，文件不变。候选之外的 `act` 记成 `UNKNOWN_TOOL` 或 `NOT_ADMITTED`，循环仍开着，不走 `on_fail`。`start` 把配方文件的 sha256 前 16 位写入 run 的 `recipe_digest`。`next` 打 `DIGEST match`、`DIGEST drift` 或 `DIGEST missing`。drift 只说明文件已变，不改 run 里已经展开的步骤。有票且这一步声明了 `react` 时，`next` 再打 `LOOP absent`，或 `LOOP <status> hops=<已用>/<上限>`。已用和上限从循环文件数出。这行不挡步骤。步骤比对仍按展开后的 id 和 kind。
 
-`verify.plan`、`verify.run`，以及写集不是单独一份 `review.md` 的 `review.report`，`next` 多打一行 `FANOUT_ASSESS`。这是提醒先跑 `scripts/fanout.py assess`，不是新步骤。`SERIAL` 时这一步仍只派一个 agent。`FANOUT` 时同一条消息派每个分片，并对每片 `delegate <step> --shard <id>`；那张验证租约只覆盖该片路径。分片只写 assess 给出的路径。assess 打出 `MERGE` 且没有 `SHARD` 时草稿已经齐了，只跑 `fanout.py merge`，不要再派执行者。合并之后这一步只 `record` 一次。根因用 `--activity rootcause`，不从 `route.s4` 自动打出来。写集已经是 `review.md` 的审查步骤不打这一行。
+`verify.plan`、`verify.run`，写集不是单独一份 `review.md` 的 `review.report`，以及 `deliver.code_pass` / `review.fix`，`next` 多打一行 `FANOUT_ASSESS`。这是提醒先跑 `scripts/fanout.py assess`，不是新步骤。`workflow.py drive` 停在单个执行者前会自己跑这条 assess：`SERIAL` 打出委派包，`FANOUT` 时为每片打出委派包并领该片租约。内核脚本的 `PREP` 已经跑完，日志路径在 `扫描:`。其它 `PREP` 仍留给导体先跑。`MERGE` 且没有 `SHARD` 时已经跑过 merge。一片的回报用 `workflow.py land <step> --shard <id>`。最后一片记下且没有打回时，merge 已经跑过。这一步仍只 `record` 一次。`SERIAL` 时这一步仍只派一个 agent。`FANOUT` 时同一条消息派每个分片，并对每片 `delegate <step> --shard <id>`；那张租约只覆盖该片路径。分片只写 assess 给出的路径。assess 打出 `MERGE` 且没有 `SHARD` 时草稿已经齐了，只跑 `fanout.py merge`，不要再派执行者。合并之后这一步只 `record` 一次。根因用 `--activity rootcause`，不从 `scope.baseline` 自动打出来。写集已经是 `review.md` 的审查步骤不打这一行。编码片只在 `include: true` 的路径分属至少两个顶层模块且写集不相交时拆开；`merge` 不改产品源码。
 
 ## kind 登记表（加行，不新开 Skill）
 
@@ -67,6 +67,7 @@
 | kind | 落到 | 说明 |
 |------|------|------|
 | `preflight.inputs` | — | S8 前置可读性探针：缺票/缺路径/缺巡检包 → BLOCKED 并列缺项；不改代码 |
+| `scope.baseline` | — | 小改范围谓词：密封基线的 goal / non_goal / sealed 与 HEAD 不一致就停。不派执行者。 |
 | `human.gate` | — | 检查通过就 `record PASS`，不另要确认；`label` 或 `with.will_write` 必须能还原一行 `将代写: …` + 证明上下文（见 chat-confirm） |
 | `shell.confirmed` | — | 仅跑人已在配方或本轮确认的一条命令 |
 | `tool.step` | — | 已登记工具的一步。next 打出 TOOL 命令，不执行 |
@@ -78,8 +79,8 @@
 | `docs.backfill` | docs/SKILL.md | 契约 / 经验回填（S5）。打开该技能，再按 setup-agents-docs 归类 |
 | `docs.changelog` | docs/SKILL.md | 变更说明 / 任务小结。打开该技能后写入解析出的票目录 |
 | `review.report` | conventions/coding | 认语言 + 出审查报告；**不改代码**；命中标待签收（C14 例外） |
-| `review.fix` | conventions/coding | 交付主路径 with.accept_all_findings 时改全部 I*；code-review 仍只改已签收 I* 与显式纳入的 O*。此步恢复当轮必改 |
-| `verify.plan` | verify | 起草/调整 plan；请人 accepted（已 accepted 且未改用例 → 跳过，H4） |
+| `review.fix` | conventions/coding | with.accept_all_findings 时改全部 I*（lite-change 与 code-review 都带这个字段）。没有该字段时才只改已签收 I*。此步恢复当轮必改 |
+| `verify.plan` | verify | 起草/调整 plan。无 SIGNAL 则 AUTO，不请人（已 accepted 且未改用例 → 跳过，H4） |
 | `verify.run` | verify | 跑已 accepted 且勾选的 cases |
 | `ops.classify` | ops | 现象分类 |
 | `localdev.start` | — | 执行扩展根 `.idev/workflow-defaults.yaml` 的 `commands.start`。`{target}` 换服务名，缺省 `all`。工作目录用 `coding_root` 与 `products.<product>.dir`。没有这些键 → 预检 BLOCKED，不猜命令 |

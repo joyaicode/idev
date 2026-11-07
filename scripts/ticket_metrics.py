@@ -43,6 +43,26 @@ def find_repo(arg: str | None) -> Path | None:
     return product_repo()
 
 
+def _deliver_reopen_overturn(repo: Path | None, feat: str) -> tuple[str, str]:
+    reopen = overturn = "n/a"
+    if feat == "-" or repo is None:
+        return reopen, overturn
+    y = homes(repo, feat)["deliver"]
+    if not y.exists():
+        return reopen, overturn
+    dy = load(y)
+    revs = dy.get("revisions") if isinstance(dy.get("revisions"), list) else []
+    notes = [str((r or {}).get("note", "")) for r in revs if isinstance(r, dict)]
+    by_note = sum(1 for n in notes if REOPEN_RE.search(n))
+    br = dy.get("baseline_revision")
+    by_rev = (br - 1) if isinstance(br, int) and br > 1 else 0
+    reopen = str(max(by_note, by_rev))
+    ov = sum(1 for n in notes if OVERTURN_RE.search(n))
+    if dy.get("last_rewind") and ov == 0:
+        ov = 1  # last_rewind present = at least one recorded rewind
+    return reopen, str(ov)
+
+
 def main() -> int:
     args = sys.argv[1:]
     root = Path(__file__).resolve().parent.parent
@@ -81,21 +101,7 @@ def main() -> int:
         first = ats[0].date().isoformat() if ats else "n/a"
         last = ats[-1].date().isoformat() if ats else "n/a"
         span = str((ats[-1].date() - ats[0].date()).days) if ats else "n/a"
-        reopen = overturn = "n/a"
-        if feat != "-" and repo:
-            y = homes(repo, feat)["deliver"]
-            if y.exists():
-                dy = load(y)
-                revs = dy.get("revisions") if isinstance(dy.get("revisions"), list) else []
-                notes = [str((r or {}).get("note", "")) for r in revs if isinstance(r, dict)]
-                by_note = sum(1 for n in notes if REOPEN_RE.search(n))
-                br = dy.get("baseline_revision")
-                by_rev = (br - 1) if isinstance(br, int) and br > 1 else 0
-                reopen = str(max(by_note, by_rev))
-                ov = sum(1 for n in notes if OVERTURN_RE.search(n))
-                if dy.get("last_rewind") and ov == 0:
-                    ov = 1  # last_rewind present = at least one recorded rewind
-                overturn = str(ov)
+        reopen, overturn = _deliver_reopen_overturn(repo, feat)
         print(f"| {feat} | {e['traces']} | {first} | {last} | {span} | {e['s2']} | {reopen} | {overturn} |")
     print()
     print("口径：S2=trace 中 route.scenario 为 S2 的条数；reopen=max(revisions[] 备注含「解除密封/reopen」条数, baseline_revision-1)；")

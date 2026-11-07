@@ -196,31 +196,33 @@ def check_item(item: dict, grills: set[str], out: list[Finding]) -> None:
 
     # 竞品对比：差异要有理由，且差异大的要拷问。
     comp = item.get("comparison")
-    if isinstance(comp, dict):
-        peers = safeyaml.as_list(comp.get("peers"))
-        if not peers:
-            out.append(Finding(iid, "comparison-no-peers",
-                               "有 comparison 块但没有 peers —— 和谁比?"))
-        differs = str(comp.get("differs") or "").strip()
-        if differs:
-            if not str(comp.get("why") or "").strip():
-                out.append(Finding(
-                    iid, "differs-without-why",
-                    f"和竞品有差异「{differs[:40]}」却没写 why —— "
-                    "差异要么是有意的(说清理由),要么是没想到(那就是个问题)"))
-            ref = str(comp.get("grill") or "").strip().upper()
-            if not ref:
-                out.append(Finding(
-                    iid, "differs-not-grilled",
-                    f"和竞品差异「{differs[:40]}」没挂 grill 问句 —— "
-                    "与竞品相悖的决定要和人谈到明确,不是单方面记下来"))
-            else:
-                q = ref if ref.startswith("Q") else f"Q{ref}"
-                if q not in grills:
-                    where_msg = ("grill.md 还不存在 —— 差异记了一笔,但讨论从没发生过"
-                                 if not grills else "在 grill.md 里找不到")
-                    out.append(Finding(iid, "grill-ref-dangling",
-                                       f"comparison 挂的 {q} {where_msg}"))
+    if not isinstance(comp, dict):
+        return
+    peers = safeyaml.as_list(comp.get("peers"))
+    if not peers:
+        out.append(Finding(iid, "comparison-no-peers",
+                           "有 comparison 块但没有 peers —— 和谁比?"))
+    differs = str(comp.get("differs") or "").strip()
+    if not differs:
+        return
+    if not str(comp.get("why") or "").strip():
+        out.append(Finding(
+            iid, "differs-without-why",
+            f"和竞品有差异「{differs[:40]}」却没写 why —— "
+            "差异要么是有意的(说清理由),要么是没想到(那就是个问题)"))
+    ref = str(comp.get("grill") or "").strip().upper()
+    if not ref:
+        out.append(Finding(
+            iid, "differs-not-grilled",
+            f"和竞品差异「{differs[:40]}」没挂 grill 问句 —— "
+            "与竞品相悖的决定要和人谈到明确,不是单方面记下来"))
+    else:
+        q = ref if ref.startswith("Q") else f"Q{ref}"
+        if q not in grills:
+            where_msg = ("grill.md 还不存在 —— 差异记了一笔,但讨论从没发生过"
+                         if not grills else "在 grill.md 里找不到")
+            out.append(Finding(iid, "grill-ref-dangling",
+                               f"comparison 挂的 {q} {where_msg}"))
 
 
 def probe(items: list) -> None:

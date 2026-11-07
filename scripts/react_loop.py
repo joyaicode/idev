@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Bounded ReAct joint for one workflow step.
 
-The step's candidate list is the only set of tools an action may name.
+The step's candidate list is what a normal call may name. A name outside it
+is still recorded, as an admission error, and the loop stays open.
 The loop stops at max_hops (default 8, hard cap 16). A failed observation
 takes on_fail (human, stop, or skip). Running out of hops takes on_exhaust
 (human or stop). skip records the hop, stays open, and writes no inbox note.
@@ -16,7 +17,10 @@ names this file with `react:` has the hops copied into calls on append.
   react_loop.py show --feature F [--step S] [--dir DIR]
 
 Exit 0 means the loop is still open or finished cleanly.
-Exit 2 is a refused call (wrong tool, wrong state); the file is unchanged.
+A call outside the candidate set is recorded and the loop stays open:
+`UNKNOWN_TOOL` when the name is not registered, `NOT_ADMITTED` when it is
+registered but not a candidate of this step. That hop does not take `on_fail`.
+Exit 2 is a refused call (wrong state); the file is unchanged.
 Exit 3 is the predefined exit. stdout starts with `EXIT human` or `EXIT stop`.
 That also writes an inbox note tagged react-exhausted or react-tool-fail.
 `on_fail: skip` prints `SKIP <action>` and exits 0. `show` prints
@@ -235,17 +239,37 @@ def cmd_act(args: argparse.Namespace) -> int:
     except Refused as refused:
         print(refused.message, file=sys.stderr)
         return 2
-    if "exit" not in box:
+    if "exit" not in box and "line" not in box:
         box["line"] = act_line(args.action)
     return _after(args, box)
 
 
+def _admission(data: dict, action: str) -> str:
+    """A model-visible tool error. Empty when this step admits the action."""
+    if action in (data.get("candidates") or []):
+        return ""
+    if action in tool_commands():
+        return "NOT_ADMITTED %s" % action
+    return "UNKNOWN_TOOL %s" % action
+
+
 def _act(data: dict, args: argparse.Namespace, box: dict) -> None:
     load_open(data)
-    if args.action not in (data.get("candidates") or []):
-        raise Refused("REJECT not a candidate: %s" % args.action)
     if len(data.get("hops") or []) >= int(data.get("max_hops") or DEFAULT_HOPS):
         box["exit"] = take_exit(data, "exhausted", "hops %d" % len(data.get("hops") or []))
+        return
+    code = _admission(data, args.action)
+    if code:
+        hop = {
+            "n": len(data.get("hops") or []) + 1,
+            "thought": args.thought,
+            "action": args.action,
+            "observation": code,
+            "ok": False,
+            "at": now(),
+        }
+        data.setdefault("hops", []).append(hop)
+        print_later(box, "HOP %d %s fail\nRESULT %s" % (hop["n"], args.action, code))
         return
     data["pending"] = {"thought": args.thought, "action": args.action, "at": now()}
 

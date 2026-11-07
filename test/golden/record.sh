@@ -8,6 +8,17 @@
 #
 #   bash test/golden/record.sh            # write test/golden/legacy/*.txtar
 #   bash test/golden/record.sh --verify   # compare, exit 1 on any difference
+#   bash test/golden/record.sh            # re-record; refuses if anything drifted
+#   bash test/golden/record.sh --accept "<why>"   # re-record, drift and all
+#
+# Why plain re-recording refuses: this file is the safety net, and the one way
+# to take a safety net down without noticing is to re-record over a real
+# regression. "A golden file that silently encodes a bug is worse than no
+# golden file" was written at the top of this script from the start, but
+# nothing enforced it — the discipline lived in whoever happened to read the
+# diff. So a bare run now prints every drift and writes nothing; accepting
+# them takes --accept with a reason, which gets printed next to the count.
+# A snapshot that does not exist yet is new, not drift, and is always written.
 #
 # Scenarios that P0 deliberately changed are recorded too, under
 # legacy/fixed/, each with a header saying what the old output was and why it
@@ -28,6 +39,13 @@ export PYTHONUNBUFFERED=1
 # do not point this script at the Go writer or the txtar bytes will drift.
 export IDEV_ENGINE=python
 export IDEV_AGENT_FEEDBACK=off
+# `trace append` observes the session that ran it — a HANDOFF line past 100
+# rounds, and turn-budget's WARN. Both describe the caller, not the command,
+# and `rounds=` moves between two runs a minute apart, so recording them
+# makes the golden unreproducible by construction. normalize.py cannot
+# substitute the problem away: whether the lines appear at all depends on the
+# session. Answer "no session" instead, for recording and --verify alike.
+export IDEV_NO_SESSION_PROBE=1
 # E1.3 only fires when an idev binary is visible. Keep this lane on pure
 # Python so txtar bytes stay stable: switch the binary off (the kernel's own
 # bin/idev included) and hide any PATH idev.
@@ -42,7 +60,21 @@ NORM="${IDEV}/test/golden/normalize.py"
 FEATURE=demo
 
 VERIFY=0
-[ "${1:-}" = "--verify" ] && VERIFY=1
+ACCEPT=0
+ACCEPT_WHY=""
+case "${1:-}" in
+  --verify) VERIFY=1 ;;
+  --accept)
+    ACCEPT=1
+    ACCEPT_WHY="${2:-}"
+    if [ -z "$ACCEPT_WHY" ]; then
+      echo "BLOCKED --accept needs a reason: what changed, and why re-recording is not hiding it" >&2
+      exit 2
+    fi
+    ;;
+  "") ;;
+  *) echo "BLOCKED unknown argument: $1 (use --verify, --accept \"<why>\", or no argument)" >&2; exit 2 ;;
+esac
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/idev-golden.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
@@ -61,12 +93,12 @@ mkdir -p "$WORK/.git" "$WORK/.idev/task/${FEATURE}/workflow" "$WORK/.idev/task/$
 cp "$FIXTURE/deliver.yaml" "$WORK/.idev/task/${FEATURE}/deliver.yaml"
 : > "$WORK/.idev/task/${FEATURE}/review.md"
 
-pass=0; diff_count=0; wrote=0
+pass=0; diff_count=0; wrote=0; fresh=0
 
 # record <name> <dir> <description> -- <cmd...>
 record() {
   local name="$1" dir="$2" desc="$3"; shift 4
-  local raw rc clean dest cmd
+  local raw rc clean dest cmd existed
   raw="$("$@" 2>&1)"; rc=$?
   clean="$(printf '%s\n' "$raw" | python3 "$NORM" --work "$WORK" --idev "$IDEV")"
   # The command line goes through the same substitutions: it carries fixture
@@ -97,9 +129,20 @@ record() {
       diff_count=$((diff_count + 1))
     fi
   else
+    existed=1
+    [ -f "$dest" ] || existed=0
+    # Drift against an existing snapshot is shown and, unless accepted, not
+    # written: a bare re-record must not be the thing that buries a regression.
+    if [ "$existed" = 1 ] && [ "$body" != "$(cat "$dest")" ]; then
+      echo "DRIFT   ${dest##*/golden/}"
+      diff <(printf '%s\n' "$body") "$dest" | sed 's/^/        /' | head -20
+      diff_count=$((diff_count + 1))
+      [ "$ACCEPT" = 1 ] || return
+    fi
     mkdir -p "$dir"
     printf '%s\n' "$body" > "$dest"
     wrote=$((wrote + 1))
+    [ "$existed" = 1 ] || fresh=$((fresh + 1))
   fi
 }
 
@@ -546,6 +589,15 @@ if [ "$VERIFY" = 1 ]; then
   echo "golden verify: ${pass} same, ${diff_count} different"
   [ "$diff_count" -eq 0 ] || { echo "golden FAIL"; exit 1; }
   echo "golden PASS"
+elif [ "$ACCEPT" = 1 ]; then
+  echo "golden record: wrote ${wrote} cases under test/golden/legacy/ (${fresh} new, ${diff_count} drifted and accepted)"
+  echo "golden accept: ${ACCEPT_WHY}"
+elif [ "$diff_count" -gt 0 ]; then
+  echo "golden record: ${diff_count} drifted and were NOT written; wrote ${wrote} unchanged (${fresh} new)"
+  echo "golden BLOCKED read every DRIFT above. Each one is either a change you meant" >&2
+  echo "        or a regression this net just caught. Re-record only after you know which:" >&2
+  echo "          bash test/golden/record.sh --accept \"<why each drift is intended>\"" >&2
+  exit 1
 else
-  echo "golden record: wrote ${wrote} cases under test/golden/legacy/"
+  echo "golden record: wrote ${wrote} cases under test/golden/legacy/ (${fresh} new)"
 fi

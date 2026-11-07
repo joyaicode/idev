@@ -686,6 +686,39 @@ def cmd_retire(args: argparse.Namespace) -> int:
     return 0
 
 
+def prior_art(paths: list[Path], scopes: list[str], top: int = 3) -> list[dict]:
+    """Kept programs from these ledgers whose scope/claim names one of these scopes.
+
+    Same shape and same reasons as lessons.prior_art: ledger paths rather
+    than a feature so composing a brief cannot BLOCK, and `kept` only —
+    a candidate has one result behind it and no named person, which is
+    not enough to put in front of an executor as prior art.
+
+    Returns the record. It still does not run the script.
+    """
+    found: list[dict] = []
+    seen: set[str] = set()
+    for path in paths:
+        if not path.is_file():
+            continue
+        data = load(path)
+        if data is None:
+            continue
+        for item in entries_of(data):
+            if str(item.get("status")) != "kept" or str(item.get("form")) != "program":
+                continue
+            sid = str(item.get("id") or "")
+            if sid in seen:
+                continue
+            hay = " ".join(str(item.get(f, "")) for f in ("scope", "claim"))
+            if scopes and not any(s and s in hay for s in scopes):
+                continue
+            seen.add(sid)
+            found.append(item)
+    found.sort(key=lambda x: str(x.get("id")))
+    return found[:top]
+
+
 def cmd_recall(args: argparse.Namespace) -> int:
     repo = repo_of(args)
     path = ledger_path(repo, args.feature)

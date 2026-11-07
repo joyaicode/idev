@@ -488,6 +488,43 @@ def same_scope_conflicts(items: list) -> list[list]:
     return found
 
 
+def prior_art(paths: list[Path], scopes: list[str], top: int = 3) -> list[dict]:
+    """Authoritative lessons from these ledgers whose scope/symptom names one of these scopes.
+
+    This is the read behind the 「既往」 line of a delegation brief, so it
+    takes ledger paths rather than a feature: the caller already knows
+    which ticket it is in, and a brief must never be the thing that
+    BLOCKs on a missing ticket home.
+
+    Candidates are left out on purpose. `recall` prints them to a reader
+    who was told they are unconfirmed; a brief is read by an executor
+    starting cold, and an unconfirmed conclusion arriving as context is
+    how one local mistake becomes a systematic one — the danger this
+    ledger's gate exists to answer.
+
+    Nothing is written: an automatic injection is not the lesson having
+    helped, so it does not count toward `uses`.
+    """
+    found: list[dict] = []
+    seen: set[str] = set()
+    for path in paths:
+        if not path.is_file():
+            continue
+        for item in safeyaml.as_list(load(path).get("lessons")):
+            if not isinstance(item, dict) or str(item.get("status")) != "authoritative":
+                continue
+            lid = str(item.get("id") or "")
+            if lid in seen:
+                continue
+            hay = " ".join(str(item.get(f, "")) for f in ("scope", "symptom"))
+            if scopes and not any(s and s in hay for s in scopes):
+                continue
+            seen.add(lid)
+            found.append(item)
+    found.sort(key=lambda x: -safeyaml.as_int(x.get("uses"), 0))
+    return found[:top]
+
+
 def cmd_recall(args: argparse.Namespace) -> int:
     path = ledger_path(args.repo, args.feature)
     data = load(path)

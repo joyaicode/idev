@@ -288,6 +288,25 @@ def _review_write(path: str) -> bool:
     return "/review/shards/" in f"/{norm}" and norm.endswith(".md")
 
 
+def _reviewer_gate_held(raw: str, out: dict[str, str]) -> None:
+    """The reviewer's CHANGED line stays inside review artifacts."""
+    changed = CHANGED_LINE.search(raw)
+    if not changed:
+        return
+    text = changed.group(1).strip()
+    paths = _paths(text)
+    if NONE_VALUE.match(text) or not paths:
+        out["gate-held"] = "PASS"
+        return
+    extra = sorted(p for p in paths if not _review_write(p))
+    out["gate-held"] = (
+        "PASS" if not extra
+        else "FAIL:审查者改了 " + ",".join(extra)
+             + " —— CHANGED 只许 review.md 和 review/shards/。"
+               "测试、用例门槛和产品代码留给生成者"
+    )
+
+
 def check_accuracy(record: dict) -> dict[str, str]:
     """The accuracy guards. Scoped to the agent and kind that can honour them.
 
@@ -371,20 +390,7 @@ def check_accuracy(record: dict) -> dict[str, str]:
         # The reviewer reads independent evidence. Naming any other file in
         # CHANGED means they moved the gate (tests, plan, product code).
         # No CHANGED line stays silent: older reports did not have the field.
-        changed = CHANGED_LINE.search(raw)
-        if changed:
-            text = changed.group(1).strip()
-            paths = _paths(text)
-            if NONE_VALUE.match(text) or not paths:
-                out["gate-held"] = "PASS"
-            else:
-                extra = sorted(p for p in paths if not _review_write(p))
-                out["gate-held"] = (
-                    "PASS" if not extra
-                    else "FAIL:审查者改了 " + ",".join(extra)
-                         + " —— CHANGED 只许 review.md 和 review/shards/。"
-                           "测试、用例门槛和产品代码留给生成者"
-                )
+        _reviewer_gate_held(raw, out)
 
     if agent != "idev-coder":
         return out
@@ -777,6 +783,13 @@ def remeasure(record: dict) -> dict[str, str]:
     return measured
 
 
+def _structured_evidence(evidence: object) -> str:
+    """The JSON evidence field is a list of paths or one prose path."""
+    if isinstance(evidence, list):
+        return " ".join(str(p) for p in evidence if str(p).strip())
+    return str(evidence).strip()
+
+
 def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
     """The honesty checks from agents-evolve.md, plus the per-agent §0 checks."""
     checks: dict[str, str] = {}
@@ -797,10 +810,7 @@ def run_checks(record: dict, repo: Path | None) -> dict[str, str]:
         report["raw"] = raw
         evidence = structured.get("evidence")
         if evidence:
-            if isinstance(evidence, list):
-                report["evidence"] = " ".join(str(p) for p in evidence if str(p).strip())
-            else:
-                report["evidence"] = str(evidence).strip()
+            report["evidence"] = _structured_evidence(evidence)
         if structured.get("status"):
             report["status"] = structured["status"]
         record = dict(record)

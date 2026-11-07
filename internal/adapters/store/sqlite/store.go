@@ -228,6 +228,10 @@ func Classify(err error) Conflict {
 	if strings.Contains(msg, "append-only") || strings.Contains(msg, "immutable") {
 		return ConflictAppendOnly
 	}
+	// A trigger RAISE(ABORT, name) does not say "UNIQUE constraint failed".
+	if strings.Contains(msg, "leases_single_writer_feature") || strings.Contains(msg, "leases_single_writer_run") {
+		return ConflictWriteLeaseHeld
+	}
 	if !strings.Contains(msg, "UNIQUE constraint failed") &&
 		!strings.Contains(msg, "constraint failed") {
 		return ConflictNone

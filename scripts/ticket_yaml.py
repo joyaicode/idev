@@ -114,11 +114,11 @@ def signoff_bys(data: dict) -> list[str]:
         if who:
             vals.append(who)
     elif isinstance(hs, list):
-        for item in hs:
-            if isinstance(item, dict):
-                who = as_str(item.get("by"))
-                if who:
-                    vals.append(who)
+        vals.extend(
+            as_str(item.get("by"))
+            for item in hs
+            if isinstance(item, dict) and as_str(item.get("by"))
+        )
     return vals
 
 

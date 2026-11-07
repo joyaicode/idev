@@ -11,3 +11,4 @@ DELEGATE idev-verifier
 FANOUT_ASSESS run python3 scripts/fanout.py assess --feature example-change --activity run
 LABEL 跑已勾选 cases
 WITH {'mode': 'logic'}
+PROGRESS closed=2/3 open=run

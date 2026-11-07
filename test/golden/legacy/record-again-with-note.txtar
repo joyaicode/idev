@@ -4,8 +4,9 @@
 -- exit --
 0
 -- output --
-DIGEST match aec1243bf708f640
-NEXT scope-guard  kind=route.s4  status=pending
-OPEN conventions/SKILL.md
-DELEGATE idev-ops
+DIGEST match f91ad7060df91b01
+NEXT scope-guard  kind=scope.baseline  status=pending
+OPEN scripts/scope-baseline.py
+DELEGATE none; the conductor does this step
 LABEL 确认不改 goal/baseline；小范围论证后改码
+PROGRESS closed=1/11 open=scope-guard

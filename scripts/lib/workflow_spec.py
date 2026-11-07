@@ -53,9 +53,26 @@ STEP_STATUS = {"PASS", "FAIL", "UNPROVEN", "SKIPPED", "BLOCKED", "AUTO"}
 STEP_DONE = {"PASS", "SKIPPED", "UNPROVEN", "AUTO"}
 STEP_STOP = {"FAIL", "BLOCKED"}
 
-# A decision answer that answers nothing. 继续 moves on without choosing, so
-# the conductor asks again rather than recording it as the person's choice.
-NON_ANSWERS = frozenset({"继续", "continue", "ok", "okay", "好", "好的", "嗯", "收到", "go", "next"})
+# A decision answer that answers nothing. These words do not choose an option.
+# Several of them in one reply still answer nothing. The conductor does not ask again.
+NON_ANSWERS = frozenset({
+    "继续", "continue", "ok", "okay", "好", "好的", "嗯", "收到", "go", "next", "验收",
+})
+# Wider than NON_ANSWERS. 确认 / 通过 still answer a real question, and they are
+# also a nudge on the delivery path: do the open step, do not record a stop.
+NUDGE_WORDS = NON_ANSWERS | frozenset({
+    "看着差不多", "不用一直询问", "不用再问", "确认", "通过",
+})
+# A stop that names one of these is a real hold. Anything else on a nudge is a restatement.
+HOLD_STOP = ("baseline-conflict", "SIGNAL", "BLOCKED", "frontier", "未决")
+NUDGE_STOP = (
+    "a nudge does not record a stop or a next; do the open step. "
+    "验收 does not write sealed baseline items"
+)
+NUDGE_DECIDE = (
+    "NUDGE proceed; 继续 / 验收 / ok choose nothing. "
+    "Do not ask again. Leave the decision open and do the open step that does not need it"
+)
 
 CONFIRM_WORDS = (
     "就按建议", "按建议", "按推荐", "听你的",
@@ -129,7 +146,7 @@ CONFIRM_TOKENS = (
     "好",
 )
 # These phrases contain a negation mark but are agreement, not a refusal.
-NEGATION_EXEMPT = ("没问题", "无异议", "不用一直询问", "不用再问")
+NEGATION_EXEMPT = ("没问题", "无异议", "不用一直询问", "不用再问", "看着差不多")
 _ORIGIN_PHRASES = (
     ("req", ("origin=req", "回退到需求", "问题在需求", "缺陷在需求")),
     ("arch", ("origin=arch", "回退到架构", "问题在架构", "缺陷在架构")),
@@ -642,6 +659,10 @@ def _check_gate(step: dict, where: str, errors: list[str]) -> None:
                 f"{where} human.gate with.auto_tiers needs a gate a machine check can pass "
                 f"({', '.join(sorted(AUTO_CHECKS))}); a {gate_type(step)} gate is signed by a person"
             )
+    if "decision" in payload and payload["decision"] is not True:
+        errors.append(f"{where} human.gate with.decision must be true")
+    if payload.get("decision") is True and "auto_tiers" in payload:
+        errors.append(f"{where} a decision gate cannot declare auto_tiers")
     if "gate_type" in payload and payload["gate_type"] not in GATE_TYPES:
         errors.append(f"{where} human.gate with.gate_type must be one of {sorted(GATE_TYPES)}")
     subject = payload.get("subject")
@@ -689,10 +710,91 @@ def auto_tiers(step: dict) -> set:
     return set(tiers) if isinstance(tiers, list) else set()
 
 
-def is_answer(quote: str) -> bool:
-    """True when a decision quote chooses something; 继续 / ok do not."""
+def is_decision_gate(step: dict) -> bool:
+    """True when a person must choose. A sign-off or a review stamp is not one."""
+    return (step.get("with") or {}).get("decision") is True
+
+
+def _only_tokens(text: str, vocab) -> bool:
+    """True when text is nothing but these words, separators, and a trailing 了."""
+    tokens = tuple(sorted(set(vocab), key=len, reverse=True))
+    rest = text
+    if not rest:
+        return False
+    while rest:
+        token = next((t for t in tokens if rest.startswith(t)), None)
+        if token is None:
+            return False
+        rest = rest[len(token):]
+        if rest.startswith("了"):
+            rest = rest[1:]
+        if not rest:
+            return True
+        sep = next((s for s in CONFIRM_SEPS if rest.startswith(s)), None)
+        if sep is not None:
+            rest = rest[len(sep):].lstrip()
+            if not rest:
+                return False
+    return True
+
+
+def is_nudge(quote: str) -> bool:
+    """True when the reply only tells the conductor to go on.
+
+    验收 / 继续 / 确认 / 通过, alone or combined, are this. A question, a
+    refusal, a hesitation, an unseal, or a rollback is not.
+    """
     text = normalize_quote(quote)
-    return bool(text) and text not in NON_ANSWERS
+    if not text:
+        return False
+    if any(mark in text for mark in QUESTION_MARKS):
+        return False
+    if _named_action(text) or _names_seal(text):
+        return False
+    if _refusal(text):
+        return False
+    return _only_tokens(text, NUDGE_WORDS)
+
+
+def nudge_kind(quote: str) -> str:
+    """proceed | named | reply | work. proceed means do the open step.
+
+    named is only an unseal or a rollback. Naming the seal itself is work.
+    A refusal is a reply even when it also names one of those actions.
+    """
+    text = normalize_quote(quote)
+    if is_nudge(quote):
+        return "proceed"
+    if (not text) or any(mark in text for mark in QUESTION_MARKS) or _refusal(text):
+        return "reply"
+    if _named_action(text):
+        return "named"
+    return "work"
+
+
+def nudge_errors(trigger: str, stop: str, nxt: str) -> list:
+    """A nudge records neither a restatement nor a next. A real hold may stay."""
+    if not is_nudge(trigger):
+        return []
+
+    def blank(value: str) -> str:
+        value = str(value or "").strip().strip('"').strip("'")
+        return "" if value in ("", "-", "无", "none") else value
+
+    stop, nxt = blank(stop), blank(nxt)
+    if not stop and not nxt:
+        return []
+    if stop and any(hint in stop for hint in HOLD_STOP):
+        return []
+    return [NUDGE_STOP]
+
+
+def is_answer(quote: str) -> bool:
+    """True when a decision quote chooses something; 继续 / 验收 / ok do not."""
+    text = normalize_quote(quote)
+    if not text:
+        return False
+    return not _only_tokens(text, NON_ANSWERS)
 
 
 def will_write_line(step: dict) -> str:
@@ -944,11 +1046,11 @@ def parse_confirm(quote: str, gate_type: str = "", origin: str = "") -> Confirm:
         named = _named_action(text)
         if named and gate_type:
             return _refusal(text) or _finish_gate(gate_type, origin, (), text)
-        if text in PLAIN_AGREE:
-            if gate_type in ("defect_origin", "reopen_baseline"):
-                return Confirm(False, "keyword-mismatch", ())
-            return Confirm(True, "ok", ())
-        return Confirm(False, "no-verb", ())
+        if text not in PLAIN_AGREE:
+            return Confirm(False, "no-verb", ())
+        if gate_type in ("defect_origin", "reopen_baseline"):
+            return Confirm(False, "keyword-mismatch", ())
+        return Confirm(True, "ok", ())
     if tokens is None:
         return Confirm(False, "unparsed-tail", ())
 

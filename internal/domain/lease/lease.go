@@ -1,9 +1,9 @@
 // Package lease holds the single-writer rule and the path boundary that
 // makes it mean something.
 //
-// Two invariants live here. I-1: at most one write lease per feature at a
-// time, so two agents cannot edit the same ticket's code concurrently and
-// discover it later in a merge. I-2's other half: a verify lease may only
+// Two invariants live here. I-1: one write lease per overlapping path set.
+// An empty path set covers the feature. Disjoint non-empty paths may both
+// be held. I-2's other half: a verify lease may only
 // write verification artefacts inside the ticket directory — a verifier that
 // can edit the code it is verifying is not an independent verifier.
 //
@@ -30,7 +30,8 @@ type Purpose string
 
 // The purposes, from registry/kinds.yaml's `lease` field.
 const (
-	// PurposeWrite permits changing product code. One per feature.
+	// PurposeWrite permits changing product code. One per overlapping path set.
+	// An empty set covers the feature.
 	PurposeWrite Purpose = "write"
 	// PurposeVerify permits writing verification artefacts in the ticket
 	// directory, and nothing else.
@@ -300,6 +301,15 @@ func Overlap(a, b []string) bool {
 		}
 	}
 	return false
+}
+
+// WriteSetsConflict is I-1 for path sets. An empty set covers the feature,
+// so it conflicts with every other write lease. Otherwise Overlap decides.
+func WriteSetsConflict(a, b []string) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return true
+	}
+	return Overlap(a, b)
 }
 
 // patternsIntersect is true when some path matches both patterns.

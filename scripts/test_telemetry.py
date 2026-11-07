@@ -123,6 +123,20 @@ class Telemetry(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("- telemetry: 1/2", done.stdout)
 
+    def test_zero_host_duration_uses_the_stamps(self) -> None:
+        payload = {
+            "subagent_type": "idev-reviewer", "status": "completed", "summary": "STATUS: PASS",
+            "duration_ms": 0, "tool_call_count": 1,
+            "started_at": "2026-11-01T00:00:00+00:00", "ended_at": "2026-11-01T00:00:02+00:00",
+            "workspace_roots": [str(self.repo)],
+        }
+        done = subprocess.run(
+            [sys.executable, str(KERNEL / "hooks" / "subagent_stop.py"), "--client", "cursor"],
+            input=json.dumps(payload), capture_output=True, text=True, env=self.env, timeout=30,
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(self.rows()[-1]["duration_ms"], 2000)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

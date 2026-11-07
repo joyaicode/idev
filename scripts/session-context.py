@@ -24,6 +24,7 @@ from doc_home import homes  # noqa: E402
 from product_marker import load_marker, resolve_extension_repo  # noqa: E402
 from product_sink import product_repo  # noqa: E402
 from roots import kernel_root as roots_kernel_root  # noqa: E402
+import prior_art  # noqa: E402
 import vue_skills  # noqa: E402
 
 try:
@@ -281,6 +282,19 @@ def main(argv: list[str] | None = None) -> int:
     print("SPEC %s" % (found_homes["spec"] if found_homes else "NONE"))
     print("PATROL %s" % (found_homes["patrol"] if found_homes else "NONE"))
     print("STAGE %s" % (stage or "NONE"))
+    if found_homes is not None and stage:
+        prior = prior_art.lines(
+            found_homes["task"],
+            kernel_root() / "state",
+            args.feature,
+            stage=stage,
+            workflow=args.workflow,
+            repo=repo,
+        )
+        for line in prior:
+            print("PRIOR %s" % line)
+        if prior:
+            print("PRIOR_NOTE 这是约束不是答案，仍以本轮证据为准。没列出的不代表没有，也不要因为列了就不查。")
     print("PRODUCT %s" % (product or "NONE"))
     try:
         import staffing
@@ -292,18 +306,17 @@ def main(argv: list[str] | None = None) -> int:
         note = staffing.note_line(found)
         if note:
             print(note)
+    recipe = None
     if args.workflow:
         recipe = resolve_recipe(repo, args.workflow)
-        print("RECIPE %s" % (recipe if recipe else "NONE"))
-        if recipe is not None:
-            page, doc_err = recipe_doc(recipe)
-            if doc_err:
-                print("FAIL " + doc_err, file=sys.stderr)
-                return 2
-            if page is not None:
-                print("OPEN %s" % page)
-    else:
-        print("RECIPE NONE")
+    print("RECIPE %s" % (recipe if recipe else "NONE"))
+    if recipe is not None:
+        page, doc_err = recipe_doc(recipe)
+        if doc_err:
+            print("FAIL " + doc_err, file=sys.stderr)
+            return 2
+        if page is not None:
+            print("OPEN %s" % page)
     defaults_path, defaults = load_defaults(pages)
     print_defaults(defaults, defaults_path, product if args.product.strip() else "")
     for line in vue_skills.lines(repo, stage):

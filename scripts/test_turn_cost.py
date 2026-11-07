@@ -345,12 +345,27 @@ class AgentColdStart(unittest.TestCase):
         self.assertNotIn("FAIL", out.stdout)
 
     def test_the_conductor_budget_is_untouched(self):
+        """--agents must not change what the conductor's budget counts.
+
+        The budget is COLD and nothing else; the on-demand list below it is
+        named by SKILL.md's body and is explicitly not counted. Executor
+        pages belong on that list — the capability table points at them by
+        name and `BODY_REF` includes `agents/` on purpose — so "the output
+        never says idev-coder.md" was a stand-in that SKILL.md outgrew,
+        not the property being guarded. Check the property instead: the
+        counted section holds the two cold-start pages and nothing from
+        agents/, and the agent view's own header stays out.
+        """
         out = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "cold-start-size.py")],
             capture_output=True, text=True,
         )
         self.assertIn("cold start", out.stdout)
-        self.assertNotIn("idev-coder.md", out.stdout)
+        self.assertNotIn("# agent cold start:", out.stdout)
+        counted = out.stdout.split("on demand")[0]
+        self.assertIn("SKILL.md", counted)
+        self.assertIn("references/agent-brief.md", counted)
+        self.assertNotIn("agents/", counted)
 
 
 class LastPrompt(unittest.TestCase):

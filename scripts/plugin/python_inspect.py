@@ -8,12 +8,17 @@ quiet on the diff. It does not mean an IDE Problems panel was opened.
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import source_diff  # noqa: E402
+import canon_smells  # noqa: E402
+
+_DECL = re.compile(r"(?m)^[ \t]*def[ \t]+(?P<name>\w+)[ \t]*\(")
 
 _NONE = re.compile(r"[=!]=\s*None\b")
 _EXCEPT = re.compile(r"(?m)^[ \t]*except[ \t]*:")
@@ -51,6 +56,15 @@ def _spans(text: str) -> list[tuple[int, int]]:
     return spans
 
 
+def _if_statement_lines(text: str) -> set[int] | None:
+    """AST lines of real `if` statements, or None when the file is unparsable."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return None
+    return {node.lineno for node in ast.walk(tree) if isinstance(node, ast.If)}
+
+
 def _inside(spans: list[tuple[int, int]], pos: int) -> bool:
     return any(start <= pos < end for start, end in spans)
 
@@ -76,6 +90,15 @@ def inspect_text(text: str, rel: str) -> list[tuple[str, int, str]]:
             continue
         if _MUTABLE.search(match.group(0)):
             hits.append((rel, _line(text, match.start()), "不要用可变默认参数"))
+    # C22 is not checked here: Python has no getter convention to chain.
+    masked = canon_smells.mask(text, spans)
+    hits.extend(canon_smells.naming_hits(masked, rel, _DECL))
+    hits.extend(
+        canon_smells.nesting_hits_indent(
+            masked, rel, statement_lines=_if_statement_lines(text)
+        )
+    )
+    hits.extend(canon_smells.swallow_hits(masked, rel, python=True))
     return hits
 
 

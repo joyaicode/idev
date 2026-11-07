@@ -189,14 +189,26 @@ while time.time() < deadline and not p.exists():
     time.sleep(0.05)
 if not p.exists():
     raise SystemExit("lock file never appeared")
-with p.open("a+") as fh:
-    try:
-        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError as exc:
-        if exc.errno in (11, 35):
-            raise SystemExit("held") from exc
-        raise
-    fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+# The file appears when `start` creates it, not when `start` is finished, so
+# a single non-blocking try races that writer and loses whenever the machine
+# is busy — this case went red inside selfcheck while passing 5/5 on its
+# own. What is under test is whether `ask` holds the run lock across the 2s
+# gate request, so retry across that window: a lock held the whole time
+# still fails, a lock held briefly by `start` no longer does.
+deadline = time.time() + 2.5
+while True:
+    with p.open("a+") as fh:
+        try:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            if exc.errno not in (11, 35):
+                raise
+        else:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+            break
+    if time.time() >= deadline:
+        raise SystemExit("held")
+    time.sleep(0.05)
 PY
 held=$?
 wait "$slow_pid"

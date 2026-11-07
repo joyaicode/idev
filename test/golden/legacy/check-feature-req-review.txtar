@@ -10,6 +10,7 @@ PASS  no stage extensions
 OK  current product has no idev marker
 product-checks PASS
 PASS  product checks
+PASS  annotations settled and recorded
 PASS  baseline.yaml exists
 PASS  baseline.goal set
 PASS  baseline.non_goal set

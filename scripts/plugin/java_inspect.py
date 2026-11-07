@@ -13,7 +13,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import java_hygiene  # noqa: E402
+import canon_smells  # noqa: E402
 
 ARM_TYPES = (
     "FileInputStream",
@@ -293,8 +295,20 @@ def method_hits(text: str, rel: str) -> list[tuple[str, int, str]]:
     return hits
 
 
+def canon_hits(text: str, rel: str) -> list[tuple[str, int, str]]:
+    """The §2 smells a regex can see. Rationale in scripts/plugin/canon_smells.py."""
+    comments, strings = _spans(text)
+    masked = canon_smells.mask(text, comments, strings)
+    return (
+        canon_smells.chain_hits(masked, rel)
+        + canon_smells.naming_hits(masked, rel, _SIG)
+        + canon_smells.nesting_hits(masked, rel)
+        + canon_smells.swallow_hits(masked, rel)
+    )
+
+
 def inspect_text(text: str, rel: str) -> list[tuple[str, int, str]]:
-    return arm_hits(text, rel) + method_hits(text, rel)
+    return arm_hits(text, rel) + method_hits(text, rel) + canon_hits(text, rel)
 
 
 def inspect_repo(repo: Path, module: str = "") -> tuple[list[tuple[str, int, str]], str]:

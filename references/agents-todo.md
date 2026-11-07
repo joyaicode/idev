@@ -119,7 +119,7 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 | # | 东西 | 为什么不做 | 要做的话先解决 |
 |---|---|---|---|
-| 12 | 无界 fan-out（多份活跃 run） | 同一 `group` 且 `writes` 不相交的步骤，以及 `fanout.py` 判定后的分片，可以同时开。多份活跃 run、人闸并行、写租约并行仍不做 | `find_run()` 仍拒第二份 run；周审计 `multi-exec-calls` 口径还没改 |
+| 12 | 无界 fan-out（多份活跃 run） | 同一 `group` 且 `writes` 不相交的步骤，以及 `fanout.py` 判定后的分片，可以同时开。不相交的 include 路径可以各持一张写租约。多份活跃 run、人闸并行仍不做。路径相交、空路径或 `**` 拒绝第二张写租约 | `find_run()` 仍拒第二份 run；周审计 `multi-exec-calls` 口径还没改 |
 | 13 | step 级 `agent:` 字段覆盖 | 走 kind 默认表够用，且不动配方语法 | 同时改 `STEP_FIELDS` + `workflow-check` + `workflow-schema.md` 三处 |
 | 14 | 继续细分 agent（回到八个或更多） | 一个阶段里的动作同进同退；切碎只会让导体多组委派包，每组一次多一次 `brief-complete` 出错机会 | 先有数据证明某个 agent 职责确实冲突（`agent-metrics` 里它的密度明显高于其它） |
 | 15 | 把导体也做成 agent | subagent 看不到对话历史、`is_human()` 黑名单含 `agent/ai/cursor/assistant`、Cursor 的嵌套限制 | 无 —— 这会把「人机共驾」降级成「无人值守」 |
@@ -162,7 +162,6 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E2.1 | `record` 进入 `runsvc.Apply`，`run.yaml` 改为导出 | 进行中 | 直播 conductor Apply+Export+audit jsonl 投影；agent/gate step 仍 YAML 回退（拍板） | 一次 PASS 同事务改 run+审计；YAML 为投影 |
 | E2.2 | 接上 `RunRepo` 的 Create/Save，去掉 `external` 投影 | 完成 | Create/Save/FindLive 接线；`external` 投影仍服务 Python/lease，与直播 run 并存 | sqlite 不再 `errNotWired`；`ConflictStaleVersion` 有测 |
 | E2.3 | 租约、状态、审计包进同一个事务 | 完成 | Apply 同事务；`TestAFailedLeaseReleaseRollsBackRunAndLease` + FailOn audit/Save | 中途失败：lease 与 run 同回滚 |
 | E2.4 | fencing 从领租约走到回报 | 完成 | `TestStaleFencingIsRefusedWithNoAudit` + sqlite/CLI：旧 token 拒、零审计；现 token 过 | 旧 fencing 迟到回报被拒，零审计残留 |

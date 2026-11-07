@@ -85,7 +85,7 @@ python3 scripts/agents-check.py    # 2 agent 定义 + 回报格式 + 登记表�
 bash scripts/workflow-check.sh     # 3 配方与 run 契约
 bash scripts/refs-check.sh         # 4 文档交叉引用
 bash scripts/selfcheck.sh          # 5 内核锁 26 道
-bash scripts/agent-smoke.sh        # 6 委派层端到端 481 条
+bash scripts/agent-smoke.sh        # 6 委派层端到端 486 条
 bash scripts/healthcheck.sh        # 7 环境与拓扑
 ```
 
@@ -99,7 +99,7 @@ bash scripts/healthcheck.sh        # 7 环境与拓扑
 python3 scripts/test_signoff.py      # 签字文法与身份，165 条共享用例
 python3 scripts/test_concurrency.py  # 三条写盘路径的并发不丢失
 python3 scripts/test_signals.py      # SIGNAL / 决策答复规则
-bash test/golden/record.sh --verify  # 50 个 golden 场景（46 + fixed 4）：CLI 输出快照（Go 迁移安全网）
+bash test/golden/record.sh --verify  # 53 个 golden 场景（51 + fixed 2）：CLI 输出快照（Go 迁移安全网）
 python3 scripts/gen-kinds.py --check # kind 表的五份生成物是否最新
 ```
 
@@ -107,10 +107,14 @@ python3 scripts/gen-kinds.py --check # kind 表的五份生成物是否最新
 
 | 车道 | 引擎 | 覆盖 |
 |---|---|---|
-| `test/golden/record.sh --verify`（50 个 txtar，含 `fixed/` 4 个） | 钉死 `IDEV_ENGINE=python` | Python 驱动自己的行为（含签字文法），字节级快照 |
+| `test/golden/record.sh --verify`（53 个 txtar，含 `fixed/` 2 个） | 钉死 `IDEV_ENGINE=python` | Python 驱动自己的行为（含签字文法），字节级快照 |
 | `scripts/selfcheck.sh` 驱动段 | 钉死 `IDEV_ENGINE=python` | run 状态机、AUTO、独立验证等语义锁 |
-| `test/gate-channel.sh`（14 例）/ `test/lease-channel.sh`（17 例） | 默认 go（自建 `bin/idev` + `IDEV_BIN`/`IDEV_DATA`） | gate/lease 通道：短码、TTY、白名单、写租约与 verify 租约围栏 |
+| `test/gate-channel.sh`（23 例）/ `test/lease-channel.sh`（25 例） | 默认 go（自建 `bin/idev` + `IDEV_BIN`/`IDEV_DATA`） | gate/lease 通道：短码、TTY、白名单、写租约与 verify 租约围栏 |
 | `go test ./...` | Go 进程内 | runsvc / gatesvc / leasesvc / sqlite store、e2e 七步 |
+
+**重录 golden 要说出理由。** 裸跑 `bash test/golden/record.sh` 把每处漂移打成 `DRIFT` 并**拒绝写入**；
+确认过每一处都是你有意改的，才用 `--accept "<理由>"` 重录，理由会打在结果旁边。
+把安全网拆掉而不被发现的唯一办法，就是在一处真实回归上重录一遍。
 
 ## Go 核心（迁移中）
 

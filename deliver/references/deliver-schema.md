@@ -40,13 +40,13 @@
 
 ## `deliver.yaml` `semantic_gate`
 
-每人签离开一阶段时，与 `sealed` / `accepted` / `aligned` **同一次确认**写入对应子键（见 [chat-confirm-signoff.md](../../references/chat-confirm-signoff.md)）。`by` 必须是人名。
+离开一阶段时，与 `sealed` / `accepted` / `aligned` 同一轮写入对应子键（见 [chat-confirm-signoff.md](../../references/chat-confirm-signoff.md)）。`by` 是名单里的人；只有一个人就写这个人，不问。
 
 | 子键 | 何时写入 | 下一阶段 `check-feature` 必有 |
 |------|----------|-------------------------------|
-| `req-review` | 人 `sealed` | `req` / `arch` / `code` / `test` |
-| `req` | 人 `accepted` 拆解 | `arch` / `code` / `test` |
-| `arch` | 人 `accepted` 方案 | `code` / `test` |
+| `req-review` | `baseline.sealed` | `req` / `arch` / `code` / `test` |
+| `req` | `req.accepted` | `arch` / `code` / `test` |
+| `arch` | `arch.accepted` | `code` / `test` |
 | `code` | 实现审核 | `test` |
 
 ```yaml
@@ -89,7 +89,7 @@ semantic_gate:
 | `items[]` | `id` + `must` 或 `must_not`；评审对象 |
 | `review_questions[]` | 保持空。未决问句在 `grill.md` |
 | `objections[]` | 保持空。异议写进 `grill.md`，清空后再密封 |
-| `sealed` | 人改 true，或确认用语代写 |
+| `sealed` | 检查通过且 frontier 空就写 true |
 
 正确、合理、边界、细节：拷问到人无异议。与 CONTEXT / ADR 冲突必须进 `grill.md`，禁止默认为「就这么做」。文件合同见 [docs/SKILL.md](../../docs/SKILL.md)。
 
@@ -100,7 +100,7 @@ semantic_gate:
 | `baseline_revision` | 必须等于当前密封基线 revision |
 | `slices[]` | `id` + `baseline_item_id` + `must` + `must_not` + `accept_hint` |
 | `open_questions[]` | 只许问**译法**，不许改基线义务 |
-| `accepted` | 人改 true，或确认用语代写 |
+| `accepted` | 检查通过且没有未决分叉就写 true |
 
 - 每个 `baseline.items` 至少一条 slice；每个 slice 恰好挂一条 `baseline_item_id`。
 - slice.must 必须与对应 item 的 `must`（无则 `must_not`）原文一致（空白归一）。超出 / 换词 = 拒过，回拆解，不改基线。
@@ -118,7 +118,7 @@ semantic_gate:
 | `scope_debt.recommend` | 建议：`mark` 或 `fix-first`。人还没选时也要写。判据只在架构阶段 |
 | `scope_debt.child` | `fix-first` 时写子需求的 feature；其它情况空 |
 | `scope_debt.requirement_lines` / `debt_lines` | 与 `design.md` 前置节同一对行数 |
-| `accepted` | 人改 true，或确认用语代写 |
+| `accepted` | 检查通过且没有未决分叉就写 true |
 
 每个 include 的影响面、每条基线 item 至少一条 `case_intents`。`approach` 与 `non_approach` 都要有正文。行数怎么比、什么时候不另开子需求，只在 [deliver/SKILL.md](../SKILL.md) 的架构阶段。`pending` 时不准 `accepted`。`fix-first` 在子需求 `done` 之前不准进入本需求编码。
 
@@ -133,17 +133,17 @@ semantic_gate:
 
 ## 方案评审的拷问
 
-先交出 `design.md` 和 `arch.yaml`，等人整体 Review。没有未决分叉就不要开 `## arch`。有分叉时，问句放在一行 `## arch` 之后，格式仍是 grilling 的 `❓` / `➡️`，`arch_frontier` 各自单独成行。问的是方案（做法、契约、回退、哪条意图证明哪条 item），不是把需求问句再问一遍。需求轮的 `frontier` 保持 `empty`。`arch_frontier` 不是 `empty` 时不准请人 `arch.accepted`。`arch_shared_understanding` 不是另一次签字。
+先交出 `design.md` 和 `arch.yaml`。没有未决分叉就写架构通过，不要开 `## arch`，也不要等整体 Review。有分叉时，问句放在一行 `## arch` 之后，格式仍是 grilling 的 `❓` / `➡️`，`arch_frontier` 各自单独成行。问的是方案（做法、契约、回退、哪条意图证明哪条 item），不是把需求问句再问一遍。需求轮的 `frontier` 保持 `empty`。`arch_frontier` 不是 `empty` 时不准写 `arch.accepted`。`arch_shared_understanding` 不是另一次签字。
 
 ## 自测门 / 提测门
 
 尺是**密封基线**，不是 slices 自己长出来的句子。
 
-**实现审核**：用例、编码、verify selftest/logic 已做完；无 FAIL；能跑的必覆盖维不是假 UNPROVEN；每条基线 item 至少一 case。人确认后写 `semantic_gate.code`，stage 改为 `test`。无确认用语不写人签。这之前不单独签用例计划。
+**实现审核**：用例、编码、verify selftest/logic 已做完；无 FAIL；能跑的必覆盖维不是假 UNPROVEN；每条基线 item 至少一 case。检查通过就写 `semantic_gate.code`，stage 改为 `test`。不请人。这之前不单独签用例计划。
 
-**提测结果**：实现审核已过；`mode=test`；每条基线 item 至少一 test case；UNPROVEN 仅缺基线场景或基线里已写明的 non_goal；无未关闭 origin；无 `baseline-conflict`。确认的是跑出来的结果。
+**提测结果**：实现审核已过；`mode=test`；每条基线 item 至少一 test case；UNPROVEN 仅缺基线场景或基线里已写明的 non_goal；无未关闭 origin；无 `baseline-conflict`。检查通过就写 `aligned`。
 
-`aligned: true` 人手改 YAML，或提测停问点确认用语代写。
+`aligned: true` 在提测检查通过时写入。
 
 ## 反馈标签
 

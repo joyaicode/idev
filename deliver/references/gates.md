@@ -56,7 +56,7 @@
 - [ ] 已写 `review.md`（少做 / 多做 / UNRELATED）
 - [ ] 已过 [coding.md](../../conventions/coding.md) 文首底线；已按 §0 + [coding-tables.md](../../conventions/coding-tables.md) §1 匹配（或确认零命中）并运用；§2 气味已扫且命中已改
 - [ ] [coding-tables.md](../../conventions/coding-tables.md) §2.4 量化阈值已扫；超线已改或 `review.md` 写清理由并落 `C#`
-- [ ] 若有结构调整：§3 R1–R6 满足；`review.md` 写了护栏 / R 条件
+- [ ] 若有结构调整：§3 R1–R7 满足；`review.md` 写了护栏 / R 条件
 - [ ] `review.md`「编码规范」用本页 `P#`/`C#`/`R#`（禁止另起表号）；场景命中 / 气味命中 / 纠正非占位符
 - [ ] `check-feature.sh <feature> code` PASS（含编码规范弱门禁）
 - [ ] 本轮废弃无用的代码 / 导入 / 方法 / 字段已删；注释与文档已对齐代码

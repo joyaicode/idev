@@ -1,7 +1,7 @@
 schema_version: 1
 id: deliver-next
 aliases: ["推下一阶段", "往下推一格", "deliver next"]
-summary: 读 deliver.yaml，在当前 stage 做允许的下一步；遇门禁则停问，不跳阶段、不自动签字。
+summary: 读 deliver.yaml，在当前 stage 做允许的下一步。无未决分叉就写下这一关并继续。不跳阶段。解封、回退、发布仍要点名。
 risk_tier: P1
 params:
   - name: feature
@@ -22,7 +22,7 @@ steps:
     label: 拒过清单机检（TOOL 行只打印；导体补 --feature/--stage 跑，record 后结果进请签 proof）
   - id: gate
     kind: human.gate
-    label: 若本步含停问点则请签
+    label: 无未决分叉就写下这一关
     with:
       will_write: ["当前 stage 的签收字段（按 chat-confirm 列出；本步无停问点则无）"]
       proof: "check-feature.sh <feature> <stage> + stage-gate 双检结果（stage-gate 为上一步 TOOL，record 后自动并入）"

@@ -97,6 +97,88 @@ def read_manifest(text: str) -> dict[str, str]:
     return out
 
 
+def first_commit(props: dict[str, str]) -> str:
+    for key in COMMIT_KEYS:
+        if props.get(key):
+            return props[key]
+    return ""
+
+
+def manifest_commit(mf: dict[str, str]) -> tuple[str, str] | None:
+    # Some builds stamp the commit into the manifest instead.
+    for key in ("Git-Commit", "SCM-Revision", "Implementation-Build"):
+        if mf.get(key):
+            return mf[key], f"MANIFEST.MF:{key}"
+    return None
+
+
+def _ahead_detail(ident: Identity, head: str, repo: Path) -> list[str]:
+    detail: list[str] = []
+    rc_c, count = run(["git", "rev-list", "--count", f"{ident.commit}..{head}"], repo)
+    n = count if rc_c == 0 else "?"
+    detail.append(f"源码比产物新 {n} 个提交 —— "
+                  f"**你在这里读到的代码不一定是线上跑的那一份**")
+    rc_f, files = run(["git", "diff", "--name-only", f"{ident.commit}..{head}"], repo)
+    if rc_f != 0 or not files:
+        return detail
+    changed = files.splitlines()
+    # Only what could actually be inside the artifact. A ticket file
+    # changing between two builds explains nothing about how the running
+    # code behaves.
+    shipped = [f for f in changed if not NOT_SHIPPED.search(f)]
+    skipped = len(changed) - len(shipped)
+    if shipped:
+        detail.append(
+            f"这期间动过 {len(shipped)} 个会进产物的文件;排查时优先怀疑它们:")
+        for f in shipped[:12]:
+            detail.append(f"    {f}")
+    if len(shipped) > 12:
+        detail.append(f"    … 另 {len(shipped) - 12} 个")
+    if not shipped:
+        detail.append(
+            f"这期间 {len(changed)} 个文件改动都不进产物(票据 / 文档 / 测试)—— "
+            "产物行为的差异不在源码这一侧,查构建或部署")
+    if skipped:
+        detail.append(f"    (另有 {skipped} 个票据 / 文档 / 测试改动,已略去)")
+    return detail
+
+
+def _commit_verdict(ident: Identity, head: str, repo: Path) -> tuple[str, list[str]]:
+    short = ident.commit[:7]
+    if head.startswith(ident.commit) or ident.commit.startswith(head[:7]):
+        return "MATCH", ["产物点名的 commit 就是当前 HEAD"]
+    rc_m, _ = run(["git", "merge-base", "--is-ancestor", ident.commit, head], repo)
+    rc_known, _ = run(["git", "cat-file", "-e", f"{ident.commit}^{{commit}}"], repo)
+    if rc_known != 0:
+        return "UNKNOWN", [f"产物点名的 {short} 在这个 checkout 里找不到 —— "
+                           "不是同一个仓,或该提交没 fetch 下来"]
+    if rc_m == 0:
+        return "AHEAD", _ahead_detail(ident, head, repo)
+    return "AHEAD", [f"产物的 {short} 不在当前分支的历史里 —— "
+                     "产物可能来自另一个分支"]
+
+
+def _timestamp_verdict(ident: Identity, head: str, repo: Path) -> tuple[str, list[str]]:
+    detail: list[str] = []
+    verdict = "UNKNOWN"
+    rc_t, ts = run(["git", "log", "-1", "--format=%cI", head], repo)
+    if rc_t == 0 and ts:
+        try:
+            head_time = dt.datetime.fromisoformat(ts).replace(tzinfo=None)
+            if head_time > ident.newest_entry:
+                verdict = "AHEAD"
+                detail.append(
+                    f"HEAD 的提交时间({head_time.date()})晚于产物里最新的 class"
+                    f"({ident.newest_entry.date()})—— 源码大概率比产物新")
+            else:
+                detail.append("时间戳上源码不比产物新,但这不是 commit 级的证据")
+        except ValueError:
+            pass
+    detail.append("产物没有 git.properties,只能用时间戳 —— "
+                  "建议构建时加 git-commit-id-plugin,让产物自己说清它是哪个 commit")
+    return verdict, detail
+
+
 class Identity:
     """What the artifact says about its own build."""
 
@@ -124,10 +206,7 @@ def identify_zip(path: Path) -> Identity:
         for cand in GIT_PROPS:
             if cand in names:
                 props = read_props(zf.read(cand).decode("utf-8", "replace"))
-                for key in COMMIT_KEYS:
-                    if props.get(key):
-                        ident.commit = props[key]
-                        break
+                ident.commit = first_commit(props)
                 ident.branch = props.get("git.branch", "")
                 ident.build_time = props.get("git.build.time", "")
                 ident.source = cand
@@ -138,13 +217,9 @@ def identify_zip(path: Path) -> Identity:
             ident.version = mf.get("Implementation-Version") or mf.get("Bundle-Version") or ""
             if not ident.build_time:
                 ident.build_time = mf.get("Build-Time") or mf.get("Built-Date") or ""
-            if not ident.commit:
-                # Some builds stamp the commit into the manifest instead.
-                for k in ("Git-Commit", "SCM-Revision", "Implementation-Build"):
-                    if mf.get(k):
-                        ident.commit = mf[k]
-                        ident.source = f"MANIFEST.MF:{k}"
-                        break
+            stamped = manifest_commit(mf)
+            if stamped:
+                ident.commit, ident.source = stamped
             if not ident.source:
                 ident.source = "META-INF/MANIFEST.MF"
 
@@ -166,10 +241,7 @@ def identify(path: Path) -> Identity:
             f = path / cand
             if f.is_file():
                 props = read_props(f.read_text(encoding="utf-8", errors="replace"))
-                for key in COMMIT_KEYS:
-                    if props.get(key):
-                        ident.commit = props[key]
-                        break
+                ident.commit = first_commit(props)
                 ident.branch = props.get("git.branch", "")
                 ident.source = str(f)
                 break
@@ -248,65 +320,9 @@ def main() -> int:
     detail: list[str] = []
 
     if ident.commit and head:
-        short = ident.commit[:7]
-        if head.startswith(ident.commit) or ident.commit.startswith(head[:7]):
-            verdict = "MATCH"
-            detail.append("产物点名的 commit 就是当前 HEAD")
-        else:
-            rc_m, _ = run(["git", "merge-base", "--is-ancestor", ident.commit, head], repo)
-            rc_known, _ = run(["git", "cat-file", "-e", f"{ident.commit}^{{commit}}"], repo)
-            if rc_known != 0:
-                verdict = "UNKNOWN"
-                detail.append(f"产物点名的 {short} 在这个 checkout 里找不到 —— "
-                              "不是同一个仓,或该提交没 fetch 下来")
-            elif rc_m == 0:
-                verdict = "AHEAD"
-                rc_c, count = run(["git", "rev-list", "--count", f"{ident.commit}..{head}"], repo)
-                n = count if rc_c == 0 else "?"
-                detail.append(f"源码比产物新 {n} 个提交 —— "
-                              f"**你在这里读到的代码不一定是线上跑的那一份**")
-                rc_f, files = run(
-                    ["git", "diff", "--name-only", f"{ident.commit}..{head}"], repo)
-                if rc_f == 0 and files:
-                    changed = files.splitlines()
-                    # Only what could actually be inside the artifact. A
-                    # ticket file changing between two builds explains
-                    # nothing about how the running code behaves.
-                    shipped = [f for f in changed if not NOT_SHIPPED.search(f)]
-                    skipped = len(changed) - len(shipped)
-                    if shipped:
-                        detail.append(
-                            f"这期间动过 {len(shipped)} 个会进产物的文件;排查时优先怀疑它们:")
-                        for f in shipped[:12]:
-                            detail.append(f"    {f}")
-                        if len(shipped) > 12:
-                            detail.append(f"    … 另 {len(shipped) - 12} 个")
-                    else:
-                        detail.append(
-                            f"这期间 {len(changed)} 个文件改动都不进产物(票据 / 文档 / 测试)—— "
-                            "产物行为的差异不在源码这一侧,查构建或部署")
-                    if skipped:
-                        detail.append(f"    (另有 {skipped} 个票据 / 文档 / 测试改动,已略去)")
-            else:
-                verdict = "AHEAD"
-                detail.append(f"产物的 {short} 不在当前分支的历史里 —— "
-                              "产物可能来自另一个分支")
+        verdict, detail = _commit_verdict(ident, head, repo)
     elif ident.newest_entry and head:
-        rc_t, ts = run(["git", "log", "-1", "--format=%cI", head], repo)
-        if rc_t == 0 and ts:
-            try:
-                head_time = dt.datetime.fromisoformat(ts).replace(tzinfo=None)
-                if head_time > ident.newest_entry:
-                    verdict = "AHEAD"
-                    detail.append(
-                        f"HEAD 的提交时间({head_time.date()})晚于产物里最新的 class"
-                        f"({ident.newest_entry.date()})—— 源码大概率比产物新")
-                else:
-                    detail.append("时间戳上源码不比产物新,但这不是 commit 级的证据")
-            except ValueError:
-                pass
-        detail.append("产物没有 git.properties,只能用时间戳 —— "
-                      "建议构建时加 git-commit-id-plugin,让产物自己说清它是哪个 commit")
+        verdict, detail = _timestamp_verdict(ident, head, repo)
     else:
         detail.append("无法比对:产物没有可用身份,或源码不是 git checkout")
 

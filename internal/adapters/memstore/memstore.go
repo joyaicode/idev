@@ -326,13 +326,15 @@ func (l leaseRepo) Issue(_ context.Context, ls lease.Lease, tokenHash string) er
 			if row.status != "active" || row.l.Purpose != lease.PurposeWrite {
 				continue
 			}
-			if ls.Feature != "" && row.featureID == ls.Feature {
+			sameFeature := ls.Feature != "" && row.featureID == ls.Feature
+			sameRun := ls.Feature == "" && row.l.RunID == ls.RunID
+			if (sameFeature || sameRun) && lease.WriteSetsConflict(row.l.WritePaths, ls.WritePaths) {
+				what := ls.Feature
+				if what == "" {
+					what = "run " + ls.RunID
+				}
 				return conflict(ports.ConflictLeaseHeld,
-					fmt.Sprintf("%s holds the write lease on %s", row.l.Agent, ls.Feature))
-			}
-			if ls.Feature == "" && row.l.RunID == ls.RunID {
-				return conflict(ports.ConflictLeaseHeld,
-					fmt.Sprintf("%s holds the write lease on run %s", row.l.Agent, ls.RunID))
+					fmt.Sprintf("%s holds the write lease on %s", row.l.Agent, what))
 			}
 		}
 	}

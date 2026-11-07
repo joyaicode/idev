@@ -428,9 +428,10 @@ def main() -> int:
             probe = {"req-review": "baseline.yaml", "req": "req.yaml", "arch": "arch.yaml",
                      "code": "review.md", "test": "verify/plan.yaml", "ops": "ops.yaml"}[s]
             if s in ("code", "ops"):
-                if not doc_home.intermediate(repo.resolve(), args.feature, probe).is_file():
-                    continue
-            elif not (home / probe).exists():
+                gate_input = doc_home.intermediate(repo.resolve(), args.feature, probe)
+            else:
+                gate_input = home / probe
+            if not gate_input.exists():
                 continue
         ran.append(s)
         gate_home = home

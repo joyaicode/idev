@@ -4,10 +4,12 @@
 -- exit --
 0
 -- output --
-DIGEST match aec1243bf708f640
+DIGEST match f91ad7060df91b01
 NEXT fix  kind=review.fix  status=pending
 OPEN conventions/coding.md
 DELEGATE idev-coder
+FANOUT_ASSESS fix python3 scripts/fanout.py assess --feature demo --activity fix
 LABEL 按审查清单改掉全部 I*（实现审核前，不另请签）
 WITH {'accept_all_findings': True}
 VERIFY idev-reviewer confirms before PASS: --verified-by idev-reviewer --verify-evidence <report>
+PROGRESS closed=8/11 open=fix

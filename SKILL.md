@@ -85,6 +85,7 @@ python3 scripts/turn-budget.py [--max 8] [--min-reads 6] [--min-ratio 1.5] [<tra
 |---|---|---|---|
 | `req-review` | 需求落到既有代码：落点 / 影响面 / 与存量冲突 / 边界 / 演进方向 + 竞品对比 | `req-ground.py --feature <f> --probe` | [idev-deliver.md](agents/idev-deliver.md)「需求要落到这个工程上」 |
 | `req-review` | 界面需求细到交互层，派生 json-render spec + 零依赖预览 | `ui-spec.py --feature <f>` | [idev-deliver.md](agents/idev-deliver.md)「界面需求要细到交互层」 |
+| `req-review` / `req` / `arch` | 人在方案文档里写下的标注：原地提、原地标掉、台账留处置。未处置、处置无留痕、标注被抹掉三条机检 | `annotate.py scan --feature <f>` | [annotate.md](references/annotate.md) |
 | `arch` | 影响范围内先审既有问题。判据唯一就写入 `scope_debt.decision`。定不了才并进当前编制的一次决策包 | — | [deliver/SKILL.md](deliver/SKILL.md) |
 | 触及 Vue | UI 设计、编码、自测、测试、UI 自动化、根因：先打开语言尺，再按它点名的技能做 | `vue-skills.py --repo <仓> --stage <阶段>` | [vue.md](conventions/vue.md) |
 | 每一格 | 七视角专业拒过清单里可机检的那一半（`--list` 看各档查什么） | `stage-gate.py --feature <f> --all` | [experts.md](deliver/references/experts.md) |
@@ -152,4 +153,4 @@ S1 新票→deliver `req-review`（必开 `docs/SKILL.md` 与 grilling）· S2 �
 
 ## 链接
 
-先读 [使用说明](references/guide.md) · [operator-cheatsheet](references/operator-cheatsheet.md) · 细则 [skill-details](references/skill-details.md) · 新票 vs 小改 [s1-vs-s8](references/s1-vs-s8-playbook.md) · HITL [hitl-risk-tiers](references/hitl-risk-tiers.md) · 全图 [lifecycle](references/lifecycle.md) · 内聚 [cohesion](references/cohesion.md) · 自进化 [self-evolution](references/self-evolution.md) · 可移植 [portability-checklist](references/portability-checklist.md) · Linux 调度 [linux-schedulers](references/linux-schedulers.md) · aisel 对照 [aisel-mapping](references/aisel-mapping.md) · spec-kit 对照 [spec-kit-mapping](references/spec-kit-mapping.md) · 自检 `scripts/syntax-check.sh` → `scripts/agents-check.py` → `scripts/agent-smoke.sh` → `scripts/healthcheck.sh`（含 late-lifecycle / second-product smoke）· 周审计 `scripts/audit-traces.sh 50`
+先读 [使用说明](references/guide.md) · 新票 vs 小改 [s1-vs-s8](references/s1-vs-s8-playbook.md) · HITL [hitl-risk-tiers](references/hitl-risk-tiers.md) · 全图 [lifecycle](references/lifecycle.md) · 自进化 [self-evolution](references/self-evolution.md) · aisel 对照 [aisel-mapping](references/aisel-mapping.md) · spec-kit 对照 [spec-kit-mapping](references/spec-kit-mapping.md) · 自检 `scripts/syntax-check.sh` → `scripts/agents-check.py` → `scripts/agent-smoke.sh` → `scripts/healthcheck.sh`（含 late-lifecycle / second-product smoke）· 周审计 `scripts/audit-traces.sh 50`

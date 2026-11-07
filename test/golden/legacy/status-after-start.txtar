@@ -6,7 +6,7 @@
 -- output --
 RUN $WORK/.idev/task/demo/workflow/run.yaml  lite-change  running
   pending   preflight  preflight.inputs
-  pending   scope-guard  route.s4
+  pending   scope-guard  scope.baseline
   pending   code-pass  deliver.code_pass
   pending   plan  verify.plan
   pending   run  verify.run

@@ -74,7 +74,7 @@ class Assess(unittest.TestCase):
         )
         result = fanout.assess("feat", "plan", self.root)
         self.assertEqual(result["decision"], "FANOUT")
-        self.assertEqual([s["id"] for s in result["shards"]], ["I1", "I3"])
+        self.assertEqual([s["id"] for s in result["shards"]], ["I1", "I2", "I3"])
         self.assertIn("verify/checks/I1/", result["shards"][0]["writes"])
         self.assertIn("LEASE", fanout.render(result, "feat"))
 
@@ -451,6 +451,37 @@ class Merge(unittest.TestCase):
         self.assertEqual(record_name("run", 1, "H1"), "run-H1-1.yaml")
         with self.assertRaises(ValueError):
             record_name("run", 1, "../x")
+
+    def test_code_splits_disjoint_include_modules(self) -> None:
+        (self.task / "arch.yaml").write_text(safeyaml.dump({
+            "impact_candidates": [
+                {"path": "a/one.go", "include": True},
+                {"path": "b/two.go", "include": True},
+            ],
+        }), encoding="utf-8")
+        result = fanout.assess("feat", "code", self.root)
+        self.assertEqual(result["decision"], "FANOUT")
+        self.assertEqual([s["id"] for s in result["shards"]], ["a", "b"])
+        fanout.write_manifest("feat", result, self.root)
+        self.assertEqual(fanout.merge("feat", "code", self.root), 0)
+
+    def test_code_stays_serial_on_one_module_or_a_covering_path(self) -> None:
+        (self.task / "arch.yaml").write_text(safeyaml.dump({
+            "impact_candidates": [
+                {"path": "a/one.go", "include": True},
+                {"path": "a/two.go", "include": True},
+            ],
+        }), encoding="utf-8")
+        self.assertEqual(fanout.assess("feat", "code", self.root)["decision"], "SERIAL")
+        (self.task / "arch.yaml").write_text(safeyaml.dump({
+            "impact_candidates": [
+                {"path": "a/one.go", "include": True},
+                {"path": "**", "include": True},
+            ],
+        }), encoding="utf-8")
+        covered = fanout.assess("feat", "fix", self.root)
+        self.assertEqual(covered["decision"], "SERIAL")
+        self.assertIn("covers", covered["reason"])
 
 
 if __name__ == "__main__":

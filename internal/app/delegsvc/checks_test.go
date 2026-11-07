@@ -489,3 +489,158 @@ func TestFailedListIsOrderedAndComplete(t *testing.T) {
 		t.Errorf("Failed = %v, want %v", o.Failed, want)
 	}
 }
+
+// --- gate-held: the reviewer may only write the review -------------------
+//
+// scope-held asks whether a writer stayed inside its declared scope; this
+// asks whether a reviewer wrote anything else at all. A reviewer that edits
+// the tests or the plan has moved the gate it exists to hold.
+
+func reviewerPacket() delegsvc.Packet {
+	p := goodPacket()
+	p.Kind = "review.report"
+	p.Agent = "idev-reviewer"
+	p.MustRead = []string{"/idev/conventions/coding.md"}
+	return p
+}
+
+func reviewerReport() delegsvc.Report {
+	r := goodReport()
+	r.Scope = []string{"review.md"}
+	r.Read = []string{"src/export.go"}
+	r.Changed = []string{"review.md"}
+	return r
+}
+
+func TestReviewerWritingOnlyTheReviewPasses(t *testing.T) {
+	mustPass(t, run(t, reviewerPacket(), reviewerReport(), goodEvidence()), delegsvc.CheckGateHeld)
+}
+
+func TestReviewerWritingAShardOfTheReviewPasses(t *testing.T) {
+	r := reviewerReport()
+	r.Scope = []string{".idev/task/demo/review/shards/api.md"}
+	r.Changed = []string{".idev/task/demo/review/shards/api.md"}
+	mustPass(t, run(t, reviewerPacket(), r, goodEvidence()), delegsvc.CheckGateHeld)
+}
+
+func TestReviewerMovingTheGateIsCaught(t *testing.T) {
+	// The failure worth having: a reviewer that edits the plan it is
+	// reviewing against.
+	r := reviewerReport()
+	r.Scope = append(r.Scope, "verify/plan.yaml")
+	r.Read = append(r.Read, "verify/plan.yaml")
+	r.Changed = append(r.Changed, "verify/plan.yaml")
+	msg := mustFail(t, run(t, reviewerPacket(), r, goodEvidence()), delegsvc.CheckGateHeld)
+	if !strings.Contains(msg, "verify/plan.yaml") {
+		t.Errorf("the message should name the file: %q", msg)
+	}
+}
+
+func TestReviewerTouchingProductCodeIsCaught(t *testing.T) {
+	r := reviewerReport()
+	r.Scope = append(r.Scope, "src/export.go")
+	r.Changed = append(r.Changed, "src/export.go")
+	mustFail(t, run(t, reviewerPacket(), r, goodEvidence()), delegsvc.CheckGateHeld)
+}
+
+func TestAReportWithNoChangedLinePassesGateHeld(t *testing.T) {
+	// The field is newer than some reports. An absent field is not evidence
+	// of a write.
+	r := reviewerReport()
+	r.Changed = nil
+	mustPass(t, run(t, reviewerPacket(), r, goodEvidence()), delegsvc.CheckGateHeld)
+}
+
+func TestGateHeldDoesNotRunForAWriter(t *testing.T) {
+	// A coder naming product code in CHANGED is scope-held's business.
+	if _, _, ok := verdictOf(run(t, goodPacket(), goodReport(), goodEvidence()), delegsvc.CheckGateHeld); ok {
+		t.Error("gate-held ran for idev-coder; it is the reviewer's check")
+	}
+}
+
+// --- deliver-gates: the two GATE lines before a signature ----------------
+
+func deliverPacket() delegsvc.Packet {
+	p := goodPacket()
+	p.Kind = "deliver.advance"
+	p.Agent = "idev-deliver"
+	p.Stage = "arch"
+	p.MustRead = []string{"/idev/deliver/SKILL.md"}
+	return p
+}
+
+func deliverReport() delegsvc.Report {
+	r := goodReport()
+	r.Scope = []string{".idev/task/demo/arch.yaml"}
+	r.Read = []string{".idev/task/demo/baseline.yaml"}
+	r.Changed = []string{".idev/task/demo/arch.yaml"}
+	r.Gates = []string{
+		"GATE: check-feature arch = PASS",
+		"GATE: stage-gate arch = PASS",
+	}
+	return r
+}
+
+func TestBothGatesNamedWithVerdictsPasses(t *testing.T) {
+	mustPass(t, run(t, deliverPacket(), deliverReport(), goodEvidence()), delegsvc.CheckDeliverGates)
+}
+
+func TestOneGateMissingIsCaught(t *testing.T) {
+	r := deliverReport()
+	r.Gates = []string{"GATE: check-feature arch = PASS"}
+	msg := mustFail(t, run(t, deliverPacket(), r, goodEvidence()), delegsvc.CheckDeliverGates)
+	if !strings.Contains(msg, "stage-gate") {
+		t.Errorf("the message should name the missing gate: %q", msg)
+	}
+}
+
+func TestAGateLineWithNoReadableVerdictIsCaught(t *testing.T) {
+	r := deliverReport()
+	r.Gates = []string{
+		"GATE: check-feature arch = PASS",
+		"GATE: stage-gate arch 跑过了",
+	}
+	mustFail(t, run(t, deliverPacket(), r, goodEvidence()), delegsvc.CheckDeliverGates)
+}
+
+func TestSigningOverAFailingGateIsCaught(t *testing.T) {
+	// The one worth having. STATUS=PASS while a gate said FAIL is not a
+	// formatting slip: it is a signature over a refusal.
+	r := deliverReport()
+	r.Status = "PASS"
+	r.Gates = []string{
+		"GATE: check-feature arch = PASS",
+		"GATE: stage-gate arch = FAIL(2)",
+	}
+	msg := mustFail(t, run(t, deliverPacket(), r, goodEvidence()), delegsvc.CheckDeliverGates)
+	if !strings.Contains(msg, "BLOCKED") {
+		t.Errorf("the message should say what to return instead: %q", msg)
+	}
+}
+
+func TestAFailingGateReportedAsBlockedPasses(t *testing.T) {
+	// Same gates, honest status. This is what the check is steering toward,
+	// so it must not also fail.
+	r := deliverReport()
+	r.Status = "BLOCKED(logic)"
+	r.Gates = []string{
+		"GATE: check-feature arch = PASS",
+		"GATE: stage-gate arch = FAIL(2)",
+	}
+	mustPass(t, run(t, deliverPacket(), r, goodEvidence()), delegsvc.CheckDeliverGates)
+}
+
+func TestNotApplicableIsAReadableVerdict(t *testing.T) {
+	r := deliverReport()
+	r.Gates = []string{
+		"GATE: check-feature arch = PASS",
+		"GATE: stage-gate arch = 不适用",
+	}
+	mustPass(t, run(t, deliverPacket(), r, goodEvidence()), delegsvc.CheckDeliverGates)
+}
+
+func TestDeliverGatesDoesNotRunForOtherKinds(t *testing.T) {
+	if _, _, ok := verdictOf(run(t, goodPacket(), goodReport(), goodEvidence()), delegsvc.CheckDeliverGates); ok {
+		t.Error("deliver-gates ran for deliver.code_pass; it is deliver.advance's check")
+	}
+}

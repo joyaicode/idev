@@ -149,7 +149,7 @@
 
 | 书里的做法 | 现有部件 |
 |---|---|
-| 同一文件不要被后写的盖掉 | 写租约一次一个写者。分片写集相交就 `SERIAL` |
+| 同一文件不要被后写的盖掉 | 写路径相交、空路径或 `**` 拒绝第二张写租约。不相交的路径可以各持一张。分片写集相交就 `SERIAL` |
 | 跨文件把同一个不变量改矛盾 | `merge` 对照派发时的 intent。assess 给总账记了指纹，分片改了它，`merge` 拒绝 |
 | 父级结束时子进程还在 | [会话收尾](../conventions/SKILL.md)只关本轮拉起的进程 |
 | 进度和卡住 | `prior_failure`、`LOOP` / `COUNT`、同签名三次、连续两次无变化 |
@@ -161,18 +161,51 @@
 
 审查者的 `CHANGED` 只许 `review.md` 和 `review/shards/`。写了别的路径，`gate-held` 失败。规划留在主会话。执行者都是 `inherit`，不按难度再分模型档。
 
+## 模型看见的内容从日志重放
+
+原则来自 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的会话日志：模型看见的内容先落进日志，下一步从日志推导。执行者每次被派都是新的上下文，所以上一回读过的正文要重放进这一份委派包。不引入 Cordis，不另起运行时，不新做事件总线。
+
+| Harness | 现有部件 |
+|---|---|
+| 追加的会话日志 | 委派留痕、保存的 brief、`workflow/reads.yaml` |
+| 下一步从日志推导 | `attempt > 1` 时，`read_ledger.project` 把 sha256 仍一致的区间原文放进委派包 |
+| 请求头（稳定指令和工具面） | 派发前冻进 brief 的 `request_header`。打印用这份，不在打印时重读文件 |
+| 请求头变了 | 同一执行者的上一份留痕 sha256 不同，委派包写 `请求头变更` |
+| 稳定指令正文 | 执行者页由宿主装载。必读页前 80 行仍是 `步进:`，因为那一页不是系统提示 |
+| 会变的事实 | `prior_failure`、冻进 brief 的 `progress`、`领域约束` |
+| 工具失败不结束这一步 | `observe --fail` 走 `on_fail`。候选之外的 `act` 记成 `UNKNOWN_TOOL` 或 `NOT_ADMITTED`，循环仍开着 |
+| 步进之间的 steer / inject | 仍按「这一轮之外到达的事」。工具还没返回时不插入 |
+| 每会话一套插件 | 五个执行者文件就是预设 |
+
+`请求头` 里的 `tools` 是声明，不是宿主里的开关。宿主若忽略 `tools` 字段，多出来的调用仍由该执行者的硬规则和回报机检挡住。
+
+重派时委派包多这几行：
+
+- `重放:` 说明本步换了新的上下文
+- `请求头变更:` 同一执行者的定义文件 sha256 和上一回不同。这一份委派包用的是现在这份
+- `上下文:` 加上 sha256 仍一致的原文。一次最多 4 段、共 4000 字，新的优先
+- `上下文失效:` 文件字节变了，文件不在，或区间已经不在文件里
+- `上下文未放入:` 字节没变，但超出这一次的篇幅。需要时 `load` 这一段
+- `上下文拒绝:` 路径不在仓根内，原文不读
+
+`步进:` 那一页已经在委派包里，不再从日志重放一遍。`PROGRESS` 在派发时写入 brief，之后回看这份委派包仍是当时那一行。
+
+候选之外的一次 `react` 调用记成一跳：名字没登记是 `UNKNOWN_TOOL`，登记了但不在这一步的候选里是 `NOT_ADMITTED`。循环仍开着，不走 `on_fail`。`open` 时候选未登记，仍然拒绝，不创建循环文件。
+
+留在上游：Cordis 的事件分类和热替换、模型流式帧、按前缀缓存只在请求头变化时写一条、每会话一份 `cordis.yml`。
+
 ## 这一层是什么 / 不是什么
 
 | 是 | 不是 |
 |---|---|
 | 每个 step 多一行「这步谁去做」 | 新的状态机(run 状态机一个字节没改) |
-| 专职 prompt + 按职责收紧的工具集 | 无界 fan-out。人闸和写租约一次一步；同一 `group` 且 `writes` 不相交的 verify 步骤同时开。自测、用例设计、用例执行、根因在 `fanout.py` 打出 `FANOUT` 时，同一条消息派多个分片 |
+| 专职 prompt + 按职责收紧的工具集 | 无界 fan-out。人闸一次一步。写路径相交、空路径或 `**` 仍是一张写租约；不相交的 include 路径可以各持一张。同一 `group` 且 `writes` 不相交的 verify 步骤同时开。自测、用例设计、用例执行、根因，以及不相交的编码片，在 `fanout.py` 打出 `FANOUT` 时，同一条消息派多个分片 |
 | 独立上下文,互不污染 | 新的签字权(人签字的规则完全不变) |
 | 强化「只开一个执行模块」 | 新的验收权威或分数门禁 |
 
-`find_run()` 仍拒绝第二份活跃 run。人闸和 `lease: write` 一次只开一步。配方里同一个 `group`、并且 `writes` 两两不相交的 verify 步骤，从第一个未完成成员到组尾同时开放：`next` 打出 `PARALLEL`，`record` 和 `delegate` 接受组内任一未完成步骤。这是先订死写集再并行，对应 `conventions/canon.md` 对「先订接口再并行」的要求。`references/hitl-risk-tiers.md` 说的不内置并行 PR 阶段机仍然成立：组不是一条并行的合并流水线。
+`find_run()` 仍拒绝第二份活跃 run。人闸一次只开一步。写路径相交、空路径或 `**` 拒绝第二张写租约；不相交的 include 路径可以各持一张。配方里同一个 `group`、并且 `writes` 两两不相交的 verify 步骤，从第一个未完成成员到组尾同时开放：`next` 打出 `PARALLEL`，`record` 和 `delegate` 接受组内任一未完成步骤。`drive` 会为这一波每个执行者打出委派包，不要再 `delegate --open`。这是先订死写集再并行，对应 `conventions/canon.md` 对「先订接口再并行」的要求。`references/hitl-risk-tiers.md` 说的不内置并行 PR 阶段机仍然成立：组不是一条并行的合并流水线。
 
-自测、用例设计、用例执行、根因，以及写集还没钉死成一份 `review.md` 的审查，可以在**同一步**里按需拆开。导体先跑 `scripts/fanout.py assess`。少于两片、写集相交、或同一个 Maven 模块没有 `runner.parallel: true`，输出 `SERIAL`，仍然只派一个 agent。用例起草在 `arch.yaml` 里还没有两条 `case_intent` 时，改看 `review.md` 里已签收的 `I*`：签收项就是分片，不必等这一步自己把 intent 写出来。审查按改动的顶层模块分片深读；`coding-scan.sh` 是 `PREP`，导体先跑完。输出 `FANOUT` 时，同一条消息把每个 `SHARD` 派出去（Cursor 用 Task，Claude Code 用 Agent 工具），并且对每一片执行 `workflow.py delegate <step> --shard <id>`。那张验证租约只覆盖该片的 `WRITES`，不覆盖整棵票目录。不要对一个 `FANOUT` 步骤再打一张整票租约。每个委派包多三行：`分片`、`只写`、`范围`。分片只写 `WRITES` 里的路径。`verify/plan.yaml`、`arch.yaml`、`review.md` 和 `hypotheses.yaml` 只由导体的 `fanout.py merge` 改。assess 打出 `MERGE` 且没有 `SHARD` 时，草稿已经齐了，跑 merge，不要再派一个执行者去写这些总账。合并之后这一步只 `record` 一次。每一片的留痕用 `shard:`，文件落在 `delegations/<run_id>/<step>-<shard>-<attempt>.yaml`。另一片的结论不是证据。分片是互补工作，先完成的一片不取消其余。默认一轮 4 片，最多 8 片，其余是 `QUEUED`，合并后再 assess。这仍然是一份 run。`review.fix` 不拆。再派的条件见「再派一个执行者」。
+自测、用例设计、用例执行、根因，以及写集还没钉死成一份 `review.md` 的审查，可以在**同一步**里按需拆开。导体先跑 `scripts/fanout.py assess`。少于两片、写集相交、或同一个 Maven 模块没有 `runner.parallel: true`，输出 `SERIAL`，仍然只派一个 agent。用例起草在 `arch.yaml` 里还没有两条 `case_intent` 时，改看 `review.md` 里的 `I*`（待签收与已签收都算）：这些项就是分片，不必等这一步自己把 intent 写出来，也不等人签收。审查按改动的顶层模块分片深读；`coding-scan.sh` 是 `PREP`，导体先跑完。输出 `FANOUT` 时，同一条消息把每个 `SHARD` 派出去（Cursor 用 Task，Claude Code 用 Agent 工具），并且对每一片执行 `workflow.py step <step> --shard <id>`。那张租约只覆盖该片的 `WRITES`，不覆盖整棵票目录。`drive` 在没有 `PREP`，或 `PREP` 是内核脚本并且已经跑完时，已经打出每片委派包并领好租约。扫描日志在 `扫描:`。编译这类 `PREP` 仍由导体先跑。一片回来后 `land <step> --shard <id>`。最后一片记下且没有打回时，这次 `land` 已经跑过 merge。打开证据后再 `record` 这一次。不要对一个 `FANOUT` 步骤再打一张整票租约。每个委派包多三行：`分片`、`只写`、`范围`。分片只写 `WRITES` 里的路径。`verify/plan.yaml`、`arch.yaml`、`review.md` 和 `hypotheses.yaml` 只由导体的 `fanout.py merge` 改。assess 打出 `MERGE` 且没有 `SHARD` 时，草稿已经齐了，跑 merge，不要再派一个执行者去写这些总账。合并之后这一步只 `record` 一次。每一片的留痕用 `shard:`，文件落在 `delegations/<run_id>/<step>-<shard>-<attempt>.yaml`。另一片的结论不是证据。分片是互补工作，先完成的一片不取消其余。默认一轮 4 片，最多 8 片，其余是 `QUEUED`，合并后再 assess。这仍然是一份 run。`deliver.code_pass` 和 `review.fix` 只在 `arch.yaml` 里 `include: true` 的路径分属至少两个顶层模块、且写集不相交时拆开；每片的写租约只覆盖该片路径，`merge` 不改产品源码，只核对 `arch.yaml` 指纹后由导体 `record` 一次。路径相交、空路径或 `**` 仍是 `SERIAL`，也拒绝第二张写租约。再派的条件见「再派一个执行者」。
 
 `conventions/evidence.md:4` 已经为此留了口子:「复杂问题可并行多个 Agent,但不能用『另一个 Agent 猜过了』代替证据。」—— 所以每个 agent 的回报都必须带证据路径,**agent 说过不算证据**。
 
@@ -188,9 +221,9 @@
 | `idev-reviewer` | 评审 | 审查(**独立于开发**) | `review.report` |
 | `idev-verifier` | verify 模块 + 用例所需环境 | 测试 | `verify.plan` · `verify.run` · `localdev.start` · `localdev.stop` · `localdev.approval_off` · `ui.lifecycle_run` · `ui.surface_scan` · `ui.coverage_lock` |
 | `idev-ops` | ops 模块 + S4 论证 | 排障 / 诊断 | `route.s4` · `ops.classify` · `ui.fix_deposit` |
-| **导体** | — | 持签字权 | `preflight.inputs` · `human.gate` · `shell.confirmed` · `tool.step` · `ui.clean_pass_loop` · `ui.product_batch` |
+| **导体** | — | 持签字权 | `preflight.inputs` · `scope.baseline` · `human.gate` · `shell.confirmed` · `tool.step` · `ui.clean_pass_loop` · `ui.product_batch` |
 
-30 个 kind:24 个委派,6 个导体保留。每个 kind 的**落点页**见 `registry/kinds.yaml` 的 `page`,本页不复制那一列。
+31 个 kind:24 个委派,7 个导体保留。每个 kind 的**落点页**见 `registry/kinds.yaml` 的 `page`,本页不复制那一列。
 
 这张表由 `scripts/gen-kinds.py` 从 `registry/kinds.yaml` 生成。加一个 kind 只改那一个文件。
 <!-- agents-table:end -->
@@ -230,6 +263,7 @@
 |---|---|
 | `human.gate` | **制度性,不是选择。** `workflow_spec.is_human()` 按词表拒绝 agent / 模型 / 角色名 —— subagent 用自己的名字签字在代码层就被拒。签字权不可下放。 |
 | `preflight.inputs` | 纯可读性探针,导体自跑一条命令即可,委派反而多一跳 |
+| `scope.baseline` | 可读性谓词，导体自跑一条命令；`route.s4` 留给论证 |
 | `shell.confirmed` | 就一条人已确认的命令,组委派包比直接跑更贵 |
 | `tool.step` | 已登记工具的一步。`next` 只打出命令，不执行，也不另起运行时 |
 | `ui.clean_pass_loop` | 外层整轮循环控制(`policy.max_clean_attempts`),跨多个 step,不属于单步执行 |
@@ -238,11 +272,11 @@
 ## 导体回路(委派步两到三条命令)
 
 1. `python3 scripts/workflow.py next --feature <f>` 看 `NEXT` / `OPEN` / `DELEGATE`。`DELEGATE none` 导体自己做;`human.gate` 照旧 `record --by --quote`。
-2. `workflow.py step <step> --feature <f>`:交给 agent,要写代码的领写租约,打印机器填好的委派包(`BRIEF` 到 `END BRIEF`),记下开始时间。原样发给 agent。有 `FANOUT` 时仍按分片 `delegate <step> --shard <id>`,不走 `step`。
+2. `workflow.py step <step> --feature <f>`:交给 agent,要写代码的领写租约,打印机器填好的委派包(`BRIEF` 到 `END BRIEF`),记下开始时间。原样发给 agent。有 `FANOUT` 时用 `step <step> --shard <id>`，不打整步租约。`workflow.py drive` 停在这一步时，`SERIAL` 的委派包和每片委派包已经打出（内核脚本的 `PREP` 也已跑完），按打出的结果派，不要再跑一遍。编译这类 `PREP` 仍先跑。一片回来后 `land <step> --shard <id>`，merge 之后才 `record` 这一步。
 3. agent 回来,回报原文交给 `workflow.py land <step> --feature <f> --report -`(走 stdin)。它写委派留痕,机检与下面第 5 条相同,然后:
    - kind 要独立复核(`next` 打 `VERIFY`)且回报 PASS:领复核租约,打印复核包(`复核对象` 是写手这次的留痕)。发给复核者,它的回报再 `land` 一次,这次带 `--verified-by` / `--verify-evidence` 记下本步。
    - 不复核的 kind:按回报的 STATUS 直接 record。
-   - `SEND BACK`:归 agent 的检查没过,或复核没过。再跑 `step <step>` 拿带 `prior_failure` 的重派包。确认检查器误判、这次仍该过,才在写手那次 `land` 加 `--accept-with-findings "<为什么仍然过>"`,理由带到最后的 record。
+   - `SEND BACK`:归 agent 的检查没过,或复核没过。同一段输出里已经有带 `prior_failure` 的重派包,直接派。确认检查器误判、这次仍该过,才在写手那次 `land` 加 `--accept-with-findings "<为什么仍然过>"`,理由带到最后的 record。
    - `STOP`:回报 BLOCKED,或有信号等人答。照 `HANDOFF` / `CONSULT` / `REBRIEF` / `SIGNAL` 做,人答了 `decide`,再把同一份回报 `land` 一次(不会重复写留痕)。
 
 带复核的一步三条命令(`step`、`land`、`land`),其余委派步两条。复核租约要在写手回报被接受之后、复核者开工之前领,租约 30 分钟,所以不能提前到 `step`。规则和 BLOCKED 文案都在下面这些底层命令里,`step` / `land` 只是按顺序调它们;出了问题可以逐条手跑定位。
@@ -252,7 +286,7 @@
 1. `python3 scripts/workflow.py next --feature <f>` → 读 `NEXT` / `OPEN` / `DELEGATE` 三行
 2. `DELEGATE none` → 导体自己做这一步;`DELEGATE <agent>` → 组委派包(见下)
 3. **记下 `started_at`**,然后委派:Claude Code 用 Agent 工具,Cursor 用 `/<agent-name>`。
-   没有 `FANOUT` 时一步只派一个 agent。`fanout.py assess` 打出 `FANOUT` 时,同一条消息派这一波的每个分片,不要等前一个回来再派下一个。`PREP` 由导体先跑完,再派分片。
+   没有 `FANOUT` 时一步只派一个 agent。`fanout.py assess` 打出 `FANOUT` 时,同一条消息派这一波的每个分片,不要等前一个回来再派下一个。`PREP` 由导体先跑完,再派分片。`drive` 已经打出 assess 或 `BRIEF` 时按打出的结果派,不要再跑一遍。一片的回报用 `land <step> --shard <id>`。
 4. 收回报，**记下 `finished_at`**。打开 `EVIDENCE` 指向的文件，再核对 `STATUS`。没有证据路径的 PASS 不作数。
    做了一部分就说全部做完、只试了一条路就说做不到、口头办成但没有对上尺的产物，都打回给原执行者补证据。
    没有检查名或 `file:方法名` 的退回，先补修复条件，不重派生成者。认法在「再派一个执行者」和「下一轮只接核实过的状态」。
@@ -266,7 +300,7 @@
    打印 `SIGNAL …`(回报是 `BLOCKED(logic)`、有 `[承重]` 假设,或 `ARTIFACT: UNKNOWN`)→ **停下来问人**:
    一个问题、选项、你的推荐;人答了用 `workflow.py decide <step> --signal "<原样>"
    --question … --answer … --quote "<人的原话>"` 记进 `decisions.yaml`。
-   `继续` / `ok` 不是答案,再问一次。没有信号就不停
+   `继续` / `验收` / `ok` 不是答案，不记，不再问一次。没有信号就不停
 6. `workflow.py record <step> <STATUS> --evidence <路径>`。`human.gate` 另须
    `--by <人名> --quote "<确认原话>"`;
    `KIND_VERIFIER` 里的 kind(`next` 打印 `VERIFY …`)PASS 前先派那个 agent 复核。
@@ -320,9 +354,13 @@ artifact: <线上跑的那份产物路径;kind=ops.classify 必填>
 分片: <fanout 的 SHARD id；没有分片就不要这一行>
 只写: <WRITES 里的路径>
 范围: <SCOPE 原文>
+既往: <这个范围里已经过闸的经验或程序，一条一行；没有就不要这一行>
+既往说明: <有「既往」行时跟在最后一条后面>
 ```
 
-`workflow.py step` 打出的委派包在 `END BRIEF` 前有一行 `PROGRESS closed=<已收口>/<总步数> open=<步骤 id>`。原样带上。已收口含跳过、未证明和失败后已改道，不是通过。
+`既往:` 由 `workflow.py` 经共享的 `scripts/lib/prior_art.py` 填，上限 3 条：票内与内核两本台账里，`scope` / `symptom` 命中本步范围（feature、label、`只写` 与 `分片` 路径的顶层目录）的条目。执行者每次被派都是新上下文，**这张票已经付钱学到的东西，不随委派包到达就等于没有到达**。只取各自台账已经过闸的那一档 —— `lessons.py` 的 `authoritative`（有复现、有人确认）与 `sediment.py` 的 `kept`（两条不同结果、有人确认）。候选不进：`recall` 打给的读者被告知过那是未验假设，而委派包的读者是从零开始的执行者，一条未确认的结论以上下文的身份到达，正是「一次局部错误变成系统性错误」的那条路。自动注入不计 `uses`（那不是这条经验帮上了忙）。台账读不了就不要这一行，不挡委派 —— 一份因为可选信息而组不出来的委派包，比没有这一行更糟。
+
+`workflow.py step` 打出的委派包在 `END BRIEF` 前有一行 `PROGRESS closed=<已收口>/<总步数> open=<步骤 id>`。原样带上。已收口含跳过、未证明和失败后已改道，不是通过。`步进:` 是必读页的前 80 行和文件 sha256，`包含:` 是 `arch.yaml` 里 `include: true` 的路径。`请求头:` 是执行者定义文件的 sha256 和声明的 `tools`。`attempt > 1` 从 `workflow/reads.yaml` 重放 sha256 仍一致的区间，见「模型看见的内容从日志重放」。
 
 `IDEV_ROOT` 对 `idev-coder` / `idev-verifier` / `idev-ops` 是**必填**:这三个要跑提效脚本
 (`scripts/failure_signature.py`、`scripts/hypothesis.py`),定义里以 `$IDEV` 引用它。

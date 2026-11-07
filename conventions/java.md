@@ -29,6 +29,7 @@ YAGNI：单实现先写具体类型，不滥抽 `IXxx`。新能力：公开接�
 | 方法从未使用 | 删掉，或本文件立刻用上。禁止留「以后用」 |
 | 不必要的装箱 | 不要 `Integer.valueOf(n)` / `Boolean.valueOf`；`return n` 即可 |
 | 不必要的拆箱 | 不要 `.intValue()` / `.booleanValue()`；比较落到 `int`，或走类型自己的包含方法 |
+| 用 `==` 比较对象内容 | 身份用 `==`，值比较用 `equals`；相等语义（值相等 / 身份相等）在契约里写明 |
 | 显式类型参数可被替换为 `<>` | `new HashMap<>()`，禁止 `new HashMap<String, String>()` |
 | 显式类型参数可以推断 | `Collections.emptySet()`，禁止 `Collections.<String>emptySet()` |
 | 可替换为 `Map.computeIfAbsent()` | `get` + null 再 `put` 改成 `computeIfAbsent(k, x -> new HashSet<>())` |

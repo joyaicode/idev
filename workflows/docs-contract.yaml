@@ -16,7 +16,7 @@ steps:
     label: 契约或经验回填
   - id: gate
     kind: human.gate
-    label: 人确认回填内容
+    label: 回填写完即过（无分叉不请人）
     with:
       will_write: ["契约文档回填段落（docs/SKILL.md 解析出的落点）"]
       proof: "回填前后差异摘要"

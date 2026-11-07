@@ -253,6 +253,26 @@ func TestAFailedAuditAppendRollsBackTheStateChange(t *testing.T) {
 	}
 }
 
+func TestApplyManyRollsBackWhenTheRecordHasNoEvidence(t *testing.T) {
+	s, st := newSvc(t)
+	r := start(t, s)
+	_, err := s.ApplyMany(context.Background(), r.ID, []run.Event{
+		{Kind: run.EvConductorStepStarted, Actor: run.ActorConductor, StepID: "preflight"},
+		{Kind: run.EvConductorStepRecorded, Actor: run.ActorConductor, StepID: "preflight",
+			Outcome: run.StepPASS},
+	}, conductor())
+	if err == nil {
+		t.Fatal("a PASS without evidence must fail")
+	}
+	stored, ok := st.Run(r.ID)
+	if !ok {
+		t.Fatal("the run disappeared")
+	}
+	if stored.Steps[0].State != run.StepReady {
+		t.Errorf("preflight = %s, want ready: the start survived a refused record", stored.Steps[0].State)
+	}
+}
+
 func TestAFailedSaveWritesNoAudit(t *testing.T) {
 	s, st := newSvc(t)
 	r := start(t, s)

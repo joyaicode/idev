@@ -2903,6 +2903,23 @@ else
 fi
 rm -rf "$CW"
 
+say "34 re-recording golden refuses without a stated reason"
+
+# The golden set is the migration's safety net, and the one way to take a
+# safety net down unnoticed is to re-record over a real regression. These two
+# cases are the cheap half: they exit in argument parsing, before any of the
+# 53 scenarios run. The expensive half — a bare run printing DRIFT and
+# writing nothing — was verified by injecting a fake regression by hand
+# (see references/changelog.md 2026-11-06); replaying it here would cost
+# three full 13s recordings.
+expect 2 "--accept without a reason is refused" -- \
+  bash "${S}/../test/golden/record.sh" --accept
+contains "needs a reason" "refusal says a reason is what is missing"
+
+expect 2 "an unknown flag does not fall through to re-recording" -- \
+  bash "${S}/../test/golden/record.sh" --force
+contains "unknown argument" "refusal names the bad argument"
+
 printf '\n== result\n'
 printf '  pass %d   fail %d\n' "$PASS" "$FAIL"
 if [ "$FAIL" -ne 0 ]; then

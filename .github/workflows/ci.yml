@@ -31,7 +31,10 @@ jobs:
       - uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.9"
-      - run: pip install pyyaml
+      # requirements.txt is where the dependency tiers are declared;
+      # hand-copying one name here meant jsonschema never arrived and the
+      # delegation-return lock skipped 4 of its 6 cases on every CI run.
+      - run: pip install -r requirements.txt
       # registry/kinds.yaml is the one source for the kind table; five copies
       # are generated from it. A stale copy is how the old five-way
       # duplication would come back.
@@ -123,7 +126,21 @@ jobs:
         with:
           # The kernel has to keep running on what macOS ships.
           python-version: "3.9"
-      - run: pip install pyyaml
+      # requirements.txt is where the dependency tiers are declared;
+      # hand-copying one name here meant jsonschema never arrived and the
+      # delegation-return lock skipped 4 of its 6 cases on every CI run.
+      - run: pip install -r requirements.txt
+      - uses: actions/setup-go@v7.0.0
+        with:
+          # Without a toolchain these jobs still pass — and that is the bug.
+          # test_auto_gate and test_hooks skipTest every case when no idev
+          # binary can be built, exit 0, and report green having tested
+          # nothing; the five Go-dependent locks inside selfcheck do the
+          # same. bin/ is gitignored, so a bare checkout never has one.
+          # go.mod is where the floor lives; hand-copying a version here is
+          # the same mistake as hand-copying the dependency names below.
+          go-version-file: go.mod
+          cache: true
       - name: compile every script
         run: bash scripts/syntax-check.sh
       - name: agent definitions and the kind registry
@@ -161,7 +178,10 @@ jobs:
       - uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.9"
-      - run: pip install pyyaml
+      # requirements.txt is where the dependency tiers are declared;
+      # hand-copying one name here meant jsonschema never arrived and the
+      # delegation-return lock skipped 4 of its 6 cases on every CI run.
+      - run: pip install -r requirements.txt
       # The safety net for the whole migration: the Python CLI's output is
       # recorded, and P2 replays the same scenarios against the Go
       # compatibility subcommands.
@@ -180,10 +200,25 @@ jobs:
       - uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.9"
-      - run: pip install pyyaml
+      # requirements.txt is where the dependency tiers are declared;
+      # hand-copying one name here meant jsonschema never arrived and the
+      # delegation-return lock skipped 4 of its 6 cases on every CI run.
+      - run: pip install -r requirements.txt
+      - uses: actions/setup-go@v7.0.0
+        with:
+          # Without a toolchain these jobs still pass — and that is the bug.
+          # test_auto_gate and test_hooks skipTest every case when no idev
+          # binary can be built, exit 0, and report green having tested
+          # nothing; the five Go-dependent locks inside selfcheck do the
+          # same. bin/ is gitignored, so a bare checkout never has one.
+          # go.mod is where the floor lives; hand-copying a version here is
+          # the same mistake as hand-copying the dependency names below.
+          go-version-file: go.mod
+          cache: true
       - name: install the conventional alias
         run: |
           mkdir -p "$HOME/.cursor/skills"
           ln -s "$GITHUB_WORKSPACE" "$HOME/.cursor/skills/idev"
       - run: bash scripts/selfcheck.sh
-      - run: bash scripts/agent-smoke.sh
+      # agent-smoke now runs inside selfcheck above, so it is not listed
+      # twice; a break there still names it (fail "agent-smoke broke …").

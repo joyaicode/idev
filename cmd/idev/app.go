@@ -55,7 +55,7 @@ type app struct {
 
 func (a app) run(args []string) int {
 	if len(args) < 2 {
-		fmt.Fprintln(a.stderr, "usage: idev gate request|approve|reject|status ... | idev lease acquire|release|check ... | idev run start|apply|record|write ... | idev baseline seal|adopt|verify|sealed ... | idev delegation allocate|verify|accept ... | idev audit downgrades|export|verify ... | idev workspace locate|manifest|diff|head ... | idev token init --handle H")
+		fmt.Fprintln(a.stderr, "usage: idev gate request|approve|reject|status ... | idev lease acquire|release|check ... | idev run start|apply|record|write ... | idev baseline seal|reopen|adopt|verify|sealed ... | idev delegation allocate|verify|accept ... | idev audit downgrades|export|verify ... | idev workspace locate|manifest|diff|head ... | idev token init --handle H")
 		return exitUsage
 	}
 	ctx := context.Background()
@@ -87,6 +87,8 @@ func (a app) run(args []string) int {
 		err = a.runWrite(args[2:])
 	case "baseline seal":
 		err = a.baselineSeal(ctx, args[2:])
+	case "baseline reopen":
+		err = a.baselineReopen(ctx, args[2:])
 	case "baseline adopt":
 		err = a.baselineAdopt(ctx, args[2:])
 	case "baseline verify":
@@ -1072,12 +1074,9 @@ func (a app) applyRecord(
 		return err
 	}
 	actor := ports.Principal{Handle: "conductor@claude", Kind: "agent", OwnerHandle: "system"}
-	var next run.Run
-	for _, ev := range events {
-		next, err = e.runs.Apply(ctx, runID, ev, actor)
-		if err != nil {
-			return err
-		}
+	next, err := e.runs.ApplyMany(ctx, runID, events, actor)
+	if err != nil {
+		return err
 	}
 	expect, err := runyaml.SHA256Hex(path)
 	if err != nil {

@@ -97,7 +97,7 @@ class Signals(unittest.TestCase):
 
 class Answers(unittest.TestCase):
     def test_non_answers(self):
-        for quote in ("", "继续", "OK", "好的。", " go "):
+        for quote in ("", "继续", "验收", "继续，验收", "OK", "好的。", " go "):
             with self.subTest(quote=quote):
                 self.assertFalse(w.is_answer(quote))
 

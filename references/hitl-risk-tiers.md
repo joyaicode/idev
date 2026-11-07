@@ -5,12 +5,12 @@
 
 ## 原则
 
-1. **可逆、低爆破**可快路径（P2 / lite-change）；**不可逆**必须人闸（seal / aligned / promote / 生产写）。
-2. 闸门放在**副作用前**：先让 Agent 起草 plan / 跑自测 / 写报告；人确认后再写 `sealed`/`accepted`/`aligned` 或跑 `promote.sh`。
-2a. **不清楚处先 grilling：** 需求分析与任何确认闸前，若边界/异议/分叉未订死，先自动唤起 grilling；不要把含糊摘要直接送人盖章。
-3. 请签必须带**证明上下文**（见 [chat-confirm-signoff.md](chat-confirm-signoff.md) §证明上下文），避免只批摘要。
-4. 进度信任：周审计里「`AUTO` / `[非承重]` 后被推翻」的次数低，才考虑再降停问。交付主路径每个档位停四次：需求通过、架构通过、实现审核、提测结果。promote 在每个档位都留下人的确认。
-5. 停问看信号，不看位置：AI 拿不准（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）或卡住时才问；机检能判的点不让人盖章。当前工程的人岗关系先认出来，交互按这个编制收束。做法只在 [chat-confirm-signoff.md](chat-confirm-signoff.md)。当前工程的人岗关系先认出来，交互按这个编制收束。做法只在 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
+1. **可逆、低爆破**可快路径（P2 / lite-change）。解封、回退、promote、生产写、push、经验入库必须人点名。`sealed` / `accepted` / `aligned` 在检查通过且没有未决分叉时写入。
+2. 闸门放在**副作用前**：先让 Agent 起草 plan / 跑自测 / 写报告。检查通过就写 `sealed` / `accepted` / `aligned`。`promote.sh` 仍等人点名。
+2a. **不清楚处先 grilling：** 边界、异议或分叉没订死，先自动唤起 grilling。没有分叉不要送人盖章。
+3. 真要问的那一次必须带**证明上下文**（见 [chat-confirm-signoff.md](chat-confirm-signoff.md) §证明上下文），避免只批摘要。
+4. 进度信任：周审计里「`AUTO` / `[非承重]` 后被推翻」的次数，才是再加停点的依据。交付主路径不为确认停。promote 仍等人点名。
+5. 停问看信号，不看位置：AI 拿不准（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）或卡住时才问；机检能判的点不让人盖章。当前工程的人岗关系先认出来，交互按这个编制收束。做法只在 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
 
 档位的典型：P0 鉴权 / 数据面 / 跨仓契约；P1 默认功能票；P2 文档 / 小修 / 低爆破。
 

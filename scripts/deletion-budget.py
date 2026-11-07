@@ -3,7 +3,7 @@
 
     deletion-budget.py [--since HEAD~20] [--json]
 
-Counts only tracked source under scripts/ agents/ references/ workflows/
+Counts only tracked source under scripts/ agents/ references/ skills/ workflows/
 hooks/ cmd/ internal/ — not generatedverify, golden fixtures, or state/.
 Exit 0 always; prints the ratio. A ratio above 2.0 is a WARN, not a gate.
 """
@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PATHS = ("scripts", "agents", "references", "workflows", "hooks", "cmd", "internal", "ops", "deliver", "verify")
+PATHS = ("scripts", "agents", "references", "skills", "workflows", "hooks", "cmd", "internal", "ops", "deliver", "verify")
 
 
 def diff_numstat(since: str) -> tuple[int, int]:

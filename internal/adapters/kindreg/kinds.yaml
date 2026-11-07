@@ -78,7 +78,7 @@ conductor:
 forbidden: [auto.seal, auto.accepted, skip.signoff, multi.module.load]
 
 kinds:
-  # --- the conductor keeps these five -------------------------------------
+  # --- the conductor keeps these ------------------------------------------
   preflight.inputs:
     page: scripts/s8-preflight.sh
     lands: "—"
@@ -86,6 +86,13 @@ kinds:
     executor: conductor
     lease: none
     why_kept: "纯可读性探针,导体自跑一条命令即可,委派反而多一跳"
+  scope.baseline:
+    page: scripts/scope-baseline.py
+    lands: "—"
+    note: "小改范围谓词：密封基线的 goal / non_goal / sealed 与 HEAD 不一致就停。不派执行者。"
+    executor: conductor
+    lease: none
+    why_kept: "可读性谓词，导体自跑一条命令；route.s4 留给论证"
   human.gate:
     page: references/chat-confirm-signoff.md
     lands: "—"
@@ -107,7 +114,7 @@ kinds:
     note: "已登记工具的一步。next 打出 TOOL 命令，不执行"
     executor: conductor
     lease: none
-    why_kept: "工具按步骤协议登记后，任何配方都能编排；命令只打印，不另起运行时"
+    why_kept: "工具按步骤协议登记后，任何配方都能编排；next 只打印，workflow.py drive 才执行登记命令"
   ui.clean_pass_loop:
     page: "-"
     lands: "—"
@@ -174,7 +181,7 @@ kinds:
   review.fix:
     page: conventions/coding.md
     lands: "conventions/coding"
-    note: "交付主路径 with.accept_all_findings 时改全部 I*；code-review 仍只改已签收 I* 与显式纳入的 O*。此步恢复当轮必改"
+    note: "with.accept_all_findings 时改全部 I*（lite-change 与 code-review 都带这个字段）。没有该字段时才只改已签收 I*。此步恢复当轮必改"
     agent: idev-coder
     lease: write
     verify: independent
@@ -184,7 +191,7 @@ kinds:
   verify.plan:
     page: verify/SKILL.md
     lands: "verify"
-    note: "起草/调整 plan；请人 accepted（已 accepted 且未改用例 → 跳过，H4）"
+    note: "起草/调整 plan。无 SIGNAL 则 AUTO，不请人（已 accepted 且未改用例 → 跳过，H4）"
     agent: idev-verifier
     lease: verify
     verify: none

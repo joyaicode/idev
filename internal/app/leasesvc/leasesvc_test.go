@@ -214,6 +214,21 @@ func seedDelegatedRun(st *memstore.Store, runID, featureID, stepID, agent string
 	}, featureID)
 }
 
+func TestAcquireAllowsDisjointWritePaths(t *testing.T) {
+	s, st := newSvc(t)
+	first := writeParams()
+	first.WritePaths = []string{"src/a.go"}
+	acquire(t, s, first)
+
+	p := writeParams()
+	p.StepID, p.Agent = "code-pass-2", "other-coder@claude"
+	p.WritePaths = []string{"src/b.go"}
+	seedDelegated(st, "r-1", "code-pass-2", "other-coder@claude")
+	if _, err := s.Acquire(context.Background(), p); err != nil {
+		t.Fatalf("disjoint write paths: %v", err)
+	}
+}
+
 func TestAcquireRefusesASecondWriteLeaseOnTheFeature(t *testing.T) {
 	s, st := newSvc(t)
 	acquire(t, s, writeParams())

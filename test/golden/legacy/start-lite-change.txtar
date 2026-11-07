@@ -5,8 +5,9 @@
 0
 -- output --
 RUN $WORK/.idev/task/demo/workflow/run.yaml
-DIGEST match aec1243bf708f640
+DIGEST match f91ad7060df91b01
 NEXT preflight  kind=preflight.inputs  status=pending
 OPEN scripts/s8-preflight.sh
 DELEGATE none; the conductor does this step
 LABEL 前置探针（票/路径/配方依赖可读；缺则 BLOCKED）
+PROGRESS closed=0/11 open=preflight

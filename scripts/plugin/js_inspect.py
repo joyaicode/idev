@@ -12,7 +12,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import source_diff  # noqa: E402
+import canon_smells  # noqa: E402
+
+# Two shapes, two patterns: re forbids reusing a group name in one alternation.
+_DECL_FN = re.compile(r"\bfunction\s+(?P<name>\w+)\s*\(")
+_DECL_ASSIGN = re.compile(r"\b(?:const|let|var)\s+(?P<name>\w+)\s*=\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*=>)")
 
 # The second "=" of "===" must not count as "==". Same for "!==".
 _EQ = re.compile(r"(?<![!=])([=!]=)(?!=)")
@@ -100,6 +106,11 @@ def inspect_text(text: str, rel: str) -> list[tuple[str, int, str]]:
                     continue
                 title = "用 ===" if eq.group(1) == "==" else "用 !=="
                 hits.append((rel, _line(text, attr.start(1) + eq.start()), title))
+    hits.extend(canon_smells.chain_hits(masked, rel))
+    hits.extend(canon_smells.naming_hits(masked, rel, _DECL_FN))
+    hits.extend(canon_smells.naming_hits(masked, rel, _DECL_ASSIGN))
+    hits.extend(canon_smells.nesting_hits(masked, rel))
+    hits.extend(canon_smells.swallow_hits(masked, rel))
     return hits
 
 

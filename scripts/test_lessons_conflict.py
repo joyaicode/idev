@@ -101,3 +101,7 @@ class LessonConflict(unittest.TestCase):
         self.assertNotIn("CONFLICT", other.stdout)
         self.assertIn("先重放消息", other.stdout)
         self.assertNotIn("先看支付", other.stdout)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -9,6 +9,7 @@ row serves two records; CHANGED must be ⊆ modified_files.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import sys
 import uuid
@@ -26,6 +27,55 @@ def as_list(value) -> list:
     if isinstance(value, str) and value.strip():
         return [value.strip()]
     return []
+
+
+def _parse_time(value) -> dt.datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        return dt.datetime.fromisoformat(text)
+    except ValueError:
+        return None
+
+
+def _stamp_span(payload: dict) -> int:
+    start = _parse_time(payload.get("started_at") or payload.get("startedAt"))
+    end = _parse_time(payload.get("ended_at") or payload.get("endedAt"))
+    if start is None or end is None or end < start:
+        return 0
+    return int((end - start).total_seconds() * 1000)
+
+
+def _file_span(path: str) -> int:
+    if not path:
+        return 0
+    try:
+        st = Path(path).stat()
+    except OSError:
+        return 0
+    birth = getattr(st, "st_birthtime", 0) or 0
+    if birth <= 0 or st.st_mtime < birth:
+        return 0
+    return int((st.st_mtime - birth) * 1000)
+
+
+def measured_duration(payload: dict) -> int:
+    host = as_int(payload.get("duration_ms") or payload.get("durationMs"), 0)
+    if host > 0:
+        return host
+    span = _stamp_span(payload)
+    if span > 0:
+        return span
+    path = str(
+        payload.get("agent_transcript_path")
+        or payload.get("transcript_path")
+        or payload.get("agentTranscriptPath")
+        or ""
+    )
+    return _file_span(path)
 
 
 def as_int(value, default: int = 0) -> int:
@@ -54,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
         "status": str(payload.get("status") or ""),
         "subagent_type": str(payload.get("subagent_type") or payload.get("subagentType") or ""),
         "description": str(payload.get("description") or "")[:200],
-        "duration_ms": as_int(payload.get("duration_ms") or payload.get("durationMs"), 0),
+        "duration_ms": measured_duration(payload),
         "tool_call_count": as_int(
             payload.get("tool_call_count") or payload.get("toolCallCount"), 0
         ),

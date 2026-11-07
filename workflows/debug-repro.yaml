@@ -1,7 +1,7 @@
 schema_version: 1
 id: debug-repro
 aliases: ["复现闭环", "按现象复现", "debug 一键"]
-summary: 现象分类后走 verify debug：plan → 签字 → run（须能红/绿切换）。
+summary: 现象分类后走 verify debug：plan → run（须能红/绿切换）。无信号不请人确认环境。
 risk_tier: P0
 params:
   - name: feature
@@ -23,7 +23,7 @@ steps:
     label: 起草 debug plan（环境/产物/可观察物）
   - id: gate-plan
     kind: human.gate
-    label: 人确认环境与 plan
+    label: 环境与 plan（无信号则记过，不请人）
     with:
       will_write: ["verify/plan.yaml accepted"]
       proof: "verify-plan 门禁结果 / case 数"

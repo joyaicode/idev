@@ -162,35 +162,60 @@ func withExecutors(steps []run.Step, reg ports.KindRegistry) []run.Step {
 // same transaction. Without this, an agent that writes Actor: human and an
 // invented approval id passes every domain guard (review D1).
 func (s Service) Apply(ctx context.Context, runID string, ev run.Event, actor ports.Principal) (run.Run, error) {
+	return s.apply(ctx, runID, []run.Event{ev}, actor)
+}
+
+// ApplyMany runs several domain events in one transaction.
+//
+// A conductor PASS is a start and a record. Two Apply calls would commit the
+// start even when the record is refused. Here both land together, or neither does.
+func (s Service) ApplyMany(ctx context.Context, runID string, events []run.Event, actor ports.Principal) (run.Run, error) {
+	if len(events) == 0 {
+		return run.Run{}, fmt.Errorf("runsvc: no events")
+	}
+	return s.apply(ctx, runID, events, actor)
+}
+
+func (s Service) apply(ctx context.Context, runID string, events []run.Event, actor ports.Principal) (run.Run, error) {
 	var out run.Run
 	err := s.Store.InTx(ctx, func(tx ports.Tx) error {
-		current, version, err := tx.Runs().Get(ctx, runID)
-		if err != nil {
-			return err
+		for _, ev := range events {
+			next, err := s.applyEvent(ctx, tx, runID, ev, actor)
+			if err != nil {
+				return err
+			}
+			out = next
 		}
-		// SQLite (and any adapter that does not round-trip Executor) must be
-		// rehydrated from the kind registry before the domain machine runs.
-		current.Steps = withExecutors(current.Steps, s.Registry)
-		if err := checkEvent(ctx, tx, current, ev, actor); err != nil {
-			return err
-		}
-		next, effects, err := run.Apply(current, ev)
-		if err != nil {
-			return err
-		}
-		if err := tx.Runs().Save(ctx, next, version); err != nil {
-			return err
-		}
-		if err := appendAudit(ctx, tx, auditFor(ev, next, actor), s.Clock); err != nil {
-			return err
-		}
-		if err := s.performEffects(ctx, tx, next, ev, effects); err != nil {
-			return err
-		}
-		out = next
 		return nil
 	})
 	return out, err
+}
+
+func (s Service) applyEvent(ctx context.Context, tx ports.Tx, runID string, ev run.Event, actor ports.Principal) (run.Run, error) {
+	current, version, err := tx.Runs().Get(ctx, runID)
+	if err != nil {
+		return run.Run{}, err
+	}
+	// SQLite (and any adapter that does not round-trip Executor) must be
+	// rehydrated from the kind registry before the domain machine runs.
+	current.Steps = withExecutors(current.Steps, s.Registry)
+	if err := checkEvent(ctx, tx, current, ev, actor); err != nil {
+		return run.Run{}, err
+	}
+	next, effects, err := run.Apply(current, ev)
+	if err != nil {
+		return run.Run{}, err
+	}
+	if err := tx.Runs().Save(ctx, next, version); err != nil {
+		return run.Run{}, err
+	}
+	if err := appendAudit(ctx, tx, auditFor(ev, next, actor), s.Clock); err != nil {
+		return run.Run{}, err
+	}
+	if err := s.performEffects(ctx, tx, next, ev, effects); err != nil {
+		return run.Run{}, err
+	}
+	return next, nil
 }
 
 // checkEvent re-verifies, in the transaction Apply runs in, the claims an

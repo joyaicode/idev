@@ -56,6 +56,7 @@ steps:
     kind: human.gate
     label: 确认提交说明与推送目标
     with:
+      decision: true
       will_write: ["git commit（提交说明）", "git push（当前分支 → 远端）"]
       proof: "git status 摘要 / 敏感屏蔽结果 / go.mod replace 检查"
   - id: commit-push

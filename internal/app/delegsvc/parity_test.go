@@ -22,8 +22,10 @@ import (
 // revert-present, and a single scope check where there are two). Nothing
 // caught it until the names were compared directly.
 const pythonSource = "../../../scripts/delegation.py"
+const goSource = "checks.go"
 
 var checkKeyRE = regexp.MustCompile(`(?:checks|out)\["([a-z0-9-]+)"\]`)
+var goCheckConstRE = regexp.MustCompile(`(?m)^\tCheck\w+\s*=\s*"([a-z0-9-]+)"`)
 
 func pythonCheckNames(t *testing.T) map[string]bool {
 	t.Helper()
@@ -44,6 +46,12 @@ func pythonCheckNames(t *testing.T) map[string]bool {
 // goCheckNames are the names this package can emit. Listed explicitly rather
 // than scraped, so adding a constant without deciding which side it belongs
 // to does not silently pass.
+//
+// That intent needs a lock of its own, which is the test below: the roster
+// only catches "Python has it, Go does not". A constant that was added and
+// implemented but never listed here reads as *not ported*, stays on the
+// deferred list, and passes — which is exactly what happened when gate-held
+// and deliver-gates were ported on 2026-11-06.
 func goCheckNames() []string {
 	return []string{
 		delegsvc.CheckBriefComplete,
@@ -61,6 +69,8 @@ func goCheckNames() []string {
 		delegsvc.CheckS0Declared,
 		delegsvc.CheckLeasePaths,
 		delegsvc.CheckBaselineIntact,
+		delegsvc.CheckGateHeld,
+		delegsvc.CheckDeliverGates,
 	}
 }
 
@@ -91,16 +101,16 @@ func TestPythonChecksAreEitherPortedOrListedAsDeferred(t *testing.T) {
 	// decision, so it is recorded here rather than discovered later: each
 	// one is either in the Go set or in this list with a reason.
 	deferred := map[string]string{
-		"anchor-granularity":     "WARN-only nicety about file:symbol granularity; no behaviour depends on it",
-		"artifact-verified":      "needs the workspace port to compare a running artefact with source (P2.4)",
-		"canon-walked":           "needs review.md parsing, which moves to the asset bundle in P3",
-		"changed-within-actual":  "reads IDEV_DATA/subagent-stops.jsonl from the client hook; Go record path has no hook log yet (phase 1 §4)",
-		"drift-declared":         "needs doc-drift detection against the asset bundle (P3)",
-		"facts-sourced":          "subsumed by facts-first here; the Python split is historical",
-		"hit-applied":            "needs the convention tables, which are asset-bundle data (P3)",
-		"java-hygiene":           "scans the product checkout's branch diff against the java.md rows; needs the workspace port (P2.4) and the asset bundle (P3)",
-		"return-schema":          "validates api/schemas/delegation-return.schema.json via Python jsonschema; port with the asset-bundle validator (phase 1 §7)",
-		"struct-gated":           "needs the structured-change gate from coding.md §3 (P3)",
+		"anchor-granularity":    "WARN-only nicety about file:symbol granularity; no behaviour depends on it",
+		"artifact-verified":     "needs the workspace port to compare a running artefact with source (P2.4)",
+		"canon-walked":          "needs review.md parsing, which moves to the asset bundle in P3",
+		"changed-within-actual": "reads IDEV_DATA/subagent-stops.jsonl from the client hook; Go record path has no hook log yet (phase 1 §4)",
+		"drift-declared":        "needs doc-drift detection against the asset bundle (P3)",
+		"facts-sourced":         "subsumed by facts-first here; the Python split is historical",
+		"hit-applied":           "needs the convention tables, which are asset-bundle data (P3)",
+		"java-hygiene":          "scans the product checkout's branch diff against the java.md rows; needs the workspace port (P2.4) and the asset bundle (P3)",
+		"return-schema":         "validates api/schemas/delegation-return.schema.json via Python jsonschema; port with the asset-bundle validator (phase 1 §7)",
+		"struct-gated":          "needs the structured-change gate from coding.md §3 (P3)",
 	}
 
 	ported := map[string]bool{}
@@ -144,5 +154,54 @@ func TestNoCheckNameIsEmptyOrDuplicated(t *testing.T) {
 			t.Errorf("check %q is declared twice", name)
 		}
 		seen[name] = true
+	}
+}
+
+// TestEveryCheckConstantIsOnTheRoster locks the hand-written roster to the
+// constants it claims to list.
+//
+// The roster is deliberately hand-written (see goCheckNames), but that only
+// works if forgetting to update it is loud. It was not: the parity test asks
+// "does Python have a name Go lacks", so a constant that is implemented and
+// missing from the roster reads as not-ported, stays on the deferred list,
+// and the suite goes green. gate-held and deliver-gates were ported on
+// 2026-11-06 and passed exactly that way until this test existed.
+func TestEveryCheckConstantIsOnTheRoster(t *testing.T) {
+	raw, err := os.ReadFile(goSource)
+	if err != nil {
+		t.Fatalf("read %s: %v", goSource, err)
+	}
+	declared := map[string]bool{}
+	for _, m := range goCheckConstRE.FindAllStringSubmatch(string(raw), -1) {
+		declared[m[1]] = true
+	}
+	if len(declared) == 0 {
+		t.Fatalf("found no check constants in %s; the pattern has drifted", goSource)
+	}
+
+	onRoster := map[string]bool{}
+	for _, name := range goCheckNames() {
+		onRoster[name] = true
+	}
+
+	var missing []string
+	for name := range declared {
+		if !onRoster[name] {
+			missing = append(missing, name)
+		}
+	}
+	sort.Strings(missing)
+	if len(missing) > 0 {
+		t.Errorf("these check constants are declared in %s but not on goCheckNames(): %s\n"+
+			"add each one, and take it off the deferred list if it was there",
+			goSource, strings.Join(missing, ", "))
+	}
+
+	// The other direction: a roster entry with no constant behind it would
+	// make the deferred list look shorter than it is.
+	for name := range onRoster {
+		if !declared[name] {
+			t.Errorf("goCheckNames() lists %q, but no constant in %s declares it", name, goSource)
+		}
 	}
 }

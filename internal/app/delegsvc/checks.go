@@ -89,6 +89,16 @@ const (
 	// it gathered itself rather than against the agent's claims.
 	CheckLeasePaths     = "lease-paths"
 	CheckBaselineIntact = "baseline-intact"
+	// gate-held mirrors scope-held for the reviewer: scope-held asks whether
+	// a writer stayed inside what it declared, this asks whether a reviewer
+	// wrote anything but the review. Naming a test, a plan or product code
+	// in CHANGED means the reviewer moved the gate it was there to hold.
+	CheckGateHeld = "gate-held"
+	// deliver-gates is the pair of GATE lines the deliver agent records
+	// before asking for a signature. Whether the lines are there, whether a
+	// verdict can be read out of them, and whether STATUS=PASS contradicts
+	// one — three things nobody used to read.
+	CheckDeliverGates = "deliver-gates"
 )
 
 // Packet is the delegation as issued, reduced to what the checks need.
@@ -122,6 +132,10 @@ type Report struct {
 	CanonTrigger  string
 	TableHit      string
 	RedFirstLog   string
+	// Gates are the raw GATE lines, one per recorded gate, as the agent
+	// wrote them. Kept raw because deliver-gates reads three different
+	// things out of the same line.
+	Gates []string
 }
 
 // Fact is one first-hand source.
@@ -201,6 +215,12 @@ func (c Checker) Run(_ context.Context, p Packet, r Report, ev Evidence) Outcome
 		out = append(out, res)
 	}
 	if res, ok := c.s0Declared(p, r); ok {
+		out = append(out, res)
+	}
+	if res, ok := c.gateHeld(p, r); ok {
+		out = append(out, res)
+	}
+	if res, ok := c.deliverGates(p, r); ok {
 		out = append(out, res)
 	}
 	if res, ok := c.leasePaths(r, ev); ok {
@@ -397,6 +417,108 @@ func (c Checker) scopeHeld(r Report) Result {
 			"要么撤掉这部分改动另开一轮。顺手改的那几处,正是别人假设没变的地方",
 		strings.Join(outside, ",")))
 }
+
+// gateHeld is scope-held for the reviewer. scope-held asks whether a writer
+// stayed inside the scope it declared; this asks whether a reviewer wrote
+// anything other than the review itself. A reviewer that edits the tests or
+// the plan has moved the gate it exists to hold, so this is a FAIL on the
+// agent, not a WARN.
+//
+// A report with no CHANGED line at all passes: the field is newer than some
+// reports, and an absent field is not evidence of a write.
+func (c Checker) gateHeld(p Packet, r Report) (Result, bool) {
+	// "Whoever executes review.report" is the reviewer, stated through the
+	// registry rather than by spelling the agent's name here. The Python
+	// side hardcodes it; this does not have to.
+	if c.Registry == nil || p.Agent == "" || p.Agent != c.Registry.AgentFor("review.report") {
+		return Result{}, false
+	}
+	changed := nonEmpty(r.Changed)
+	if len(changed) == 0 {
+		return pass(CheckGateHeld), true
+	}
+	var extra []string
+	for _, path := range changed {
+		if !reviewWrite(filePart(path)) {
+			extra = append(extra, path)
+		}
+	}
+	if len(extra) == 0 {
+		return pass(CheckGateHeld), true
+	}
+	sort.Strings(extra)
+	return fail(CheckGateHeld, BlameAgent, fmt.Sprintf(
+		"审查者改了 %s —— CHANGED 只许 review.md 和 review/shards/。"+
+			"测试、用例门槛和产品代码留给生成者",
+		strings.Join(extra, ","))), true
+}
+
+// reviewWrite: a reviewer may only name the review artefact, including a
+// shard of it.
+func reviewWrite(path string) bool {
+	norm := strings.ReplaceAll(path, "\\", "/")
+	if norm == "review.md" || strings.HasSuffix(norm, "/review.md") {
+		return true
+	}
+	return strings.Contains("/"+norm, "/review/shards/") && strings.HasSuffix(norm, ".md")
+}
+
+// deliverGates reads the two GATE lines the deliver agent records before
+// asking for a signature: check-feature (the convention check) and
+// stage-gate (the machine-checkable half of the experts' refusal list).
+//
+// Three separate failures, in the order they matter: a gate that was never
+// named, a line whose verdict cannot be read, and a PASS that contradicts
+// its own gate. The third is the one worth having — signing over a FAIL is
+// not a formatting slip.
+func (c Checker) deliverGates(p Packet, r Report) (Result, bool) {
+	// The kind alone decides: kinds.yaml already fixes deliver.advance to
+	// the deliver agent, so checking the agent too would only add a way for
+	// the two statements to disagree.
+	if p.Kind != "deliver.advance" {
+		return Result{}, false
+	}
+	named := map[string]bool{}
+	anyUnreadable := false
+	sawFail := false
+	for _, line := range nonEmpty(r.Gates) {
+		if tool := gateTool.FindString(line); tool != "" {
+			named[tool] = true
+		}
+		verdict := gateVerdict.FindStringSubmatch(line)
+		if verdict == nil {
+			anyUnreadable = true
+			continue
+		}
+		if verdict[1] == "FAIL" {
+			sawFail = true
+		}
+	}
+	switch {
+	case len(named) < 2:
+		return fail(CheckDeliverGates, BlameAgent,
+			"GATE 行缺门 —— check-feature 与 stage-gate 各留一行,"+
+				"形如 'GATE: stage-gate <stage> = PASS'"), true
+	case anyUnreadable:
+		return fail(CheckDeliverGates, BlameAgent,
+			"GATE 行读不出结论 —— 每行须以 "+
+				"'= PASS | FAIL(<几处>) | 不适用' 收尾"), true
+	case sawFail && strings.EqualFold(strings.TrimSpace(r.Status), "PASS"):
+		return fail(CheckDeliverGates, BlameAgent,
+			"STATUS=PASS 但 GATE 有 FAIL —— 门禁 FAIL 应回 "+
+				"BLOCKED(logic)(见 idev-deliver.md BLOCKED 分类),不是硬签"), true
+	}
+	return pass(CheckDeliverGates), true
+}
+
+var (
+	gateTool = regexp.MustCompile(`\b(check-feature|stage-gate)\b`)
+	// The word boundary sits inside each ASCII branch rather than after the
+	// group: Go's \b is ASCII-only, so `不适用\b` never matches, while
+	// Python's \b is Unicode-aware and the same pattern works there. Keeping
+	// \b on PASS and FAIL still stops "PASSED" from reading as PASS.
+	gateVerdict = regexp.MustCompile(`=\s*(PASS\b|FAIL\b|不适用)`)
+)
 
 func (c Checker) readBeforeChange(r Report) Result {
 	if len(nonEmpty(r.Changed)) == 0 {

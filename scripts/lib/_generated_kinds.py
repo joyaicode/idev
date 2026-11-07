@@ -10,6 +10,7 @@ from __future__ import annotations
 
 KINDS: dict[str, str] = {
     "preflight.inputs": "scripts/s8-preflight.sh",
+    "scope.baseline": "scripts/scope-baseline.py",
     "human.gate": "references/chat-confirm-signoff.md",
     "shell.confirmed": "-",
     "tool.step": "references/workflow-schema.md",
@@ -43,6 +44,7 @@ KINDS: dict[str, str] = {
 
 KIND_AGENTS: dict[str, str] = {
     "preflight.inputs": "-",
+    "scope.baseline": "-",
     "human.gate": "-",
     "shell.confirmed": "-",
     "tool.step": "-",
@@ -86,6 +88,7 @@ KIND_COMMANDS: dict[str, str] = {
 # Leases: write touches product code, verify only ticket artefacts.
 KIND_LEASE: dict[str, str] = {
     "preflight.inputs": "none",
+    "scope.baseline": "none",
     "human.gate": "none",
     "shell.confirmed": "none",
     "tool.step": "none",

@@ -48,23 +48,30 @@ def extract(raw: str) -> tuple[dict | None, str]:
 
 
 def _validator():
+    # RefResolver was the way to do this before jsonschema 4.18 and has been
+    # deprecated since — "a future release will remove" it. requirements.txt
+    # asks for >=4.18, so this file was already running on versions that warn,
+    # and nobody saw it: the one lock that exercises this path skipped itself
+    # locally for want of jsonschema. `referencing` ships as a dependency of
+    # jsonschema >= 4.18, so this needs no new entry in requirements.txt.
     try:
         import jsonschema
-        from jsonschema import RefResolver
+        from referencing import Registry, Resource
+        from referencing.jsonschema import DRAFT202012
     except ImportError as exc:  # pragma: no cover
         raise RuntimeError("jsonschema is required to validate delegation returns") from exc
     schema = json.loads(RETURN_SCHEMA.read_text(encoding="utf-8"))
-    store = {}
+    resources = []
     for path in SCHEMA_DIR.glob("*.schema.json"):
         doc = json.loads(path.read_text(encoding="utf-8"))
-        store[doc.get("$id", path.name)] = doc
-        store[path.name] = doc
-    resolver = RefResolver(
-        base_uri=schema.get("$id", RETURN_SCHEMA.as_uri()),
-        referrer=schema,
-        store=store,
-    )
-    return jsonschema.Draft202012Validator(schema, resolver=resolver)
+        resource = Resource.from_contents(doc, default_specification=DRAFT202012)
+        # Both keys, as the old store did: the $id is what a relative $ref
+        # resolves against, the bare filename is what a schema without an $id
+        # would be reached by.
+        resources.append((doc.get("$id", path.name), resource))
+        resources.append((path.name, resource))
+    registry = Registry().with_resources(resources)
+    return jsonschema.Draft202012Validator(schema, registry=registry)
 
 
 def validate(data: dict) -> list[str]:
@@ -94,6 +101,12 @@ def check_report(raw: str, *, require: bool = False) -> str:
     return "PASS"
 
 
+def _replace_or_append(text: str, pattern: re.Pattern[str], line: str) -> str:
+    if pattern.search(text):
+        return pattern.sub(line, text, count=1)
+    return text.rstrip() + "\n" + line + "\n"
+
+
 def apply_as_main(raw: str, structured: dict) -> str:
     """Rewrite STATUS/CHANGED/EVIDENCE lines from the JSON so regex checks see one truth.
 
@@ -116,11 +129,7 @@ def apply_as_main(raw: str, structured: dict) -> str:
         else:
             joined = str(evidence).strip()
         if joined:
-            line = f"EVIDENCE: {joined}"
-            if EVIDENCE_LINE.search(text):
-                text = EVIDENCE_LINE.sub(line, text, count=1)
-            else:
-                text = text.rstrip() + "\n" + line + "\n"
+            text = _replace_or_append(text, EVIDENCE_LINE, f"EVIDENCE: {joined}")
     changed = structured.get("changed")
     if isinstance(changed, list):
         joined = " ".join(str(p) for p in changed) if changed else "-"

@@ -171,6 +171,43 @@ def read_text(src: str) -> str:
     return Path(src).read_text(encoding="utf-8")
 
 
+def _invoke_errors(invoke: str) -> list[str]:
+    errors: list[str] = []
+    if not field(invoke, "trigger"):
+        errors.append("invoke.trigger empty")
+    if not field(invoke, "matched"):
+        errors.append("invoke.matched empty")
+    how = field(invoke, "how")
+    if how and how not in INVOKE_HOW:
+        errors.append("invoke.how unknown: %s" % how)
+    skills_body = nested_block(invoke, "skills")
+    if not skills_body.strip():
+        return errors
+    skills = maps_from_body(skills_body)
+    n_raw = len(re.findall(r"(?m)^\s+-\s+\S", skills_body))
+    if n_raw != len(skills) or any(not s.get("name") for s in skills):
+        errors.append("invoke.skills item missing name")
+    return errors
+
+
+def _thinking_step_errors(thinking: str) -> list[str]:
+    steps_body_m = re.search(
+        r"^[ \t]*steps:\s*(?:\[\]\s*)?\n(?P<body>(?:[ \t].*\n)*)",
+        thinking,
+        re.M,
+    )
+    if not steps_body_m:
+        return []
+    fake = "steps:\n" + steps_body_m.group("body")
+    errors: list[str] = []
+    for item in dash_maps(fake, "steps"):
+        if not item.get("do"):
+            errors.append("thinking.steps item missing do")
+        if not item.get("so"):
+            errors.append("thinking.steps item missing so")
+    return errors
+
+
 def validate(text: str, *, for_append: bool = False) -> list[str]:
     errors: list[str] = []
     ver = field(text, "schema_version")
@@ -226,19 +263,7 @@ def validate(text: str, *, for_append: bool = False) -> list[str]:
         if not invoke:
             errors.append("invoke block missing")
         else:
-            if not field(invoke, "trigger"):
-                errors.append("invoke.trigger empty")
-            if not field(invoke, "matched"):
-                errors.append("invoke.matched empty")
-            how = field(invoke, "how")
-            if how and how not in INVOKE_HOW:
-                errors.append("invoke.how unknown: %s" % how)
-            skills_body = nested_block(invoke, "skills")
-            if skills_body.strip():
-                skills = maps_from_body(skills_body)
-                n_raw = len(re.findall(r"(?m)^\s+-\s+\S", skills_body))
-                if n_raw != len(skills) or any(not s.get("name") for s in skills):
-                    errors.append("invoke.skills item missing name")
+            errors.extend(_invoke_errors(invoke))
         thinking = block(text, "thinking")
         if not thinking:
             errors.append("thinking block missing")
@@ -259,18 +284,7 @@ def validate(text: str, *, for_append: bool = False) -> list[str]:
             if "thinking" in item and not item.get("thinking"):
                 errors.append("calls.thinking empty")
         if thinking:
-            steps_body_m = re.search(
-                r"^[ \t]*steps:\s*(?:\[\]\s*)?\n(?P<body>(?:[ \t].*\n)*)",
-                thinking,
-                re.M,
-            )
-            if steps_body_m:
-                fake = "steps:\n" + steps_body_m.group("body")
-                for item in dash_maps(fake, "steps"):
-                    if not item.get("do"):
-                        errors.append("thinking.steps item missing do")
-                    if not item.get("so"):
-                        errors.append("thinking.steps item missing so")
+            errors.extend(_thinking_step_errors(thinking))
 
     if ver == "2" and for_append:
         errors.extend(signoff_errors(text))
@@ -1054,7 +1068,17 @@ def session_rounds() -> tuple[int, int]:
     slashes and dots both become dashes — has one home. Only the round count
     decides whether a HANDOFF prints: a round count is something a person can
     check by hand, a token count is not. The size rides along to be shown.
+
+    `IDEV_NO_SESSION_PROBE=1` answers "no session" instead of looking. Both
+    things this gates — the HANDOFF line and the turn-budget WARN — describe
+    the session that ran the command, not what the command did, so a
+    byte-for-byte recording must not contain them: `rounds=` changes between
+    two runs a minute apart, and whether the lines appear at all depends on
+    how long someone's session happened to be. normalize.py cannot fix that
+    by substitution, because the problem is the line existing, not its value.
     """
+    if os.environ.get("IDEV_NO_SESSION_PROBE") == "1":
+        return 0, 0
     return session_transcript.session()
 
 

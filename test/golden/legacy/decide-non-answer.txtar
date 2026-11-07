@@ -4,4 +4,4 @@
 -- exit --
 2
 -- output --
-BLOCKED --quote must be the person's answer to the question; 继续 / ok choose nothing, ask again
+BLOCKED NUDGE proceed; 继续 / 验收 / ok choose nothing. Do not ask again. Leave the decision open and do the open step that does not need it

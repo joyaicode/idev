@@ -95,8 +95,8 @@ python3 scripts/delegation.py replay --feature <f> --step <step>
 
 | 场景 | 典型链路 |
 |---|---|
-| 代码审查 | `/idev` 说「审查当前仓」→ S8 `code-review` → reviewer 出报告 → **人签收 `I*`** → coder 只改已签收项 → verifier 跑用例 |
-| 小改 | `/idev` 说「走轻量」→ S8 `lite-change` → coder 改 + 自测 → 计划无信号自动过 → 停在实现审核 |
+| 代码审查 | `/idev` 说「审查当前仓」→ S8 `code-review` → reviewer 出报告 → 不签收，改全部 `I*` → verifier 跑用例 |
+| 小改 | `/idev` 说「走轻量」→ S8 `lite-change` → coder 改 + 自测 → 计划无信号自动过 → 检查通过就写实现审核并进入提测 |
 | 线上现象 | `/idev` 说现象 → S6 → ops 分类（`kind`）→ 交 verifier 跑 `debug` → ops 定根因 → 回退或修 |
 | 查一个说不清的问题 | `/idev` → S4 → ops 走 `evidence.md` 闭环 + 假设台账，**先拿事实再推理** |
 | 契约 / 经验回填 | `/idev` 说「回填」→ S5 → deliver 按 setup-agents-docs 的目录落盘 |
@@ -109,7 +109,7 @@ python3 scripts/delegation.py replay --feature <f> --step <step>
 
 | 不要 | 为什么 |
 |---|---|
-| 没有 `PARALLEL`、也没有 `fanout.py` 的 `FANOUT`，就同一轮派两个 agent | 写集没订死。`next` 打出 `PARALLEL` 时，先 `workflow.py delegate --open`，再把这一波的每个 `DELEGATE` 都派出去。`FANOUT_ASSESS` 先跑 assess：`SERIAL` 仍是一个 agent；`FANOUT` 的每一片写集已经订死，同一条消息派完，并且 `delegate <step> --shard <id>` 给每片一张只锁该片路径的验证租约。人闸和产品代码写租约不在这一波里 |
+| 没有 `PARALLEL`、也没有 `fanout.py` 的 `FANOUT`，就同一轮派两个 agent | 写集没订死。`next` 打出 `PARALLEL` 时，先 `workflow.py delegate --open`，再把这一波的每个 `DELEGATE` 都派出去。`drive` 已经打出这一波每个 `BRIEF` 时按 `BRIEF` 派，不要再 `delegate --open`。`FANOUT_ASSESS` 先跑 assess：`SERIAL` 仍是一个 agent；`FANOUT` 的每一片写集已经订死，同一条消息派完，并且 `delegate <step> --shard <id>` 给每片一张只锁该片路径的验证租约。`drive` 已经打出每片 `BRIEF` 时按打出的结果派，回报用 `land <step> --shard <id>`，不要再跑一遍。内核脚本的 `PREP` 已经跑完，日志在 `扫描:`。其它 `PREP` 仍先跑。人闸和产品代码写租约不在这一波里 |
 | 让 agent 去问人 | 它问不到。要停问就 `BLOCKED` 回报，由导体停 |
 | 跳过 `next` 直接派你觉得对的 agent | 配方改过 step 你就派错了；而且 trace 里对不上账 |
 | 替 agent 写 `FACTS` / `EVIDENCE` | 那是它的交代。你代写就等于没有交代 |

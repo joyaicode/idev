@@ -38,6 +38,7 @@ func Run(t *testing.T, open Opener, classify Classifier) {
 	}{
 		{"one live run per feature and workflow", testOneLiveRun},
 		{"one write lease per feature", testSingleWriter},
+		{"disjoint write paths may both be held", testDisjointWritePaths},
 		{"one write lease across two runs of a feature", testSingleWriterAcrossRuns},
 		{"one write lease per run when no feature is set", testSingleWriterUnboundRun},
 		{"one verification per delegation", testOneVerification},
@@ -210,6 +211,29 @@ func testSingleWriter(t *testing.T, open Opener, classify Classifier) {
 	if err != nil {
 		t.Errorf("a verify lease must coexist with a write lease: %v", err)
 	}
+}
+
+func insertWriteLeasePaths(db *sql.DB, id, agent, paths string) error {
+	return tryExec(db, `INSERT INTO leases
+		(id, purpose, feature_id, run_id, step_id, agent, token_sha256,
+		 fencing_token, write_paths_json, status, issued_at, expires_at)
+		VALUES (?, 'write', ?, ?, 'code-pass', ?, 'h', 1, ?, 'active', ?, ?)`,
+		id, featureID, runID, agent, paths, now(),
+		time.Now().Add(time.Hour).UTC().Format(time.RFC3339Nano))
+}
+
+func testDisjointWritePaths(t *testing.T, open Opener, classify Classifier) {
+	db := open(t)
+	seedFeature(t, db)
+	seedRun(t, db, runID, "lite-change", "running")
+	if err := insertWriteLeasePaths(db, "l-a", "idev-coder", `["src/a.go"]`); err != nil {
+		t.Fatalf("first path set: %v", err)
+	}
+	if err := insertWriteLeasePaths(db, "l-b", "idev-coder", `["src/b.go"]`); err != nil {
+		t.Fatalf("disjoint path set must be granted: %v", err)
+	}
+	mustConflict(t, classify,
+		insertWriteLeasePaths(db, "l-c", "idev-coder", `["src/a.go"]`), "lease_held")
 }
 
 func testSingleWriterAcrossRuns(t *testing.T, open Opener, classify Classifier) {

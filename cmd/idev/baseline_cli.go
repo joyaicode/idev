@@ -69,6 +69,42 @@ func (a app) baselineSeal(ctx context.Context, args []string) error {
 	})
 }
 
+// baselineReopen calls the existing reopen service. The approval is an
+// approved reopen_baseline gate bound to the sealed manifest.
+func (a app) baselineReopen(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("baseline reopen", flag.ContinueOnError)
+	fs.SetOutput(a.stderr)
+	feature := fs.String("feature", "", "feature id")
+	gateID := fs.String("gate", "", "approved reopen_baseline gate id")
+	by := fs.String("by", "", "actor handle doing the reopen")
+	if err := fs.Parse(args); err != nil {
+		return usageError{err.Error()}
+	}
+	if *feature == "" || *gateID == "" || *by == "" {
+		return usageError{"baseline reopen needs --feature, --gate and --by"}
+	}
+	e, err := a.open(ctx)
+	if err != nil {
+		return err
+	}
+	defer e.store.Close()
+	svc := baselinesvc.Service{Store: e.store, Clock: local.Clock{}}
+	was, err := svc.Reopen(ctx, baselinesvc.ReopenParams{
+		Feature: *feature,
+		GateID:  *gateID,
+		Actor:   ports.Principal{Handle: *by, Kind: "human"},
+	})
+	if err != nil {
+		return err
+	}
+	return json.NewEncoder(a.stdout).Encode(map[string]any{
+		"feature":       *feature,
+		"revision":      was.Revision,
+		"manifest_root": string(was.ManifestRoot),
+		"status":        "reopened",
+	})
+}
+
 // baselineAdopt takes a ticket sealed before the store existed into it. A
 // person runs it once per legacy ticket; the proof is the ticket's git
 // history, so the row is recorded with low assurance.

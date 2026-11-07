@@ -16,7 +16,7 @@ idev 不依赖任何一个产品。先走内核。进入阶段用 `scripts/sessi
 |----|------|--------|--------|
 | 排查闭环 | 分析 / 论证 / 推测 / 查问题 | [evidence.md](evidence.md)（**通用真源**） | 只许指针 |
 | 编码规范 | 改任何代码或写 Review | [coding.md](coding.md) §0；扫表再开 [coding-tables.md](coding-tables.md) | 不要把 23 模式名录抄进仓 |
-| 架构范式 | `arch` 阶段、任何“加一层 / 拆分 / 缓存 / 队列 / 重写”的念头 | [canon.md](canon.md) §1 协议 + §5（T1–T13 / A1–A8） | 只留指针，不抄原则表 |
+| 架构范式 | `arch` 阶段、任何“加一层 / 拆分 / 缓存 / 队列 / 重写”的念头 | [canon.md](canon.md) §1 协议 + §5（T1–T14 / A1–A8） | 只留指针，不抄原则表 |
 | 领域建模 | 涉及新领域概念 / 跨模块术语 / 通用语言 | [domain-modeling.md](domain-modeling.md)（arch 阶段调起的透镜） | 术语表随票走，不进核心 |
 | Java 领域 | 改 Java | [java.md](java.md) 按**该仓**语言级别 | 四准则在该仓。核心不默认某一语言级别 |
 | Vue | 改 `.vue` / Vue Router / Pinia / Vite+Vue | [vue.md](vue.md) 按阶段打开 vuejs-ai 技能 | 不抄技能正文。产品控制台规约仍在该仓扩展包 |
@@ -33,7 +33,7 @@ idev 不依赖任何一个产品。先走内核。进入阶段用 `scripts/sessi
 5. **不要**为本模块再开顶层 Skill。
 6. **编码规范**入口只改 [coding.md](coding.md)；全表只改 [coding-tables.md](coding-tables.md)。
 7. **P/C/R 编号只认 coding.md**（§3.5，全表在 coding-tables.md）。仓内 review 禁止第二套表号。
-8. **T/A/F 编号只认 canon.md**（原则 T1–T13、架构出门 A1–A8、失败模式 F1–F7）。它是 P/C/R 的上游原则层：不新增第二套严重度，不新增强门禁。
+8. **T/A/F 编号只认 canon.md**（原则 T1–T14、架构出门 A1–A8、失败模式 F1–F7）。它是 P/C/R 的上游原则层：不新增第二套严重度，不新增强门禁。
 9. **规约与这张票冲突时改这张票。** 不把原则改写成能放过当前工件。要改规约，另走显式变更，不在交付票里稀释。
 
 ## 会话收尾

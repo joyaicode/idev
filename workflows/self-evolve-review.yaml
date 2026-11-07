@@ -26,6 +26,7 @@ steps:
   - id: gate
     kind: human.gate
     with:
+      decision: true
       will_write:
         - "若人确认某条 draft：按 evolve.md grill 后 land 真源（不在本步自动改）"
         - "若人确认归档：再跑 evolve-curator.sh --apply"

@@ -2,6 +2,16 @@
 #
 #     python3 -m pip install --user -r requirements.txt
 #
+# homebrew 的 python 被标成 externally-managed（PEP 668），上面这条会被拒，
+# 回答是 `error: externally-managed-environment`。这台机器上两个包都装在
+# user site（~/Library/Python/<ver>/lib/python/site-packages），加一个 flag：
+#
+#     python3 -m pip install --user --break-system-packages -r requirements.txt
+#
+# `--user` 不能省 —— homebrew 自己的提示也这么说。有它，写入只落在 user site，
+# 不碰 homebrew 自己那份。venv 在这里解决不了问题：selfcheck 和所有脚本调的是
+# 裸 `python3`，不会进 venv，装在 venv 里等于没装。
+#
 # 为什么需要这份声明：2026-11-01 homebrew 把 `python3` 切到 python@3.15，而这些
 # 包一直装在系统 3.9 上。于是 safeyaml.py 对每一处 yaml 锁报 BLOCKED，selfcheck
 # 在第 425 行退出，11 条锁以看起来互不相干的方式失败，negative 锁还因为「期望非 0
@@ -24,3 +34,18 @@ jsonschema>=4.18
 
 # 不是 idev 的依赖，列在这里是为了别再被误装：requests 与 numpy 被 0 个脚本
 # import。它们曾出现在系统 3.9 里只是碰巧。
+
+# 不是 pip 包，但同属这份声明该说清的事：Go 工具链。既没有已构建的 bin/idev、
+# 又没有 go 时（CI 的 python job 正是如此，/bin/ 在 .gitignore 里），五个测试会
+# skipTest 掉一部分用例再退出 0。2026-11-04 在影子 PATH + 无 bin 的副本里实测：
+#
+#   test_record_findings  6/6 全跳     test_step_land  8/8 全跳
+#   test_auto_gate        1/10         test_hooks      2/23       test_idev_bin 1/9
+#
+# 前两个完全没测任何东西，后三个是局部失效。此前 selfcheck 用 >/dev/null 跑它们，
+# 于是这些**以通过的样子失效** —— 比 pyyaml 那次「以失败的样子失效」更难发现，
+# 因为没有任何一行输出是红的。
+#
+# 现在 run_test 把未执行的锁记下来，在 `selfcheck PASS` 旁边列出「这些锁本次没有
+# 执行」；test-roster.py 则不许任何会 skip 的测试再被 >/dev/null 吞掉。
+# 要让这五条锁真的跑：装 Go，或先 `go build ./cmd/idev` 把 bin/idev 备好。

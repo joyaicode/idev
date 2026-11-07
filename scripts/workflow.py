@@ -3,8 +3,9 @@
 
 The recipe is the artifact; run.yaml is its instance. This tool binds
 params, writes run.yaml, names the next step and the page that executes it,
-and records step results. It never executes a step: the agent does that in
-the module the step lands on.
+and records step results. `next` does not execute a step. `drive` runs the
+conductor-owned commands until an agent, a person, or a failure, and on a
+single agent step, or one PARALLEL wave, it runs each assess and prints the briefs.
 
   workflow.py resolve <id>
   workflow.py start <id> [--feature F] [--param k=v ...]
@@ -18,6 +19,7 @@ the module the step lands on.
   workflow.py decide  <step> --signal S --question Q --answer A --quote TEXT [--options O] [--recommend R]
   workflow.py status  [--feature F | --run PATH]
   workflow.py abort   --note TEXT [--feature F | --run PATH]
+  workflow.py drive   [--feature F | --run PATH]
 
 A human.gate is recorded with `record <gate> PASS`. Delivery stages do not
 ask for a confirmation. An open gate is approved by that same record.
@@ -33,6 +35,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -42,12 +45,15 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 import doc_home  # noqa: E402
 import ids  # noqa: E402
+import prior_art  # noqa: E402
 import break_glass
 import delegation_return  # noqa: E402
 import idev_bin as idev_exe  # noqa: E402
 import kind_agents  # noqa: E402
+import read_ledger  # noqa: E402
 import record_paths  # noqa: E402
 import safeyaml  # noqa: E402
+import step_packet  # noqa: E402
 import staffing  # noqa: E402
 import workflow_defaults  # noqa: E402
 from product_marker import resolve_extension_repo  # noqa: E402
@@ -61,9 +67,11 @@ from workflow_spec import (  # noqa: E402
     STEP_STATUS,
     STEP_STOP,
     auto_tiers,
+    is_decision_gate,
     check_recipe,
     check_run,
     gate_type,
+    NUDGE_DECIDE,
     is_answer,
     is_human,
     people_whitelist,
@@ -137,15 +145,23 @@ def session_repo(arg: str) -> Path | None:
     return product_repo(Path(arg).expanduser().resolve() if arg else None)
 
 
+def product_recipe(pages: Path | None, workflow_id: str) -> Path | None:
+    if pages is None:
+        return None
+    candidate = pages / ".idev" / "workflows" / f"{workflow_id}.yaml"
+    if candidate.is_file():
+        return candidate
+    return None
+
+
 def resolve(workflow_id: str, repo: Path | None) -> Path:
     if repo is not None:
         pages, err = resolve_extension_repo(repo)
         if err:
             raise Blocked(err)
-        if pages is not None:
-            candidate = pages / ".idev" / "workflows" / f"{workflow_id}.yaml"
-            if candidate.is_file():
-                return candidate
+        candidate = product_recipe(pages, workflow_id)
+        if candidate is not None:
+            return candidate
     kernel_one = kernel_root() / "workflows" / f"{workflow_id}.yaml"
     if kernel_one.is_file():
         return kernel_one
@@ -719,6 +735,22 @@ def ticket_dir_repo_relative(run_path: Path, repo: Path | None) -> str:
     raise Blocked(f"{ticket} is not inside a git repository; a verify lease needs one")
 
 
+def write_lease_paths(run_path: Path, shard: str, writes: list) -> list[str]:
+    """Shard leases cover that shard's writes. A whole step covers arch includes."""
+    if shard:
+        paths = [str(item) for item in writes if str(item).strip()]
+        if not paths:
+            raise Blocked(f"shard {shard} has no write paths")
+        return paths
+    paths = arch_includes(run_path)
+    if not paths:
+        raise Blocked(
+            "a write lease needs the paths a person included in arch.yaml "
+            "(impact_candidates[].include: true); none found"
+        )
+    return paths
+
+
 def arch_includes(run_path: Path) -> list[str]:
     """The paths a person included in arch.yaml: what a write lease may touch."""
     arch = ticket_of(run_path) / "arch.yaml"
@@ -869,20 +901,60 @@ def writes_block(step_id: str, writes: list[str], has_report: bool, has_line: bo
     return ""
 
 
+def _deliver_tier(run_path: Path) -> str | None:
+    if run_path.name != "run.yaml":
+        return None
+    deliver = run_path.parent.parent / "deliver.yaml"
+    if not deliver.is_file():
+        return None
+    tier = (safeyaml.mapping(deliver) or {}).get("risk_tier")
+    if tier:
+        return str(tier)
+    return None
+
+
 def risk_tier_of(run: dict, run_path: Path) -> str:
     """The ticket's risk_tier, else the recipe's, else the P1 default."""
-    if run_path.name == "run.yaml":
-        deliver = run_path.parent.parent / "deliver.yaml"
-        if deliver.is_file():
-            tier = (safeyaml.mapping(deliver) or {}).get("risk_tier")
-            if tier:
-                return str(tier)
+    deliver_tier = _deliver_tier(run_path)
+    if deliver_tier is not None:
+        return deliver_tier
     recipe = Path(str(run.get("recipe") or ""))
     if recipe.is_file():
         tier = (load_yaml(recipe) or {}).get("risk_tier")
         if tier:
             return str(tier)
     return "P1"
+
+
+def _refuse_outside_lease(purpose: str, outside: list[str], step_id: str) -> None:
+    if purpose == "verify":
+        raise Blocked(
+            f"{step_id} changed files outside its lease (the ticket directory): "
+            + ", ".join(outside)
+            + " — revert them; a verify lease covers only the ticket directory"
+        )
+    raise Blocked(
+        f"{step_id} changed files outside its lease (arch.yaml include): "
+        + ", ".join(outside)
+        + " — revert them, or include them in arch.yaml and delegate again"
+    )
+
+
+def _block_earlier_open_signals(run: dict, step: dict, path: Path) -> None:
+    earlier = []
+    for prev in run["steps"]:
+        if prev.get("id") == step["id"]:
+            break
+        earlier.extend(
+            "%s: %s" % (prev.get("id"), signal)
+            for signal in unanswered(path, str(prev.get("id") or ""))
+        )
+    if earlier:
+        raise Blocked(
+            "a decision is still open — "
+            + "; ".join(earlier)
+            + " — workflow.py decide <step> --signal ..."
+        )
 
 
 def _settled(step: dict) -> bool:
@@ -984,11 +1056,15 @@ def next_line(run: dict) -> list[str]:
 def _fanout_activity(step: dict) -> str:
     """Which on-demand split applies to this step, or empty when none does.
 
-    route.s4 is also the scope guard, so root-cause assess is not printed
-    for every ops step. The conductor runs `--activity rootcause` when it
-    is actually locating a cause.
+    scope.baseline is the sealed-goal predicate, so root-cause assess is not
+    printed for it. The conductor runs `--activity rootcause` when it is
+    actually locating a cause.
     """
     kind = step.get("kind")
+    if kind == "deliver.code_pass":
+        return "code"
+    if kind == "review.fix":
+        return "fix"
     if kind == "verify.plan":
         return "plan"
     if kind == "verify.run":
@@ -1215,15 +1291,21 @@ def _step_lines(run: dict, step: dict) -> list[str]:
     if key:
         lines.append(f"COMMAND workflow-defaults.yaml {key}")
     if kind == "human.gate":
-        tiers = auto_tiers(step)
-        check = AUTO_CHECKS.get(gate_type(step))
-        if tiers and check:
-            lines.append(
-                f"GATE at {'/'.join(sorted(tiers))}: record AUTO runs check-feature {check.stage} "
-                f"and keeps its output in {check.log}; a FAIL, a SIGNAL or another tier means stop and ask"
-            )
-        lines.append(f"GATE checks passed, record PASS. Will write: {will_write_line(step)}")
-        lines.append("GATE do not ask for a confirmation")
+        if is_decision_gate(step):
+            lines.append("DECISION a person chooses; do not record this step until they answer")
+            lines.append(f"Will write: {will_write_line(step)}")
+        else:
+            tiers = auto_tiers(step)
+            check = AUTO_CHECKS.get(gate_type(step))
+            if tiers and check:
+                lines.append(
+                    f"GATE at {'/'.join(sorted(tiers))}: record AUTO runs check-feature {check.stage} "
+                    f"and keeps its output in {check.log}; a FAIL, a SIGNAL or another tier means stop and ask"
+                )
+                lines.append(f"Will write: {will_write_line(step)}")
+            else:
+                lines.append(f"GATE pass. Will write: {will_write_line(step)}")
+            lines.append("GATE do not ask for a confirmation")
     feature = str(run.get("feature") or "-")
     if force_leases() and feature != "-" and kind_agents.KIND_AGENTS.get(kind, "-") != "-":
         lines.append(
@@ -1619,17 +1701,7 @@ def cmd_record(args: argparse.Namespace) -> int:
             *[a for p in pre["changed"] for a in ("--path", p)],
         ).get("outside") or []
         if outside:
-            if pre["purpose"] == "verify":
-                raise Blocked(
-                    f"{args.step} changed files outside its lease (the ticket directory): "
-                    + ", ".join(outside)
-                    + " — revert them; a verify lease covers only the ticket directory"
-                )
-            raise Blocked(
-                f"{args.step} changed files outside its lease (arch.yaml include): "
-                + ", ".join(outside)
-                + " — revert them, or include them in arch.yaml and delegate again"
-            )
+            _refuse_outside_lease(str(pre["purpose"]), outside, args.step)
     if pre.get("writes"):
         blocked = writes_block(
             args.step,
@@ -1688,71 +1760,71 @@ def cmd_record(args: argparse.Namespace) -> int:
                 raise Blocked(f"finish {who} first; record it SKIPPED to skip")
             if not args.note:
                 raise Blocked(f"{step['id']} is already {step['status']}; changing it needs --note")
-        if step["kind"] == "human.gate":
-            if status == "PASS" and go_engine() and str((step.get("gate") or {}).get("id") or ""):
-                gid = str((step.get("gate") or {}).get("id") or "")
-                if signed is None or gid != str(pre.get("gate_id") or ""):
-                    raise Blocked(f"{step['id']} changed while it was being recorded; record again")
-                blocked_signer = staffing.signer_refusal(
-                    session_repo(args.repo), signed["by"], gate_type(step), deliver_stage(path)
-                )
-                if blocked_signer:
-                    raise Blocked(blocked_signer)
-                step["signoff"] = signed
-            elif status == "PASS":
-                payload = step.get("with") or {}
-                signoff = chat_signoff(
-                    args.by or "", args.quote or "", gate_type(step), str(payload.get("origin") or "")
-                )
-                blocked_signer = staffing.signer_refusal(
-                    session_repo(args.repo), signoff["by"], gate_type(step), deliver_stage(path)
-                )
-                if blocked_signer and signoff["by"]:
-                    raise Blocked(blocked_signer)
-                step["signoff"] = signoff
-            elif status == "SKIPPED" and not args.evidence:
+        human_gate = step["kind"] == "human.gate"
+        if human_gate and status == "PASS" and go_engine() and str((step.get("gate") or {}).get("id") or ""):
+            gid = str((step.get("gate") or {}).get("id") or "")
+            if signed is None or gid != str(pre.get("gate_id") or ""):
+                raise Blocked(f"{step['id']} changed while it was being recorded; record again")
+            blocked_signer = staffing.signer_refusal(
+                session_repo(args.repo), signed["by"], gate_type(step), deliver_stage(path)
+            )
+            if blocked_signer:
+                raise Blocked(blocked_signer)
+            step["signoff"] = signed
+        elif human_gate and status == "PASS":
+            payload = step.get("with") or {}
+            signoff = chat_signoff(
+                args.by or "", args.quote or "", gate_type(step), str(payload.get("origin") or "")
+            )
+            blocked_signer = staffing.signer_refusal(
+                session_repo(args.repo), signoff["by"], gate_type(step), deliver_stage(path)
+            )
+            if blocked_signer and signoff["by"]:
+                raise Blocked(blocked_signer)
+            step["signoff"] = signoff
+        elif human_gate and status == "SKIPPED" and not args.evidence:
+            raise Blocked(
+                "a gate is skipped only with --evidence: the earlier signoff, "
+                "or the file that shows nothing is left to sign"
+            )
+        elif human_gate and status == "AUTO":
+            tier = risk_tier_of(run, path)
+            if tier not in auto_tiers(step):
                 raise Blocked(
-                    "a gate is skipped only with --evidence: the earlier signoff, "
-                    "or the file that shows nothing is left to sign"
+                    f"{step['id']} may not pass on machine checks at {tier}; "
+                    "it needs a person's signoff"
                 )
-            elif status == "AUTO":
-                tier = risk_tier_of(run, path)
-                if tier not in auto_tiers(step):
-                    raise Blocked(
-                        f"{step['id']} may not pass on machine checks at {tier}; "
-                        "it needs a person's signoff"
-                    )
-                if args.by or args.quote:
-                    raise Blocked("AUTO is not a signoff; drop --by / --quote")
-                check = AUTO_CHECKS.get(gate_type(step))
-                if check is None:
-                    raise Blocked(
-                        f"{step['id']} is a {gate_type(step)} gate; no machine check can pass it, "
-                        "so it needs a person's signoff"
-                    )
-                if args.evidence and args.evidence != check.log:
-                    raise Blocked(
-                        f"AUTO keeps the output of the check it runs in {check.log}; "
-                        "drop --evidence or name that file"
-                    )
-                ran = pre.get("auto_run")
-                if not ran or ran["log"] != check.log:
-                    raise Blocked(f"{step['id']} changed while it was being recorded; record again")
-                if ran["refusal"]:
-                    raise Blocked(ran["refusal"])
-                asked = [
-                    f"{s['id']}: {signal}"
-                    for s in run["steps"] if s["kind"] == check.source
-                    for signal in unanswered(path, s["id"])
-                ]
-                if asked:
-                    raise Blocked(
-                        "AUTO refused: signals still wait for a person's decision — "
-                        + "; ".join(asked)
-                        + " — ask, then: workflow.py decide <step> --signal ..."
-                    )
-                step["auto"] = {key: ran[key] for key in ("stage", "log", "exit", "sha256")}
-                step["evidence"] = check.log
+            if args.by or args.quote:
+                raise Blocked("AUTO is not a signoff; drop --by / --quote")
+            check = AUTO_CHECKS.get(gate_type(step))
+            if check is None:
+                raise Blocked(
+                    f"{step['id']} is a {gate_type(step)} gate; no machine check can pass it, "
+                    "so it needs a person's signoff"
+                )
+            if args.evidence and args.evidence != check.log:
+                raise Blocked(
+                    f"AUTO keeps the output of the check it runs in {check.log}; "
+                    "drop --evidence or name that file"
+                )
+            ran = pre.get("auto_run")
+            if not ran or ran["log"] != check.log:
+                raise Blocked(f"{step['id']} changed while it was being recorded; record again")
+            if ran["refusal"]:
+                raise Blocked(ran["refusal"])
+            asked = [
+                f"{s['id']}: {signal}"
+                for s in run["steps"] if s["kind"] == check.source
+                for signal in unanswered(path, s["id"])
+            ]
+            if asked:
+                raise Blocked(
+                    "AUTO refused: signals still wait for a person's decision — "
+                    + "; ".join(asked)
+                    + " — ask, then: workflow.py decide <step> --signal ..."
+                )
+            step["auto"] = {key: ran[key] for key in ("stage", "log", "exit", "sha256")}
+            step["evidence"] = check.log
         elif status == "AUTO":
             raise Blocked("AUTO is only for a human.gate that declares auto_tiers")
         verifier = kind_agents.KIND_VERIFIER.get(step["kind"])
@@ -1773,7 +1845,7 @@ def cmd_record(args: argparse.Namespace) -> int:
             ]
             if missing:
                 raise Blocked(
-                    f"{step['id']} is FANOUT; missing a verify lease for "
+                    f"{step['id']} is FANOUT; missing a lease for "
                     + ", ".join(missing)
                     + f"; workflow.py delegate {step['id']} --shard <id> for each"
                 )
@@ -1781,12 +1853,12 @@ def cmd_record(args: argparse.Namespace) -> int:
             if now_ids != list(pre.get("shard_lease_ids") or []):
                 raise Blocked(f"{step['id']} changed while it was being recorded; record again")
         elif purpose:
+            if not held.get("id") and purpose == "verify":
+                raise Blocked(
+                    f"{step['id']} writes ticket artifacts and was never given a verify lease: "
+                    f"workflow.py delegate {step['id']} before the verifier starts"
+                )
             if not held.get("id"):
-                if purpose == "verify":
-                    raise Blocked(
-                        f"{step['id']} writes ticket artifacts and was never given a verify lease: "
-                        f"workflow.py delegate {step['id']} before the verifier starts"
-                    )
                 raise Blocked(
                     f"{step['id']} writes product code and was never given a write lease: "
                     f"workflow.py delegate {step['id']} before the agent starts"
@@ -1827,6 +1899,8 @@ def cmd_record(args: argparse.Namespace) -> int:
                     + "; ".join(open_signals)
                     + f" — ask, then: workflow.py decide {step['id']} --signal ..."
                 )
+            if step["kind"] == "human.gate" and not is_decision_gate(step):
+                _block_earlier_open_signals(run, step, path)
         if "status" in step:
             note = args.note or "recorded again"
             run.setdefault("revisions", []).append(
@@ -2055,12 +2129,7 @@ def delegate_one(args: argparse.Namespace, path: Path) -> int:
         else:
             paths = [f"{ticket}/**"]
     else:
-        paths = arch_includes(path)
-        if not paths:
-            raise Blocked(
-                "a write lease needs the paths a person included in arch.yaml "
-                "(impact_candidates[].include: true); none found"
-            )
+        paths = write_lease_paths(path, shard, marked.get("writes") or [])
     acquire = [
         "lease", "acquire", "--run", str(path), "--step", args.step, "--risk", marked["tier"],
         "--feature-id", marked["feature_id"], "--agent", marked["agent"],
@@ -2128,9 +2197,11 @@ def _raw(record: dict | None) -> str:
     return str(((record or {}).get("report") or {}).get("raw") or "").strip()
 
 
-def brief_path(run_path: Path, run: dict, step_id: str, verify: bool = False) -> Path:
+def brief_path(run_path: Path, run: dict, step_id: str, verify: bool = False, shard: str = "") -> Path:
     """Where step leaves the brief that land reads: beside the run, apart from the records."""
-    return run_path.parent / "briefs" / f"{run.get('run_id') or 'run'}--{step_id}{'.verify' if verify else ''}.yaml"
+    mark = f"--{shard}" if shard else ""
+    suffix = ".verify" if verify else ""
+    return run_path.parent / "briefs" / f"{run.get('run_id') or 'run'}--{step_id}{mark}{suffix}.yaml"
 
 
 def handed_guide(run_path: Path, step_id: str) -> str:
@@ -2182,8 +2253,49 @@ def prior_failure(run_path: Path, record: dict) -> str:
     return said
 
 
-def compose_brief(run_path: Path, run: dict, step: dict, repo: Path | None, **extra: str) -> dict:
+def _freeze_header(brief: dict, step: dict, previous: dict | None, agent_name: str) -> None:
+    """The system and tool assembly this dispatch will show, copied into the brief."""
+    name = agent_name or kind_agents.KIND_AGENTS.get(step["kind"], "")
+    if not name or name == "-":
+        return
+    head = step_packet.header(name)
+    brief["request_header"] = head
+    prev = previous if isinstance(previous, dict) else {}
+    if str(prev.get("agent") or name) != name:
+        return
+    old = (prev.get("brief") or {}).get("request_header") if isinstance(prev.get("brief"), dict) else {}
+    if not isinstance(old, dict):
+        return
+    old_sha = str(old.get("sha256") or "")
+    new_sha = str(head.get("sha256") or "")
+    if old_sha and new_sha and old_sha != new_sha:
+        brief["header_changed"] = {"from": old_sha, "to": new_sha}
+
+
+def _prior_art(brief: dict, step: dict, ticket: Path, root: Path | None, feature: str) -> list[str]:
+    """Confirmed prior art for this step's scope, through the shared reader.
+
+    Keep the delegation-brief scope exactly as before: feature, label,
+    explicit scope, write roots, and shard root. Stage-entry advice is a
+    separate concern and may use the stage; this brief must not silently grow
+    a broader scope.
+    """
+    return prior_art.lines(
+        ticket,
+        kernel_root() / "state",
+        feature,
+        label=str(step.get("label") or ""),
+        scope=str(brief.get("scope") or ""),
+        writes=[str(item) for item in brief.get("writes") or []],
+        shard=str(brief.get("shard") or ""),
+        repo=root,
+    )
+
+
+def compose_brief(run_path: Path, run: dict, step: dict, repo: Path | None,
+                  previous: dict | None = None, **extra: str) -> dict:
     """The brief of references/agents.md, from what the run, the ticket and the registry already say."""
+    agent_name = str(extra.pop("agent", "") or "")
     page = KINDS.get(step["kind"], "")
     root = repo or next((p for p in ticket_of(run_path).parents if (p / ".git").is_dir()), None)
     brief = {
@@ -2205,11 +2317,52 @@ def compose_brief(run_path: Path, run: dict, step: dict, repo: Path | None, **ex
     if guide:
         brief["guide"] = guide
     brief.update({k: v for k, v in extra.items() if v})
+    progress = _progress_line(run)
+    if progress:
+        brief["progress"] = progress
+    _freeze_header(brief, step, previous, agent_name)
+    ticket = ticket_of(run_path)
+    step_id = str(step.get("id") or "")
+    brief = step_packet.attach(brief, ticket, step_id)
+    prior = _prior_art(brief, step, ticket, root, str(run.get("feature") or ""))
+    if prior:
+        brief["prior_art"] = prior
+    if brief.get("prior_failure") and root is not None:
+        skip = set()
+        page = str(brief.get("must_read") or "")
+        end = brief.get("packet_end")
+        if page and end:
+            skip.add(f"{page}:1:{end}")
+        brief.update(read_ledger.project(ticket, step_id, root, skip))
     return brief
+
+
+def _print_replay(brief: dict) -> None:
+    if not brief.get("prior_failure"):
+        return
+    print("重放: 本步换了新的上下文。上下文行是日志里 sha256 仍一致的原文。没有出现在本包里的旧正文，不要当作已经读过。")
+    for block in brief.get("context_blocks") or []:
+        print(f"上下文: {block['span']} sha256={block['sha256']}")
+        print(block["text"])
+    for row in brief.get("context_stale") or []:
+        print(f"上下文失效: {row['span']} {row.get('reason') or '文件已变'}，这一段不算上下文")
+    for row in brief.get("context_omitted") or []:
+        print(f"上下文未放入: {row['span']} sha256={row['sha256']} 本轮上下文是新的，需要时 load 这一段")
+    for row in brief.get("context_refused") or []:
+        print(f"上下文拒绝: {row['span']} 不在仓根内")
 
 
 def print_brief(run: dict, step: dict, agent: str, attempt: int, brief: dict, role: str = "") -> None:
     print(f"BRIEF {step['id']} -> {agent}{' verify' if role else ''} attempt {attempt}")
+    stored = brief.get("request_header") if isinstance(brief.get("request_header"), dict) else {}
+    head = stored or step_packet.header(agent)
+    if head.get("sha256"):
+        print(f"请求头: agent={head.get('agent') or agent} sha256={head['sha256']} tools={head.get('tools') or ''}")
+    else:
+        print(f"请求头: agent={agent} 定义文件缺失")
+    changed = brief.get("header_changed") if isinstance(brief.get("header_changed"), dict) else {}
+    if changed.get("from") and changed.get("to"):
+        print(f"请求头变更: {changed['from']} → {changed['to']}。执行者定义和上一回不是同一份。")
     print(f"票目录: {brief['ticket_home']}")
     print(f"仓根: {brief['repo']}")
     print(f"feature / stage / risk_tier: {run.get('feature')} / {brief['stage'] or '-'} / {brief['risk_tier'] or '-'}")
@@ -2217,7 +2370,17 @@ def print_brief(run: dict, step: dict, agent: str, attempt: int, brief: dict, ro
     print(f"attempt: {attempt}")
     if brief.get("prior_failure"):
         print(f"prior_failure: {brief['prior_failure']}")
+    _print_replay(brief)
     print(f"必读: {brief['must_read']}")
+    if brief.get("packet_text"):
+        print(
+            f"步进: {brief['must_read']} sha256={brief['packet_sha256']} "
+            f"行 1-{brief['packet_end']}"
+        )
+        print(brief["packet_text"])
+    if "packet_includes" in brief:
+        names = brief.get("packet_includes") or []
+        print("包含: " + (", ".join(names) if names else "无"))
     print(f"IDEV_ROOT: {brief['idev_root']}")
     if brief.get("artifact"):
         print(f"artifact: {brief['artifact']}")
@@ -2225,11 +2388,21 @@ def print_brief(run: dict, step: dict, agent: str, attempt: int, brief: dict, ro
     print("回报: 按你定义里的回报格式,STATUS + EVIDENCE 必填")
     if brief.get("guide"):
         print(f"领域约束: {brief['guide']}")
+    if brief.get("shard"):
+        print(f"分片: {brief['shard']}")
     if brief.get("writes"):
         print("只写: " + ", ".join(brief["writes"]))
+    if brief.get("scope"):
+        print(f"范围: {brief['scope']}")
+    if brief.get("scan"):
+        print(f"扫描: {brief['scan']}")
     if brief.get("verifies"):
         print(f"复核对象: {brief['verifies']}(写手这次的回报与改动,独立判断,不改写手的代码)")
-    progress = _progress_line(run)
+    for line in brief.get("prior_art") or []:
+        print(f"既往: {line}")
+    if brief.get("prior_art"):
+        print("既往说明: 这是约束不是答案,仍以本轮证据为准。没列出的不代表没有,也不要因为列了就不查")
+    progress = str(brief.get("progress") or "") or _progress_line(run)
     if progress:
         print(progress)
     print("END BRIEF")
@@ -2260,29 +2433,91 @@ def _locate(args: argparse.Namespace, **extra: Any) -> argparse.Namespace:
     return argparse.Namespace(repo=args.repo, feature=args.feature, run=args.run, step=args.step, **extra)
 
 
+def _shard_writer(path: Path, step_id: str, shard: str) -> dict | None:
+    """The newest writer record for one shard. Other shards of the step do not count."""
+    best: tuple[int, dict] | None = None
+    for record_path in run_records(path):
+        data = safeyaml.mapping(record_path) or {}
+        if str(data.get("step")) != step_id or str(data.get("shard") or "") != shard:
+            continue
+        if str(data.get("role") or "").lower() == "verifier":
+            continue
+        attempt = safeyaml.as_int(data.get("attempt"), 1)
+        if best is None or attempt > best[0]:
+            best = (attempt, data)
+    return best[1] if best else None
+
+
+def _shard_fields(args: argparse.Namespace, path: Path, shard: str) -> dict:
+    run = load_yaml(path) or {}
+    step = next(item for item in run["steps"] if item["id"] == args.step)
+    data = safeyaml.mapping(fanout_manifest(path, _fanout_activity(step), session_repo(args.repo))) or {}
+    item = next((row for row in data.get("shards") or [] if str(row.get("id")) == shard), None)
+    if not isinstance(item, dict):
+        raise Blocked(f"{args.step} shard {shard} disappeared from the manifest; assess again")
+    return {
+        "shard": shard,
+        "writes": [str(w) for w in (item.get("writes") or []) if str(w).strip()],
+        "scope": str(item.get("scope") or ""),
+    }
+
+
+def _apply_shard(brief: dict, fields: dict) -> None:
+    brief["shard"] = fields["shard"]
+    if fields["writes"]:
+        brief["writes"] = fields["writes"]
+    if fields["scope"]:
+        brief["scope"] = fields["scope"]
+
+
+def _delegate_shard(args: argparse.Namespace, path: Path, shard: str) -> None:
+    try:
+        delegate_one(_locate(args, shard=shard, verify=False, open=False), path)
+    except Blocked as exc:
+        if "already holds lease" not in str(exc):
+            raise
+        print(f"DELEGATE {args.step} shard {shard} (lease stands)")
+
+
+def _emit_step_brief(args: argparse.Namespace, path: Path, shard: str) -> int:
+    run = load_yaml(path) or {}
+    step = next(item for item in run["steps"] if item["id"] == args.step)
+    agent = kind_agents.KIND_AGENTS[step["kind"]]
+    last = _shard_writer(path, step["id"], shard) if shard else latest_delegation(path, step["id"])
+    attempt = safeyaml.as_int((last or {}).get("attempt"), 0) + 1
+    failure = prior_failure(path, last) if last else ""
+    brief = compose_brief(path, run, step, session_repo(args.repo), last,
+                          prior_failure=failure, agent=agent)
+    if shard:
+        _apply_shard(brief, _shard_fields(args, path, shard))
+    if str(getattr(args, "prep_log", "") or ""):
+        brief["scan"] = str(args.prep_log)
+    save_brief(brief_path(path, run, step["id"], shard=shard), run, step, agent, attempt, brief)
+    print_brief(run, step, agent, attempt, brief)
+    flag = f" --shard {shard}" if shard else ""
+    print(f"LAND send the brief to {agent}; with its report: "
+          f"workflow.py land {step['id']}{flag} --feature {run.get('feature')} --report -")
+    if shard:
+        print(f"SHARD do not record {step['id']} until fanout.py merge")
+    return 0
+
+
 def cmd_step(args: argparse.Namespace) -> int:
-    """Hand a step to its agent and print the brief, filled from the run, the ticket and the registry."""
+    """Hand a step, or one fanout shard, to its agent and print the filled brief."""
     path, run, step = _ticket_run(args)
     block = agent_feedback_block(run, path)
     if block:
         print(block, file=sys.stderr)
         raise Blocked(block)
+    shard = str(getattr(args, "shard", "") or "").strip()
     agent = kind_agents.KIND_AGENTS[step["kind"]]
-    if (step.get("delegated") or {}).get("agent"):
+    if shard:
+        _delegate_shard(args, path, shard)
+    elif (step.get("delegated") or {}).get("agent"):
         print(f"DELEGATE {step['id']} -> {agent} (already delegated; its lease stands)")
     else:
         delegate_one(_locate(args, shard="", verify=False, open=False), path)
-        run = load_yaml(path) or {}
-        step = next(s for s in run["steps"] if s["id"] == args.step)
-    last = latest_delegation(path, step["id"])
-    attempt = safeyaml.as_int((last or {}).get("attempt"), 0) + 1
-    repo = session_repo(args.repo)
-    brief = compose_brief(path, run, step, repo, prior_failure=prior_failure(path, last) if last else "")
-    save_brief(brief_path(path, run, step["id"]), run, step, agent, attempt, brief)
-    print_brief(run, step, agent, attempt, brief)
-    feature = run.get("feature")
-    print(f"LAND send the brief to {agent}; with its report: workflow.py land {step['id']} --feature {feature} --report -")
-    return 0
+    return _emit_step_brief(args, path, shard)
 
 
 def write_record(record: dict, feature: str, repo: str) -> int:
@@ -2297,12 +2532,73 @@ def write_record(record: dict, feature: str, repo: str) -> int:
     return done.returncode
 
 
+def _shard_record(step: dict, shard: str, saved: dict, raw: str) -> dict:
+    return {
+        "step": step["id"], "kind": step["kind"], "agent": kind_agents.KIND_AGENTS[step["kind"]],
+        "attempt": safeyaml.as_int(saved.get("attempt"), 1), "shard": shard,
+        "started_at": saved.get("started_at"), "finished_at": now(), "brief": saved.get("brief") or {},
+        "report": {"status": _report_status(raw), "evidence": _report_evidence(raw), "raw": raw},
+    }
+
+
+def _land_shard(args: argparse.Namespace, path: Path, raw: str) -> int:
+    run = load_yaml(path) or {}
+    step = next(item for item in run["steps"] if item["id"] == args.step)
+    shard = str(args.shard).strip()
+    saved = saved_brief(brief_path(path, run, step["id"], shard=shard))
+    if not saved or str(saved.get("run_id")) != str(run.get("run_id") or ""):
+        raise Blocked(f"no brief for {step['id']} shard {shard}: workflow.py step {step['id']} --shard {shard} first")
+    previous = _shard_writer(path, step["id"], shard)
+    if previous is not None and raw == _raw(previous):
+        print(f"SHARD {shard} already recorded")
+        return 0
+    if previous is not None and safeyaml.as_int(saved.get("attempt"), 1) <= safeyaml.as_int(previous.get("attempt"), 1):
+        raise Blocked(f"{step['id']} shard {shard} attempt {previous.get('attempt')} is already recorded")
+    code = write_record(_shard_record(step, shard, saved, raw), str(run.get("feature") or ""), args.repo)
+    if code not in (0, 1):
+        return code
+    if _agent_findings(path, step["id"], shard):
+        print(f"SEND BACK {step['id']} shard {shard}: the retry brief follows")
+        return _retry_brief(args, path, shard)
+    return _close_shards(args, path)
+
+
+def _agent_findings(path: Path, step_id: str, shard: str) -> bool:
+    """True when this shard's latest report still fails an agent check."""
+    last = _shard_writer(path, step_id, shard) or {}
+    checks = last.get("checks") if isinstance(last.get("checks"), dict) else {}
+    return any(key != "brief-complete" and str(value).startswith("FAIL") for key, value in checks.items())
+
+
+def _close_shards(args: argparse.Namespace, path: Path) -> int:
+    """Merge once every shard is in. The conductor still records the step."""
+    import fanout
+    run = load_yaml(path) or {}
+    step = next(item for item in run["steps"] if item["id"] == args.step)
+    if str(step.get("status") or "") in ("PASS", "FAIL", "SKIPPED", "AUTO"):
+        return 0
+    repo = session_repo(args.repo)
+    ids = fanout_shard_ids(path, step, repo) or []
+    pending = [sid for sid in ids if _shard_writer(path, step["id"], sid) is None or _agent_findings(path, step["id"], sid)]
+    if not ids or pending:
+        print(f"SHARD {args.shard} recorded; do not record {step['id']} until fanout.py merge")
+        return 0
+    return fanout.merge(str(run.get("feature") or ""), _fanout_activity(step), repo)
+
+
+def _retry_brief(args: argparse.Namespace, path: Path, shard: str) -> int:
+    _emit_step_brief(args, path, shard)
+    return 1
+
+
 def cmd_land(args: argparse.Namespace) -> int:
     """Take an agent's report for a step: its record, then the verifier's turn or the step's record."""
     path, run, step = _ticket_run(args)
     raw = (sys.stdin.read() if args.report in ("", "-") else Path(args.report).read_text(encoding="utf-8")).strip()
     if not raw:
         raise Blocked("land needs the agent's report: --report - with the text on stdin, or a file")
+    if str(getattr(args, "shard", "") or "").strip():
+        return _land_shard(args, path, raw)
     sid, kind, feature = step["id"], step["kind"], str(run.get("feature") or "")
     agent, verifier = kind_agents.KIND_AGENTS[kind], kind_agents.KIND_VERIFIER.get(kind)
     last = latest_delegation(path, sid)
@@ -2331,9 +2627,9 @@ def cmd_land(args: argparse.Namespace) -> int:
                       if str(v).startswith("FAIL") and k != "brief-complete")
     if findings and not args.accept_with_findings:
         print(f"SEND BACK {sid}: the report fails {', '.join(findings)}; "
-              f"workflow.py step {sid} prints the retry brief with them as prior_failure, "
-              "or land it again with --accept-with-findings \"<why it passes anyway>\"")
-        return 1
+              "the retry brief follows, or land again with "
+              "--accept-with-findings \"<why it passes anyway>\"")
+        return _retry_brief(args, path, "")
     status = _report_status(raw)
     if status == "BLOCKED":
         print(f"STOP {sid} came back BLOCKED: follow the HANDOFF / CONSULT / REBRIEF / SIGNAL lines above, "
@@ -2354,6 +2650,7 @@ def cmd_land(args: argparse.Namespace) -> int:
         target = written[0].relative_to(ticket_of(path)).as_posix() if written else ""
         home = ticket_dir_repo_relative(path, session_repo(args.repo))
         brief = compose_brief(path, run, step, session_repo(args.repo),
+                              agent=verifier,
                               verifies=f"{home}/{target}" if target else "")
         save_brief(brief_path(path, run, sid, verify=True), run, step, verifier, attempt, brief,
                    accept_with_findings=args.accept_with_findings)
@@ -2387,8 +2684,8 @@ def land_verification(args: argparse.Namespace, path: Path, run: dict, step: dic
     status, evidence = _report_status(raw), _report_evidence(raw)
     if status != "PASS":
         print(f"SEND BACK {sid}: {verifier} came back {status or 'without a STATUS'} ({evidence or 'no evidence'}); "
-              f"workflow.py step {sid} prints the retry brief for {kind_agents.KIND_AGENTS[kind]}")
-        return 1
+              f"the retry brief for {kind_agents.KIND_AGENTS[kind]} follows")
+        return _retry_brief(args, path, "")
     code = cmd_record(_locate(
         args, status="PASS", evidence=_report_evidence(_raw(writer)), by="", quote="", note="",
         verified_by=verifier, verify_evidence=evidence,
@@ -2630,7 +2927,7 @@ def cmd_decide(args: argparse.Namespace) -> int:
         if not str(getattr(args, name) or "").strip():
             raise Blocked(f"a decision needs --{name}")
     if not is_answer(args.quote):
-        raise Blocked("--quote must be the person's answer to the question; 继续 / ok choose nothing, ask again")
+        raise Blocked(NUDGE_DECIDE)
     entry = append_decision(path, args.step, {
         "signal": args.signal.strip(),
         "question": args.question.strip(),
@@ -2643,6 +2940,205 @@ def cmd_decide(args: argparse.Namespace) -> int:
     left = unanswered(path, args.step)
     print("SIGNALS none left" if not left else "SIGNALS still open: " + "; ".join(left))
     return 0
+
+
+def _capture(fn) -> tuple[int, str]:
+    import contextlib
+    import io
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        try:
+            code = fn()
+        except Blocked as exc:
+            print(f"BLOCKED {exc}", file=err)
+            code = 2
+        except SystemExit as exc:
+            code = exc.code if isinstance(exc.code, int) else 1
+    return code or 0, out.getvalue() + err.getvalue()
+
+
+def _record_args(args: argparse.Namespace, step: str, status: str, evidence: str) -> argparse.Namespace:
+    rec = argparse.Namespace(**vars(args))
+    rec.step = step
+    rec.status = status
+    rec.evidence = evidence
+    rec.by = ""
+    rec.quote = ""
+    rec.note = ""
+    rec.verified_by = ""
+    rec.verify_evidence = ""
+    rec.accept_with_findings = ""
+    return rec
+
+
+_ASSESS = re.compile(
+    r"^FANOUT_ASSESS\s+\S+\s+.*?--feature\s+(\S+)\s+--activity\s+(\S+)\s*$",
+    re.M,
+)
+
+
+def _named(args: argparse.Namespace, step: str, shard: str = "") -> argparse.Namespace:
+    rec = argparse.Namespace(**vars(args))
+    rec.step = step
+    rec.shard = shard
+    return rec
+
+
+def _open_shards(result: dict) -> list[dict]:
+    pending = {str(item) for item in (result.get("pending_ids") or [])}
+    return [
+        row for row in result.get("shards") or []
+        if isinstance(row, dict) and str(row.get("id") or "")
+        and (not pending or str(row.get("id")) in pending)
+    ]
+
+
+def _brief_shards(args: argparse.Namespace, step_id: str, result: dict) -> tuple[int, str]:
+    """Print one brief per shard that still needs an agent. Do not spawn it."""
+    chunks: list[str] = []
+    for row in _open_shards(result):
+        sid = str(row["id"])
+        code, out = _capture(lambda sid=sid: cmd_step(_named(args, step_id, sid)))
+        chunks.append(out)
+        if code != 0:
+            return code, "".join(chunks)
+    return 0, "".join(chunks)
+
+
+def _agent_head(text: str) -> str:
+    return "\n".join(
+        line for line in text.splitlines()
+        if line.startswith("NEXT ") or line.startswith("DELEGATE ")
+    )
+
+
+def _prep_log(args: argparse.Namespace, activity: str) -> Path | None:
+    try:
+        path = find_run(args)
+    except (Blocked, SystemExit):
+        return None
+    if path.name != "run.yaml":
+        return None
+    return path.parent / f"prep-{activity}.log"
+
+
+def _auto_prep(args: argparse.Namespace, activity: str, lines: list[str]):
+    """Run kernel-script prep. None means the conductor still runs the lines."""
+    import prep_run
+    if not lines or any(prep_run.kernel_argv(line) is None for line in lines):
+        return None
+    dest = _prep_log(args, activity)
+    if dest is None:
+        return None
+    return prep_run.run_all(lines, dest)
+
+
+def _with_prep(args: argparse.Namespace, log: str) -> argparse.Namespace:
+    rec = argparse.Namespace(**vars(args))
+    rec.prep_log = log
+    return rec
+
+
+def _finish_fanout(args: argparse.Namespace, result: dict, text: str) -> tuple[int, str]:
+    """Brief the shards after a kernel-script prep. Leave every other prep printed."""
+    import drive_run
+    import fanout
+    step = drive_run.parse_next(text) or {}
+    rendered = fanout.render(result, str(getattr(args, "feature", "") or "")) + "\n"
+    prep = [str(line) for line in (result.get("prep") or []) if str(line).strip()]
+    ran = _auto_prep(args, str(result.get("activity") or ""), prep) if prep else (0, "")
+    if ran is None:
+        return 0, _agent_head(text) + "\n" + rendered
+    code, log = ran
+    if prep and code not in (0, 1):
+        return 1, rendered + f"PREP exit={code} log={log}\n"
+    held = _with_prep(args, log) if log else args
+    brief_code, out = _brief_shards(held, str(step.get("id") or ""), result)
+    note = f"PREP exit={code} log={log}\n" if log else ""
+    return brief_code, rendered + note + out
+
+
+def _handoff_assess(args: argparse.Namespace, step_id: str, feature: str, activity: str, text: str):
+    """Run the assess next already printed. SERIAL then prints the one brief."""
+    import fanout
+    repo = (session_repo(args.repo) or Path.cwd()).resolve()
+    try:
+        result = fanout.assess(feature, activity, repo)
+    except ValueError as exc:
+        return 2, f"BLOCKED {exc}\n"
+    fanout.write_manifest(feature, result, repo)
+    rendered = fanout.render(result, feature) + "\n"
+    if result.get("resume") == "merge":
+        code, out = _capture(lambda: fanout.merge(feature, activity, repo))
+        return code, rendered + out
+    if result.get("decision") != "SERIAL":
+        return _finish_fanout(args, result, text)
+    code, out = _capture(lambda: cmd_step(_named(args, step_id)))
+    return code, rendered + out
+
+
+def _handoff_one(args: argparse.Namespace, text: str) -> tuple[int, str]:
+    """Prepare one agent step. Do not spawn it."""
+    import drive_run
+    step = drive_run.parse_next(text)
+    if step is None:
+        return 0, text
+    hit = _ASSESS.search(text)
+    if hit is None:
+        return _capture(lambda: cmd_step(_named(args, step["id"])))
+    return _handoff_assess(args, step["id"], hit.group(1), hit.group(2), text)
+
+
+def _wave_blocks(text: str) -> list[str]:
+    blocks, body = [], []
+    for line in text.splitlines():
+        if line == "---":
+            blocks.append("\n".join(body))
+            body = []
+            continue
+        if line.startswith(("PARALLEL ", "DIGEST ", "PROGRESS ")):
+            continue
+        body.append(line)
+    blocks.append("\n".join(body))
+    return [block for block in blocks if "NEXT " in block]
+
+
+def _handoff_wave(args: argparse.Namespace, text: str) -> tuple[int, str]:
+    """Prepare every agent in the open wave. Do not spawn them."""
+    head = next((line for line in text.splitlines() if line.startswith("PARALLEL ")), "PARALLEL")
+    chunks = [head + "\n"]
+    for block in _wave_blocks(text):
+        if "DELEGATE idev-" not in block:
+            chunks.append(block + "\n")
+            continue
+        code, out = _handoff_one(args, block)
+        chunks.append(out)
+        if code != 0:
+            return code, "".join(chunks)
+    return 0, "".join(chunks)
+
+
+def _handoff(args: argparse.Namespace, text: str) -> tuple[int, str]:
+    if text.startswith("PARALLEL ") or "\nPARALLEL " in text:
+        return _handoff_wave(args, text)
+    return _handoff_one(args, text)
+
+
+def cmd_drive(args: argparse.Namespace) -> int:
+    import drive_run
+    path = find_run(args)
+    run = load_yaml(path) or {}
+    repo = session_repo(args.repo) or Path.cwd()
+    return drive_run.drive(repo.resolve(), ticket_of(path), {
+        "feature": str(run.get("feature") or args.feature or ""),
+        "workflow_id": str(run.get("workflow_id") or ""),
+        "load": lambda: load_yaml(path) or {},
+        "show_next": lambda: _capture(lambda: cmd_next(args)),
+        "record": lambda step, status, evidence: _capture(
+            lambda: cmd_record(_record_args(args, step, status, evidence))
+        ),
+        "handoff": lambda text: _handoff(args, text),
+    })
 
 
 def cmd_abort(args: argparse.Namespace) -> int:
@@ -2723,10 +3219,12 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_record)
     p = sub.add_parser("step", help="delegate a step and print the brief the machine filled")
     p.add_argument("step")
+    p.add_argument("--shard", default="", help="fanout shard id; the brief and the lease cover only that shard")
     locate(p)
     p.set_defaults(func=cmd_step)
     p = sub.add_parser("land", help="take an agent's report: record it, then the verifier's turn or the step's record")
     p.add_argument("step")
+    p.add_argument("--shard", default="", help="record this shard only; the step is recorded once after merge")
     p.add_argument("--report", default="-", help="the agent's report: - for stdin (default) or a file")
     p.add_argument(
         "--accept-with-findings", default="",
@@ -2748,6 +3246,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--note", required=True)
     locate(p)
     p.set_defaults(func=cmd_abort)
+    p = sub.add_parser("drive", help="run conductor-owned steps until an agent or a person")
+    locate(p)
+    p.set_defaults(func=cmd_drive)
     args = parser.parse_args(argv)
     try:
         return args.func(args)

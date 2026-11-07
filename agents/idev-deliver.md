@@ -86,7 +86,7 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
      想加义务 → `baseline-conflict`,**停**
    - **`arch`** — 需求签收后交整包方案,再请人签。`design.md` 六节(目标/方案/契约/影响面/回退/用例),目标节照抄基线 goal;每条 item、每条 `case_intent` 点名。`## 前置` 放在 `## 目标` 之前。`arch.yaml` 的 `approach` 与 `non_approach` 都要有,`case_intents` 挂 `baseline_item_id`。本阶段不写 `verify/plan.yaml`。方案"更好"但超基线 → 拒过。没有未决分叉就不要写 `grill.md` 的 `## arch` 轮。有分叉才回报,让导体把问句写进那一轮。需求轮的 `frontier` 保持 empty。影响范围内的既有问题按 deliver/SKILL.md 架构阶段写进前置节。判据唯一就直接写 `scope_debt.decision` 为 `mark` 或 `fix-first`，不要回报问人。定不了才写 `pending`，让导体按 chat-confirm 并进当前这个人的一次决策包。`fix-first` 才另开子需求。
      按 `$IDEV/conventions/canon.md` §1 协议扫 §2 信号与 §4 念头,§5 必答 A1–A8;
-     答不出标 `UNPROVEN` 并写进方案节。方案节同时过 `$IDEV/conventions/coding.md` 底线 4、5:顺着读能指出重点;业务落在带行为的类型上,不计划一串只有 get/set 的对象。引入新领域概念时先过 `conventions/domain-modeling.md` 建通用语言。方案碰到 Vue 组件边界时,跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage arch`，状态所有者和数据流按打出的技能写进方案节
+     答不出标 `UNPROVEN` 并写进方案节。方案节同时过 `$IDEV/conventions/coding.md` 底线 4、5:顺着读能指出重点;业务落在带行为的类型上,不计划一串只有 get/set 的对象。引入新领域概念时先过 `conventions/domain-modeling.md` 建通用语言。引入或替换依赖前先读真实契约 / 源码；没读过的 API、配置和字段不得进方案，第三方行为用学习测试钉住（F2）。方案碰到 Vue 组件边界时,跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage arch`，状态所有者和数据流按打出的技能写进方案节
    - **`test`** — 用例证明基线 item。疑问只拷问理解,**答案不得写成新 must**
 3. 请签前**必须**跑结构检查,FAIL 不准请签:
    ```bash
@@ -108,18 +108,23 @@ shared_understanding: true
 
 正文用 grilling 的问句行(`❓ **Q1** - **主题**:`)和推荐答案行(`➡️`)。
 `frontier` 只许 `empty` 或 `open`,各只出现一次。
-基线 `sealed: true` 时这份文件必须在,且 frontier 是 `empty`、shared_understanding 是 `true`（后者由需求通过那一次确认写入）。
-方案先整包交出。只有真有未决分叉才另起一轮,不把需求轮改回 open:`arch_frontier` 单独成行,问句写在一行 `## arch` 之后。这轮还开着就不许请人签方案。没有分叉不要造问句。
+基线 `sealed: true` 时这份文件必须在,且 frontier 是 `empty`、shared_understanding 是 `true`（后者由需求通过写入）。
+方案先整包交出。只有真有未决分叉才另起一轮,不把需求轮改回 open:`arch_frontier` 单独成行,问句写在一行 `## arch` 之后。这轮还开着就不许写方案通过。没有分叉不要造问句。
 
 不要 `trace.sh append` —— trace 由导体统一写。
 
 ## 硬规则
 
 1. **不准跳阶段。** 无 `deliver.yaml` 就从 `req-review` 建,不要从中间插入。
-2. **frontier 未空不准把需求当通过。** `baseline.yaml` 仍有 `status: open` 或未清空 `objections` 时不准请导体签需求 —— 回报 `BLOCKED(logic)`,让导体把本轮问题一次问完。基线就绪后可以起草拆解,密封和拆解同一次确认。**禁止**口头"差不多了"。
+2. **frontier 未空不准把需求当通过。** `baseline.yaml` 仍有 `status: open` 或未清空 `objections` 时不准把需求当通过 —— 回报 `BLOCKED(logic)`,让导体把本轮问题一次问完。基线就绪后起草拆解。检查通过就由导体写密封和拆解,不问确认。**禁止**口头"差不多了"。
 3. **密封后不准改 baseline 正文。** 下游只引用 `baseline_item_id`。要改原文必须人说「解除密封」或 `reopen`,那是导体的事。
+3a. **人写在文档里的标注不准改写、不准删。** `<!-- @me: ... -->` 和 `# @me: ...` 是人的原话。
+   处理它要求的改动,然后 `python3 $IDEV/scripts/annotate.py settle --feature <f> --at <file:line> --how "<一句话>"`,
+   再把那一行的 `@me:` 改成 `@done:` —— **原文一个字都不动**。重写措辞会被当成抹掉:
+   台账存的是原文 sha256,`check-feature` 会同时报「标注被抹掉」和「处置无留痕」。
+   要改措辞,让提标注的人改。全文 [$IDEV/references/annotate.md](../references/annotate.md)。
 4. **签字**：人签只走 [$IDEV/references/chat-confirm-signoff.md](../references/chat-confirm-signoff.md)；你不写任何签字字段，`by:` 只能是人名。
-5. **过专家拒过清单才能请签**(`$IDEV/deliver/references/experts.md`)。清单不过就停,不要用"资深意见"绕过。
+5. **过专家拒过清单才能写需求通过**(`$IDEV/deliver/references/experts.md`)。清单不过就停,不要用"资深意见"绕过。
 6. **红绿只调用 verify 模块。** 你不跑用例、不造断言 —— 那是 `idev-verifier`。改代码是 `idev-coder`。
 7. **回退 origin 只能是 `req`/`arch`/`code`**,且须人拷问确认。禁止用提测反馈直接改 goal。
 8. **契约里没有的文件名不要临场新建。** 交付看 `deliver/references/deliver-schema.md`,验证看 `verify/references/plan-schema.md`,排障看 `ops/references/ops-schema.md`。
@@ -128,7 +133,7 @@ shared_understanding: true
 11. **人读规格与密封基线不一致时,改规格,不改基线。** 密封 item 不因后确认改写 —— 后确认进 `docs/adr/` 或 `docs/convention/`。
 12. **三处 review 不是同一份**,不要混:`doc_home.py --key work` 的 `review.md` 是编码评审（过程文件）· `<票目录>/reviews/` 是 checklist · `.idev/reviews/` 是执行残留。
 13. **禁止 `.scratch/`。** 已写在 `.idev/task/` 或 `.idev/docs/` 的票不是执行残留,清理时不删。
-14. 结构检查 FAIL 仍请签 = 拒过。
+14. 结构检查 FAIL 仍写这一关 = 拒过。
 15. `setup-agents-docs` 的一次性安装不是每张票的步骤 —— 只有人明确要初始化时才做。
 
 

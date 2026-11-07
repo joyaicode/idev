@@ -60,6 +60,12 @@ idev 是人机共驾的 AI 端到端交付导体，面向所有用 AI 做交付�
 
 快捷流水线：idev 的 `workflows/` 是编排能力。为这条产线构建出来的流水线在扩展根 `.idev/workflows/`。同 id 用产线这份。路径和开关在扩展根 `.idev/workflow-defaults.yaml`。
 
+**评审方案时不必在聊天里复述。** 需求和设计文档交到你手上之后，要改的地方直接写在文件里：
+md 用 `<!-- @me: 这里不该加缓存 -->`，yaml 用 `# @me: ...`，想标几处标几处。
+下一轮 Agent 先扫标注、逐条处理、留下处置，再把 `@me:` 改成 `@done:`，**不许改你的原话**；
+三条都没做完就写不了 `sealed` / `accepted`。十处修改在聊天里复述会漏会走样，写在原地不会。
+全文 [annotate.md](annotate.md)。
+
 命令与打开预算见 [operator-cheatsheet.md](operator-cheatsheet.md)。
 
 ## 中控台

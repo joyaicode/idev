@@ -138,7 +138,8 @@ class StepAndLand(unittest.TestCase):
         self.conductor("step", "c")
         out = self.conductor("land", "c", NO_EVIDENCE, ok=False)
         self.assertIn("evidence-present", out)
-        self.assertIn("workflow.py step c", out)
+        self.assertIn("prior_failure:", out)
+        self.assertIn("attempt: 2", out)
         self.assertNotIn("verify_lease", self.step())
         out = self.conductor("step", "c")
         self.assertIn("attempt: 2", out)
@@ -152,10 +153,10 @@ class StepAndLand(unittest.TestCase):
 
     def test_a_new_report_on_a_used_brief_needs_the_retry_brief(self) -> None:
         self.conductor("step", "c")
-        self.conductor("land", "c", NO_EVIDENCE, ok=False)
-        out = self.conductor("land", "c", COMPLETE, ok=False)
-        self.assertIn("workflow.py step c prints the retry brief", out)
-        self.assertFalse((self.records() / "c-2.yaml").exists())
+        out = self.conductor("land", "c", NO_EVIDENCE, ok=False)
+        self.assertIn("attempt: 2", out)
+        self.conductor("land", "c", COMPLETE)
+        self.assertTrue((self.records() / "c-2.yaml").exists())
 
     def test_landing_the_writer_report_twice_keeps_one_record(self) -> None:
         self.conductor("step", "c")

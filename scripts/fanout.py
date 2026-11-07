@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""On-demand split for self-test, case design, case execution, review, and root cause.
+"""On-demand split for self-test, case design, case execution, review, root cause, and disjoint code edits.
 
 The conductor asks this before delegating those activities. Fewer than two
 independent shards, overlapping writes, or a shared Maven module that has
@@ -10,8 +10,8 @@ conclusion is not evidence, and the first shard to finish does not cancel
 the rest. When those shard files are already on disk, assess
 prints MERGE and does not ask for another agent.
 
-    fanout.py assess --feature F --activity plan|run|selftest|rootcause|report
-    fanout.py merge  --feature F --activity plan|run|selftest|rootcause|report
+    fanout.py assess --feature F --activity plan|run|selftest|rootcause|report|code|fix
+    fanout.py merge  --feature F --activity plan|run|selftest|rootcause|report|code|fix
 
 assess writes verify/fanout-<activity>.yaml so merge can see the wave and
 can refuse a plan.yaml or hypotheses.yaml that an agent touched.
@@ -39,15 +39,18 @@ except ImportError:
 
 import hypothesis  # noqa: E402
 
-ACTIVITIES = ("plan", "run", "selftest", "rootcause", "report")
+ACTIVITIES = ("plan", "run", "selftest", "rootcause", "report", "code", "fix")
 AGENTS = {
     "plan": "idev-verifier",
     "run": "idev-verifier",
     "selftest": "idev-verifier",
     "rootcause": "idev-ops",
     "report": "idev-reviewer",
+    "code": "idev-coder",
+    "fix": "idev-coder",
 }
 SIGNED_FINDING = re.compile(r"(?m)^### (I\d+) 已签收\b")
+PLAN_FINDING = re.compile(r"(?m)^### (I\d+) (?:已签收|待签收)\b")
 SOURCE_EXT = {".java", ".vue", ".js", ".jsx", ".ts", ".tsx", ".yml", ".yaml", ".xml"}
 SKIP_DIR = {"target", "node_modules", "dist", ".git", "generatedverify"}
 DEFAULT_CAP = 4
@@ -241,21 +244,30 @@ def _review_path(task: Path) -> Path:
     return doc_home.intermediate(task.parent.parent, task.name, "review.md")
 
 
-def _signed_findings(task: Path) -> list[str]:
-    """I* headings a person has already signed. Unsigned findings are not cases yet."""
+def _finding_ids(task: Path, pattern: re.Pattern) -> list[str]:
     path = _review_path(task)
     if not path.is_file():
         return []
     text = path.read_text(encoding="utf-8", errors="replace")
     found: list[str] = []
     seen: set[str] = set()
-    for match in SIGNED_FINDING.finditer(text):
+    for match in pattern.finditer(text):
         sid = match.group(1)
         if sid in seen or not _slug(sid):
             continue
         seen.add(sid)
         found.append(sid)
     return found
+
+
+def _signed_findings(task: Path) -> list[str]:
+    """Headings already marked 已签收. That ledger is not regenerated."""
+    return _finding_ids(task, SIGNED_FINDING)
+
+
+def _plan_findings(task: Path) -> list[str]:
+    """Every I* heading. 待签收 is the report status, not a person gate."""
+    return _finding_ids(task, PLAN_FINDING)
 
 
 def _covers_finding(case: dict, finding: str) -> bool:
@@ -266,12 +278,12 @@ def _covers_finding(case: dict, finding: str) -> bool:
 
 
 def _assess_plan_findings(task: Path, cap: int) -> dict:
-    """Split a fresh plan by signed findings.
+    """Split a fresh plan by I* headings.
 
     case_intents are an output of this step, so a review ticket that has
     not drafted them yet would otherwise stay one agent forever.
     """
-    findings = _signed_findings(task)
+    findings = _plan_findings(task)
     if len(findings) < 2:
         return _serial("plan", "fewer than two case_intents")
     plan_path = task / "verify" / "plan.yaml"
@@ -588,6 +600,51 @@ def lease_globs(ticket: str, writes: list[str]) -> list[str]:
     return out
 
 
+def _covers_feature(path: str) -> bool:
+    name = path.strip().strip("/")
+    return name in ("", "*", "**") or "**" in Path(name).parts or name.endswith("/**")
+
+
+def _include_paths(task: Path) -> list[str]:
+    arch = _load(task / "arch.yaml")
+    out = []
+    for row in safeyaml.as_list(arch.get("impact_candidates")):
+        if isinstance(row, dict) and row.get("include") is True:
+            rel = str(row.get("path") or "").strip()
+            if rel:
+                out.append(rel)
+    return out
+
+
+def assess_sources(task: Path, activity: str, cap: int) -> dict:
+    paths = _include_paths(task)
+    if any(_covers_feature(rel) for rel in paths):
+        return _serial(activity, "an include path covers the feature")
+    groups: dict[str, list[str]] = {}
+    order: list[str] = []
+    for rel in paths:
+        module = Path(rel).parts[0] if Path(rel).parts else rel
+        if module not in groups:
+            order.append(module)
+            groups[module] = []
+        groups[module].append(rel)
+    shards = []
+    for module in order:
+        files = groups[module]
+        shards.append({
+            "id": module,
+            "agent": "idev-coder",
+            "writes": files,
+            "scope": "edit only " + ", ".join(files),
+            "units": files,
+        })
+    return _finish(
+        activity, shards, cap, "",
+        {"arch.yaml": _fingerprint(task / "arch.yaml")},
+        "fewer than two include modules",
+    )
+
+
 def assess(feature: str, activity: str, repo: Path | None = None, cap: int = DEFAULT_CAP) -> dict:
     if activity not in ACTIVITIES:
         raise ValueError(activity)
@@ -605,6 +662,8 @@ def assess(feature: str, activity: str, repo: Path | None = None, cap: int = DEF
         return assess_report(place, (repo or Path.cwd()).resolve(), cap)
     if activity == "rootcause":
         return assess_rootcause(place, cap)
+    if activity in ("code", "fix"):
+        return assess_sources(task, activity, cap)
     return assess_cases(task, activity, cap)
 
 
@@ -967,6 +1026,9 @@ def merge(feature: str, activity: str, repo: Path | None = None) -> int:
     if moved:
         print(f"BLOCKED {moved} changed after assess; a shard must not write it", file=sys.stderr)
         return 2
+    if activity in ("code", "fix"):
+        print(f"OK   {activity} shards keep their include paths; record the step once")
+        return 0
     for shard in safeyaml.as_list(result.get("shards")):
         rel = (shard.get("writes") or [""])[0]
         if not (task / rel).is_file():

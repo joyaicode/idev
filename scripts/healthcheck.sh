@@ -205,7 +205,9 @@ fi
 
 # Self-evolution and path-view are siblings. A missing evolve script must not skip path-view.
 if [[ -x "$ROOT/scripts/evolve-review.sh" && -x "$ROOT/scripts/evolve-curator.sh" \
-     && -f "$ROOT/workflows/self-evolve-review.yaml" && -f "$ROOT/references/self-evolution.md" ]]; then
+     && -x "$ROOT/scripts/process-eval.py" \
+     && -f "$ROOT/workflows/self-evolve-review.yaml" && -f "$ROOT/references/self-evolution.md" \
+     && -f "$ROOT/references/process-eval.md" && -f "$ROOT/references/scaffolds.yaml" ]]; then
   echo "OK  self-evolution tooling (evolve-review/curator/workflow/doc)"
 else
   echo "WARN self-evolution tooling incomplete"

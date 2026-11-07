@@ -81,7 +81,7 @@ class ReactLoop(unittest.TestCase):
         )
         self.assertTrue(any("unknown tool not-a-tool" in item for item in errors))
 
-    def test_unknown_tool_does_not_record(self):
+    def test_unknown_tool_is_a_result_and_the_loop_stays_open(self):
         with tempfile.TemporaryDirectory() as raw:
             folder = Path(raw)
             opened = loop("open", "--feature", "demo", "--step", "look", "--candidate", "stage-gate", folder=folder)
@@ -90,10 +90,25 @@ class ReactLoop(unittest.TestCase):
                 "act", "--feature", "demo", "--step", "look",
                 "--thought", "try another", "--action", "other-tool", folder=folder,
             )
-            self.assertEqual(acted.returncode, 2)
-            self.assertIn("REJECT", acted.stderr)
+            self.assertEqual(acted.returncode, 0, acted.stderr)
+            self.assertIn("RESULT UNKNOWN_TOOL other-tool", acted.stdout)
+            self.assertNotIn("EXIT", acted.stdout)
+            hidden = loop(
+                "act", "--feature", "demo", "--step", "look",
+                "--thought", "try a registered one", "--action", "lessons", folder=folder,
+            )
+            self.assertEqual(hidden.returncode, 0, hidden.stderr)
+            self.assertIn("RESULT NOT_ADMITTED lessons", hidden.stdout)
             text = (folder / "demo--look.yaml").read_text(encoding="utf-8")
-            self.assertNotIn("other-tool", text)
+            self.assertIn("status: open", text)
+            self.assertIn("UNKNOWN_TOOL other-tool", text)
+            self.assertIn("NOT_ADMITTED lessons", text)
+            again = loop(
+                "act", "--feature", "demo", "--step", "look",
+                "--thought", "use the candidate", "--action", "stage-gate", folder=folder,
+            )
+            self.assertEqual(again.returncode, 0, again.stderr)
+            self.assertIn("TOOL python3 scripts/stage-gate.py", again.stdout)
 
     def test_tool_failure_takes_the_exit_and_the_trace_copies_the_hop(self):
         with tempfile.TemporaryDirectory() as raw:

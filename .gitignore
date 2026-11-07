@@ -60,7 +60,18 @@ testdata/fuzz/
 # put 190M that does not into it permanently.
 /scripts/docs/*.pdf
 /scripts/docs/notes/*-OCR.txt
+/scripts/docs/notes/*-OCR.p*.txt
 /scripts/docs/notes/*-全文.txt
+
+# Python bytecode. Regenerated on every import, and a .pyc from another
+# interpreter version is noise in a repo that already has to care which
+# python3 it got.
+__pycache__/
+*.py[co]
+
+# One-off local console and OCR logs; they are run residue, not book notes.
+/state/console/
+/ocr*.log
 
 # idev: execution residue stays untracked; durable product characteristics stay
 .idev/*

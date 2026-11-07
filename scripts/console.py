@@ -2163,22 +2163,22 @@ def main(argv: list[str] | None = None) -> int:
         msg = reply(folder, args.text)
         print(f"reply id={msg['id']}")
         return 0
+    if args.cmd == "live" and args.add:
+        if not args.agent:
+            print("FAIL --agent is required with --add", file=sys.stderr)
+            return 2
+        row = live_add(
+            folder,
+            feature=args.feature,
+            step=args.step,
+            agent=args.agent,
+            shard=args.shard or "",
+            kind=args.kind,
+        )
+        label = row["step"] if not row["shard"] else f"{row['step']}/{row['shard']}"
+        print(f"live add {row['feature']} {label} {row['agent']}")
+        return 0
     if args.cmd == "live":
-        if args.add:
-            if not args.agent:
-                print("FAIL --agent is required with --add", file=sys.stderr)
-                return 2
-            row = live_add(
-                folder,
-                feature=args.feature,
-                step=args.step,
-                agent=args.agent,
-                shard=args.shard or "",
-                kind=args.kind,
-            )
-            label = row["step"] if not row["shard"] else f"{row['step']}/{row['shard']}"
-            print(f"live add {row['feature']} {label} {row['agent']}")
-            return 0
         shard = None if args.shard is None else args.shard
         removed = live_clear(folder, feature=args.feature, step=args.step, shard=shard)
         print(f"live clear {args.feature} {args.step} {removed}")

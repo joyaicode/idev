@@ -34,7 +34,7 @@ SCHEMA_CASES = frozenset({
 class ExtractAndValidate(unittest.TestCase):
     def setUp(self) -> None:
         if not HAVE_SCHEMA and self._testMethodName in SCHEMA_CASES:
-            self.skipTest("jsonschema 未安装；python3 -m pip install --user -r requirements.txt")
+            self.skipTest("jsonschema 未安装；装法见 requirements.txt 头部（PEP 668 的机器要多一个 flag）")
 
     def test_valid_fixture_passes(self) -> None:
         data = json.loads(VALID.read_text(encoding="utf-8"))

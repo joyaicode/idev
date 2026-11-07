@@ -4,7 +4,7 @@
 -- exit --
 0
 -- output --
-DIGEST match aec1243bf708f640
+DIGEST match f91ad7060df91b01
 PARALLEL check
 NEXT plan  kind=verify.plan  status=pending
 OPEN verify/SKILL.md
@@ -30,3 +30,4 @@ LABEL 验收索引（只写验收报告，不改用例、不写 aligned）
 GROUP check
 WRITES verify/accept.md
 WITH {'mode': 'selftest'}
+PROGRESS closed=4/11 open=plan,review,accept

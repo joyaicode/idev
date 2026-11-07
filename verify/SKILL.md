@@ -7,14 +7,14 @@ parent: idev
 
 由 `idev` 按内容调起。本目录不是独立 Skill。只跑红绿，不加 mode 就不开新 Skill。
 
-同一循环，五个 **mode**。AI 提名并跑可执行用例；人确认范围、对需求/设计/架构签字。  
+同一循环，五个 **mode**。AI 提名并跑可执行用例。范围有未决分叉才问人。需求、设计、架构在检查通过后由导体写入；本模块不写这些字段。  
 **不是**验收权威，不准把无基线写成达标。  
 plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析，不把路径写死成 `docs/task`。
 
 ## 本阶段 5 步（先做这些）
 
 1. 读 `plan.yaml`；无 plan 先起草（goal/non_goal 复制密封基线）。票在 `arch` 时就起草，每条 `case_intent` 一条 case（`slice_id` / `baseline_item_id` / `dimension` 一致），不要等到编码之后另起一套。
-2. 请人 `accepted` 前跑 `check-feature.sh <f> verify-plan`（已 accepted 再 run 不重跑）。S8 的 `workflow.py record <gate> AUTO` 自己跑这一步。
+2. 起草或改了用例后跑 `check-feature.sh <f> verify-plan`（已 accepted 再 run 不重跑）。无 `SIGNAL` 由导体记 `AUTO`，不请人 `accepted`。S8 的 `workflow.py record <gate> AUTO` 自己跑这一步。
 3. 按 mode 跑 cases；只许 PASS/FAIL/UNPROVEN；PASS 必须有证据路径。
 4. 提测维表六族：`mode: test` + `unproven.md`；人没提 promote 不问不跑。
 5. 写 `conductor-eval` 件数；试运行停问 feedback tags；`trace.sh append`。
@@ -59,9 +59,9 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 9. **扩展只改登记表**（[plan-schema.md](references/plan-schema.md)）。不复制本模块、不开新 Skill。不兼容修正升 `schema_version` + ADR。
 10. **跑测用现有 Maven / 人确认的 shell**，不要第二套断言引擎。
 11. **试运行反馈。** 入口直接落到本模块且台账 `trial`：每次 `run` 后写 `feedback.yaml` 并停问导体 tag。**由 deliver / ops 模块调用时**：只写 `conductor-eval`，不为进化再停一次。进化只改真源 `~/.cursor/skills/idev/verify/`，不要写回仓库。禁止分数门禁。导体评审禁止数字总分。
-12. **若存在 `<票目录>/deliver.yaml`：** case 必须带 `slice_id` 与 `baseline_item_id`。goal/non_goal 复制基线。**起草或调整 `cases[]` 后、请人 `accepted` 前**跑  
+12. **若存在 `<票目录>/deliver.yaml`：** case 必须带 `slice_id` 与 `baseline_item_id`。goal/non_goal 复制基线。**起草或调整 `cases[]` 后**跑  
     `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> verify-plan`  
-    FAIL 不准请人 `accepted`。**`run` 不跑这一项、不请签、FAIL 不挡跑。** 禁止为了让测试绿去改 `baseline.yaml`。
+    FAIL 不准写 `accepted`。**`run` 不跑这一项、不请签、FAIL 不挡跑。** 禁止为了让测试绿去改 `baseline.yaml`。
 
 ## 动作
 
@@ -72,9 +72,9 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 1. 要齐：mode、feature；goal/non_goal 按规则 2（复制基线或人写）；`debug` 要环境/产物/可观察物。
 2. 列 `impact_candidates`（hop 0 = diff 文件，hop 1 = 扩一跳）。
 3. 按 mode 的维度表起草 `cases[]`（能挂上已有 `*Test`/`*IT` 就挂；没有则写人确认后的 `shell`，或生成到 `generatedverify/` 且 `accepted: false` 直到人勾）。
-4. 写下 `<票目录>/verify/plan.yaml`（照 [plan.example.yaml](references/plan.example.yaml)）。`accepted: false`。`arch.yaml` 里还有两条以上没有 case 的 `case_intent` 时，先跑 `fanout.py assess --activity plan`。`FANOUT` 时每个分片只写 `verify/shards/plan-<id>.yaml`，不写 `plan.yaml`，不改 `accepted`。导体 `fanout.py merge` 再把草稿收进计划。`SERIAL` 就一个人起草。
-5. 起草后或之后改了 `cases[]` / goal：跑 `check-feature.sh <feature> verify-plan`。FAIL 不准请人 `accepted`。
-6. **P0，或 P1/P2 有 `SIGNAL`：停，等人改 plan**（勾选 / 删 case / `accepted: true`），或回复确认用语全签（见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)）。P1/P2 无 `SIGNAL`：S8 里由 `workflow.py record <gate> AUTO` 跑检查并把输出写进 `verify/plan-check.log`，不在配方里时自己把检查输出存成这个文件；都写 `accepted: true` + `auto: verify/plan-check.log`，不停。已 `accepted` 且本轮未改用例，不要再走本步。
+4. 写下 `<票目录>/verify/plan.yaml`（照 [plan.example.yaml](references/plan.example.yaml)）。`accepted: false`。`arch.yaml` 里还有两条以上没有 case 的 `case_intent` 时，先跑 `fanout.py assess --activity plan`。`FANOUT` 时每个分片只写 `verify/shards/plan-<id>.yaml`，不写 `plan.yaml`，不改 `accepted`。最后一片 `land --shard` 已经把草稿收进计划。`SERIAL` 就一个人起草。
+5. 起草后或之后改了 `cases[]` / goal：跑 `check-feature.sh <feature> verify-plan`。FAIL 不准写 `accepted`。
+6. **有 `SIGNAL`：停**，用 `workflow.py decide` 记下回答（见 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md)）。无 `SIGNAL`：S8 里由 `workflow.py record <gate> AUTO` 跑检查并把输出写进 `verify/plan-check.log`，不在配方里时自己把检查输出存成这个文件；写 `accepted: true` + `auto: verify/plan-check.log`，不停。已 `accepted` 且本轮未改用例，不要再走本步。
 
 ### 2. run
 

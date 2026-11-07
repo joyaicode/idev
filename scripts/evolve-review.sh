@@ -317,6 +317,12 @@ for row in rows:
 print("\n".join(lines) if lines else "(none)")
 PY
 )"
+PROCESS_OUT="$TMP/process.txt"
+TRACES="${IDEV_TRACE_DIR:-$("${SINK[@]}" traces)}"
+if ! python3 "$ROOT/scripts/process-eval.py" scan --traces "$TRACES" --window "$WINDOW" >"$PROCESS_OUT" 2>"$TMP/process.err"; then
+  echo "PROCESS now= later= waste=0 unreasonable=0 scaffold_idle=0 unproven=scan-failed" >"$PROCESS_OUT"
+fi
+PROCESS_LATER="$(awk '/^PROCESS /{for(i=1;i<=NF;i++) if($i ~ /^later=/){sub(/^later=/,"",$i); print $i; exit}}' "$PROCESS_OUT")"
 BODY="${BODY}
 
 ## 自净化发现的试点
@@ -324,12 +330,21 @@ BODY="${BODY}
 这些仓写了 \`.idev/marker.yaml\` 且 \`marker: idev\`、\`evolve: pilot\`。内核先跑通用复盘；试点自己的 trace、提案、复盘留在该仓 \`.idev/\`，方便下次接着做。这里只记计数，不抄试点正文进内核。
 
 ${PILOT_TEXT}
+
+## 流程机制
+
+\`\`\`
+$(cat "$PROCESS_OUT")
+\`\`\`
+
+流程机制的 later=PROPOSE 不抬 signal。要写草案再跑 process-eval.py scan --propose。草案仍须 grill 和人确认才改 Skill。
 "
 
 echo "=== evolve-review ==="
 echo "HARD_COUNT=${HARD}"
 echo "hot_tags=${HOT}"
 echo "signal=${SIGNAL}"
+echo "process_later=${PROCESS_LATER:-none}"
 if [[ "$DRY" == "1" ]]; then
   echo "DRY-RUN: would write $OUT_DRAFT"
   printf '%s\n' "$BODY" | head -40

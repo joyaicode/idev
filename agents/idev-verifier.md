@@ -63,7 +63,8 @@ is_background: false
    `mode=test` 的维表**六族每一维**至少一条 case 或显式 `UNPROVEN`。四类原因是 `conductor-eval` 的 `unproven_reasons` 既有取值,照用。
    票里有 `deliver.yaml` 时,每条 case **必须同时挂** `slice_id` 与 `baseline_item_id`。
    **selector 必须指向含该 case `assert` 语句的测试类** —— 配置绑定/冒烟类同名测试不算覆盖;起草前先找到断言落点再回填 runner。
-6. 写 `<票目录>/verify/plan.yaml`,**`accepted: false`**。然后跑门禁:
+6. 起草完先扫测试气味：F5 断言取自契约或用户现象，不从实现反推；C26 一测一方向、最小 setup、Input/Expected/Actual；C28 套件金字塔与快速重跑；C29 随机失败 / 跳过 / 长期红灯当轮处理；C30 stub 优先、mock 只验对外副作用。命中先改 case，不改基线。
+7. 写 `<票目录>/verify/plan.yaml`,**`accepted: false`**。然后跑门禁:
    ```bash
    bash $IDEV/scripts/check-feature.sh <feature> verify-plan
    python3 $IDEV/scripts/stage-gate.py --feature <feature> --stage test
