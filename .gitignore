@@ -12,6 +12,9 @@
 !.idev/docs/
 !.idev/docs/**
 
+# VSCode changelists.json is per-user local grouping state, not product content.
+.vscode/changelists.json
+
 # flock residue from safeyaml's load_locked/save_locked: the lock file
 # outlives the process that held it, and it is always empty.
 state/*.lock
