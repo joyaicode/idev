@@ -84,7 +84,7 @@ class Layers(unittest.TestCase):
         self.assertEqual(reached, 0)
 
     def test_stage_ranges_expand_to_every_table_entry(self):
-        """A page saying P1–P19 / C1–C32 / A1–A8 / R1–R7 stages every entry."""
+        """A page saying P1–P19 / C1–C33 / A1–A8 / R1–R7 stages every entry."""
         staged = dra.staged_ids(self.kernel)
         expected = {
             "A2", "A3", "A4", "A5", "A6",
