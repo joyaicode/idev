@@ -157,11 +157,19 @@ class PreTool(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stdout)
 
     def test_denies_git_push(self) -> None:
+        # IDEV_ALLOW_AGENT_PUSH=1 是宿主会话的合法旁路；run_hook 的 env 是
+        # 覆盖式合并（只能加不能减），所以这里显式置空串压掉继承值。
         done = run_hook("pre_tool.py", {
             "command": "git push origin HEAD",
-        })
+        }, env={"IDEV_ALLOW_AGENT_PUSH": ""})
         self.assertEqual(done.returncode, 2)
         self.assertIn("git push", done.stdout)
+
+    def test_allows_git_push_with_optin(self) -> None:
+        done = run_hook("pre_tool.py", {
+            "command": "git push origin HEAD",
+        }, env={"IDEV_ALLOW_AGENT_PUSH": "1"})
+        self.assertEqual(done.returncode, 0, done.stdout)
 
 
 class InstallHooks(unittest.TestCase):
