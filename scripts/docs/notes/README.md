@@ -136,7 +136,7 @@
 | 计算机程序的构造和解释（第2版）（Harold Abelson / Gerald Jay Sussman / Julie Sussman《Structure and Interpretation of Computer Programs, Second Edition》中译「SICP」，机械工业出版社，扫描版经 macOS Vision OCR 逐页识别） | `计算机程序的构造和解释（第2版）-精读缺口.md` | T3 4 5 7 10 14 · C20 24 · P5 |
 | 高性能 MySQL（第 3 版）中文版（Baron Schwartz / Peter Zaitsev / Vadim Tkachenko《High Performance MySQL》第 3 版中译，宁海元 / 周振兴 / 彭立勋 / 翟卫祥 / 刘辉译，电子工业出版社，全书 16 章 + 6 附录扫描版经 macOS Vision OCR 逐页识别） | `高性能MySQL（第3版）中文版-精读缺口.md` | T5 9 10 11 · A4 6 |
 | 高性能网站建设指南（Steve Souders《High Performance Web Sites: Essential Knowledge for Front-End Engineers》中译，刘彦博译，电子工业出版社，扫描版经 macOS Vision OCR 逐页识别） | `高性能网站建设指南-精读缺口.md` | T7 8 9 10 11 12 · C19 |
-| UNIX操作系统设计（Maurice J. Bach《The Design of the UNIX Operating System》英文原版，485 页、484 页带文本层，经 macOS PDFKit 逐页提取，全书 13 章 + 附录） | `UNIX操作系统设计-精读缺口.md` | T1 3 4 9 10 11 12 14 · A2 4 · C19 38 39 |
+| UNIX操作系统设计（Maurice J. Bach《The Design of the UNIX Operating System》英文原版，485 页、484 页带文本层，经 macOS PDFKit 逐页提取，全书 13 章 + 附录） | `UNIX操作系统设计-精读缺口.md` | T1 3 4 9 10 11 12 14 · A2 4 · C19 23 33 38 39 |
 
 ## 读一本书的流程
 
