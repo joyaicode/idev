@@ -57,6 +57,7 @@
 | Go 语言实战（William Kennedy / Brian Ketelsen / Erik St. Martin《Go in Action》中译，全书 9 章 + 译者序 / 序 / 前言） | `Go语言实战-精读缺口.md` | T1 T3 T4 T7 T9 T10 T11 T14 · C2 C7 C19 C26 C27 C28 C30 C34 C38 C39（新增） · P6 P15 · R1 · F4 |
 | Go 学习笔记（第 4 版，雨痕《Go 学习笔记》，基于 Go 1.4，全书三部分：语言 / 源码 / 附录） | `Go学习笔记（第4版）-精读缺口.md` | T9 T10 T14 · C6 C19 C23 C35 C38 C39 C40（新增） · F4 F5 |
 | C 语言接口与实现（David R. Hanson《C Interfaces and Implementations》中译「创建可重用软件的技术」，全书 20 章） | `C语言接口与实现-精读缺口.md` | T1 T3 T4 T9 T10 T11 T12 T14 · C1 C2 C5 C7 C15 C16 C17 C19 C24 C38 C39 · F4 F5 |
+| Go 学习笔记（第 6 版下卷，雨痕《Go 学习笔记》，基于 Go 1.10，66 页运行时源码：启动 / 内存分配器 / GC / scavenge） | `Go学习笔记（第6版下卷）-精读缺口.md` | T5 T9 T11 · C13 C17 C19 C23 C39 |
 
 ## 读一本书的流程
 
