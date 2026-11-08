@@ -137,6 +137,13 @@
 | 高性能 MySQL（第 3 版）中文版（Baron Schwartz / Peter Zaitsev / Vadim Tkachenko《High Performance MySQL》第 3 版中译，宁海元 / 周振兴 / 彭立勋 / 翟卫祥 / 刘辉译，电子工业出版社，全书 16 章 + 6 附录扫描版经 macOS Vision OCR 逐页识别） | `高性能MySQL（第3版）中文版-精读缺口.md` | T5 9 10 11 · A4 6 |
 | 高性能网站建设指南（Steve Souders《High Performance Web Sites: Essential Knowledge for Front-End Engineers》中译，刘彦博译，电子工业出版社，扫描版经 macOS Vision OCR 逐页识别） | `高性能网站建设指南-精读缺口.md` | T7 8 9 10 11 12 · C19 |
 | UNIX操作系统设计（Maurice J. Bach《The Design of the UNIX Operating System》英文原版，485 页、484 页带文本层，经 macOS PDFKit 逐页提取，全书 13 章 + 附录） | `UNIX操作系统设计-精读缺口.md` | T1 3 4 9 10 11 12 14 · A2 4 · C19 23 31 33 38 39 |
+| Site Reliability Engineering（Betsy Beyer 等，Google 官方在线版 49 页：前言、五部分、34 章、附录 A–F、参考文献与目录） | `Site Reliability Engineering-精读缺口.md` | T1 3 4 5 6 8 9 10 11 12 14 · A2 4 5 6 · F4 5 · C6 7 19 26 28 · P6 19 · R1 6 |
+| Software Engineering at Google（Titus Winters / Tom Manshreck / Hyrum Wright，Google 官方在线版 34 页：前言、五部分、26 章、后记与索引） | `Software Engineering at Google-精读缺口.md` | T1–T14 · A1–A8 · F2 5 6 · C5 6 12 14 18 26 28 29 30 31 · R1–R7 |
+| The Architecture of Open Source Applications（官方在线聚合版 91 页：AOSA Vol.1/Vol.2、The Performance of Open Source Software、500 Lines or Less 四卷；官方缺 041） | `The Architecture of Open Source Applications-精读缺口.md` | T1–T14 · A1–A4 A6–A8 · F1 F3–F7 · C5 16 17 19 26 28 29 30 31 34 38 39 · P7 · R1 7 |
+| The Site Reliability Workbook（Betsy Beyer 等，Google 官方在线版 35 页：前言、三部分、示例附录、索引与目录） | `The Site Reliability Workbook-精读缺口.md` | T1 3–6 8–13 · A2 4 5 6 · C6 7 19 26 28 · R1 6 |
+| Building Secure and Reliable Systems（Google 官方在线版 38 页：前言、五个部分、21 章、Conclusion / Appendix / Index / Editors） | `Building Secure and Reliable Systems-精读缺口.md` | T1–T6 8 10–14 · A1–A4 A6–A8 · F1 4–7 · C1 2 13 15 18 21 22 25 28 30 31 34 35 37 39 40 · P1 19 · R1 7 |
+| The Art of Agile Development, 2nd Edition（James Shore / Shane Warden，作者官网 70 页摘录版：四个部分与全部实践页） | `The Art of Agile Development 2nd Edition-精读缺口.md` | T1–T12 T14 · A1–A3 A5 A6 A8 · F5 · C6 7 26 28–31 · R1 4 7 |
+| Producing Open Source Software（Karl Fogel，官方在线版 71 页：前言、9 章、Further Resources、附录 A 与 CC BY-SA 4.0 许可证） | `Producing Open Source Software-精读缺口.md` | T2 4–7 11–13 · A1 2 4 6 · C5 14 26 28 29 31 · F5 · R1 3 4 7 |
 
 ## 读一本书的流程
 
