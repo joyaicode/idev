@@ -95,6 +95,7 @@
 | TCP/IP 详解卷 3：TCP 事务协议，HTTP，NNTP 和 UNIX 域协议（W. Richard Stevens《TCP/IP Illustrated, Volume 3: TCP for Transactions, HTTP, NNTP, and the UNIX Domain Protocols》中译，250 页带文本层，经 macOS PDFKit 逐页提取） | `TCP_IP详解卷3：TCP事务协议，HTTP，NNTP和UNIX域协议-精读缺口.md` | T8 10 11 · A4 · F4 · C7 16 17 18 |
 | Linux 内核设计与实现（第三版）（Robert Love《Linux Kernel Development（第三版）》中译，353 页扫描版，经 macOS Vision OCR 提取） | `Linux内核设计与实现（第三版）-精读缺口.md` | T3 4 6 9 10 11 14 · C16 17 |
 | 深入理解计算机系统（Randal E. Bryant / David R. O'Hallaron《Computer Systems: A Programmer's Perspective》中译「深入理解计算机系统」，2001-11-16 Beta Draft，1616 页混合 PDF：第 1–833 页中文扫描版经 macOS Vision OCR 逐页识别、第 834–1616 页英文 Beta Draft 文本层经 macOS PDFKit 逐页提取） | `深入理解计算机系统-精读缺口.md` | T3 4 8 9 10 11 13 14 · C18 19 37 |
+| 图解HTTP（上野宣《图解HTTP》中译，人民邮电出版社 2014，全书 11 章：网络基础 / HTTP 协议 / 报文 / 状态码 / 协作服务器 / 首部 / HTTPS / 认证 / 追加协议 / Web 内容 / 攻击技术） | `图解HTTP-精读缺口.md` | T8 9 10 11 14 · A4 · C2 31 · P9 10 |
 
 ## 读一本书的流程
 
