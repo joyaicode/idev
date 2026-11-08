@@ -1,6 +1,6 @@
 # 《剑指 Offer：名企面试官精讲典型编程题》精读缺口报告
 
-> 源文本：`scripts/docs/notes/剑指offer名企面试官精讲典型编程题-OCR.txt`（何海涛《剑指 Offer》第 1 版，278 页扫描版无文本层，经 macOS Vision OCR 逐页识别）。本报告对照 `conventions/canon.md`、`conventions/coding-tables.md` 裁定真缺口。
+> 源文本：`scripts/docs/notes/剑指offer名企面试官精讲典型编程题-OCR.txt`（何海涛《剑指 Offer》第 1 版，278 页扫描版无文本层，经 macOS Vision OCR 逐页识别）。本报告为第 74 本精读，对照 `conventions/canon.md`、`conventions/coding-tables.md` 裁定真缺口。
 >
 > 边界：编号真源仍只认 `canon.md` 的 T/A/F 与 `coding-tables.md` 的 P/C/R；本书「第 N 章 / 面试题 N」序号只作溯源，不建第二套编号。50 道面试题的具体算法（链表 / 树 / 栈 / 队列 / 查找 / 排序 / 动态规划 / 位运算）是算法题知识，不进产品仓真源；可迁移到工程上的「代码质量三要素（规范性 / 完整性 / 鲁棒性）、先思路后编码、复杂度权衡」原则落阶段页，不改 T/C/P/R 计数。
 

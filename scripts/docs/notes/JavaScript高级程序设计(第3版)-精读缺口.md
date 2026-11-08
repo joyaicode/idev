@@ -1,6 +1,6 @@
 # 《JavaScript高级程序设计（第3版）》精读缺口报告
 
-> 源文本：`scripts/docs/notes/JavaScript高级程序设计(第3版)-OCR.txt`（Nicholas C. Zakas《Professional JavaScript for Web Developers》第 3 版中译，人民邮电出版社 2012，全书 25 章 + 附录）。本报告对照 `conventions/canon.md`、`conventions/coding-tables.md` 与 `deliver/references/experts.md` 裁定真缺口。
+> 源文本：`scripts/docs/notes/JavaScript高级程序设计(第3版)-OCR.txt`（Nicholas C. Zakas《Professional JavaScript for Web Developers》第 3 版中译，人民邮电出版社 2012，全书 25 章 + 附录）。本报告为第 78 本精读，对照 `conventions/canon.md`、`conventions/coding-tables.md` 与 `deliver/references/experts.md` 裁定真缺口。
 >
 > 边界：编号真源只认 T/A/F 与 P/C/R；本书语言核心 / 引用类型 / 面向对象 / DOM / BOM / 事件 / Canvas / JSON / Ajax 等 JavaScript 与浏览器机制只作溯源。
 

@@ -1,6 +1,6 @@
 # 《Node学习指南》精读缺口报告
 
-> 源文本：`scripts/docs/notes/Node学习指南-OCR.txt`（Shelley Powers《Learning Node》中译，夏思雨、高亮译，人民邮电出版社 2014，379 页扫描版无文本层，经 macOS Vision OCR 识别）。本报告为 nodejs 类别收尾批次精读，对照 `conventions/canon.md`、`conventions/coding-tables.md` 裁定真缺口。
+> 源文本：`scripts/docs/notes/Node学习指南-OCR.txt`（Shelley Powers《Learning Node》中译，夏思雨、高亮译，人民邮电出版社 2014，379 页扫描版无文本层，经 macOS Vision OCR 识别）。本报告为第 87 本精读，对照 `conventions/canon.md`、`conventions/coding-tables.md` 裁定真缺口。
 >
 > 边界：编号真源仍只认 `canon.md` 的 T/A/F 与 `coding-tables.md` 的 P/C/R；本书「第 N 章」序号只作溯源，不建第二套编号。Node.js 语言特性与框架教程（Express/Connect/EJS/Jade/Redis/MongoDB/MySQL/Socket.IO/部署工具链）是技术栈参考，不进产品仓真源；可推广的工程原则（异步与事件驱动、模块化与信息隐藏、快速失败与错误传播、异步流程控制、中间件单一职责、鉴权与安全、测试、可运维、先测量再优化）落阶段页，不改 T/C/P/R 计数。
 
