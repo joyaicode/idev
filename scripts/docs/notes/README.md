@@ -2,7 +2,7 @@
 
 这一层是**中间产物**，不是真源，也不是知识库。真源只有两处：
 `conventions/canon.md`（T1–T14 / A1–A8 / F1–F7）与
-`conventions/coding-tables.md`（P1–P19 / C1–C33 / R1–R7）。
+`conventions/coding-tables.md`（P1–P19 / C1–C38 / R1–R7）。
 
 为什么不在这里建知识库：`coding.md` 文首明令「不要把 GoF 23 名录、《Clean Code》章节或
 《重构》全书手法目录抄进产品仓」，`coding-tables.md` §3.5 明令「禁止另起表号 / 气味码 /
@@ -51,6 +51,8 @@
 | Java 编程思想（第 4 版，Bruce Eckel《Thinking in Java》，全书 22 章 + 前言 / 译者序 / 读者评论 / 附录） | `Java编程思想（第4版）-精读缺口.md` | C7 C19 C27 C32 · P18 · T1 T3 T4 T7 T8 T9 T10 T14 |
 | 编程珠玑（第 2 版，Jon Bentley《Programming Pearls》，全书三部分 15 章 + 附录 A–E + 第 1/2 版跋 + 习题提示/答案 + 索引） | `编程珠玑（第2版）-精读缺口.md` | A1 · T1 T2 T3 T5 T6 T7 T9 T10 T13 · C12 C20 C23 C25 C26 C33（新增） · R1 · F5 |
 | C 专家编程（Peter van der Linden《Expert C Programming》，全书 11 章 + 附录 A/B） | `C专家编程-精读缺口.md` | T1 T3 T4 T7 T11 · P5 · C27 C33 |
+| Go 程序设计语言（Alan A. A. Donovan / Brian W. Kernighan《The Go Programming Language》，全书 12 章 + 前言 / 译者序 / 致谢） | `go程序设计语言-精读缺口.md` | T1 T3 T4 T5 T8 T10 T11 T14 · C2 C7 C19 C23 C28 C34（新增）C38（新增） · P6 · R1 · F4 |
+| C 陷阱与缺陷（Andrew Koenig《C Traps and Pitfalls》，全书 8 章 + 附录 A/B） | `C陷阱与缺陷-精读缺口.md` | T4 T5 T6 T7 T8 · C2 C9 C18 C19 C20 C33 C35（新增）C36（新增）C37（新增） · R1–R7 · F4 |
 
 ## 读一本书的流程
 
@@ -82,7 +84,7 @@
    `--all-books` 只收 `*-精读缺口.md`，给出每份报告的可达数和全局「只有记账」编号；DDD 逐章笔记的局部编号与《程序设计实践》的提案直落成果不进这批。
 
    它按四层报每条到达了哪里：`defined`（只是记账）→ `trigger`（T# 的 §2/§4）→
-   `staged`（阶段页点名，含 `A1–A8` / `P1–P19` / `C1–C33` / `R1–R7` 这类全表范围）→ `enforced`（插件能判形状）。只有后三层会在没人想起时起作用。
+   `staged`（阶段页点名，含 `A1–A8` / `P1–P19` / `C1–C38` / `R1–R7` 这类全表范围）→ `enforced`（插件能判形状）。只有后三层会在没人想起时起作用。
 
    判据取自真源自己的设计意图，不要自造一把尺 —— 这是上一条那次误判的来源。
 7. **反思与重炼化。** `enforced` 那一列是可以变的：条目的气味若有明确代码形状，

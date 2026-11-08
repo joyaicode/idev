@@ -43,7 +43,7 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | 中控台 | 本机页面。看当前任务、架构、agent、耗时、skill 调起，并把窗口内的件数摊开。点一件数可带上依据，写下改关口、改这一步、补观测或质疑基线。下一轮由导体读取。不签字、不派工、不打分 | `scripts/console.py` |
 | S1–S8 | 场景码，见 `SKILL.md` 决策树 | `SKILL.md` |
 | H1–H6 | 非门禁不停规则（旧称 C1–C6） | [invoke.md](invoke.md) |
-| P/C/R | 编码模式/气味/重构条件（P1–P19、C1–C33、R1–R7） | [coding-tables.md](../conventions/coding-tables.md) |
+| P/C/R | 编码模式/气味/重构条件（P1–P19、C1–C38、R1–R7） | [coding-tables.md](../conventions/coding-tables.md) |
 | T/A/F | 架构范式/出门问题/AI 失败模式 | [canon.md](../conventions/canon.md) |
 | S8 配方 | 一条可被 AI 识别的流水线。产品构建的在 `<repo>/.idev/workflows/<id>.yaml`；idev `workflows/` 只留编排能力 | [workflow-schema.md](workflow-schema.md) |
 | 浏览器程序 | 一次提交的一段页面操作。回执按任务和请求号保存。会改页面的同一段程序只跑一次。失败后的下一段由该页的 `advise` 给出。不绑定某一个浏览器 | [browser-program.md](browser-program.md) |

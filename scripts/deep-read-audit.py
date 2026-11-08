@@ -80,7 +80,7 @@ def trigger_ids(kernel: Path) -> set[str]:
 def staged_ids(kernel: Path) -> set[str]:
     """Numbers a stage page reaches, including full-family ranges.
 
-    A page that says `A1–A8`, `P1–P19`, `C1–C33`, or `R1–R7` is not naming
+    A page that says `A1–A8`, `P1–P19`, `C1–C38`, or `R1–R7` is not naming
     two bookends; it is making every entry in that family part of the sweep.
     Treating only the two literal endpoints as staged made the audit understate
     reachability for exactly the entries the books had just landed.
