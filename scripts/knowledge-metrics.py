@@ -40,7 +40,6 @@ import delegation  # noqa: E402
 import kind_agents  # noqa: E402
 import record_paths  # noqa: E402
 import safeyaml  # noqa: E402
-from lib.capability_inventory import script_names  # noqa: E402
 import textwidth as tw  # noqa: E402
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -212,7 +211,6 @@ def matrix(kernel: Path, coder, review_cites: Counter):
             "trigger": num in trigger,
             "staged": num in staged,
             "enforced": num in canon_smells.COVERED,
-            "s0": table_hits.get(num, 0),
             "hits": table_hits.get(num, 0) + (trigger_declared.get(num, 0) if num.startswith("T") else 0),
             "cites": review_cites.get(num, 0),
             "hit_fail": hit_fail.get(num, 0),
