@@ -63,6 +63,24 @@
 | 计算的本质：深入剖析程序和计算机（Tom Stuart《Understanding Computation》中译，张伟译，306 页 9 章 + 前言/后记：Ruby 基础 / 程序的含义 / 有限自动机 / 下推自动机 / 图灵机 / 从零开始编程 / 通用性无处不在 / 不可能的程序 / 抽象解释） | `计算的本质：深入剖析程序和计算机-精读缺口.md` | T1 T2 T3 T8 T14 · R6 |
 | 程序员的自我修养：链接、装载与库（俞甲子 / 石凡 / 潘爱民，2009 年电子工业出版社，485 页 4 部分 13 章：温故而知新 / 编译和链接 / 目标文件 / 静态链接 / Windows PE/COFF / 装载与进程 / 动态链接 / Linux 共享库 / Windows DLL / 内存 / 运行库 / 系统调用与 API / MiniCRT） | `程序员的自我修养-精读缺口.md` | T3 T4 T10 T13 T14 · C18 |
 | 七周七语言：理解多种编程范型（Bruce A. Tate《Seven Languages in Seven Weeks》中译，全书 9 章 + 附录参考书目） | `七周七语言：理解多种编程范型-精读缺口.md` | T1 T3 T5 T8 T10 T11 T14 · C2 C7 C21 C25 C38 · P15 |
+| Docker 从入门到实践（第 3 版）（开源书《Docker — 从入门到实践》0.9.0 版，370 页带文本层，经 macOS PDFKit 逐页提取） | `Docker从入门到实践（第3版）-精读缺口.md` | T1 3 7 8 10 11 14 · C6 13 31 |
+| JavaScript设计模式与开发实践（曾探著，人民邮电出版社 2015，全书 22 章：第一部分「基础知识」第 1–3 章、第二部分「设计模式」第 4–17 章共 16 个模式、第三部分「设计原则和编程技巧」第 18–22 章） | `JavaScript设计模式与开发实践-精读缺口.md` | T1 2 3 4 5 6 7 8 9 10 11 12 13 14 · C1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 · P1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 · R1 2 3 4 5 6 7 |
+| JavaScript语言精粹（Douglas Crockford《JavaScript: The Good Parts》中译修订版，电子工业出版社 2012，正文 10 章 + 附录 A–E） | `JavaScript语言精粹-精读缺口.md` | T2 3 4 5 8 14 · F3 4 · C2 5 16 34 |
+| javascript面向对象编程（Stoyan Stefanov《Object-Oriented JavaScript》中译，Packt 2008，全书 7 章：第一部分「现代 JavaScript 简介」第 1 章、第二部分「专业的 JavaScript 开发」第 2–4 章、第三部分「Unobtrusive JavaScript」第 5–7 章） | `javascript面向对象编程-精读缺口.md` | T2 3 4 5 6 7 · F5 · C11 26 28 29 30 |
+| 你不知道的JavaScript（上卷）（Kyle Simpson《You Don't Know JS: Scope & Closures / this & Object Prototypes》中译上卷，人民邮电出版社 2015，两部分：第一部分「作用域和闭包」第 1–5 章 + 附录 A–D、第二部分「this 和对象原型」+ 附录 A） | `你不知道的JavaScript（上卷）-精读缺口.md` | T3 4 5 8 14 · C2 34 |
+| 你不知道的JavaScript（中卷）（Kyle Simpson《You Don't Know JS: Types & Grammar / Async & Performance》中译中卷，人民邮电出版社 2015，两部分：第一部分「类型和语法」第 1–5 章、第二部分「异步和性能」第 1–6 章 + 附录 A–B） | `你不知道的JavaScript（中卷）-精读缺口.md` | T5 8 9 10 11 14 · C24 35 |
+| 你不知道的JavaScript（下卷）（Kyle Simpson《You Don't Know JS: Up & Going / ES6 & Beyond》中译下卷，人民邮电出版社 2015，两部分：第一部分「起步上路」第 1–2 章、第二部分「ES6 及更新版本」第 1–8 章） | `你不知道的JavaScript（下卷）-精读缺口.md` | T3 4 8 10 11 14 · A2 · C2 38 |
+| 基于MVC的JavaScript Web富应用开发（Alex MacCaw《JavaScript Web Applications》中译，电子工业出版社 2012，全书 13 章：MVC / 事件与观察者 / 模型与数据 / 控制器与状态 / 视图与模板 / 依赖管理 / 文件 / 实时 Web / 测试 / 部署 / Spine / Backbone / JavaScriptMVC） | `基于MVC的JavaScript_Web富应用开发-精读缺口.md` | T3 4 5 8 9 10 11 14 · A4 · F5 · C2 11 24 25 26 28 29 30 |
+| MongoDB 实战（《MongoDB 实战》中译，91 页带文本层，经 macOS PDFKit 逐页提取） | `MongoDB实战-精读缺口.md` | T9 10 11 · A4 6 · C31 |
+| MySQL 必知必会（Ben Forta《MySQL 必知必会》中译，252 页带文本层，经 macOS PDFKit 逐页提取） | `MySQL必知必会-精读缺口.md` | T1 3 9 10 11 · A4 6 · C31 |
+| MySQL 性能调优与架构设计（简朝阳《MySQL 性能调优与架构设计》，302 页带文本层，经 macOS PDFKit 逐页提取） | `MySQL性能调优与架构设计-精读缺口.md` | T9 10 11 · A4 6 · C31 |
+| Redis 开发与运维（付磊 / 张益军《Redis 开发与运维》，890 页带文本层，经 macOS PDFKit 逐页提取） | `Redis开发与运维-精读缺口.md` | T8 9 10 11 · A4 6 · F4 |
+| Python Cookbook（David Beazley / Brian K. Jones《Python Cookbook（第 3 版）》中译，702 页带文本层，经 macOS PDFKit 逐页提取） | `Python_Cookbook-精读缺口.md` | T1 3 5 8 9 10 14 · F4 · C7 18 19 26 28 · R1 |
+| Python 编程：从入门到实践（Eric Matthes《Python 编程：从入门到实践》中译，482 页带文本层，经 macOS PDFKit 逐页提取） | `Python编程：从入门到实践-精读缺口.md` | T1 3 4 5 8 · F4 5 · C1 19 26 28 · R1 |
+| Python 核心编程（Wesley Chun《Python 核心编程（第 2 版）》中译，925 页带文本层，经 macOS PDFKit 逐页提取） | `python核心编程-精读缺口.md` | T2 3 4 5 8 10 14 · F4 · C7 19 27 |
+| 深入 Linux 内核架构（Wolfgang Mauerer《Professional Linux Kernel Architecture》中译，1058 页带文本层，经 macOS PDFKit 逐页提取） | `深入Linux内核架构-精读缺口.md` | T3 4 10 11 14 · A4 · C19 31 |
+| 深入理解Nginx：模块开发与架构解析（第2版）（陶辉著，机械工业出版社 2016，全书 16 章：第一部分「Nginx 能帮我们做什么」第 1–2 章、第二部分「如何编写 HTTP 模块」第 3–7 章、第三部分「深入 Nginx」第 8–16 章） | `深入理解Nginx-精读缺口.md` | T1 2 3 4 7 8 9 10 11 12 14 · A6 · C19 24 |
+| 跟我一起写 Makefile（陈皓《跟我一起写 Makefile》，75 页带文本层，经 macOS PDFKit 逐页提取） | `跟我一起写makefile-精读缺口.md` | T7 11 |
 
 ## 读一本书的流程
 
