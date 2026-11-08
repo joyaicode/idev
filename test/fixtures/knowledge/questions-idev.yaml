@@ -1,0 +1,62 @@
+- id: idev-arch-deep-module
+  query: 架构 深模块 信息隐藏
+  expect:
+    - conventions/canon.md
+  note: 架构阶段能召回深模块与信息隐藏判据
+- id: idev-code-naming-errors
+  query: 编码 命名 错误处理
+  expect:
+    - conventions/coding-tables.md
+  note: 编码阶段能召回命名与错误处理规范
+- id: idev-test-unit-assertions
+  query: 测试 单元测试 断言
+  expect:
+    - conventions/coding-tables.md
+  note: 测试阶段能召回单元测试与断言要求
+- id: idev-rootcause-hypothesis-evidence
+  query: 根因 假设 证据
+  expect:
+    - conventions/evidence.md
+  note: 排障阶段能召回假设台账与证据链
+- id: idev-reliability-retry-timeout
+  query: 重试 超时 幂等
+  expect:
+    - conventions/canon.md
+  note: 可靠性设计能召回重试、超时与幂等权衡
+- id: idev-requirement-boundary-grilling
+  query: 需求 边界 grilling
+  expect:
+    - deliver/references/req-quality.md
+  note: 需求阶段能召回边界拷问与需求质量
+- id: idev-vue-component-state
+  query: Vue 组件 状态 边界
+  expect:
+    - conventions/vue.md
+  note: Vue 交付能召回组件状态与边界约束
+- id: idev-release-patrol-rollback
+  query: 发布 巡检 回滚
+  expect:
+    - conventions/canon.md
+  note: 发布与巡检能召回回滚和可验证上线
+- id: idev-docs-contract-change
+  query: 文档 契约 变更
+  expect:
+    - conventions/evidence.md
+    - docs/SKILL.md
+  note: 文档阶段能召回契约与变更记录要求
+- id: idev-performance-measure-first
+  query: 性能 优化 测量
+  expect:
+    - conventions/canon.md
+  note: 性能工作能召回先测量再优化
+- id: idev-domain-ubiquitous-language
+  query: 领域模型 通用语言
+  expect:
+    - conventions/domain-modeling.md
+  note: 领域建模能召回通用语言与模型边界
+- id: idev-review-finding-severity
+  query: 评审 发现 严重度
+  expect:
+    - conventions/coding-tables.md
+    - deliver/references/review.example.md
+  note: 评审阶段能召回发现分类与严重度表达

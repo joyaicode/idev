@@ -107,6 +107,9 @@ class KnowledgeTest(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def _run_questions(self, questions=""):
+        return _run(knowledge.cmd_questions, repo=str(self.repo), questions=questions)
+
     def test_sync_add_update_delete(self):
         self._write("docs/design/arch.md", "# 架构\n\n实例账本\n")
         rc, out = self._sync()
@@ -228,13 +231,13 @@ class KnowledgeTest(unittest.TestCase):
         self.assertIn("+1", out)
 
     def test_questions_missing_file(self):
-        rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+        rc, out = self._run_questions()
         self.assertEqual(rc, 2)
         self.assertIn("not found", out)
 
     def test_questions_empty_set(self):
         self._questions([])
-        rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+        rc, out = self._run_questions()
         self.assertEqual(rc, 2)
         self.assertIn("empty question set", out)
 
@@ -254,7 +257,7 @@ class KnowledgeTest(unittest.TestCase):
             "expect": ["docs/design/missing.md"],
         })
         self._questions(questions)
-        rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+        rc, out = self._run_questions()
         self.assertEqual(rc, 0)
         self.assertIn("9/10", out)
         self.assertIn("MISS q10", out)
@@ -276,10 +279,44 @@ class KnowledgeTest(unittest.TestCase):
                 "expect": ["docs/design/missing.md"],
             })
         self._questions(questions)
-        rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+        rc, out = self._run_questions()
         self.assertEqual(rc, 1)
         self.assertIn("8/10", out)
         self.assertIn("MISS q9", out)
+
+    def test_questions_explicit_path(self):
+        self._write("docs/design/arch.md", "# 架构\n\n实例账本 采信\n")
+        self._sync()
+        explicit = self.root / "explicit-questions.yaml"
+        explicit.write_text(json.dumps([
+            {"id": "explicit", "query": "实例账本",
+             "expect": ["docs/design/arch.md"], "note": "hit"},
+        ], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        self._questions([
+            {"id": "default", "query": "完全不相干的词",
+             "expect": ["docs/design/missing.md"], "note": "miss"},
+        ])
+        rc, out = self._run_questions(str(explicit))
+        self.assertEqual(rc, 0)
+        self.assertIn("PASS explicit", out)
+        self.assertNotIn("default", out)
+
+    def test_questions_default_path_when_not_specified(self):
+        self._write("docs/design/arch.md", "# 架构\n\n实例账本 采信\n")
+        self._sync()
+        explicit = self.root / "explicit-questions.yaml"
+        explicit.write_text(json.dumps([
+            {"id": "explicit", "query": "完全不相干的词",
+             "expect": ["docs/design/missing.md"], "note": "miss"},
+        ], ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        self._questions([
+            {"id": "default", "query": "实例账本",
+             "expect": ["docs/design/arch.md"], "note": "hit"},
+        ])
+        rc, out = self._run_questions()
+        self.assertEqual(rc, 0)
+        self.assertIn("PASS default", out)
+        self.assertNotIn("explicit", out)
 
     def test_questions_threshold_and_miss(self):
         # questions 回归：门槛按 len*9//10；过线 PASS 退出 0，差一条退出 1。
@@ -299,7 +336,7 @@ class KnowledgeTest(unittest.TestCase):
             self._write("docs/design/arch.md", "# 架构\n\n实例账本 采信\n")
             self._sync()
             # 2 条门槛 = 2*9//10 = 1；1 命中 >= 1 -> PASS
-            rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+            rc, out = self._run_questions()
             self.assertEqual(rc, 0)
             self.assertIn("1/2", out)
             self.assertIn("PASS q1", out)
@@ -307,7 +344,7 @@ class KnowledgeTest(unittest.TestCase):
             # 两条全 miss -> 退出 1
             questions[0]["expect"] = ["docs/design/none.md"]
             qfile.write_text(_yaml.safe_dump(questions, allow_unicode=True), encoding="utf-8")
-            rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+            rc, out = self._run_questions()
             self.assertEqual(rc, 1)
         finally:
             knowledge.QUESTIONS_PATH = old

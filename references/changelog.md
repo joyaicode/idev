@@ -1,5 +1,7 @@
 # idev 变更记录（给人看，Agent 无需读取）
 
+- 2026-11-09：`knowledge.py questions` 新增 `--questions <file>` 显式问题集路径；未指定时仍默认读取 gitignored 的 `state/knowledge-questions.yaml`，不改变既有 joypaas 验收入口。新增可跟踪的 idev 自身验收问题集 `test/fixtures/knowledge/questions-idev.yaml`，12 条覆盖架构、需求、编码、测试、根因、可靠性、Vue、发布、文档、性能、领域建模与评审主题；真实 idev 语料 Top-5 来源命中 12/12（门槛 10）。该命令仍与 doctor 同级，只做验收回归，不进 CI、不进交付门禁。单元测试补显式路径与默认路径各 1 例，共 25 例通过。人要求：quote「好的，按推荐进行」。
+
 - 2026-11-08：知识检索 CLI 新增 `questions` 验收子命令：读取 gitignored 的 `state/knowledge-questions.yaml`，对每条人工标注问题跑 Top-5 检索，来源命中 ≥90% 才返回 0；逐条输出 PASS/MISS，不进入任何门禁。`cmd_search` 与 `questions` 共用检索体，保持覆盖数硬门与真源优先排序；空查询仍拒绝。单元测试补齐 questions 缺失/空集/90% 通过与低于 90% 失败，共 23 例通过；真实 joypaas 问题集 15/15 通过。问题集仍是产品验收工具，不提交进内核。人要求：quote「好的，按推荐进行」。
 
 - 2026-11-08：《The Architecture of Open Source Applications》（官方在线聚合版 91 页：AOSA Vol.1/Vol.2、The Performance of Open Source Software、500 Lines or Less 四卷；官方缺 041，未跳过任何存在页面）逐篇精读收口，第 113 本。**七个真缺口已落 T5/T10/T11/T14/A4/A7/C18。** ① 用户可见系统从第一版建模 language context、locale、翻译键、fallback、语法/复数/性别、文本方向与本地化格式化，不得把 i18n 当事后翻译层；② 系统边界显式定义 bytes/text 转换点、内部统一文本或结构化类型与输出编码，入站尽早解码、出站一次性编码；③ 远程 / 跨进程 API 控制往返粒度，相关读取批量返回，事件携带接收方判定所需的不可变元数据，避免 N+1 往返；④ 派生结果记录输入、参数、流程版本、执行记录与依赖，能查询、复现与回溯；⑤ 关键知识可达性：列出新人最小上手路径、可检索决策与可运行示例，降低 bus factor；⑥ 并发相同计算 single-flight，同一 key 在途计算只执行一次，并定义等待上限、失败传播、取消与结果复用边界；⑦ 长生命周期对象默认不持有短生命周期对象引用，确需跨生命周期持有时显式改为值拷贝、句柄、弱引用或独立生命周期域，并配套可回收性验证。均只扩展现有编号与触发面，不新增编号、门禁或第二套测试框架。其余项目史、语言运行时、协议算法与社区出版信息不复制为第二套知识库。人要求：quote「好的，按推荐进行」，并沿用书籍精读持续授权。
@@ -455,3 +457,5 @@
 - 2026-09-29：新增 `conventions/canon.md`（T/A/F，Agent 版架构范式）。
 - 2026-09-29：非门禁不停规则由 `C1–C6` 改名为 `H1–H6`，避免与 `coding-tables.md` 的代码气味 `C1–C15` 撞号；`references/0011-chat-confirm-signoff.md`（已合并的空壳）删除。
 - 2026-09-29：新增 `references/agent-brief.md`、`references/glossary.md`。
+
+- 2026-11-09：一键安装与重建收口。① `scripts/install-idev.sh`：编排层只调用既有 installer（link-idev-aliases / link-agents / link-companion-skills / install-idev-hooks / install-codegraph-hooks），尾部 `--verify`（agents --check + companion skills + hooks 计数 + healthcheck）；支持 `--verify` / `--unlink`，每步幂等、失败即停，不含第二份安装逻辑。README 增「一键安装」节。② agent 重建链全绿：gen-kinds --check（31 kinds）、agents-check、syntax-check、`go build ./cmd/idev + idevd`、go test ./... 全过；`~/.claude/agents` 与 `~/.cursor/agents` 十个符号链接核对一致（真源 idev 仓 agents/）。③ 修 late-lifecycle smoke 与 E4.3 seal-store 检查的冲突：fixture 直写 sealed:true 无 store 行，check-feature 在有 Go 二进制时按设计 FAIL——smoke 固定 `IDEV_BIN=off` 走 python lane（该 smoke 主题是晚阶段门，seal-store 由 selfcheck 与 e2e 覆盖），healthcheck 由 FAIL 转 PASS。工作区无遗留未提交变更。人要求：quote「提交所有变更。然后重新构建所有Agent。最后沉淀idev一键安装（依赖技能、服务、Agent等）」。

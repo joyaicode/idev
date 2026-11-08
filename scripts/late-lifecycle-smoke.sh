@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 # Late-lifecycle smoke: exercise test → promote → ops → aligned forge reject.
 # Uses temp fixtures only — never writes product-ticket signoff.
+#
+# IDEV_BIN=off on purpose: the fixture writes sealed:true straight into
+# baseline.yaml with no store row, and check_sealed_projection FAILs a
+# hand-edited projection whenever a Go binary is around (E4.3). The smoke's
+# subject is the late-stage gates, not the seal store; the python lane is
+# how a machine without a build runs, and the seal-store lane has its own
+# coverage (selfcheck locks + test/e2e).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export IDEV_BIN=off
 CHECK=(python3 "$ROOT/scripts/check-feature.py")
 DELIVER="$ROOT/deliver/references"
 VERIFY="$ROOT/verify/references"

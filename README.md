@@ -63,6 +63,17 @@
 
 其它产品仓只留 `marker.yaml` + `extension_root: ../joypaas`（或等价相对路径）。
 
+## 一键安装
+
+```bash
+bash scripts/install-idev.sh          # skill 别名 + agents + companion skills + 客户端 hooks + codegraph git hooks，尾部自动 --verify
+bash scripts/install-idev.sh --verify  # 只核对，不改动
+bash scripts/install-idev.sh --unlink   # 各 installer 自己的卸载路径
+```
+
+编排层只调用既有的 installer，不含第二份安装逻辑；每步幂等，失败即停。
+单独装某一层仍用对应脚本（见下）。
+
 ## 装 agent
 
 ```bash

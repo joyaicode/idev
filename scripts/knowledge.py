@@ -15,7 +15,7 @@
 - 入库与查询同用 CJK bigram 切词（连续汉字段切 bigram、拉丁数字词小写整存）
 - 候选 / 未过闸不作为已验证事实注入；检索结果只是资料，不是执行授权
 - `--repo` 是仓库路径（不是仓库名）；路径不存在会拒绝并提示，避免把同名仓库的索引静默清空
-- `questions` 跑 `state/knowledge-questions.yaml` 验收问题集（Top-5 来源命中 >= 90%）
+- `questions` 跑验收问题集（默认 `state/knowledge-questions.yaml`，可用 `--questions` 指定；Top-5 来源命中 >= 90%）
 """
 from __future__ import annotations
 
@@ -391,15 +391,16 @@ def cmd_questions(args: argparse.Namespace) -> int:
     except ImportError:
         print("PyYAML not available", file=sys.stderr)
         return 2
-    if not QUESTIONS_PATH.is_file():
-        print(f"questions: {QUESTIONS_PATH} not found", file=sys.stderr)
+    questions_path = Path(args.questions) if args.questions else QUESTIONS_PATH
+    if not questions_path.is_file():
+        print(f"questions: {questions_path} not found", file=sys.stderr)
         return 2
     repo = _resolve_repo(args.repo)
     name = repo.name
     if _sync_repo(repo) is None:
         print(f"no whitelist for repo '{name}'", file=sys.stderr)
         return 1
-    questions = yaml.safe_load(QUESTIONS_PATH.read_text(encoding="utf-8")) or []
+    questions = yaml.safe_load(questions_path.read_text(encoding="utf-8")) or []
     if not questions:
         print("questions: empty question set", file=sys.stderr)
         return 2
@@ -529,6 +530,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_questions = sub.add_parser("questions", help="验收问题集回归（Top-5 来源命中 >= 90%%）")
     p_questions.add_argument("--repo", required=True)
+    p_questions.add_argument("--questions", default="", help="问题集路径；默认 state/knowledge-questions.yaml")
     p_questions.set_defaults(func=cmd_questions)
     return parser
 
