@@ -81,6 +81,20 @@
 | 深入 Linux 内核架构（Wolfgang Mauerer《Professional Linux Kernel Architecture》中译，1058 页带文本层，经 macOS PDFKit 逐页提取） | `深入Linux内核架构-精读缺口.md` | T3 4 10 11 14 · A4 · C19 31 |
 | 深入理解Nginx：模块开发与架构解析（第2版）（陶辉著，机械工业出版社 2016，全书 16 章：第一部分「Nginx 能帮我们做什么」第 1–2 章、第二部分「如何编写 HTTP 模块」第 3–7 章、第三部分「深入 Nginx」第 8–16 章） | `深入理解Nginx-精读缺口.md` | T1 2 3 4 7 8 9 10 11 12 14 · A6 · C19 24 |
 | 跟我一起写 Makefile（陈皓《跟我一起写 Makefile》，75 页带文本层，经 macOS PDFKit 逐页提取） | `跟我一起写makefile-精读缺口.md` | T7 11 |
+| JavaScript函数式编程（Michael Fogus《Functional JavaScript》中译，人民邮电出版社 2015，全书 9 章 + 附录 A–B） | `JavaScript函数式编程-精读缺口.md` | T3 4 10 14 · F5 · C20 21 24 26 27 33 34 · P6 19 |
+| JavaScript设计模式（Ross Harmes / Dustin Diaz《Pro JavaScript Design Patterns》中译，人民邮电出版社 2009，全书 17 章：第一部分面向对象基础 + 第二部分具体设计模式） | `JavaScript设计模式-精读缺口.md` | T1 3 4 5 9 10 11 · C3 22 27 · P1 2 3 4 6 7 8 9 10 13 16 19 |
+| 精通JavaScript（John Resig《Pro JavaScript Techniques》中译，人民邮电出版社 2008，全书 13 章：现代 JavaScript / 面向对象 / 可重用代码 / 调试测试 / DOM / 事件 / JS 与 CSS / 表单 / 图库 / Ajax / blog / 自动补全 / wiki） | `精通JavaScript-精读缺口.md` | T2 3 4 5 7 8 10 11 · F5 · C2 11 26 28 29 30 |
+| JavaScript DOM编程艺术（Jeremy Keith《DOM Scripting: Web Design with JavaScript and the Document Object Model》中译，人民邮电出版社 2007，全书 12 章） | `JavaScript_DOM编程艺术-精读缺口.md` | T1 4 8 · C11 24 |
+| 如何阅读一本书（Mortimer J. Adler / Charles Van Doren《How to Read a Book》中译，郝明义 / 朱衣译，145 页带文本层，经 macOS PDFKit 逐页提取） | `如何阅读一本书-精读缺口.md` | T2 · F2 |
+| Pro Git（中文版）（Scott Chacon《Pro Git》中译，236 页带文本层，经 macOS PDFKit 逐页提取） | `ProGit中文版-精读缺口.md` | T6 7 · A3 4 · C31 · R3 4 7 |
+| GitHub 入门与实践（大塚弘记《GitHub 入门与实践》中译，支鹏浩 / 刘斌译，286 页带文本层，经 macOS PDFKit 逐页提取） | `GitHub入门与实践-精读缺口.md` | T6 · A3 · R3 4 7 |
+| MongoDB 权威指南（Kristina Chodorow《MongoDB：The Definitive Guide》中译，192 页扫描版，经 macOS Vision OCR 提取） | `MongoDB权威指南-精读缺口.md` | T9 10 11 · A4 6 · C31 |
+| 深入学习 MongoDB（Kristina Chodorow《Scaling MongoDB》中译，145 页扫描版，经 macOS Vision OCR 提取） | `深入学习MongoDB-精读缺口.md` | T3 4 9 10 11 · A4 6 |
+| TCP/IP 详解卷 1：协议（W. Richard Stevens《TCP/IP Illustrated, Volume 1: The Protocols》中译，423 页带文本层，经 macOS PDFKit 逐页提取） | `TCP_IP详解卷1：协议-精读缺口.md` | T3 4 8 9 10 11 · A4 · C23 31 |
+| TCP/IP 详解卷 2：实现（Gary R. Wright / W. Richard Stevens《TCP/IP Illustrated, Volume 2: The Implementation》中译，872 页带文本层，经 macOS PDFKit 逐页提取） | `TCP_IP详解卷2：实现-精读缺口.md` | T3 4 7 8 14 · A4 · F4 · C1 19 23 39 |
+| TCP/IP 详解卷 3：TCP 事务协议，HTTP，NNTP 和 UNIX 域协议（W. Richard Stevens《TCP/IP Illustrated, Volume 3: TCP for Transactions, HTTP, NNTP, and the UNIX Domain Protocols》中译，250 页带文本层，经 macOS PDFKit 逐页提取） | `TCP_IP详解卷3：TCP事务协议，HTTP，NNTP和UNIX域协议-精读缺口.md` | T8 10 11 · A4 · F4 · C7 16 17 18 |
+| Linux 内核设计与实现（第三版）（Robert Love《Linux Kernel Development（第三版）》中译，353 页扫描版，经 macOS Vision OCR 提取） | `Linux内核设计与实现（第三版）-精读缺口.md` | T3 4 6 9 10 11 14 · C16 17 |
+| 深入理解计算机系统（Randal E. Bryant / David R. O'Hallaron《Computer Systems: A Programmer's Perspective》中译「深入理解计算机系统」，2001-11-16 Beta Draft，1616 页混合 PDF：第 1–833 页中文扫描版经 macOS Vision OCR 逐页识别、第 834–1616 页英文 Beta Draft 文本层经 macOS PDFKit 逐页提取） | `深入理解计算机系统-精读缺口.md` | T3 4 8 9 10 11 13 14 · C18 19 37 |
 
 ## 读一本书的流程
 
