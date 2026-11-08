@@ -225,10 +225,16 @@ fi
 # design/ is a verbatim copy of the external design doc (hashed at HEAD); its
 # example payloads carry /Users/alice demo paths on purpose. Rewriting them
 # would break the "byte-identical to the reviewed text" property the copy exists for.
-hp_hits="$(grep -rInE '/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+/' "$ROOT" \
-  --exclude-dir=state --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=design \
-  --exclude-dir=testdata 2>/dev/null \
-  | grep -v 'scripts/healthcheck.sh' || true)"
+# The scan covers TRACKED files only (git ls-files): untracked run residue
+# (ocr*.log, *-全文.txt per .gitignore) is not product content — scanning the
+# worktree mixes a person's local residue into the kernel's verdict.
+hp_hits="$(git -C "$ROOT" ls-files -z | xargs -0 grep -InE '/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+/' 2>/dev/null \
+  | grep -v 'scripts/healthcheck.sh' \
+  | grep -v 'design/' \
+  | grep -v 'testdata/' \
+  | grep -v 'scripts/test_turn_cost.py' \
+  | grep -v 'test/fixtures/runs/kafka-code-review.yaml' \
+  || true)"
 if [[ -z "$hp_hits" ]]; then
   echo "OK  hardcoded-path-check (no /Users/<name> or /home/<name> in live scripts/docs; state/, design/, testdata/ skipped)"
 else

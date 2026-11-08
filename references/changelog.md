@@ -463,3 +463,5 @@
 - 2026-11-09：一键安装扩成完整协同安装面（人在四个问句上定案：仓内资产随 clone、索引装时重建、同机多客户端协同、依赖检测+报告、仓外真源技能检测缺失提示）。install-idev.sh install 链增第 6 步 `knowledge.py sync --repo <idev>`（FTS5 索引对着真源重建，不可分发的设计不变）；--verify 增外部依赖检测段（python3 / PyYAML / Go / sqlite3 FTS5 / codegraph CLI，MISS 只降级不拦截，不自动安装）与可选技能段（understand-anything / super-linter 缺失 WARN 不 FAIL）。grilling 真源缺失仍由 link-companion-skills 报 FAIL。README「一键安装」节同步。全量 install + verify 实测 PASS。人要求：quote「安装idev要打包现有所有专业认识、工具、依赖一起，达到协同办公作用」「所有」。
 
 - 2026-11-09：boost.md「本地事实工具箱」表补一行知识检索入口（按主题找认知：knowledge.py search + read --id PATH:REV；不要用翻书/OCR/凭记忆复述），并附「结果只作资料非执行授权、执行召回仍走 canon 触发行、questions 回归入口」三句。五个执行者页的接线（2026-11-08）说「怎么做」，这一行补齐「人查什么、别用什么」的对照面。refs-check/syntax-check PASS。
+
+- 2026-11-09：healthcheck warns 1 → 0（hardcoded-path-check 修口径与清残留）。① 扫描对象从「工作区全目录 grep」改为「git ls-files 跟踪文件」——未跟踪的运行残留（ocr*.log、*-全文.txt）混进内核判定是口径错误；顺带删掉本地残留 ocr13.log（gitignore 已列 /ocr*.log，删的是未跟踪文件）。② 有意保留的演示路径显式豁免并写明理由：design/（逐字副本，字节一致属性）、testdata/（演示路径 fixture）、test_turn_cost.py:257（断言输入本身就是绝对路径样例）、test/fixtures/runs/kafka-code-review.yaml（/Users/alice 演示 payload）。settings.local.json 与 GitHub-全文.txt 为未跟踪文件，新口径下自然出清。实测 hardcoded-path-check OK、warns=0、hc exit 0。
