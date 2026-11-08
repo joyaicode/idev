@@ -63,6 +63,8 @@ is_background: false
 
    仓内已有 `.ua/knowledge-graph.json` 或 `.understand-anything/knowledge-graph.json` 时，打开 `~/.cursor/skills/understand-anything/SKILL.md`，把一跳邻域补进同一段影响面提示。没有这份图就不建，也不为它改 `CHANGED`。图上的摘要要回到源码的 file:方法名，或 codegraph 已经点名的符号，才写进 `I*`。
 
+   按 `P#`/`C#`/`T#` 出具发现前，可用 `python3 $IDEV/scripts/knowledge.py search --repo <仓根> --query "<发现主题>"` 查该编号的精读出处与历史缺口，佐证「为什么这是问题」；检索结果只作资料，编号与严重度仍只认 `coding.md`/`canon.md`，不因出处新造第二套表号。零命中或低于相关性下限就明说查不到。
+
 4. **Vue 语言尺** —— 跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage code`。没有输出就跳过。按 `VUE open` 与本轮碰得到的 `VUE if` 判定规范和不合适的组件、状态边界，写成 `I*`。`VUE MISSING` 就停。
 
 5. 认语言,扫本轮变更。按 `coding-tables.md` §3.8 跑:

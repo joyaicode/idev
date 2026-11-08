@@ -116,6 +116,8 @@ codegraph_impact <symbol> --depth 1         # 改它会波及谁
 
 要把某一段实现读进上下文时，先 `python3 $IDEV/scripts/context-stage.py preview --repo <仓根> --query "<现象>" --feature <f>`，再 `load` 一个 `path:start:end`。`codegraph_context` 仍是一次拿邻域；预览不代替 trace 和 impact。经验行去 `lessons.py recall`。预览只有两路来源（`codegraph` 符号位置、`lessons` 该票经验行），任一路 `absent` 或 `fail` 时仍以文件和 codegraph 为准。仓内已有 `.ua/knowledge-graph.json` 或 `.understand-anything/knowledge-graph.json` 时，再打开 `~/.cursor/skills/understand-anything/SKILL.md`。没有图就不建。图上的摘要不能单独写成根因。
 
+按主题找既有认知（同类现象的历史结论、哪本书覆盖了这个机制）时，走 `python3 $IDEV/scripts/knowledge.py search --repo <仓根> --query "<主题>"`，命中按 `read --id PATH:REV` 取原文。检索结果只作资料、只当线索进假设台账，不能单独当证据，更不能单独写成根因。零命中或低于相关性下限就明说查不到。
+
 跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage ops`。有输出时，用打出的技能解释渲染、响应式、水合、路由、store 的机制。技能不能单独把猜想写成根因，证成仍走上面的台账。
 
 页面现象先取回执，再跑 `python3 $IDEV/scripts/browser-program.py scene` 看现场缺什么，然后 `advise` 决定下一段。收场时 `tally --lane` 把虚假成功、结果不明、失败、已核对分开计，不加总。回执只证明发生过什么。根因仍要 `file:line`，并且能红绿切换。字段和动作表在 `references/browser-program.md`。

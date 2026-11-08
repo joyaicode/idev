@@ -68,6 +68,8 @@ is_background: false
 
    目录里没有函数体。经验行不是答案，正文仍走 `lessons.py recall`。两路来源：`codegraph` 给符号位置，`lessons` 给该票的经验行；任一路 `absent` 或 `fail` 时另一路照常列。
 
+   按主题找既有认知（哪本书覆盖了什么、某类问题的历史缺口）时，走 `python3 $IDEV/scripts/knowledge.py search --repo <仓根> --query "<主题>"`；命中按 `read --id PATH:REV` 取原文。检索结果只作资料，不是执行授权；执行召回仍以 `canon.md` §2/§4 触发行与 `coding-tables.md` §1 为准。零命中或低于相关性下限就明说查不到，不当成「没有这类知识」，也不为它建图建库。
+
    仓内已有 `.ua/knowledge-graph.json` 或 `.understand-anything/knowledge-graph.json` 时，再打开 `~/.cursor/skills/understand-anything/SKILL.md`，用图提名要 `load` 的文件。没有图就不建。图上的摘要不是这段实现的正文。
 
    同一做法要收成可重跑脚本时，用 `python3 $IDEV/scripts/sediment.py add --form program` 记成候选，并指向已经存在的脚本。一条成功不能留下。改过已经留下的脚本之后，原来的结果不能再把它留下。全文 `references/sediment.md`。

@@ -259,8 +259,38 @@ def _search_query(q: str) -> str:
         return ""
     # OR 语义 + bm25 排序：长查询切出的 bigram 里含跨词边界的噪声 token，
     # 用 AND 会要求整句连续命中（过严）；OR 让任一 bigram 命中即进入候选，
-    # 由 bm25 按命中密度把最相关的排到前面。
+    # 由 _filter_coverage 按查询词覆盖数过滤、bm25 排序。
     return " OR ".join(f'"{t}"' for t in terms)
+
+
+def _filter_coverage(rows: list, conn: sqlite3.Connection, repo: str,
+                      fts_q: str, min_hits: int) -> list:
+    """查询词覆盖数硬门：结果至少命中过半查询词才保留。
+
+    FTS5 的 OR 查询不返回每词命中明细，这里对 Top-N 候选逐个回查
+    `MATCH '"t"'`（LIMIT top 之后才过滤，候选集不放大，回查是点查）。
+    拉丁词不折半：中文主题词切 bigram 后一词多 token，英文同义扩展词
+    （handler / elasticsearch）只算加分不算门槛。没过线的结果宁可丢掉
+    ——排上来的噪声比零命中更贵。
+    """
+    terms = [t.strip('"') for t in fts_q.split(" OR ")]
+    out = []
+    for r in rows:
+        path = r[0]
+        if not path:
+            continue
+        # MATCH 只收一个查询串：OR 整串命中只证明 >=1，因此要数「该文档
+        # 对几个查询词有命中」须逐词点查（候选 × 词数次，Top-N 内点查）。
+        hit = sum(
+            1 for t in terms
+            if conn.execute(
+                "SELECT 1 FROM docs WHERE docs MATCH ? AND path=? AND repo=?",
+                (f'"{t}"', path, repo),
+            ).fetchone()
+        )
+        if hit >= min_hits:
+            out.append(r)
+    return out
 
 
 def cmd_search(args: argparse.Namespace) -> int:
@@ -273,23 +303,23 @@ def cmd_search(args: argparse.Namespace) -> int:
     if not fts_q:
         print("empty query", file=sys.stderr)
         return 1
-    terms = [t for t in fts_q.split(" OR ")]
     conn = _connect()
     try:
-        # bm25 分数越小越相关（SQLite 的 bm25 返回负无穷方向最小值）。
-        # 无下限时 OR 语义会把「只撞上一个 bigram 的无关文件」照样排进 Top-N，
-        # 排名像命中——宁可零命中把人退回原文，不塞噪声。
+        # NEAR/2 与 AND-子集在这里都试过：真实语料（590K 精读缺口）上假命中与
+        # 真命中的 bm25 分数连续（假命中 -15.5 排在真命中之前），单靠 bm25
+        # 分不开。改为查询词覆盖数硬门：结果至少要覆盖过半查询词（拉丁词
+        # 不折半），再由 bm25 排序。这挡住了跨词边界 bigram 撞长文档的假命中。
+        n_terms = len(fts_q.split(" OR "))
+        # 过半向上取整；单词 / 双词查询保持原语义（>=1），多词查询至少两词命中。
+        min_hits = min(max(2, (n_terms + 1) // 2), n_terms)
         rows = conn.execute(
             "SELECT path, chapter, hash, scope, status, bm25(docs) FROM docs "
             "WHERE docs MATCH ? AND repo=? ORDER BY bm25(docs) LIMIT ?",
             (fts_q, name, args.top),
         ).fetchall()
+        rows = _filter_coverage(rows, conn, name, fts_q, min_hits)
     finally:
         conn.close()
-    # 相关性下限：bm25(docs) 返回的是负向分（值越小越相关），所以「差于阈值」
-    # 是大于比较。阈值按最相关的 -1.0 与噪声区的分界取，先观测再收紧；
-    # 单独 1 个 bigram 命中一个长文档的分数通常落在 (-0.3, 0) 区间。
-    rows = [r for r in rows if r[5] < -1.0] or rows[:1]
     rows = [r[:5] for r in rows]
     if args.json:
         print(json.dumps([

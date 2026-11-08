@@ -53,6 +53,7 @@ is_background: false
    `--depth 1` 是规约:`conductor-eval` 的 `one-hop-only` 以「候选 hop > 1」为失败。
    **只提名,人 `include`。** runner 不算图。查不到就明说查不到。
 4. **Vue 测试尺** —— 跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage test`。没有输出就跳过。按打出的技能设计断言。`VUE MISSING` 就停。
+4a. 按主题找用例设计的既有认知（某类现象该怎么断、哪本书覆盖了这个机制）时，走 `python3 $IDEV/scripts/knowledge.py search --repo <仓根> --query "<主题>"`，命中按 `read --id PATH:REV` 取原文。检索结果只作资料，断言仍以基线 item 为准；零命中或低于相关性下限就明说查不到，不为它建图建库。
 
 5. **维度表先铺满骨架,再逐个填** —— 这是本步最容易漏的地方:
    ```
