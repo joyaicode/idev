@@ -264,30 +264,50 @@ def _search_query(q: str) -> str:
 
 
 def _filter_coverage(rows: list, conn: sqlite3.Connection, repo: str,
-                      fts_q: str, min_hits: int) -> list:
-    """查询词覆盖数硬门：结果至少命中过半查询词才保留。
+                      query: str, min_hits: int) -> list:
+    """查询词覆盖数硬门：结果至少命中过半「原始查询词」才保留。
 
-    FTS5 的 OR 查询不返回每词命中明细，这里对 Top-N 候选逐个回查
-    `MATCH '"t"'`（LIMIT top 之后才过滤，候选集不放大，回查是点查）。
-    拉丁词不折半：中文主题词切 bigram 后一词多 token，英文同义扩展词
-    （handler / elasticsearch）只算加分不算门槛。没过线的结果宁可丢掉
+    FTS5 的 OR 查询不返回每词命中明细，这里对候选逐个回查 `MATCH '"t"'`。
+    计数单位是**原始查询词**而非 token：一个词的任一 bigram / 拉丁 token
+    命中都算该词命中——否则「弹性搜索」切出 弹性/性搜/搜索 三个 token，
+    英文文档只命中同义扩展词 elasticsearch 时被误挡（实测 joypaas q15
+    真命中被挡）。同义扩展词只算加分不算门槛。没过线的结果宁可丢掉
     ——排上来的噪声比零命中更贵。
     """
-    terms = [t.strip('"') for t in fts_q.split(" OR ")]
+    # 原始查询词：空格分词；中文段不再按 bigram 拆计数单位。
+    raw_words = [w for w in query.split() if w]
+    word_tokens: list[list[str]] = []
+    for w in raw_words:
+        toks = tokenize(w).split()
+        if toks:
+            word_tokens.append(toks)
+    # 同义扩展词（如 弹性搜索->elasticsearch）：只算加分不算门槛——中文词
+    # 在英文文档上零命中时，扩展词命中仍保住该词（joypaas q15 即此形态）。
+    expanded = [english for chinese, english in QUERY_SYNONYMS.items() if chinese in query]
     out = []
     for r in rows:
         path = r[0]
         if not path:
             continue
-        # MATCH 只收一个查询串：OR 整串命中只证明 >=1，因此要数「该文档
-        # 对几个查询词有命中」须逐词点查（候选 × 词数次，Top-N 内点查）。
-        hit = sum(
-            1 for t in terms
-            if conn.execute(
-                "SELECT 1 FROM docs WHERE docs MATCH ? AND path=? AND repo=?",
-                (f'"{t}"', path, repo),
-            ).fetchone()
-        )
+        hit = 0
+        for toks in word_tokens:
+            if any(
+                conn.execute(
+                    "SELECT 1 FROM docs WHERE docs MATCH ? AND path=? AND repo=?",
+                    (f'"{t}"', path, repo),
+                ).fetchone()
+                for t in toks
+            ):
+                hit += 1
+                continue
+            if any(
+                conn.execute(
+                    "SELECT 1 FROM docs WHERE docs MATCH ? AND path=? AND repo=?",
+                    (f'"{e}"', path, repo),
+                ).fetchone()
+                for e in expanded
+            ):
+                hit += 1
         if hit >= min_hits:
             out.append(r)
     return out
@@ -309,15 +329,25 @@ def cmd_search(args: argparse.Namespace) -> int:
         # 真命中的 bm25 分数连续（假命中 -15.5 排在真命中之前），单靠 bm25
         # 分不开。改为查询词覆盖数硬门：结果至少要覆盖过半查询词（拉丁词
         # 不折半），再由 bm25 排序。这挡住了跨词边界 bigram 撞长文档的假命中。
-        n_terms = len(fts_q.split(" OR "))
+        n_terms = len(args.query.split())
         # 过半向上取整；单词 / 双词查询保持原语义（>=1），多词查询至少两词命中。
         min_hits = min(max(2, (n_terms + 1) // 2), n_terms)
         rows = conn.execute(
             "SELECT path, chapter, hash, scope, status, bm25(docs) FROM docs "
             "WHERE docs MATCH ? AND repo=? ORDER BY bm25(docs) LIMIT ?",
-            (fts_q, name, args.top),
+            # 候选池放宽到 4 倍：bm25 偏好短文档，会把词密的缺口报告排进
+            # 前几名、把长而全的真源挤出小 Top-N（实测 canon 排到第 6/11 名）。
+            # 先宽召回，再由覆盖数门与真源优先收严，最后裁到 --top。
+            (fts_q, name, max(args.top * 4, 40)),
         ).fetchall()
-        rows = _filter_coverage(rows, conn, name, fts_q, min_hits)
+        rows = _filter_coverage(rows, conn, name, args.query, min_hits)
+        # 排序：真源目录优先（稳定排序，bm25 分相同层内定序）。书的缺口
+        # 报告短而词密，bm25 会把它排在执法真源之前——但报告本来就是对
+        # 真源的溯源（「对照结论」节引用的就是真源编号），要执行指导的
+        # 调用方先要真源原文，再要出处。conventions/ 前缀只影响 idev 仓，
+        # 产品仓无此目录、排序不生效。
+        rows.sort(key=lambda r: (0 if r[0].startswith("conventions/") else 1, r[5]))
+        rows = rows[: args.top]
     finally:
         conn.close()
     rows = [r[:5] for r in rows]
