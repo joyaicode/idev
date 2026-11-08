@@ -107,6 +107,8 @@
 | JavaScript 高级程序设计（第 3 版）（Nicholas C. Zakas《Professional JavaScript for Web Developers》第 3 版中译，人民邮电出版社 2012，全书 25 章 + 附录） | `JavaScript高级程序设计(第3版)-精读缺口.md` | T3 4 5 8 9 10 11 14 · C7 11 12 19 24 25 27 31 34 · P1–P19 · A4 |
 | C++ Primer Plus（第5版）（Stephen Prata《C++ Primer Plus, Fifth Edition》中译，人民邮电出版社 2005，806 页扫描版，经 macOS Vision OCR 逐页提取） | `C++ Primer Plus（第5版）-精读缺口.md` | T1 2 3 6 8 13 14 · C7 19 27 33 34 38 39 40 · P5 · F4 5 |
 | 数据结构与算法分析：C语言描述（第2版）（Mark Allen Weiss《Data Structures and Algorithm Analysis in C, Second Edition》中译，机械工业出版社 2004，406 页扫描版，经 macOS Vision OCR 逐页提取） | `数据结构与算法分析：C语言描述（第2版）-精读缺口.md` | T1 2 3 9 10 |
+| Node.js实战（Mike Cantelon / Marc Harter / T. J. Holowaychuk / Nathan Rajlich《Node.js in Action》中译，吴海星译，人民邮电出版社 2014，360 页带文本层，经 macOS PDFKit 逐页提取） | `Node.js实战-精读缺口.md` | T1 2 3 4 5 8 9 10 11 14 · C1 7 9 12 13 18 19 20 21 23 24 28 29 30 31 37 38 · P4 7 · F2 4 5 · A4 6 · R1 |
+
 ## 读一本书的流程
 
 1. **精读 + 逐条对照真源**，不是摘抄。产出 `<书名>-精读缺口.md`，格式沿用
