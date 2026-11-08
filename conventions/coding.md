@@ -104,7 +104,7 @@ YAGNI 的例外：预置与否看「重构距离」——把简单方案事后�
 |------|------|------|
 | `T1`–`T14` / `A1`–`A8` / `F1`–`F7` | 架构原则 / 架构出门 / Agent 失败模式 | [canon.md](canon.md) |
 | `P1`–`P19` | 场景 → 模式 | [coding-tables.md](coding-tables.md) §1 |
-| `C1`–`C39` | 气味 → 纠正 | [coding-tables.md](coding-tables.md) §2 |
+| `C1`–`C40` | 气味 → 纠正 | [coding-tables.md](coding-tables.md) §2 |
 | `R1`–`R7` | 重构满足条件 | [coding-tables.md](coding-tables.md) §3 |
 
 仓内 `<票目录>/current.md`、clean-code 票、`review.md` **必须用上表编号**。禁止另起「表号 / 气味码 / 模式码」。  
