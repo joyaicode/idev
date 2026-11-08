@@ -96,7 +96,17 @@
 | Linux 内核设计与实现（第三版）（Robert Love《Linux Kernel Development（第三版）》中译，353 页扫描版，经 macOS Vision OCR 提取） | `Linux内核设计与实现（第三版）-精读缺口.md` | T3 4 6 9 10 11 14 · C16 17 |
 | 深入理解计算机系统（Randal E. Bryant / David R. O'Hallaron《Computer Systems: A Programmer's Perspective》中译「深入理解计算机系统」，2001-11-16 Beta Draft，1616 页混合 PDF：第 1–833 页中文扫描版经 macOS Vision OCR 逐页识别、第 834–1616 页英文 Beta Draft 文本层经 macOS PDFKit 逐页提取） | `深入理解计算机系统-精读缺口.md` | T3 4 8 9 10 11 13 14 · C18 19 37 |
 | 图解HTTP（上野宣《图解HTTP》中译，人民邮电出版社 2014，全书 11 章：网络基础 / HTTP 协议 / 报文 / 状态码 / 协作服务器 / 首部 / HTTPS / 认证 / 追加协议 / Web 内容 / 攻击技术） | `图解HTTP-精读缺口.md` | T8 9 10 11 14 · A4 · C2 31 · P9 10 |
-
+| MySQL 技术内幕：InnoDB 存储引擎（姜承尧著，机械工业出版社 2010，全书 10 章扫描版，经 macOS Vision OCR 逐页识别） | `MySQL技术内幕：InnoDB存储引擎-精读缺口.md` | T3 4 8 9 10 11 · C2 39 · A4 6 |
+| Docker 容器与容器云（第 2 版）（浙江大学 SEL 实验室著，人民邮电出版社 2016，全书 8 章 + 附录扫描版，经 macOS Vision OCR 逐页识别） | `Docker容器与容器云（第2版）-精读缺口.md` | T1 3 4 6 7 10 11 · C31 · P6 · A2 6 |
+| UNIX 环境高级编程（第三版）（W. Richard Stevens / Stephen A. Rago《Advanced Programming in the UNIX Environment》第 3 版中译，全书 19 章扫描版，经 macOS Vision OCR 逐页识别） | `UNIX环境高级编程(第三版)-精读缺口.md` | T8 9 10 11 · C16 17 18 19 35 38 39 |
+| UNIX 网络编程卷 1：套接字 API（W. Richard Stevens《UNIX Network Programming, Volume 1: The Sockets Networking API》第 2 版中译，施振川 / 周利民 / 孙宏晖等译，清华大学出版社，全书 27 章 + 附录扫描版，经 macOS Vision OCR 逐页识别） | `UNIX网络编程卷1：套接字API-精读缺口.md` | T4 8 9 10 11 · C16 17 18 19 38 39 · A2 |
+| 剑指 Offer：名企面试官精讲典型编程题（何海涛《剑指 Offer》第 1 版，278 页扫描版无文本层，经 macOS Vision OCR 逐页识别） | `剑指offer名企面试官精讲典型编程题-精读缺口.md` | T1 2 3 5 8 9 10 · C1–C40 · F4 |
+| 算法心得：高效算法的奥秘（第 2 版）（Henry S. Warren, Jr.《Hacker's Delight, Second Edition》中译「Hacker's Delight」，爱飞翔译，78 页扫描版无文本层，经 macOS Vision OCR 逐页识别） | `算法心得：高效算法的奥秘（第2版）-精读缺口.md` | T5 9 · C20 31 33 37 |
+| 算法设计与分析（第 3 版）（Anany Levitin《Introduction to the Design and Analysis of Algorithms, Third Edition》中译，潘彦译，437 页扫描版无文本层，经 macOS Vision OCR 逐页识别） | `算法设计与分析（第3版）-精读缺口.md` | T5 9 10 · C20 33 37 · P5 |
+| 现代操作系统（第 3 版）（Andrew S. Tanenbaum《Modern Operating Systems, Third Edition》中译，陈向群 / 马洪兵等译，606 页扫描版无文本层，经 macOS Vision OCR 逐页识别） | `现代操作系统（第3版）-精读缺口.md` | T3 4 9 10 11 13 14 · C19 31 39 · A2 4 |
+| JavaScript 高级程序设计（第 3 版）（Nicholas C. Zakas《Professional JavaScript for Web Developers》第 3 版中译，人民邮电出版社 2012，全书 25 章 + 附录） | `JavaScript高级程序设计(第3版)-精读缺口.md` | T3 4 5 8 9 10 11 14 · C7 11 12 19 24 25 27 31 34 · P1–P19 · A4 |
+| C++ Primer Plus（第5版）（Stephen Prata《C++ Primer Plus, Fifth Edition》中译，人民邮电出版社 2005，806 页扫描版，经 macOS Vision OCR 逐页提取） | `C++ Primer Plus（第5版）-精读缺口.md` | T1 2 3 6 8 13 14 · C7 19 27 33 34 38 39 40 · P5 · F4 5 |
+| 数据结构与算法分析：C语言描述（第2版）（Mark Allen Weiss《Data Structures and Algorithm Analysis in C, Second Edition》中译，机械工业出版社 2004，406 页扫描版，经 macOS Vision OCR 逐页提取） | `数据结构与算法分析：C语言描述（第2版）-精读缺口.md` | T1 2 3 9 10 |
 ## 读一本书的流程
 
 1. **精读 + 逐条对照真源**，不是摘抄。产出 `<书名>-精读缺口.md`，格式沿用
