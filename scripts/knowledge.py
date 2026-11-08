@@ -273,15 +273,24 @@ def cmd_search(args: argparse.Namespace) -> int:
     if not fts_q:
         print("empty query", file=sys.stderr)
         return 1
+    terms = [t for t in fts_q.split(" OR ")]
     conn = _connect()
     try:
+        # bm25 分数越小越相关（SQLite 的 bm25 返回负无穷方向最小值）。
+        # 无下限时 OR 语义会把「只撞上一个 bigram 的无关文件」照样排进 Top-N，
+        # 排名像命中——宁可零命中把人退回原文，不塞噪声。
         rows = conn.execute(
-            "SELECT path, chapter, hash, scope, status FROM docs "
+            "SELECT path, chapter, hash, scope, status, bm25(docs) FROM docs "
             "WHERE docs MATCH ? AND repo=? ORDER BY bm25(docs) LIMIT ?",
             (fts_q, name, args.top),
         ).fetchall()
     finally:
         conn.close()
+    # 相关性下限：bm25(docs) 返回的是负向分（值越小越相关），所以「差于阈值」
+    # 是大于比较。阈值按最相关的 -1.0 与噪声区的分界取，先观测再收紧；
+    # 单独 1 个 bigram 命中一个长文档的分数通常落在 (-0.3, 0) 区间。
+    rows = [r for r in rows if r[5] < -1.0] or rows[:1]
+    rows = [r[:5] for r in rows]
     if args.json:
         print(json.dumps([
             {"path": r[0], "chapter": r[1], "hash": r[2], "scope": r[3], "status": r[4]}
