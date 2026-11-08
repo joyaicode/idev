@@ -116,6 +116,26 @@
 | Node学习指南（Shelley Powers《Learning Node》中译，夏思雨 / 高亮译，人民邮电出版社 2014，379 页扫描版无文本层，经 macOS Vision OCR 逐页识别，全书 16 章 + 附录） | `Node学习指南-精读缺口.md` | T1 3 4 5 8 9 11 · C1 7 9 20 21 23 24 28 29 30 31 37 · P7 · F4 5 · A6 · R1 |
 | Node.js开发指南（BYVoid 著，图灵原创，人民邮电出版社 2012，185 页带文本层，经 macOS PDFKit 逐页提取，全书 6 章 + 附录 A–B） | `Node.js开发指南-精读缺口.md` | T1 2 3 4 5 8 9 11 14 · C1 7 9 12 20 21 23 24 27 34 36 38 39 · P4 · F2 4 · A4 6 · R1 |
 | Node与Express开发（Ethan Brown《Web Development with Node and Express》中译，吴海星 / 苏文译，人民邮电出版社 2015，281 页带文本层，经 macOS PDFKit 逐页提取，全书 23 章） | `Node与Express开发-精读缺口.md` | T1 3 8 9 11 · C7 13 16 17 21 23 24 25 28 29 30 31 36 37 38 · P7 · F4 5 · A6 · R1 |
+| C++编程思想（第1卷）（Bruce Eckel《Thinking in C++, Second Edition, Volume One: Introduction to Standard C++》中译，刘宗田、袁兆山、潘秋菱等译，机械工业出版社 2002，扫描版经 macOS Vision OCR 逐页识别） | `C++编程思想（第1卷）-精读缺口.md` | T3 4 5 6 · C19 27 36 37 · P5 6 |
+| JavaScript权威指南（第6版）（David Flanagan《JavaScript: The Definitive Guide》第 6 版中译，机械工业出版社 2012，全书 22 章 + 核心/客户端参考） | `JavaScript权威指南(第6版)-精读缺口.md` | T3 4 5 8 10 11 14 · A4 · C2 11 21 27 34 · P1–P19 |
+| Python 基础教程（第 2 版）（Magnus Lie Hetland《Beginning Python: From Novice to Professional》第 2 版中译，司维 / 曾军崴 / 谭颖华译，人民邮电出版社 2010，全书 29 章扫描版经 macOS Vision OCR 逐页识别） | `Python基础教程（第2版）-精读缺口.md` | T1 3 4 6 7 8 9 10 11 · C7 26 28 29 30 38 · F5 · A4 |
+| Python 源码剖析（陈儒著，哲思自由软件社区审校，电子工业出版社，全书 3 部分 16 章扫描版经 macOS Vision OCR 逐页识别） | `Python源码剖析-精读缺口.md` | T4 5 8 9 10 14 · C19 38 39 |
+| Redis 入门指南（第 2 版）（李子骅编著，人民邮电出版社，全书 9 章扫描版经 macOS Vision OCR 逐页识别） | `Redis入门指南（第2版）-精读缺口.md` | T1 3 9 10 11 · C31 · A4 6 |
+| Redis 实战（Josiah L. Carlson《Redis in Action》中译，黄健宏译，人民邮电出版社，全书 11 章扫描版经 macOS Vision OCR 逐页识别） | `Redis实战-精读缺口.md` | T1 3 9 10 11 · C39 |
+| Redis 设计与实现（黄健宏著，机械工业出版社，全书 4 部分 24 章扫描版经 macOS Vision OCR 逐页识别） | `Redis设计与实现-精读缺口.md` | T1 3 9 10 11 · A4 6 |
+| SQL 基础教程（MICK 著，孙淼 / 罗勇译，人民邮电出版社，全书 8 章扫描版经 macOS Vision OCR 逐页识别） | `SQL基础教程-精读缺口.md` | T1 3 8 9 10 · C2 · A4 |
+| SQL 学习指南（第 2 版）（Alan Beaulieu《Learning SQL》第 2 版中译，张伟超 / 林青松译，人民邮电出版社，全书 15 章扫描版经 macOS Vision OCR 逐页识别） | `SQL学习指南-精读缺口.md` | T1 3 5 8 9 10 12 · C2 · A4 |
+| UNIX 网络编程（第 2 卷）：进程间通信（W. Richard Stevens《UNIX Network Programming, Volume 2: Interprocess Communications》第 2 版中译，人民邮电出版社，全书 16 章 + 附录扫描版经 macOS Vision OCR 逐页识别） | `UNIX网络编程卷2：进程间通信-精读缺口.md` | T8 9 10 11 · C18 19 38 39 |
+| 数据结构与算法分析：Java 语言描述（Mark Allen Weiss《Data Structures and Algorithm Analysis in Java》中译，413 页扫描版无文本层，经 macOS Vision OCR 逐页识别） | `数据结构与算法分析：Java语言描述-精读缺口.md` | T3 4 8 9 13 · C2 20 24 27 33 37 · P6 15 · A2 · F4 |
+| 深入理解 Linux 内核（第 3 版）（Daniel P. Bovet / Marco Cesati《Understanding the Linux Kernel》第 3 版中译，陈莉君 / 张琼声 / 张宏伟译，中国电力出版社，涵盖 Linux 2.6，全书 20 章扫描版经 macOS Vision OCR 逐页识别） | `深入理解linux内核（第三版）-精读缺口.md` | T3 4 8 9 10 · C19 38 39 |
+| 算法导论（第2版）（Thomas H. Cormen / Charles E. Leiserson / Ronald L. Rivest / Clifford Stein《Introduction to Algorithms, Second Edition》中译，机械工业出版社，扫描版经 macOS Vision OCR 逐页识别） | `算法导论（第2版）-精读缺口.md` | T3 9 10 · C20 21 33 37 · P6 |
+| 算法（第 4 版）（Robert Sedgewick / Kevin Wayne《Algorithms, Fourth Edition》中译，谢路云译，647 页扫描版无文本层，经 macOS Vision OCR 逐页识别） | `算法（第4版）-精读缺口.md` | T3 4 9 · C1 12 20 27 33 37 · P6 |
+| 编码：隐匿在计算机软硬件背后的语言（Charles Petzold《Code: The Hidden Language of Computer Hardware and Software》中译，左飞、薛佟佟译，电子工业出版社，扫描版经 macOS Vision OCR 逐页识别） | `编码：隐匿在计算机软硬件背后的语言-精读缺口.md` | T3 4 7 10 · C18 |
+| 编程之美：微软技术面试心得（《编程之美》小组著，电子工业出版社 2008，扫描版经 macOS Vision OCR 逐页识别） | `编程之美：微软技术面试心得-精读缺口.md` | T6 9 10 · C20 24 28 33 37 |
+| 编译原理（第2版）（Alfred V. Aho / Monica S. Lam / Ravi Sethi / Jeffrey D. Ullman《Compilers: Principles, Techniques, and Tools, Second Edition》中译「龙书」，机械工业出版社，扫描版经 macOS Vision OCR 逐页识别） | `编译原理（第2版）-精读缺口.md` | T3 4 5 9 · C19 24 33 36 37 40 |
+| 计算机程序的构造和解释（第2版）（Harold Abelson / Gerald Jay Sussman / Julie Sussman《Structure and Interpretation of Computer Programs, Second Edition》中译「SICP」，机械工业出版社，扫描版经 macOS Vision OCR 逐页识别） | `计算机程序的构造和解释（第2版）-精读缺口.md` | T3 4 5 7 10 14 · C20 24 · P5 |
+| 高性能 MySQL（第 3 版）中文版（Baron Schwartz / Peter Zaitsev / Vadim Tkachenko《High Performance MySQL》第 3 版中译，宁海元 / 周振兴 / 彭立勋 / 翟卫祥 / 刘辉译，电子工业出版社，全书 16 章 + 6 附录扫描版经 macOS Vision OCR 逐页识别） | `高性能MySQL（第3版）中文版-精读缺口.md` | T5 9 10 11 · A4 6 |
+| 高性能网站建设指南（Steve Souders《High Performance Web Sites: Essential Knowledge for Front-End Engineers》中译，刘彦博译，电子工业出版社，扫描版经 macOS Vision OCR 逐页识别） | `高性能网站建设指南-精读缺口.md` | T7 8 9 10 11 12 · C19 |
 
 ## 读一本书的流程
 
