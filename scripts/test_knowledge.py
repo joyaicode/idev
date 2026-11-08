@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""knowledge.py 的测试：CJK bigram 切词、增量同步、检索、read-hash 复核、越界、doctor。
+"""knowledge.py 的测试：CJK bigram 切词、增量同步、检索、read-hash 复核、越界、doctor、questions。
 
 检索结果只是资料，不是执行授权；候选/未过闸不作为已验证事实注入。测试重点
 是「什么不该被索引/返回」：越界文件、过期条目、hash 不符的原文。
@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import json
 import sys
 import tempfile
 import unittest
@@ -65,13 +66,25 @@ class KnowledgeTest(unittest.TestCase):
         (self.repo / "docs" / "adr").mkdir(parents=True)
         (self.repo / ".idev" / "pack").mkdir(parents=True)
         (self.repo / ".cursor").mkdir(parents=True)
-        self._old = (knowledge.INDEX_DIR, knowledge.DB_PATH, knowledge.LOCK_PATH)
+        self.questions_path = self.root / "knowledge-questions.yaml"
+        self._old = (
+            knowledge.INDEX_DIR,
+            knowledge.DB_PATH,
+            knowledge.LOCK_PATH,
+            knowledge.QUESTIONS_PATH,
+        )
         knowledge.INDEX_DIR = self.root / "state" / "knowledge-index"
         knowledge.DB_PATH = knowledge.INDEX_DIR / "knowledge.db"
         knowledge.LOCK_PATH = knowledge.INDEX_DIR / "knowledge.lock"
+        knowledge.QUESTIONS_PATH = self.questions_path
 
     def tearDown(self):
-        knowledge.INDEX_DIR, knowledge.DB_PATH, knowledge.LOCK_PATH = self._old
+        (
+            knowledge.INDEX_DIR,
+            knowledge.DB_PATH,
+            knowledge.LOCK_PATH,
+            knowledge.QUESTIONS_PATH,
+        ) = self._old
         self.tmp.cleanup()
 
     def _write(self, rel, text):
@@ -87,6 +100,12 @@ class KnowledgeTest(unittest.TestCase):
         kw.setdefault("top", 10)
         kw.setdefault("json", False)
         return _run(knowledge.cmd_search, repo=str(self.repo), query=query, **kw)
+
+    def _questions(self, questions):
+        self.questions_path.write_text(
+            json.dumps(questions, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
     def test_sync_add_update_delete(self):
         self._write("docs/design/arch.md", "# 架构\n\n实例账本\n")
@@ -114,6 +133,12 @@ class KnowledgeTest(unittest.TestCase):
         self.assertIn("docs/adr/0001.md", out)
         _, out = self._search("不存在的词")
         self.assertIn("零命中", out)
+
+    def test_search_empty_query_is_error(self):
+        self._write("docs/design/arch.md", "# 架构\n\n实例账本\n")
+        rc, out = self._search("")
+        self.assertEqual(rc, 1)
+        self.assertIn("empty query", out)
 
     def test_search_auto_syncs_new_and_deleted_sources(self):
         self._write("docs/design/arch.md", "# 架构\n\n实例账本\n")
@@ -201,6 +226,91 @@ class KnowledgeTest(unittest.TestCase):
         rc, out = _run(knowledge.cmd_sync, repo=str(idev), feature="")
         self.assertEqual(rc, 0)
         self.assertIn("+1", out)
+
+    def test_questions_missing_file(self):
+        rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+        self.assertEqual(rc, 2)
+        self.assertIn("not found", out)
+
+    def test_questions_empty_set(self):
+        self._questions([])
+        rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+        self.assertEqual(rc, 2)
+        self.assertIn("empty question set", out)
+
+    def test_questions_passes_at_90_percent(self):
+        questions = []
+        for i in range(1, 10):
+            rel = f"docs/design/q{i}.md"
+            self._write(rel, f"# 问题{i}\n\n唯一词{i} 账本\n")
+            questions.append({
+                "id": f"q{i}",
+                "query": f"唯一词{i} 账本",
+                "expect": [rel],
+            })
+        questions.append({
+            "id": "q10",
+            "query": "完全不存在的主题",
+            "expect": ["docs/design/missing.md"],
+        })
+        self._questions(questions)
+        rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+        self.assertEqual(rc, 0)
+        self.assertIn("9/10", out)
+        self.assertIn("MISS q10", out)
+
+    def test_questions_fail_below_90_percent(self):
+        questions = []
+        for i in range(1, 9):
+            rel = f"docs/design/q{i}.md"
+            self._write(rel, f"# 问题{i}\n\n唯一词{i} 账本\n")
+            questions.append({
+                "id": f"q{i}",
+                "query": f"唯一词{i} 账本",
+                "expect": [rel],
+            })
+        for i in (9, 10):
+            questions.append({
+                "id": f"q{i}",
+                "query": "完全不存在的主题",
+                "expect": ["docs/design/missing.md"],
+            })
+        self._questions(questions)
+        rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+        self.assertEqual(rc, 1)
+        self.assertIn("8/10", out)
+        self.assertIn("MISS q9", out)
+
+    def test_questions_threshold_and_miss(self):
+        # questions 回归：门槛按 len*9//10；过线 PASS 退出 0，差一条退出 1。
+        # 用临时问题集钉住判定（不碰真 state/knowledge-questions.yaml）。
+        questions = [
+            {"id": "q1", "query": "实例账本",
+             "expect": ["docs/design/arch.md"], "note": "hit"},
+            {"id": "q2", "query": "完全不相干的词",
+             "expect": ["docs/design/arch.md"], "note": "miss"},
+        ]
+        old = knowledge.QUESTIONS_PATH
+        qfile = self.root / "knowledge-questions.yaml"
+        import yaml as _yaml
+        qfile.write_text(_yaml.safe_dump(questions, allow_unicode=True), encoding="utf-8")
+        knowledge.QUESTIONS_PATH = qfile
+        try:
+            self._write("docs/design/arch.md", "# 架构\n\n实例账本 采信\n")
+            self._sync()
+            # 2 条门槛 = 2*9//10 = 1；1 命中 >= 1 -> PASS
+            rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+            self.assertEqual(rc, 0)
+            self.assertIn("1/2", out)
+            self.assertIn("PASS q1", out)
+            self.assertIn("MISS q2", out)
+            # 两条全 miss -> 退出 1
+            questions[0]["expect"] = ["docs/design/none.md"]
+            qfile.write_text(_yaml.safe_dump(questions, allow_unicode=True), encoding="utf-8")
+            rc, out = _run(knowledge.cmd_questions, repo=str(self.repo))
+            self.assertEqual(rc, 1)
+        finally:
+            knowledge.QUESTIONS_PATH = old
 
 
 if __name__ == "__main__":

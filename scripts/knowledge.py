@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """按需增量知识检索 CLI（全文检索优先，SQLite FTS5 + CJK bigram）。
 
-四个子命令：
+五个子命令：
   sync   扫描白名单目录，按内容 hash 增量重索引（新增 / 更新 / 删除）
   search 全文检索，输出 来源路径·章节·hash·适用范围·状态
   read   按 --id PATH:REV 读原文，返回前再验一次 hash
   doctor FTS5 探针、白名单解析、索引/真源一致性、孤儿条目
+  questions 跑验收问题集，Top-5 来源命中 >= 90%
 
 设计约束（见 state/proposals/20261108-knowledge-search-cli.md）：
 - 检索时自动增量同步，用户不需要知道 sync 的存在；doctor 显式报告索引态
@@ -14,6 +15,7 @@
 - 入库与查询同用 CJK bigram 切词（连续汉字段切 bigram、拉丁数字词小写整存）
 - 候选 / 未过闸不作为已验证事实注入；检索结果只是资料，不是执行授权
 - `--repo` 是仓库路径（不是仓库名）；路径不存在会拒绝并提示，避免把同名仓库的索引静默清空
+- `questions` 跑 `state/knowledge-questions.yaml` 验收问题集（Top-5 来源命中 >= 90%）
 """
 from __future__ import annotations
 
@@ -313,23 +315,21 @@ def _filter_coverage(rows: list, conn: sqlite3.Connection, repo: str,
     return out
 
 
-def cmd_search(args: argparse.Namespace) -> int:
-    repo = _resolve_repo(args.repo)
-    name = repo.name
-    if _sync_repo(repo) is None:
-        print(f"no whitelist for repo '{name}'", file=sys.stderr)
-        return 1
-    fts_q = _search_query(args.query)
+def _run_search(repo: Path, name: str, query: str, top: int) -> list:
+    """search 与 questions 共用的检索体：宽召回 -> 覆盖数门 -> 真源优先 -> 裁 top。
+
+    返回未截 hash 的原始行（path, chapter, hash, scope, status, bm25）。
+    """
+    fts_q = _search_query(query)
     if not fts_q:
-        print("empty query", file=sys.stderr)
-        return 1
+        return []
     conn = _connect()
     try:
         # NEAR/2 与 AND-子集在这里都试过：真实语料（590K 精读缺口）上假命中与
         # 真命中的 bm25 分数连续（假命中 -15.5 排在真命中之前），单靠 bm25
-        # 分不开。改为查询词覆盖数硬门：结果至少要覆盖过半查询词（拉丁词
-        # 不折半），再由 bm25 排序。这挡住了跨词边界 bigram 撞长文档的假命中。
-        n_terms = len(args.query.split())
+        # 分不开。改为查询词覆盖数硬门：结果至少要覆盖过半查询词，再由
+        # bm25 排序。这挡住了跨词边界 bigram 撞长文档的假命中。
+        n_terms = len(query.split())
         # 过半向上取整；单词 / 双词查询保持原语义（>=1），多词查询至少两词命中。
         min_hits = min(max(2, (n_terms + 1) // 2), n_terms)
         rows = conn.execute(
@@ -338,18 +338,30 @@ def cmd_search(args: argparse.Namespace) -> int:
             # 候选池放宽到 4 倍：bm25 偏好短文档，会把词密的缺口报告排进
             # 前几名、把长而全的真源挤出小 Top-N（实测 canon 排到第 6/11 名）。
             # 先宽召回，再由覆盖数门与真源优先收严，最后裁到 --top。
-            (fts_q, name, max(args.top * 4, 40)),
+            (fts_q, name, max(top * 4, 40)),
         ).fetchall()
-        rows = _filter_coverage(rows, conn, name, args.query, min_hits)
+        rows = _filter_coverage(rows, conn, name, query, min_hits)
         # 排序：真源目录优先（稳定排序，bm25 分相同层内定序）。书的缺口
         # 报告短而词密，bm25 会把它排在执法真源之前——但报告本来就是对
         # 真源的溯源（「对照结论」节引用的就是真源编号），要执行指导的
         # 调用方先要真源原文，再要出处。conventions/ 前缀只影响 idev 仓，
         # 产品仓无此目录、排序不生效。
         rows.sort(key=lambda r: (0 if r[0].startswith("conventions/") else 1, r[5]))
-        rows = rows[: args.top]
+        return rows[:top]
     finally:
         conn.close()
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    repo = _resolve_repo(args.repo)
+    name = repo.name
+    if _sync_repo(repo) is None:
+        print(f"no whitelist for repo '{name}'", file=sys.stderr)
+        return 1
+    if not _search_query(args.query):
+        print("empty query", file=sys.stderr)
+        return 1
+    rows = _run_search(repo, name, args.query, args.top)
     rows = [r[:5] for r in rows]
     if args.json:
         print(json.dumps([
@@ -362,6 +374,50 @@ def cmd_search(args: argparse.Namespace) -> int:
         for r in rows:
             print(f"{r[0]} · {r[1]} · {r[2][:12]} · {r[3]} · {r[4]}")
     return 0
+
+
+QUESTIONS_PATH = KERNEL_ROOT / "state" / "knowledge-questions.yaml"
+
+
+def cmd_questions(args: argparse.Namespace) -> int:
+    """验收问题集回归：每条问题跑一次 Top-5 检索，来源命中 >= 90% 才 PASS。
+
+    问题集是验收工具不是产品知识（改它不触发产品仓变更）；期望来源
+    allowlist 对上即命中（相等 / endswith 任一方向）。输出计数与逐条
+    PASS/MISS，退出码 0/1 —— 与 doctor 同级，不进任何门禁。
+    """
+    try:
+        import yaml
+    except ImportError:
+        print("PyYAML not available", file=sys.stderr)
+        return 2
+    if not QUESTIONS_PATH.is_file():
+        print(f"questions: {QUESTIONS_PATH} not found", file=sys.stderr)
+        return 2
+    repo = _resolve_repo(args.repo)
+    name = repo.name
+    if _sync_repo(repo) is None:
+        print(f"no whitelist for repo '{name}'", file=sys.stderr)
+        return 1
+    questions = yaml.safe_load(QUESTIONS_PATH.read_text(encoding="utf-8")) or []
+    if not questions:
+        print("questions: empty question set", file=sys.stderr)
+        return 2
+    passed = 0
+    for q in questions:
+        rows = _run_search(repo, name, q["query"], top=5)
+        paths = [r[0] for r in rows]
+        hit = any(
+            p == e or p.endswith(e) or e.endswith(p)
+            for p in paths for e in q.get("expect", [])
+        )
+        passed += hit
+        state = "PASS" if hit else "MISS"
+        first = paths[0] if paths else "零命中"
+        print(f"{state} {q['id']} {q['query']} -> {first}")
+    need = len(questions) * 9 // 10  # >= 90%
+    print(f"questions: {passed}/{len(questions)} (门槛 {need})")
+    return 0 if passed >= need else 1
 
 
 def cmd_read(args: argparse.Namespace) -> int:
@@ -470,6 +526,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_doctor = sub.add_parser("doctor", help="探针 + 一致性 + 孤儿")
     p_doctor.add_argument("--repo", default="")
     p_doctor.set_defaults(func=cmd_doctor)
+
+    p_questions = sub.add_parser("questions", help="验收问题集回归（Top-5 来源命中 >= 90%%）")
+    p_questions.add_argument("--repo", required=True)
+    p_questions.set_defaults(func=cmd_questions)
     return parser
 
 
