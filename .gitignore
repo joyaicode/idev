@@ -32,6 +32,7 @@ state/*.lock
 /state/promptfoo/
 /state/outbound-config.json
 /state/proposals/
+/state/research/
 /state/lessons.yaml
 /state/lessons/
 /state/sediment.yaml
