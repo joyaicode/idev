@@ -60,6 +60,7 @@
 | Go 学习笔记（第 6 版下卷，雨痕《Go 学习笔记》，基于 Go 1.10，66 页运行时源码：启动 / 内存分配器 / GC / scavenge） | `Go学习笔记（第6版下卷）-精读缺口.md` | T5 T9 T11 · C13 C17 C19 C23 C39 |
 | Go 源码剖析（雨痕《Go 学习笔记》第五版下册《源码剖析》，基于 Go 1.5.1，全书 10 章：准备 / 引导 / 初始化 / 内存分配 / 垃圾回收 / 并发调度 / 通道 / 延迟 / 析构 / 缓存池） | `Go源码剖析-精读缺口.md` | T1 T2 T9 T10 T11 T14 · C19 |
 | HTTP 权威指南（David Gourley / Brian Totty / Marjorie Sayer / Sailu Reddy / Anshu Aggarwal《HTTP: The Definitive Guide》中译，全书 21 章 + 8 附录） | `HTTP权威指南-精读缺口.md` | A4 A6 · C7 C18 C21 C23 C31 C38 · T9 T10 T11 |
+| 计算的本质：深入剖析程序和计算机（Tom Stuart《Understanding Computation》中译，张伟译，306 页 9 章 + 前言/后记：Ruby 基础 / 程序的含义 / 有限自动机 / 下推自动机 / 图灵机 / 从零开始编程 / 通用性无处不在 / 不可能的程序 / 抽象解释） | `计算的本质：深入剖析程序和计算机-精读缺口.md` | T1 T2 T3 T8 T14 · R6 |
 
 ## 读一本书的流程
 
