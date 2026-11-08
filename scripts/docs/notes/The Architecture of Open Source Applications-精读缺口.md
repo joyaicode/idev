@@ -44,8 +44,20 @@
 
 ## 三、真缺口
 
-无。
+以下 2 条为现有真源未承载、且跨项目可推广的缺口。详细最小 diff 见 `state/proposals/20261108-aosa-posa-gaps.md`。
 
-理由：四个系列卷中所有能约束本仓代码与架构判断的原则，均已有更通用的 T / A / F / C / P / R 编号承载。Asterisk、Berkeley DB、HDFS、Git、ZeroMQ、Chrome、Paxos、Warp 等具体项目的实现细节、历史决策、协议事实、算法与领域示例，只是这些原则的证据，不宜抄成第二套知识库；语言 / 运行时差异、工具用法、社区治理、出版购买信息、参考文献与许可条款也不属于编码或架构真源。
+1. **并发同类请求合并（single-flight）**
+   - 依据：Zotonic 065 L47585–47587、L47954。
+   - 现状：T10 覆盖缓存、并发与幂等，但未要求同一 key 的在途计算只执行一次、等待者复用结果，并定义等待上限、失败传播与取消语义。
+   - 最小落点：`conventions/canon.md` T10。
 
-因无真缺口，本轮不生成 `state/proposals/20261108-aosa-gaps.md`，也不修改 `conventions/canon.md`、`conventions/coding-tables.md`、`scripts/docs/notes/README.md`、`references/changelog.md`。
+2. **长短生命周期引用隔离**
+   - 依据：MemShrink 061 L46567–46571。
+   - 现状：T14 覆盖可变状态与保护性拷贝，C19 覆盖资源成对获取/释放，但均不禁止长生命周期对象默认持有短生命周期对象引用。
+   - 最小落点：`conventions/canon.md` T14。
+
+## 四、不建议落的内容
+
+- 各项目的具体协议、算法、运行时、平台与历史细节。
+- 500 Lines or Less 的逐行教程式实现。
+- 已由 `security-and-hardening` skill 承载的注入防护，不在本报告重复立条。
