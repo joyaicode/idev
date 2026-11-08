@@ -40,6 +40,13 @@ bash scripts/codegraph-sync.sh --repo <仓根> semantic
 | 这东西真实的行为 | 跑一条命令,**看实际输出** | 相信 README 里的示例输出 |
 | 这段逻辑为什么这样 | `git log -p <file>` / `git blame` | 猜,或问另一个 agent |
 | 配置 / 路径现在指向哪 | `ls -la`、`readlink`、`realpath` | 相信文档写的路径 |
+| 某主题在既有认知里怎么说(真源触发行 / 精读出处 / 产品 ADR) | `python3 scripts/knowledge.py search --repo <仓根> --query "<主题>"`,命中按 `read --id PATH:REV` 取原文 | 翻书、翻 OCR 原文,或凭记忆复述 |
+
+**检索结果只是资料,不是执行授权** —— 执行召回仍走 canon §2/§4 触发行与
+coding-tables §1;检索用来「按主题找条目、找哪本书覆盖了什么」。零命中
+或低于相关性下限就明说查不到,不当成「没有这类知识」,也不为它建图建库。
+验收回归:`python3 scripts/knowledge.py questions --repo <joypaas 仓>`(15 条,
+门槛 13);idev 仓自测问题集在 `test/fixtures/knowledge/questions-idev.yaml`。
 
 **codegraph 等同「代码」一档** —— 它帮你读懂实际结构,但**不替代用例证明**。
 `--depth 1` 是规约不是建议:`conductor-eval` 的 `one-hop-only` 以「候选 hop > 1」为失败。
