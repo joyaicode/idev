@@ -1928,6 +1928,10 @@ else
 fi
 python3 "${KERNEL}/scripts/test_outcome_metrics.py" >/dev/null 2>&1 \
   || fail "outcome-metrics WIP/rework counts broke (python3 scripts/test_outcome_metrics.py)"
+python3 "${KERNEL}/scripts/test_capability_metrics.py" >/dev/null 2>&1 \
+  || fail "capability-metrics inventory/trace locks broke (python3 scripts/test_capability_metrics.py)"
+python3 "${KERNEL}/scripts/test_knowledge_metrics.py" >/dev/null 2>&1 \
+  || fail "knowledge-metrics §0/matrix locks broke (python3 scripts/test_knowledge_metrics.py)"
 python3 "${KERNEL}/scripts/test_phase2.py" >/dev/null 2>&1 \
   || fail "phase 2 retain/eval/usage/budget broke (python3 scripts/test_phase2.py)"
 WFA="$(mktemp -d)"

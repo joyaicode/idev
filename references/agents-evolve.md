@@ -218,12 +218,13 @@ verify 层已有 8 个 tag(`missed-impact` / `false-green` / … / `ok`),管的�
 
 ## 六、nudge(并入内核现有四条)
 
-内核 `self-evolution.md` 的 nudge 已有四条触发条件。本层再加三条,**话术一样:一句话问要不要
+内核 `self-evolution.md` 的 nudge 已有四条触发条件。本层再加四条,**话术一样:一句话问要不要
 写提案,人说要才写**:
 
 5. 同一 agent 的 `check_fail` 累计 ≥ 2,且尚无对应提案
 6. 同一 kind 连续 2 次 `retried` 或 `rejected`
 7. 同一个内核脚本、agent 或 kind 被 ≥ 2 条留痕的 `SUGGEST` 点名(带连字符的脚本名不写扩展名也算)
+8. 同一编号的 `hit-applied` 检查 FAIL ≥ 2——声明命中没落到代码,是措辞之外的真信号
 
 **不算 nudge:** 单次 BLOCKED、单次重派、已 landed 的重复话题、纯 banter。
 
@@ -288,6 +289,31 @@ python3 scripts/agent-metrics.py --repo <仓> --unused         # 登记表里从
 
 **优先级原则:** 先改委派包(一处改动影响全部 agent),再改登记表(一行),最后才改 agent
 定义(五份里的一份)。改动面从小到大,与内核「扩展 = 登记表加行」同一思路。
+
+## 七点五、能力与知识两个观察面(只读,不记新账)
+
+跨 agent 之上还有两个观察面,由两把只读的尺子给出,不新增任何记账文件:
+
+```bash
+python3 scripts/capability-metrics.py [--repo <仓>] [--traces <目录>]   # 能力 → 命中 → 质量事实
+python3 scripts/knowledge-metrics.py  [--repo <仓>]                     # 编号真源 静态可达 × 运行时命中
+```
+
+- `capability-metrics.py` 回答「哪些能力被用过、哪些从未验证过」。能力清单纯派生自
+  真源(workflows / kind_agents / 模块 SKILL.md / scripts),不建第二张登记表;
+  agent/kind 的质量事实直接引自 `agent-metrics.py` 的同一份计算 —— **同一数字永远
+  只有一个计算者**;两表同键数字的一致性由 `test_capability_metrics.py` / `selfcheck.sh` 锁住,
+  出现不一致是测试失败,不是运行时第二 signal。
+- `knowledge-metrics.py` 回答「编号真源在执行时真的被触发了吗」。§0 交代用
+  delegation.py 机检的同三条正则抽取,reviewer 引用读 review.md(含 shards),静态四层
+  来自 deep-read-audit。零命中不是分数:enforced / §0 全表扫一族**无需命中**;
+  trigger 在而零命中是措辞候选;只有 defined 且零命中是重炼化候选。§0 交代样本
+  不足 20 份时单条零命中不下结论。
+- 两者都进 `evolve-review.sh` 的复盘收据(「能力观察」「知识线观察」两段),冷能力与
+  零命中编号只进观察表由人读,**不抬 signal**。`--signal` 只在 knowledge 侧存在,且只认同一编号
+  `hit-applied` FAIL ≥ 2(声明命中没落到代码);capability 侧没有 `--signal`,避免第二套判定。
+- 改真源仍只走提案:触发行措辞、编号整并、阶段页点名,见
+  `state/proposals/20261108-capability-and-knowledge-metrics.md` 的四期路线。
 
 ## 八、提案路径(沿用内核,不新开目录)
 

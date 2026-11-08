@@ -175,11 +175,43 @@ OPEN_BODY="$(cat "$TMP/open.txt")"
 STALE_N="$(cat "$TMP/stale_n.txt")"
 AUDIT_SNIP="$(grep -E 'HARD|ALERT|multi-exec|seal-write|WARN|FAIL' "$AUDIT_OUT" | head -40 || true)"
 
+# 4b) capability / knowledge observation sections (facts only; never a signal
+# by themselves — cold capabilities and zero-hit numbers are observations for
+# a person to read, per 20261108-capability-and-knowledge-metrics.md)
+CAP_OUT="$TMP/capability.txt"
+if ! python3 "$ROOT/scripts/capability-metrics.py" >"$CAP_OUT" 2>&1; then
+  echo "(capability-metrics failed)" >"$CAP_OUT"
+fi
+# Capability rows are observations only. Their quality facts are quoted from
+# agent-metrics and locked by selfcheck, so there is no second signal here.
+CAP_SIGNAL="no"
+KNOW_OUT="$TMP/knowledge.txt"
+if [[ -n "${IDEV_PRODUCT_REPO:-}" ]]; then
+  KNOW_SIGNAL_OUT="$TMP/knowledge-signal.txt"
+  if ! python3 "$ROOT/scripts/knowledge-metrics.py" --repo "${IDEV_PRODUCT_REPO}" >"$KNOW_OUT" 2>&1; then
+    echo "(knowledge-metrics failed)" >"$KNOW_OUT"
+  fi
+  if ! python3 "$ROOT/scripts/knowledge-metrics.py" --repo "${IDEV_PRODUCT_REPO}" --signal >"$KNOW_SIGNAL_OUT" 2>&1; then
+    echo "signal=no" >"$KNOW_SIGNAL_OUT"
+  fi
+  KNOW_SIGNAL="$(sed -n 's/^signal=//p' "$KNOW_SIGNAL_OUT" | head -1)"
+else
+  echo "(no IDEV_PRODUCT_REPO set; static-only view below)"
+  if ! python3 "$ROOT/scripts/knowledge-metrics.py" --kernel "$ROOT" >"$KNOW_OUT" 2>&1; then
+    echo "(knowledge-metrics failed)" >"$KNOW_OUT"
+  fi
+  KNOW_SIGNAL="no"
+fi
+
 SIGNAL=0
 [[ "$HARD" != "0" ]] && SIGNAL=1
 [[ "$HOT" != "(none)" ]] && SIGNAL=1
 [[ "$STALE_N" != "0" ]] && SIGNAL=1
 # reviews are soft: never raise signal alone (debounce historical 缺口 mentions)
+# capability observations stay counts for a person, never a signal. The
+# knowledge signal is nudge candidate 8 only; a person still says yes first.
+[[ "$CAP_SIGNAL" == "yes" ]] && SIGNAL=1
+[[ "$KNOW_SIGNAL" == "yes" ]] && SIGNAL=1
 
 TITLE_DATE="$(date +%Y%m%d)"
 if [[ "$SIGNAL" -eq 0 ]]; then
@@ -201,8 +233,23 @@ window: ${WINDOW}
 - inbox non-ok count=${INBOX_N}; hot_tags=${HOT}
 - stale_proposals (≥${STALE_DAYS}d draft/stale)=${STALE_N}
 - soft review hits (≤${REVIEW_DAYS}d, not a signal): ${REVIEW_BODY}
+- capability/knowledge observation signals: cap=${CAP_SIGNAL:-no} knowledge=${KNOW_SIGNAL:-no}
 - open proposals:
 ${OPEN_BODY}
+
+## 能力观察（事实计数，不是信号）
+
+冷能力与零命中编号只在这里由人读；命中与质量事实见下。
+
+\`\`\`
+$(sed -n '1,3p;/^## 从未使用/,$p' "$CAP_OUT" | head -30)
+\`\`\`
+
+## 知识线观察（编号真源的静态可达 × 运行时命中）
+
+\`\`\`
+$(sed -n '1,4p;/^## 分层归因/,$p' "$KNOW_OUT" | head -30)
+\`\`\`
 
 ## 不改什么
 
@@ -227,6 +274,22 @@ window: ${WINDOW}
 | inbox hot tags (≥2) | ${HOT} |
 | inbox non-ok count | ${INBOX_N} |
 | stale proposals (≥${STALE_DAYS}d) | ${STALE_N} |
+| capability observation signal (nudge 候选) | ${CAP_SIGNAL:-no} |
+| knowledge hit-applied FAIL (nudge 候选) | ${KNOW_SIGNAL:-no} |
+
+## 能力观察（事实计数）
+
+冷能力只在这里列,由人读;不是信号。质量事实引自 agent-metrics(同一数字单一计算者)。
+
+\`\`\`
+$(sed -n '1,3p;/^## 从未使用/,$p' "$CAP_OUT" | head -30)
+\`\`\`
+
+## 知识线观察（编号真源矩阵）
+
+\`\`\`
+$(sed -n '1,4p;/^## 分层归因/,$p' "$KNOW_OUT" | head -30)
+\`\`\`
 
 ## 要改什么（草稿 — 须 grill 后改）
 
@@ -239,7 +302,7 @@ window: ${WINDOW}
 
 - 不引入分数门禁 / LLM 自评盖章
 - 不自动 land、不改 \`phase: ga\`
-- 试点的中间态写在该仓 `.idev/`，不写进内核
+- 试点的中间态写在该仓 \`.idev/\`，不写进内核
 
 ## 依据
 
