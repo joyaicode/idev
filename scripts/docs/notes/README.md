@@ -48,7 +48,7 @@
 | UNIX 编程艺术（Eric S. Raymond，全书 20 章、4 部分） | `UNIX编程艺术-精读缺口.md` | C1 C2 C6 C7 C12 C22 C23 · P5 P15 P18 · T1 T2 T3 T4 T5 T7 T8 T9 T10 T11 T14 |
 | 企业应用架构模式（Martin Fowler，全书引言 + 第 1–18 章共 51 个模式） | `企业应用架构模式-精读缺口.md` | A1 A2 A4 · C2 C13 C25 C27 C30 · F1 · P3 P5 P6 P15 P18 P19 · T1 T3 T4 T5 T8 T9 T10 T11 T14 |
 | 企业集成模式：设计、构建及部署消息传递解决方案（Gregor Hohpe / Bobby Woolf，全书引言 + 14 章正文与参考文献） | `企业集成模式-精读缺口.md` | A2 A3 · T4 T7 T8 T10 T11 T12 T13 |
-| Java 编程思想（第 4 版，Bruce Eckel《Thinking in Java》，全书 22 章 + 前言 / 译者序 / 读者评论 / 附录） | `Java编程思想（第4版）-精读缺口.md` | T1 T3 T4 T5 T7 T8 T9 T10 T12 T14 · C6 C11 C21 C24 C25 C27 C32（新增） · P5 P6 · F4 |
+| Java 编程思想（第 4 版，Bruce Eckel《Thinking in Java》，全书 22 章 + 前言 / 译者序 / 读者评论 / 附录） | `Java编程思想（第4版）-精读缺口.md` | C7 C19 C27 C32 · P18 · T1 T3 T4 T7 T8 T9 T10 T14 |
 | 编程珠玑（第 2 版，Jon Bentley《Programming Pearls》，全书三部分 15 章 + 附录 A–E + 第 1/2 版跋 + 习题提示/答案 + 索引） | `编程珠玑（第2版）-精读缺口.md` | A1 · T1 T2 T3 T5 T6 T7 T9 T10 T13 · C12 C20 C23 C25 C26 C33（新增） · R1 · F5 |
 | C 专家编程（Peter van der Linden《Expert C Programming》，全书 11 章 + 附录 A/B） | `C专家编程-精读缺口.md` | T1 T3 T4 T7 T11 · P5 · C27 C33 |
 

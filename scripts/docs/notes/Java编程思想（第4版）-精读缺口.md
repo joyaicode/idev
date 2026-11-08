@@ -66,6 +66,8 @@
 
 **与最相近现有条目的区别**：C19 现文管「资源获取与释放在同一抽象层次、由获取方释放」，不含「显式 vs 隐式（GC/finalizer）」与「覆盖所有路径（含异常）」两个维度。
 
+**落地状态（已提交）**：本缺口已按最小落点落地——`conventions/coding-tables.md` §2 C19 纠正列增补「释放必须显式（close/release），且覆盖所有路径（含异常 / 提前返回），不依赖 GC/finalizer 隐式清理」；`deep-read-audit.py --report` 与 `--all-books`、`syntax-check.sh` 均 PASS。
+
 ## 四、重点候选裁定（防后人重复发现）
 
 1. **OOP 三/四特征（抽象/封装/继承/多态）不另立。** T1/T3/T4/C27 已承载；再加会变成口号。
