@@ -62,6 +62,7 @@
 | HTTP 权威指南（David Gourley / Brian Totty / Marjorie Sayer / Sailu Reddy / Anshu Aggarwal《HTTP: The Definitive Guide》中译，全书 21 章 + 8 附录） | `HTTP权威指南-精读缺口.md` | A4 A6 · C7 C18 C21 C23 C31 C38 · T9 T10 T11 |
 | 计算的本质：深入剖析程序和计算机（Tom Stuart《Understanding Computation》中译，张伟译，306 页 9 章 + 前言/后记：Ruby 基础 / 程序的含义 / 有限自动机 / 下推自动机 / 图灵机 / 从零开始编程 / 通用性无处不在 / 不可能的程序 / 抽象解释） | `计算的本质：深入剖析程序和计算机-精读缺口.md` | T1 T2 T3 T8 T14 · R6 |
 | 程序员的自我修养：链接、装载与库（俞甲子 / 石凡 / 潘爱民，2009 年电子工业出版社，485 页 4 部分 13 章：温故而知新 / 编译和链接 / 目标文件 / 静态链接 / Windows PE/COFF / 装载与进程 / 动态链接 / Linux 共享库 / Windows DLL / 内存 / 运行库 / 系统调用与 API / MiniCRT） | `程序员的自我修养-精读缺口.md` | T3 T4 T10 T13 T14 · C18 |
+| 七周七语言：理解多种编程范型（Bruce A. Tate《Seven Languages in Seven Weeks》中译，全书 9 章 + 附录参考书目） | `七周七语言：理解多种编程范型-精读缺口.md` | T1 T3 T5 T8 T10 T11 T14 · C2 C7 C21 C25 C38 · P15 |
 
 ## 读一本书的流程
 
