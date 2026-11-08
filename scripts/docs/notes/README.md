@@ -54,7 +54,7 @@
 | Go 程序设计语言（Alan A. A. Donovan / Brian W. Kernighan《The Go Programming Language》，全书 12 章 + 前言 / 译者序 / 致谢） | `go程序设计语言-精读缺口.md` | T1 T3 T4 T5 T8 T10 T11 T14 · C2 C7 C19 C23 C28 C34（新增）C38（新增） · P6 · R1 · F4 |
 | C 陷阱与缺陷（Andrew Koenig《C Traps and Pitfalls》，全书 8 章 + 附录 A/B） | `C陷阱与缺陷-精读缺口.md` | T4 T5 T6 T7 T8 · C2 C9 C18 C19 C20 C33 C35（新增）C36（新增）C37（新增） · R1–R7 · F4 |
 | C 程序设计语言（第 2 版，Brian W. Kernighan / Dennis M. Ritchie《The C Programming Language, Second Edition》中译「K&R C」，全书 8 章 + 附录 A/B/C） | `C程序设计语言（第2版）-精读缺口.md` | T1 T3 T4 T5 T7 T14 · C1 C2 C7 C10 C16 C17 C19 C20 C21 C35 C36 C37 · P15 · F4 |
-| Go 语言实战（William Kennedy / Brian Ketelsen / Erik St. Martin《Go in Action》中译，全书 9 章 + 译者序 / 序 / 前言） | `Go语言实战-精读缺口.md` | T1 T3 T4 T7 T9 T10 T11 T14 · C2 C7 C19 C26 C27 C28 C30 C34 C38 C39（新增） · P6 P15 · F4 |
+| Go 语言实战（William Kennedy / Brian Ketelsen / Erik St. Martin《Go in Action》中译，全书 9 章 + 译者序 / 序 / 前言） | `Go语言实战-精读缺口.md` | T1 T3 T4 T7 T9 T10 T11 T14 · C2 C7 C19 C26 C27 C28 C30 C34 C38 C39（新增） · P6 P15 · R1 · F4 |
 
 ## 读一本书的流程
 
