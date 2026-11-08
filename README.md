@@ -66,13 +66,17 @@
 ## 一键安装
 
 ```bash
-bash scripts/install-idev.sh          # skill 别名 + agents + companion skills + 客户端 hooks + codegraph git hooks，尾部自动 --verify
-bash scripts/install-idev.sh --verify  # 只核对，不改动
-bash scripts/install-idev.sh --unlink   # 各 installer 自己的卸载路径
+bash scripts/install-idev.sh            # skill 别名 + agents + companion skills + 客户端 hooks + codegraph git hooks + knowledge 索引重建，尾部自动 verify
+bash scripts/install-idev.sh --verify   # 只核对（含外部依赖检测报告），不改动
+bash scripts/install-idev.sh --unlink     # 各 installer 自己的卸载路径
 ```
 
 编排层只调用既有的 installer，不含第二份安装逻辑；每步幂等，失败即停。
-单独装某一层仍用对应脚本（见下）。
+知识资产（canon / coding-tables / 精读缺口）随 clone 即得；FTS5 索引
+在安装时对着真源重建（过期即失效，索引不可分发）。外部依赖
+（python3 / PyYAML / Go / codegraph CLI）只检测并报告缺什么，**不自动
+安装**——装软件不是脚本的权限。同机多客户端（Claude Code / Cursor /
+joycode）由同一真源 symlink 协同。单独装某一层仍用对应脚本（见下）。
 
 ## 装 agent
 
