@@ -13,6 +13,7 @@
 - SQLite FTS5 stdlib 自带，无进程、无重包、删掉即回退
 - 入库与查询同用 CJK bigram 切词（连续汉字段切 bigram、拉丁数字词小写整存）
 - 候选 / 未过闸不作为已验证事实注入；检索结果只是资料，不是执行授权
+- `--repo` 是仓库路径（不是仓库名）；路径不存在会拒绝并提示，避免把同名仓库的索引静默清空
 """
 from __future__ import annotations
 
@@ -173,7 +174,12 @@ def _upsert(conn: sqlite3.Connection, repo: str, rel: str, content: str,
 
 
 def _resolve_repo(repo_arg: str) -> Path:
-    return Path(repo_arg).resolve()
+    p = Path(repo_arg).resolve()
+    if not p.is_dir():
+        raise FileNotFoundError(
+            f"repo 路径不存在: {p}（--repo 要传仓库路径，不是仓库名；在仓库内用 --repo .）"
+        )
+    return p
 
 
 def _sync_repo(repo: Path) -> tuple[str, tuple[int, int, int, int]] | None:
@@ -400,7 +406,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    return args.func(args)
+    try:
+        return args.func(args)
+    except FileNotFoundError as exc:
+        print(f"knowledge: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

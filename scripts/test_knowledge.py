@@ -189,6 +189,11 @@ class KnowledgeTest(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("no whitelist", out)
 
+    def test_resolve_repo_nonexistent_raises(self):
+        # --repo 传仓库名（如 idev）会解析成 ./idev 不存在：拒绝而不是静默清空索引
+        with self.assertRaises(FileNotFoundError):
+            knowledge._resolve_repo(str(self.root / "does-not-exist"))
+
     def test_idev_whitelist_repo(self):
         idev = self.root / "idev"
         (idev / "conventions").mkdir(parents=True)
