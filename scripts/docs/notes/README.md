@@ -109,6 +109,7 @@
 | 数据结构与算法分析：C语言描述（第2版）（Mark Allen Weiss《Data Structures and Algorithm Analysis in C, Second Edition》中译，机械工业出版社 2004，406 页扫描版，经 macOS Vision OCR 逐页提取） | `数据结构与算法分析：C语言描述（第2版）-精读缺口.md` | T1 2 3 9 10 |
 | Node.js实战（Mike Cantelon / Marc Harter / T. J. Holowaychuk / Nathan Rajlich《Node.js in Action》中译，吴海星译，人民邮电出版社 2014，360 页带文本层，经 macOS PDFKit 逐页提取） | `Node.js实战-精读缺口.md` | T1 2 3 4 5 8 9 10 11 14 · C1 7 9 12 13 18 19 20 21 23 24 28 29 30 31 37 38 · P4 7 · F2 4 5 · A4 6 · R1 |
 | 深入浅出Node.js（朴灵著，人民邮电出版社 2013，353 页带文本层，经 macOS PDFKit 逐页提取，全书第 1–11 章 + 附录 A–D） | `深入浅出Node.js-精读缺口.md` | T3 4 5 6 8 9 10 11 14 · C1 7 9 31 38 40 · F5 · A6 |
+| Node即学即用（Tom Hughes-Croucher / Mike Wilson《Node: Up and Running》中译，郑达译，人民邮电出版社 2013，193 页带文本层，经 macOS PDFKit 逐页提取，全书第 1–8 章 + 词汇表/索引） | `Node即学即用-精读缺口.md` | T3 4 6 8 10 11 12 14 · C1 7 9 31 38 40 · F5 |
 
 ## 读一本书的流程
 
