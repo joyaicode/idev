@@ -112,6 +112,7 @@
 | Node即学即用（Tom Hughes-Croucher / Mike Wilson《Node: Up and Running》中译，郑达译，人民邮电出版社 2013，193 页带文本层，经 macOS PDFKit 逐页提取，全书第 1–8 章 + 词汇表/索引） | `Node即学即用-精读缺口.md` | T3 4 6 8 10 11 12 14 · C1 7 9 31 38 40 · F5 |
 | Head First设计模式（Eric Freeman / Elisabeth Freeman《Head First Design Patterns》中译，O'Reilly Taiwan 公司译，中国电力出版社 2007，扫描版无文本层，经 macOS Vision OCR 逐页识别，全书第 1–14 章 + 附录 A） | `HeadFirst设计模式-精读缺口.md` | T1 3 4 5 13 · C1 22 23 27 · F1 · P1–P14 P18 P19 |
 | 设计模式之禅（秦小波著，机械工业出版社 2010，扫描版无文本层，经 macOS Vision OCR 逐页识别，全书四部分：6 大设计原则 / 23 种设计模式 / 模式对比 / 设计模式实战） | `设计模式之禅-精读缺口.md` | T1 3 4 9 10 11 13 · C1 22 23 27 · F1 · P1–P19 |
+| 了不起的Node.js（Guillermo Rauch《Smashing Node.js: JavaScript Everywhere》中译，Goddy Zhao 译，电子工业出版社 2014，313 页扫描版无文本层，经 macOS Vision OCR 逐页识别，全书五大部分 16 章） | `了不起的Node.js-精读缺口.md` | T1 3 4 5 8 9 11 · C1 7 16 17 21 23 24 28 29 30 31 37 38 · P7 · F4 5 · A4 6 · R1 |
 
 ## 读一本书的流程
 
