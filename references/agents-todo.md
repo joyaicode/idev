@@ -87,10 +87,10 @@ Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未�
 
 | # | 待办 | 状态 | 卡在什么上 |
 |---|---|---|---|
-| 7 | 端到端一轮：真票跑 `code-review` 全程 | **进行中** | report 步已 PASS（reviewer 异步委派 + 诚实性五查全过），停在 `gate-report` 等人从自己终端签收 gate `01M5A86FX2GB614BK2TGF80DV6`（step_confirm / P1，2026-10-22T14:14:10Z 到期，过期重问即可）；其后还有 plan→gate-plan→fix→run 三段 |
-| 8 | agent prompt 的真任务有效性 | 待验 | #7 首轮回报零措辞类 SUGGEST（早好信号）；等全程跑完按回报质量定 |
-| 25 | 委派检查只留一套实现：Python 留痕检查与 Go `delegsvc` 并存 | 待议 | 真源方向。A：Go/SQLite 成为唯一真源，agent 与 gate 步也走 Apply；B：冻结 Go，只留 gate、lease、audit，删掉 `delegsvc` 等没在用的服务。等两周真实运行数据（到 2026-11-11），届时库里 `delegations` 仍是 0 条就选 B（2026-10-28 为 0）。做完的判据：只剩一个实现，真实留痕对拍零差异 |
-| 26 | 委派遥测的真数据 | 待验 | 2026-10-28 钩子已装到用户级。等真委派跑过，`agent-metrics.py` 的 `telemetry` 接近留痕总数才算数；仍偏低就查宿主有没有给 `duration_ms` / `tool_call_count` |
+| 7 | 端到端一轮：真票跑 `code-review` 全程 | **完成** | 六步全 PASS 走到 done（2026-11-09 核对 run.yaml：report / gate-report / plan / gate-plan / fix / run 全 PASS）。#8 据此可按全程回报质量评估 |
+| 8 | agent prompt 的真任务有效性 | **进行中** | #7 全程已跑完。首轮回报零措辞类 SUGGEST（早好信号）；按「维护这页」做完即删的规则，等 #7 末轮回报质量复核后有结论即可销项 |
+| 25 | 委派检查只留一套实现：Python 留痕检查与 Go `delegsvc` 并存 | **已定方向 A，待做** | 原判据「到 2026-11-11 库里 delegations 仍 0 条就选 B」——2026-11-09 实测库里 161 条（11 个 run），前提已被事实推翻：真实运行在用 Python 留痕 + Go gate/lease/audit 的现状。方向 A（Go/SQLite 唯一真源）成本升高且没有新动因，**倾向 B（冻结 Go 服务面、删未用的 delegsvc）**，待人确认后另立提案 |
+| 26 | 委派遥测的真数据 | **已验（部分）** | 2026-11-09 实测：joypaas 仓 115 条留痕、24 条缺 subagentStop 遥测（约 85% 覆盖），钩子在真实委派上工作；6 条缺计时。剩余缺口是「钩子没装或没对上」的那 24 条，属环境面，不再阻塞本项 |
 
 **第 7 项首轮（2026-10-20，joypaas 真票）已有结论。** reviewer 子代理按委派完成了 report 步：产出 9 `I*` / 7 `O*` / 3 `UNPROVEN`，
 canon §7 记 T3/T7/T8/T10+T11/F4 命中，五轴齐写，栈指南开 java8 + common-bugs（vue.md 明示未开、委派范围内）。值得记的
