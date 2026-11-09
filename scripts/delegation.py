@@ -24,6 +24,10 @@ So every delegation lands a record next to run.yaml:
     delegation.py eval     --feature F              # the agent-eval counts
     delegation.py list     --feature F
 
+run_checks 是唯一实现（2026-11-09 起）：Go 侧的移植版 internal/app/delegsvc
+已按提案 20261109-freeze-go-delegsvc 删除——零生产调用方，留着只会漂移成
+假基准。检查名出现在留痕记录与 agent 页文案里，本侧同名保留。
+
 The brief is stored verbatim, never summarized: replay is the whole point.
 check exits 1 on a finding. The counts are counts, not a score.
 

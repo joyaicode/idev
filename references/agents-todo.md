@@ -89,7 +89,6 @@ Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未�
 |---|---|---|---|
 | 7 | 端到端一轮：真票跑 `code-review` 全程 | **完成** | 六步全 PASS 走到 done（2026-11-09 核对 run.yaml：report / gate-report / plan / gate-plan / fix / run 全 PASS）。#8 据此可按全程回报质量评估 |
 | 8 | agent prompt 的真任务有效性 | **进行中** | #7 全程已跑完。首轮回报零措辞类 SUGGEST（早好信号）；按「维护这页」做完即删的规则，等 #7 末轮回报质量复核后有结论即可销项 |
-| 25 | 委派检查只留一套实现：Python 留痕检查与 Go `delegsvc` 并存 | **提案已立，待拷问落地** | 人 2026-11-09 确认走 B。提案 `state/proposals/20261109-freeze-go-delegsvc.md`：删 `internal/app/delegsvc`（零生产调用方，2026-11-09 实测 grep 全仓无包外引用；CLI delegation 命令不经过它）、保留 Go 侧 delegation CLI/SQLite repo（E3.3 成果，有活调用）、Python `run_checks` 冻结为唯一检查实现。回退 = 单包 revert |
 | 26 | 委派遥测的真数据 | **已验（部分）** | 2026-11-09 实测：joypaas 仓 115 条留痕、24 条缺 subagentStop 遥测（约 85% 覆盖），钩子在真实委派上工作；6 条缺计时。剩余缺口是「钩子没装或没对上」的那 24 条，属环境面，不再阻塞本项 |
 
 **第 7 项首轮（2026-10-20，joypaas 真票）已有结论。** reviewer 子代理按委派完成了 report 步：产出 9 `I*` / 7 `O*` / 3 `UNPROVEN`，
