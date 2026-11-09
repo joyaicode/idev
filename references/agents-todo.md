@@ -89,7 +89,7 @@ Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未�
 |---|---|---|---|
 | 7 | 端到端一轮：真票跑 `code-review` 全程 | **完成** | 六步全 PASS 走到 done（2026-11-09 核对 run.yaml：report / gate-report / plan / gate-plan / fix / run 全 PASS）。#8 据此可按全程回报质量评估 |
 | 8 | agent prompt 的真任务有效性 | **进行中** | #7 全程已跑完。首轮回报零措辞类 SUGGEST（早好信号）；按「维护这页」做完即删的规则，等 #7 末轮回报质量复核后有结论即可销项 |
-| 25 | 委派检查只留一套实现：Python 留痕检查与 Go `delegsvc` 并存 | **已定方向 A，待做** | 原判据「到 2026-11-11 库里 delegations 仍 0 条就选 B」——2026-11-09 实测库里 161 条（11 个 run），前提已被事实推翻：真实运行在用 Python 留痕 + Go gate/lease/audit 的现状。方向 A（Go/SQLite 唯一真源）成本升高且没有新动因，**倾向 B（冻结 Go 服务面、删未用的 delegsvc）**，待人确认后另立提案 |
+| 25 | 委派检查只留一套实现：Python 留痕检查与 Go `delegsvc` 并存 | **提案已立，待拷问落地** | 人 2026-11-09 确认走 B。提案 `state/proposals/20261109-freeze-go-delegsvc.md`：删 `internal/app/delegsvc`（零生产调用方，2026-11-09 实测 grep 全仓无包外引用；CLI delegation 命令不经过它）、保留 Go 侧 delegation CLI/SQLite repo（E3.3 成果，有活调用）、Python `run_checks` 冻结为唯一检查实现。回退 = 单包 revert |
 | 26 | 委派遥测的真数据 | **已验（部分）** | 2026-11-09 实测：joypaas 仓 115 条留痕、24 条缺 subagentStop 遥测（约 85% 覆盖），钩子在真实委派上工作；6 条缺计时。剩余缺口是「钩子没装或没对上」的那 24 条，属环境面，不再阻塞本项 |
 
 **第 7 项首轮（2026-10-20，joypaas 真票）已有结论。** reviewer 子代理按委派完成了 report 步：产出 9 `I*` / 7 `O*` / 3 `UNPROVEN`，
@@ -203,11 +203,15 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E6.1 | passkey 之后，P0 闸关掉 `AllowLowForHigh` | 进行中 | `IDEV_REQUIRE_PASSKEY` 置位时 `AllowLowForHigh=false`；完整 passkey 登记未完 |
-| E6.2 | Postgres 跑同一套 storetest | 进行中 | `store/postgres` 占位：无 `IDEV_POSTGRES_URL` 跳过；驱动未接线 |
-| E6.3 | 质量门 qodana / e2e | 进行中 | `quality/qodana` + `quality/e2e` 占位拒绝未配置；MCP 工具与假 CLI 未完 |
-| E6.4 | OIDC 多用户 | 进行中 | `adapters/oidc` 占位 `Resolve`；与 Authorizer 合流未完 |
-| E6.5 | shadow 双写比对 | 进行中 | `adapters/shadow` 只读 Diff 占位；未挂双写 |
+2026-11-09 人确认启动 E6。逐项卡点实况（当日盘点）：
+
+| 项 | 待办 | 状态 | 卡在 | 完成判据 |
+|---|---|---|---|---|
+| E6.1 | passkey 之后，P0 闸关掉 `AllowLowForHigh` | **代码已就位，等人登记** | 开关链路（`IDEV_REQUIRE_PASSKEY` 置位 → `AllowLowForHigh=false`，`cmd/idev/app.go:190`）与 gate 域测试均在；缺的是人在自己终端跑一次 `idev token init --handle <人名>` 完成登记，然后置位环境变量 | 登记完成后置 `IDEV_REQUIRE_PASSKEY`，A 类闸的 low 降级消失、审计不再出现 assurance_downgraded |
+| E6.2 | Postgres 跑同一套 storetest | **卡物理前提** | 本机无 psql / 无 docker（2026-11-09 实测）；驱动接线本身也未做。有 Postgres 实例前不动 | `IDEV_POSTGRES_URL` 指向真库时 storetest 全绿 |
+| E6.3 | 质量门 qodana / e2e | **卡外部工具** | qodana 需要外部服务；假 CLI 与 MCP 工具未完 | 占位拒绝语义保持，配置后真跑 |
+| E6.4 | OIDC 多用户 | **卡身份源** | 需要一个真实 OIDC provider 对接；`adapters/oidc` 占位 | Resolve 走通一次真实交换 |
+| E6.5 | shadow 双写比对 | **卡 E2.5 对不上** | 设计说只在 go 车道与 python golden 对不上且解释不了时才开；目前对得上，不启动 | 不适用（触发条件未发生） |
 
 ---
 
