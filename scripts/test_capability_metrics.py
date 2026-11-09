@@ -87,8 +87,13 @@ calls:
 
     with tempfile.TemporaryDirectory() as tmp:
         home = Path(tmp)
-        (home / "20261108-001.yaml").write_text(trace, encoding="utf-8")
-        (home / "20261108-002.yaml").write_text(trace, encoding="utf-8")
+        # 相对日期：写死日历日的 fixture 会在第二天掉出 days=1 窗口
+        # （2026-11-08 写的 at: 在 11-09 跑就 FAIL，与被测代码无关）。
+        import datetime as _dt
+        today = _dt.datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%S%z")
+        trace_today = trace.replace("at: 2026-11-08T10:00:00+08:00", f"at: {today}")
+        (home / "20261108-001.yaml").write_text(trace_today, encoding="utf-8")
+        (home / "20261108-002.yaml").write_text(trace_today, encoding="utf-8")
         counts, total = cm.collect_traces(home, days=None)
         check("trace total", total, 2)
         check("path call maps to inventory name", len(counts.get("console.py", ())), 2)
