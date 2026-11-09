@@ -206,7 +206,7 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 | 项 | 待办 | 状态 | 卡在 | 完成判据 |
 |---|---|---|---|---|
-| E6.1 | passkey 之后，P0 闸关掉 `AllowLowForHigh` | **代码已就位，等人登记** | 开关链路（`IDEV_REQUIRE_PASSKEY` 置位 → `AllowLowForHigh=false`，`cmd/idev/app.go:190`）与 gate 域测试均在；缺的是人在自己终端跑一次 `idev token init --handle <人名>` 完成登记，然后置位环境变量 | 登记完成后置 `IDEV_REQUIRE_PASSKEY`，A 类闸的 low 降级消失、审计不再出现 assurance_downgraded |
+| E6.1 | passkey 之后，P0 闸关掉 `AllowLowForHigh` | **机制验证完成，启用待人置位** | 凭证在位（`~/.idev/secrets/human.yaml`，2026-10-21 登记）；2026-11-09 红绿实测：未置位时 low 批 high 要求**降级放行**（downgraded:true + 审计入账），置位 `IDEV_REQUIRE_PASSKEY=1` 后同型批准**被拒**（weak-assurance）。启用只差把环境变量写进 shell 配置 | 置位后跑真票，`idev audit downgrades` 不再新增降级条目 |
 | E6.2 | Postgres 跑同一套 storetest | **卡物理前提** | 本机无 psql / 无 docker（2026-11-09 实测）；驱动接线本身也未做。有 Postgres 实例前不动 | `IDEV_POSTGRES_URL` 指向真库时 storetest 全绿 |
 | E6.3 | 质量门 qodana / e2e | **卡外部工具** | qodana 需要外部服务；假 CLI 与 MCP 工具未完 | 占位拒绝语义保持，配置后真跑 |
 | E6.4 | OIDC 多用户 | **卡身份源** | 需要一个真实 OIDC provider 对接；`adapters/oidc` 占位 | Resolve 走通一次真实交换 |
