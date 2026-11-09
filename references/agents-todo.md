@@ -88,7 +88,7 @@ Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未�
 | # | 待办 | 状态 | 卡在什么上 |
 |---|---|---|---|
 | 7 | 端到端一轮：真票跑 `code-review` 全程 | **完成** | 六步全 PASS 走到 done（2026-11-09 核对 run.yaml：report / gate-report / plan / gate-plan / fix / run 全 PASS）。#8 据此可按全程回报质量评估 |
-| 8 | agent prompt 的真任务有效性 | **进行中** | #7 全程已跑完。首轮回报零措辞类 SUGGEST（早好信号）；按「维护这页」做完即删的规则，等 #7 末轮回报质量复核后有结论即可销项 |
+| 8 | agent prompt 的真任务有效性 | **完成（2026-11-09 复核销项）** | 全程 SUGGEST 复核（115 条留痕、16 条真 SUGGEST）：① 措辞类 1 条——fix 委派「方法名+第N个该构造」定位法，已被 `file:方法名` 锚点规约（coder.md 回报格式）与 agents.md 重派规则承接；② 脚本类 3 条（coding-scan SIGPIPE、qodana 黄条、逐文件命中缺失）——SIGPIPE 当日已修（coding-scan.sh:25 prune node_modules），其余 2 条属 E6.3 质量门范畴；③ 范围/门禁类 5 条是单票语境的裁决记录（签收间张力、旧 case_intent），非 prompt 缺陷；④ 其余为分片审交接说明（UNPROVEN 边界声明），正是设计意图。**结论：prompt 真任务有效性成立，无措辞级改进项**；残留改进属 E6.3（qodana/逐文件命中），不挂 #8。#11 的门槛（够两次 SUGGEST 起草）继续等下一批 |
 | 26 | 委派遥测的真数据 | **已验（部分）** | 2026-11-09 实测：joypaas 仓 115 条留痕、24 条缺 subagentStop 遥测（约 85% 覆盖），钩子在真实委派上工作；6 条缺计时。剩余缺口是「钩子没装或没对上」的那 24 条，属环境面，不再阻塞本项 |
 
 **第 7 项首轮（2026-10-20，joypaas 真票）已有结论。** reviewer 子代理按委派完成了 report 步：产出 9 `I*` / 7 `O*` / 3 `UNPROVEN`，

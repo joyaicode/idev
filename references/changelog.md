@@ -479,3 +479,5 @@
 - 2026-11-09：修 selfcheck 揭出的日期漂移（与 #25-B 删除无关的既有 bug）：`test_capability_metrics.py` 的 fixture 写死 `at: 2026-11-08`，`days=1` 窗口从「今天」起算——11-09 起跑必 FAIL（昨日绿是因「今天」还是 11-08）。改相对日期（now() 生成 at），注释写明教训。删 delegsvc 后全量 selfcheck 重跑中段锁全过（269 PASS），此条修复后 capability-metrics 锁全绿。
 
 - 2026-11-09：E6.1 passkey 机制红绿实测完成。凭证在位（2026-10-21 登记，无需重发——token init 幂等且门禁要求本人 TTY，agent 会话按设计不可代发）。临时票端到端两环境实测：未置位 `IDEV_REQUIRE_PASSKEY` 时，sealed/P0 gate（required_assurance=high）以 low 批准**降级放行**（downgraded:true，审计当周入账，总数 13 条可查）；置位后同型批准**被拒**（weak-assurance）。启用动作收敛为一件事：把 `IDEV_REQUIRE_PASSKEY=1` 写进 shell 配置（人决定何时切换——切换后所有 A 类闸只认 high）。临时 fixture 清理，无真票触碰。agents-todo E6.1 更新为「机制验证完成」。
+
+- 2026-11-09：#8 销项（prompt 真任务有效性复核完成）。材料：code-review 真票全程 115 条委派留痕、`delegation.py eval` 计数（115 委派 / 24 reviewer / 81 verifier / 10 coder，rejected 18、retried 10、telemetry 91/115）、逐条 SUGGEST 复核（16 条真 SUGGEST）。分类结论：措辞类仅 1 条且已被现有规约承接（file:方法名锚点）；脚本类 3 条中 SIGPIPE 当日已修，余 2 条归 E6.3；范围裁决类 5 条是单票语境记录非 prompt 缺陷；其余为分片 UNPROVEN 交接声明（设计意图）。无措辞级改进项，#8 完成。#11 门槛（SUGGEST 够两次）继续等下一批真票。
