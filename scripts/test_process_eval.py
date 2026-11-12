@@ -53,13 +53,13 @@ def run(*args: str) -> subprocess.CompletedProcess:
 
 class Stop(unittest.TestCase):
     def test_rubber_stamp_and_nudge_are_corrected(self):
-        asked = run("stop", "--stop", "请确认实现审核")
+        asked = run("stop", "--drive", "assisted", "--stop", "请确认实现审核")
         self.assertEqual(asked.returncode, 0, asked.stderr)
         self.assertIn("now=CORRECT", asked.stdout)
         self.assertIn("id=ask-known", asked.stdout)
         self.assertIn("不问人确认", asked.stdout)
 
-        nudge = run("stop", "--quote", "验收", "--stop", "验收没有写入")
+        nudge = run("stop", "--drive", "assisted", "--quote", "验收", "--stop", "验收没有写入")
         self.assertIn("id=rubber-proceed", nudge.stdout)
         self.assertIn("不记 stop", nudge.stdout)
         self.assertNotIn("later=PROPOSE", nudge.stdout)
@@ -67,31 +67,31 @@ class Stop(unittest.TestCase):
     def test_real_holds_and_decision_gates_stay_asked(self):
         cases = {
             ("--stop", "实现审核有矛盾"): "id=real-hold",
-            ("--quote", "打开基线"): "id=named",
+            ("--quote", "打开基线"): "id=real-hold",
             ("--quote", "解除密封"): "id=real-hold",
             ("--quote", "不要继续"): "id=reply",
             ("--quote", "把实现审核的失败项改到通过"): "id=work",
         }
         for args, marker in cases.items():
             with self.subTest(args=args):
-                done = run("stop", *args)
+                done = run("stop", "--drive", "assisted", *args)
                 self.assertIn("now=ASK", done.stdout)
                 self.assertIn(marker, done.stdout)
                 self.assertNotIn("now=CORRECT", done.stdout)
 
-        gated = run("stop", "--decision", "--quote", "确认")
+        gated = run("stop", "--drive", "assisted", "--decision", "--quote", "确认")
         self.assertIn("id=decision-gate", gated.stdout)
         self.assertIn("now=ASK", gated.stdout)
-        leave = run("stop", "--decision", "--quote", "验收")
+        leave = run("stop", "--drive", "assisted", "--decision", "--quote", "验收")
         self.assertIn("id=leave-decision", leave.stdout)
         self.assertIn("决策保持开着", leave.stdout)
-        stamped = run("stop", "--decision", "--stop", "请确认实现审核")
+        stamped = run("stop", "--drive", "assisted", "--decision", "--stop", "请确认实现审核")
         self.assertIn("now=ASK", stamped.stdout)
-        signal = run("stop", "--stop", "请确认实现审核", "--signals", "frontier")
+        signal = run("stop", "--drive", "assisted", "--stop", "请确认实现审核", "--signals", "frontier")
         self.assertIn("id=real-hold", signal.stdout)
 
     def test_empty_is_not_a_stop(self):
-        done = run("stop")
+        done = run("stop", "--drive", "assisted")
         self.assertIn("now=KEEP", done.stdout)
         self.assertIn("没有要判断的停问", done.stdout)
 

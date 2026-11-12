@@ -23,6 +23,137 @@ DECL_JAVA = __import__("re").compile(
 DECL_PY = __import__("re").compile(r"(?m)^[ \t]*def[ \t]+(?P<name>\w+)[ \t]*\(")
 
 
+class Section24Thresholds(unittest.TestCase):
+    """§2.4 function-level thresholds — one positive and one negative each.
+
+    The negatives are the point: a detector that fires on ordinary code
+    would drown the advisory report (failure-modes.md 三).
+    """
+
+    def test_length_over_reported(self):
+        funcs = [{"name": "f", "line": 3, "lines": 21, "params": 1, "complexity": 2}]
+        self.assertEqual(len(cs.func_length_hits(funcs, "A.py")), 1)
+
+    def test_length_at_limit_not_reported(self):
+        funcs = [{"name": "f", "line": 3, "lines": 20, "params": 1, "complexity": 2}]
+        self.assertEqual(cs.func_length_hits(funcs, "A.py"), [])
+
+    def test_params_over_reported(self):
+        funcs = [{"name": "f", "line": 3, "lines": 5, "params": 4, "complexity": 2}]
+        self.assertEqual(len(cs.param_count_hits(funcs, "A.py")), 1)
+
+    def test_params_at_limit_not_reported(self):
+        funcs = [{"name": "f", "line": 3, "lines": 5, "params": 3, "complexity": 2}]
+        self.assertEqual(cs.param_count_hits(funcs, "A.py"), [])
+
+    def test_complexity_over_reported(self):
+        funcs = [{"name": "f", "line": 3, "lines": 5, "params": 1, "complexity": 11}]
+        self.assertEqual(len(cs.complexity_hits(funcs, "A.py")), 1)
+
+    def test_complexity_at_limit_not_reported(self):
+        funcs = [{"name": "f", "line": 3, "lines": 5, "params": 1, "complexity": 10}]
+        self.assertEqual(cs.complexity_hits(funcs, "A.py"), [])
+
+    def test_brace_complexity_counts_keywords_and_ops(self):
+        body = "if (a) { x(); } else if (b && c) { y(); } try { z(); } catch (E e) { w(); }"
+        # if ×2, && ×1, catch ×1 → 1 + 4 = 5
+        self.assertEqual(cs.brace_complexity(body), 5)
+
+    def test_brace_complexity_ignores_string_if(self):
+        # a masked body: strings are blanked upstream, but a bare word check
+        # still guards against keyword-in-identifier misfires
+        body = "notifyCustomer(x); wifiCheck(y); catchAll(z);"
+        self.assertEqual(cs.brace_complexity(body), 1)
+
+    def test_brace_func_spans_reports_function_body(self):
+        src = "class A {\n    void f(int a) {\n        g();\n    }\n}\n"
+        spans = cs.brace_func_spans(src, [__import__("re").search(r"\bvoid\s+(?P<name>f)\s*\((?P<params>[^()]*)\)\s*\{", src)])
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0]["name"], "f")
+        self.assertEqual(spans[0]["lines"], 3)
+        self.assertEqual(spans[0]["params"], 1)
+
+    def test_brace_func_spans_skips_bodyless_declaration(self):
+        src = "interface I {\n    int compute(int a, int b);\n}\n"
+        m = __import__("re").search(r"\bint\s+(?P<name>compute)\s*\((?P<params>[^()]*)\)", src)
+        self.assertEqual(cs.brace_func_spans(src, [m]), [])
+
+
+class Section24Python(unittest.TestCase):
+    """The Python AST path — nested functions report under their own def."""
+
+    def test_long_function_reported(self):
+        body = "\n".join("    x%d = %d" % (i, i) for i in range(20))
+        src = "def f(a, b, c):\n" + body + "\n    return c\n"
+        hits = python_inspect.inspect_text(src, "t.py")
+        self.assertTrue(any("长达" in h[2] for h in hits), hits)
+
+    def test_ok_function_not_reported(self):
+        src = "def ok(a, b, c):\n    if a:\n        return b\n    return c\n"
+        self.assertEqual(python_inspect.inspect_text(src, "t.py"), [])
+
+    def test_complexity_reported(self):
+        body = "\n".join("    if x%s:\n        pass" % i for i in range(11))
+        src = "def cx(a):\n" + body + "\n    return a\n"
+        hits = python_inspect.inspect_text(src, "t.py")
+        self.assertTrue(any("圈复杂度" in h[2] for h in hits), hits)
+
+    def test_params_reported(self):
+        src = "def many(a, b, c, d, e):\n    return a\n"
+        hits = python_inspect.inspect_text(src, "t.py")
+        self.assertTrue(any("参数" in h[2] for h in hits), hits)
+
+    def test_string_branch_words_not_reported(self):
+        src = 'def s(a):\n    """if x and y or z"""\n    return a\n'
+        self.assertEqual(python_inspect.inspect_text(src, "t.py"), [])
+
+
+class Section24Go(unittest.TestCase):
+    def test_go_params_reported(self):
+        src = "package main\n\nfunc manyParams(a int, b string, c bool, d float64, e rune) error {\n\treturn nil\n}\n"
+        import go_inspect
+        hits = go_inspect.inspect_text(src, "t.go")
+        self.assertTrue(any("参数" in h[2] for h in hits), hits)
+
+    def test_go_receiver_not_a_param(self):
+        src = "package main\n\nfunc (s *Server) handle(w io.Writer, r *Request) error {\n\treturn nil\n}\n"
+        import go_inspect
+        self.assertEqual(go_inspect.inspect_text(src, "t.go"), [])
+
+
+class Section24Java(unittest.TestCase):
+    def test_java_length_reported(self):
+        import java_inspect
+        lines = "\n".join("        int v%d = %d;" % (i, i) for i in range(20))
+        src = "public class A {\n    public int longOne(int a, int b, int c) {\n%s\n        return a;\n    }\n}\n" % lines
+        hits = java_inspect.inspect_text(src, "A.java")
+        self.assertTrue(any("长达" in h[2] for h in hits), hits)
+
+    def test_java_interface_method_not_reported(self):
+        import java_inspect
+        src = "public interface D {\n    int compute(int a, int b, int c, int d, int e);\n}\n"
+        self.assertEqual(java_inspect.inspect_text(src, "D.java"), [])
+
+    def test_java_test_annotation_excluded(self):
+        import java_inspect
+        src = ("import org.junit.Test;\n\npublic class E {\n    @Test\n    public void longTest() {\n"
+               + "\n".join("        int v%d = %d;" % (i, i) for i in range(25)) + "\n    }\n}\n")
+        self.assertEqual(java_inspect.inspect_text(src, "E.java"), [])
+
+
+class Section24Js(unittest.TestCase):
+    def test_js_function_decl_reported(self):
+        import js_inspect
+        src = "export function many(a, b, c, d, e) {\n  return a;\n}\n"
+        hits = js_inspect.inspect_text(src, "a.js")
+        self.assertTrue(any("参数" in h[2] for h in hits), hits)
+
+    def test_js_arrow_function_not_reported(self):
+        import js_inspect
+        src = "const f = (a, b, c, d, e) => {\n  return a;\n};\n"
+        self.assertEqual(js_inspect.inspect_text(src, "a.js"), [])
+
+
 class Mask(unittest.TestCase):
     def test_offsets_survive(self):
         text = 'int a = 1; // getX().getY().doIt()\nint b = 2;'

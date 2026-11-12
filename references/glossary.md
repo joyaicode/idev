@@ -25,6 +25,7 @@ authority: normative（术语定义以本页为准；引用处不得另行解释
 | 流水线引用 | 步骤写 `use: <配方 id>` 引用另一条配方。`tool` / `tool_group` 把已登记工具当成步骤。`adjust` 只改这一次的成员、顺序和 `label`/`with`/`react` | [workflow-schema.md](workflow-schema.md) |
 | 密封基线 / seal / `sealed` | 检查通过后写下的目标与验收基准（“尺”）。之后不得靠「验收」或「继续」改 goal / items / non_goal。解封要点名 | `SKILL.md` 硬规则 3 |
 | 停问点 | 需求、设计对齐认知。其后阶段验收不过就自省改到通过。矛盾、冲突、不清楚，以及解封、回退、promote、生产写、push、经验入库才停。不等「验收」或「继续」点头 | [chat-confirm-signoff.md](chat-confirm-signoff.md) |
+| `drive_mode` | `assisted`（默认）或 `auto`。`auto` 下有推荐的 B 类 / grilling / 需求与架构分叉按建议代决；解封、回退、promote、生产写、push、经验入库仍要点名。会话覆盖 → 产品 `workflow-defaults.yaml` → 默认 | [chat-confirm-signoff.md](chat-confirm-signoff.md) |
 | 流程机制评估 | 停问前判断这一步是低效、不合理，还是较弱模型的补丁。当轮能按既有规则改的立刻改；要改规则只写提案。变强只看被挡住的失败还在不在 | [process-eval.md](process-eval.md) |
 | 签字类状态 | 检查过了就写 `sealed` / `accepted` / `aligned` / `resolved` / `semantic_gate.*.passed`。`reopen_baseline` 仍要点名。这些字段不是往基线条目上改字 | `SKILL.md` 硬规则 3 |
 | `risk_tier` | 人在 `deliver.yaml` 定的风险档：P0 鉴权/数据面/跨仓契约；P1 默认功能票；P2 文档/小修/低爆破。决定停问次数。注意：此处 P0–P2 与 coding 的模式 P1–P19 **无关** | [hitl-risk-tiers.md](hitl-risk-tiers.md) |

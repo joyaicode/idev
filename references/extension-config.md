@@ -60,6 +60,7 @@ stages:
 | 键 | 解释 |
 |---|---|
 | `coding_root` | 产品目录的共同父路径。和 `products.<id>.dir` 拼出某个产品仓 |
+| `drive_mode` | `assisted`（默认）或 `auto`。产品级默认驱动模式；会话 `.idev/drive-mode.yaml` 可覆盖。`auto` 下有推荐的 B 类/认知分叉按建议代决，硬停点仍问人。权威 [chat-confirm-signoff.md](chat-confirm-signoff.md) |
 | `commands.start` | 启动本地服务的命令。`{target}` 换成服务名，缺省 `all` |
 | `commands.stop` | 停止本地服务的命令。`{target}` 同上 |
 | `commands.status` | `shell.confirmed` 且 `command: status` 时执行的命令 |
@@ -73,6 +74,7 @@ stages:
 
 ```yaml
 coding_root: ../..
+drive_mode: assisted
 commands:
   start: "make up TARGET={target}"
   stop: "make down TARGET={target}"
@@ -85,5 +87,7 @@ products:
     dir: kafka-web
     server: kafka-web
 ```
+
+`drive_mode` 可写 `auto`。缺省键时行为等同 `assisted`（不 BLOCKED）。
 
 `{target}` 由配方替换。`kafka` 换成实际产品 id，`dir` 换成该仓目录名。

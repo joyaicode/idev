@@ -465,6 +465,22 @@ def check_ledger_settled(repo: Path, feature: str, errors: list[str]) -> None:
         ok("hypothesis ledger settled (a proven root cause, nothing open)")
 
 
+def _drive_signal_suffix() -> str:
+    """Under drive=auto, remind the conductor to stamp / decide rather than ask."""
+    try:
+        import drive_mode  # noqa: WPS433
+
+        mode, _source = drive_mode.current()
+    except Exception:
+        return ""
+    if mode != "auto":
+        return ""
+    return (
+        "  (drive=auto: stamp RECOMMEND / PASS+[承重] defaults to 1 / "
+        "decide --all-open --source auto)"
+    )
+
+
 def plan_signals(plan: dict, baseline_items: list[str], has_baseline: bool) -> list[str]:
     """What a person must decide before the plan can pass without them.
 
@@ -1219,7 +1235,7 @@ def check_arch_stage(
     else:
         ok("arch approach set")
     if args.stage == "arch" and nonempty_list(arch, "open_questions"):
-        print("SIGNAL arch open_questions still open")
+        print("SIGNAL arch open_questions still open" + _drive_signal_suffix())
 
 
 def check_plan_stage(
@@ -1262,7 +1278,7 @@ def check_plan_stage(
         for signal in plan_signals(
             plan, items, bool(baseline) and not skips_baseline(root)
         ):
-            print("SIGNAL %s" % signal)
+            print("SIGNAL %s%s" % (signal, _drive_signal_suffix()))
     if args.stage == "test":
         check_auto_record("plan", plan, tier, root, errors, tiers=PLAN_AUTO_TIERS)
     case_refs = [c["baseline_item_id"] for c in cases if c["baseline_item_id"]]

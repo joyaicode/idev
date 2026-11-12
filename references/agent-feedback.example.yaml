@@ -2,7 +2,7 @@
 #
 # 落点:<票目录>/workflow/agent-feedback.yaml
 # 时机:试运行期每轮委派结束**停问一次**(整轮一次,不是每步 —— 每步都停会违反
-#       内核 H5「不为观测另停」)。
+#       内核 H5「不为观测另停」)。drive_mode=auto 时缺档/空 tags 自动写 status: none。
 #
 # 与 verify 的 feedback.yaml 是两张表,不要混:
 #   verify 的八个 tag 管红绿质量(missed-impact / false-green / …)

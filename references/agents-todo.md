@@ -105,7 +105,7 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 | # | 待办 | 状态 | 说明 |
 |---|---|---|---|
 | 10 | `agent-feedback.yaml` 的停问时机没有强制 | 完成 | `workflow.py next` 在整轮委派终态后硬停；缺/pending 的 `agent-feedback.yaml` → BLOCKED；golden/selfcheck 用 `IDEV_AGENT_FEEDBACK=off` |
-| 11 | 本层 `state/proposals/` 还是空的 | 阻塞 | 等 #8 产出第一批 `SUGGEST`，够两次再由 `agent-review.sh` 起草 |
+| 11 | 本层 `state/proposals/` 还是空的 | 阻塞 | 等 #8 产出第一批 `SUGGEST`，够两次再由 `agent-review.sh` 起草。2026-11-12 注：`state/proposals/` 已有编码质量四缝隙的两份产物（`20261112-gap-inventory.md` 清点收口、`20261112-arch-structure-hints.md` 已落地），但都不是 SUGGEST 起草的——#11 的门槛不变，继续等 |
 
 第一批 `SUGGEST` 已出现但来自 #7 的首轮（coding-scan 脚本问题，当日已修）——不算 prompt 措辞问题，仍不够两次，继续等。
 
@@ -208,7 +208,7 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 |---|---|---|---|---|
 | E6.1 | passkey 之后，P0 闸关掉 `AllowLowForHigh` | **机制验证完成，启用待人置位** | 凭证在位（`~/.idev/secrets/human.yaml`，2026-10-21 登记）；2026-11-09 红绿实测：未置位时 low 批 high 要求**降级放行**（downgraded:true + 审计入账），置位 `IDEV_REQUIRE_PASSKEY=1` 后同型批准**被拒**（weak-assurance）。启用只差把环境变量写进 shell 配置 | 置位后跑真票，`idev audit downgrades` 不再新增降级条目 |
 | E6.2 | Postgres 跑同一套 storetest | **卡物理前提** | 本机无 psql / 无 docker（2026-11-09 实测）；驱动接线本身也未做。有 Postgres 实例前不动 | `IDEV_POSTGRES_URL` 指向真库时 storetest 全绿 |
-| E6.3 | 质量门 qodana / e2e | **卡外部工具** | qodana 需要外部服务；假 CLI 与 MCP 工具未完 | 占位拒绝语义保持，配置后真跑 |
+| E6.3 | 质量门 qodana / e2e | **部分收口（2026-11-12）；qodana 仍卡外部工具** | #8 划来的两条残留之一「逐文件命中缺失」已收：`coding-tables.md` §2.4 函数级阈值（长度/参数/圈复杂度）进 `scripts/plugin/` 四语言插件，按 diff 命中文件逐文件报 `file:line` 落 `C#`；§2.4 L111 的「未配工具不硬造」已过时。仍缺的：qodana 深度方法复杂度（需外部服务）与 e2e 假 CLI/MCP 工具 | 占位拒绝语义保持，配置后真跑 |
 | E6.4 | OIDC 多用户 | **卡身份源** | 需要一个真实 OIDC provider 对接；`adapters/oidc` 占位 | Resolve 走通一次真实交换 |
 | E6.5 | shadow 双写比对 | **卡 E2.5 对不上** | 设计说只在 go 车道与 python golden 对不上且解释不了时才开；目前对得上，不启动 | 不适用（触发条件未发生） |
 

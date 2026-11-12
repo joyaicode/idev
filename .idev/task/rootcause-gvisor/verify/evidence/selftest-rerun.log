@@ -1,0 +1,22 @@
+.FAIL H1: repl-transcript-without-runsc-receipt — /var/folders/jf/14qmd6g90cj05b3t7y8drt3r0000gp/T/tmp1_tq6lb9/repo/.idev/task/feat/repl/rootcause-9.out 是 repl transcript,旁边没有 runtime: runsc 的回执。根因命令证据必须来自 runsc;没有回执就不能把这段输出当成证据
+WARN H1: evidence path not found: scripts/repl.py:147
+...--- stderr ---
+SANDBOX_UNAVAILABLE runsc not on PATH
+EXIT     127
+....
+----------------------------------------------------------------------
+Ran 8 tests in 2.496s
+
+OK
+(no stdout)
+
+EVIDENCE /private/var/folders/jf/14qmd6g90cj05b3t7y8drt3r0000gp/T/tmpb7i7btfs/repo/.idev/task/feat/repl/rootcause-1.out
+SOURCE   /private/var/folders/jf/14qmd6g90cj05b3t7y8drt3r0000gp/T/tmpb7i7btfs/repo/.idev/task/feat/repl/rootcause-1.py
+host-ok
+
+EVIDENCE /private/var/folders/jf/14qmd6g90cj05b3t7y8drt3r0000gp/T/tmpu1his0yr/repo/.idev/task/feat/repl/arch-1.out
+SOURCE   /private/var/folders/jf/14qmd6g90cj05b3t7y8drt3r0000gp/T/tmpu1his0yr/repo/.idev/task/feat/repl/arch-1.py
+(no stdout)
+
+EVIDENCE /private/var/folders/jf/14qmd6g90cj05b3t7y8drt3r0000gp/T/tmp8o11edyk/repo/.idev/task/feat/repl/rootcause-1.out
+SOURCE   /private/var/folders/jf/14qmd6g90cj05b3t7y8drt3r0000gp/T/tmp8o11edyk/repo/.idev/task/feat/repl/rootcause-1.py

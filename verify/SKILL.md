@@ -58,7 +58,7 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 8. **禁止** `.scratch/`、`docs/verify/`、整仓当入口、一条龙自动开火。
 9. **扩展只改登记表**（[plan-schema.md](references/plan-schema.md)）。不复制本模块、不开新 Skill。不兼容修正升 `schema_version` + ADR。
 10. **跑测用现有 Maven / 人确认的 shell**，不要第二套断言引擎。
-11. **试运行反馈。** 入口直接落到本模块且台账 `trial`：每次 `run` 后写 `feedback.yaml` 并停问导体 tag。**由 deliver / ops 模块调用时**：只写 `conductor-eval`，不为进化再停一次。进化只改真源 `~/.cursor/skills/idev/verify/`，不要写回仓库。禁止分数门禁。导体评审禁止数字总分。
+11. **试运行反馈。** 入口直接落到本模块且台账 `trial`：每次 `run` 后写 `feedback.yaml` 并停问导体 tag。`drive_mode=auto` 时写 `status: none`（`drive-mode.py settle --feature` 或 `session-context --feature`），不停问；已填 tags 的仍停。**由 deliver / ops 模块调用时**：只写 `conductor-eval`，不为进化再停一次。进化只改真源 `~/.cursor/skills/idev/verify/`，不要写回仓库。禁止分数门禁。导体评审禁止数字总分。
 12. **若存在 `<票目录>/deliver.yaml`：** case 必须带 `slice_id` 与 `baseline_item_id`。goal/non_goal 复制基线。**起草或调整 `cases[]` 后**跑  
     `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> verify-plan`  
     FAIL 不准写 `accepted`。**`run` 不跑这一项、不请签、FAIL 不挡跑。** 禁止为了让测试绿去改 `baseline.yaml`。

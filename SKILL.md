@@ -10,7 +10,7 @@ description: >-
 
 # idev（端到端交付生命周期，唯一入口）
 
-**产品目标：** 人机共驾的 AI 端到端交付。需求、设计对齐认知和信息。其后每阶段按该阶段规范做完，验收不过就自省改到通过，再进入下一阶段。矛盾、冲突或不清楚才停下来讨论。解封、回退、发布仍要点名。**不是**无人值守自动 seal→promote。使用说明：[references/guide.md](references/guide.md)。
+**产品目标：** 人机共驾的 AI 端到端交付。需求、设计对齐认知和信息。其后每阶段按该阶段规范做完，验收不过就自省改到通过，再进入下一阶段。矛盾、冲突或不清楚才停下来讨论。解封、回退、发布仍要点名。**不是**无人值守自动 seal→promote。可选 `drive_mode=auto`：有推荐的 B 类/认知分叉按建议代决（见 [chat-confirm-signoff.md](references/chat-confirm-signoff.md)）。使用说明：[references/guide.md](references/guide.md)。
 
 **Agent 先读：** [references/agent-brief.md](references/agent-brief.md)（最小执行回路 / 何时必须停问人 / 冲突时听谁 / 编号只认一处）· [references/glossary.md](references/glossary.md)（术语表，不认识的词先查，别猜）。本页决策树是**路由的唯一权威**，其它页的路由表只是摘要。
 

@@ -32,26 +32,93 @@ NON_STOPS = (
     "要不要提测",
     "是否验收",
     "请验收",
+    "请确认一下",
+    "是否没问题",
+    "可以继续吗",
+    "要不要推进",
+    "是否对齐",
+    "确认一下方案",
+    "可以吗",
+    "没问题吧",
+    "继续吗",
+    "这样可以吗",
+    "先这样吧",
+    "请审核一下",
+    "麻烦确认",
+    "看下可以吗",
+    "帮确认一下",
+    "是否可行",
+    "这样行吗",
+    "帮看下",
+    "瞅一眼",
+    "过一下",
+    "走个确认",
+    "确认下",
+    "再确认",
+    "最后确认一下",
+    "顺便确认",
 )
-HOLDS = (
+# Never auto-decide. Single source: scripts/lib/drive_mode.HARD_HOLDS.
+try:
+    from drive_mode import HARD_HOLDS  # noqa: WPS433
+except ImportError:  # pragma: no cover
+    HARD_HOLDS = (
+        "解封",
+        "解除密封",
+        "启封",
+        "开封",
+        "unseal",
+        "打开基线",
+        "重新打开基线",
+        "打開基線",
+        "重新打開基線",
+        "reopen",
+        "回退",
+        "回滚",
+        "rollback",
+        "roll back",
+        "promote",
+        "生产写",
+        "写入生产",
+        "写生产",
+        "上生产",
+        "上线生产",
+        "生产发布",
+        "发布到生产",
+        "生产变更",
+        "write to production",
+        "production write",
+        "deploy to production",
+        "生產寫",
+        "寫入生產",
+        "寫生產",
+        "上生產",
+        "上線生產",
+        "生產發布",
+        "發布到生產",
+        "生產變更",
+        "git push",
+        "经验入库",
+        "經驗入庫",
+    )
+# B-class / cognitive forks. Auto mode may adopt --recommend.
+SOFT_HOLDS = (
     "矛盾",
     "冲突",
+    "衝突",  # traditional
     "不清楚",
-    "解封",
-    "解除密封",
-    "回退",
-    "promote",
-    "PROMOTE",
-    "生产",
-    "git push",
-    "经验入库",
     "frontier",
     "BLOCKED",
+    "ARTIFACT",
     "SIGNAL",
     "baseline-conflict",
+    "baseline_conflict",  # underscore form of the same token
+    "baseline conflict",  # spaced form
     "未决",
+    "未決",  # traditional
     "承重",
 )
+HOLDS = HARD_HOLDS + SOFT_HOLDS
 MEMORY_MARKERS = ("没读", "未读", "未打开", "重读", "must_read", "忘记", "忘了")
 PROPOSE_AT = 2
 CLOSED = {"landed", "archived", "rejected", "ga"}
@@ -59,6 +126,12 @@ DO = {
     "rubber-proceed": "做当前阶段还开着的事。不改密封基线的 goal、items、non_goal。不记 stop，不写 next。",
     "leave-decision": "决策保持开着。做不依赖它的那一步。这句不是批准。",
     "ask-known": "按既有规则把这一步做完。检查没过就改到通过。不问人确认。",
+    "drive-auto": "采纳推荐并 decide --all-open --source auto --quote auto:recommend；by 写编制真人。不停问。",
+    "drive-need-recommend": (
+        "先写出推荐选项与理由，再带 --recommend 重跑 process-eval；"
+        "或在回报盖 RECOMMEND: / AI 建议: / AI建議: <档>；"
+        "PASS 且仅 [承重] 时可默认档 1。不要空手停问。"
+    ),
     "ask": "停下来问。",
     "none": "没有要判断的停问。",
     "propose": "只起草提案。不改 Skill。起草用过的轨迹不能当接受证据。",
@@ -125,9 +198,113 @@ def indented_field(text: str, key: str) -> str:
     return unquote(match.group(1)) if match else ""
 
 
+def hard_held(*parts: str) -> bool:
+    try:
+        import drive_mode  # noqa: WPS433
+
+        return drive_mode.hard_held(*parts)
+    except Exception:
+        blob = "\n".join(str(p or "") for p in parts)
+        return any(mark in blob for mark in HARD_HOLDS)
+
+
+def soft_held(*parts: str) -> bool:
+    """True when a soft-hold marker appears.
+
+    ASCII markers (frontier, BLOCKED, SIGNAL, …) match as whole phrases,
+    case-insensitively after stripping English negation (no BLOCKED).
+    CJK markers stay exact substring after stripping negation+mark
+    (不矛盾 / 无需冲突 / 不涉及冲突 do not soft-hold;「不清楚」itself still does).
+    """
+    import re
+
+    try:
+        import drive_mode  # noqa: WPS433
+
+        strip = drive_mode._strip_hold_negations  # noqa: SLF001
+    except Exception:
+        def strip(blob: str, marks: tuple[str, ...] | list[str]) -> str:
+            # Last-resort mirror of drive_mode._strip_hold_negations (CJK only).
+            import re as _re
+            import unicodedata as _ud
+
+            cleaned = _ud.normalize("NFKC", str(blob or ""))
+            cleaned = _re.sub("[\u200b\u200c\u200d\u2060\ufeff\u00ad]", "", cleaned)
+            cleaned = cleaned.translate(str.maketrans({
+                "開": "开", "線": "线", "產": "产", "寫": "写", "發": "发",
+                "經": "经", "驗": "验", "庫": "库", "衝": "冲", "決": "决",
+                "議": "议", "無": "无", "沒": "没", "該": "该", "應": "应",
+                "別": "别", "於": "于", "會": "会", "辦": "办", "絕": "绝",
+                "對": "对", "過": "过", "並": "并", "緩": "缓", "遲": "迟",
+                "後": "后", "暫": "暂", "滾": "滚",
+            }))
+            cleaned = _re.sub(
+                r"(?<=[^\x00-\x7F])\s+(?=[^\x00-\x7F])",
+                "",
+                cleaned,
+            )
+            prefixes = (
+                "不涉及", "不需要", "无需再", "永不再", "并不是", "没办法",
+                "沒辦法", "用不着", "犯不着", "不至于", "不至於", "禁止", "避免",
+                "拒绝", "反对",
+                "取消", "跳过", "忽略", "切莫", "莫要", "暂缓", "推迟", "延后",
+                "无法", "無法", "无需", "無需", "无须", "無須", "毋须", "毋庸",
+                "未尝", "不用", "不必", "不要", "不会", "不會", "不再", "不是",
+                "不该", "不該", "不应", "不應", "不宜", "不可", "未能",
+                "未曾", "未有", "没有", "沒有", "没法", "沒法", "永不",
+                "不", "无", "無", "勿", "别", "別", "非", "未", "没", "沒",
+                "莫", "慎", "拒",
+            )
+            for mark in sorted(
+                (m for m in marks if not str(m).isascii()),
+                key=len,
+                reverse=True,
+            ):
+                for prefix in prefixes:
+                    phrase = prefix + mark
+                    if not (prefix.startswith("不") and len(prefix) >= 2):
+                        cleaned = cleaned.replace(phrase, "")
+                        continue
+                    parts: list[str] = []
+                    idx = 0
+                    while True:
+                        pos = cleaned.find(phrase, idx)
+                        if pos < 0:
+                            parts.append(cleaned[idx:])
+                            break
+                        if (
+                            pos > 0
+                            and pos + 1 < len(cleaned)
+                            and cleaned[pos - 1] == cleaned[pos + 1]
+                        ):
+                            parts.append(cleaned[idx : pos + len(phrase)])
+                            idx = pos + len(phrase)
+                            continue
+                        parts.append(cleaned[idx:pos])
+                        idx = pos + len(phrase)
+                    cleaned = "".join(parts)
+            return cleaned
+
+    blob = "\n".join(str(p or "") for p in parts)
+    cleaned = strip(blob, SOFT_HOLDS)
+    for mark in SOFT_HOLDS:
+        if not mark.isascii():
+            if mark in cleaned:
+                return True
+            continue
+        try:
+            import drive_mode as _dm  # noqa: WPS433
+
+            pat = _dm._ascii_mark_pattern(mark)  # noqa: SLF001
+        except Exception:
+            pat = r"(?i)\b" + re.escape(mark) + r"\b"
+        if re.search(pat, cleaned):
+            return True
+    return False
+
+
 def held(*parts: str) -> bool:
-    blob = "\n".join(parts)
-    return any(mark in blob for mark in HOLDS)
+    return hard_held(*parts) or soft_held(*parts)
 
 
 def ask_known(text: str) -> bool:
@@ -157,14 +334,33 @@ def finding(fid: str, kind: str, now: str, later: str, rule: str, count: int,
     }
 
 
-def judge_stop(quote: str, stop: str, nxt: str, signals: str, decision: bool) -> dict:
+def judge_stop(
+    quote: str,
+    stop: str,
+    nxt: str,
+    signals: str,
+    decision: bool,
+    drive: str = "assisted",
+    recommend: str = "",
+) -> dict:
     quote, stop, nxt, signals = blank(quote), blank(stop), blank(nxt), blank(signals)
-    if held(quote, stop, nxt, signals):
+    recommend = blank(recommend)
+    drive = str(drive or "assisted").strip().lower() or "assisted"
+    parts = (quote, stop, nxt, signals)
+    if hard_held(*parts):
         return finding("real-hold", "keep", "ASK", "", "chat-confirm", 1, "-")
+    # Decision gates (push / evolve land) never auto — same as assisted.
     if decision:
         if quote and w.is_nudge(quote) and not w.is_answer(quote):
             return finding("leave-decision", "waste", "CORRECT", "", "H1", 1, "-")
         return finding("decision-gate", "keep", "ASK", "", "chat-confirm", 1, "-")
+    # Auto: soft holds, or any stop written as a cognitive fork, with recommend.
+    if drive == "auto" and soft_held(*parts):
+        if recommend:
+            return finding("drive-auto", "keep", "CORRECT", "", "drive-auto", 1, recommend)
+        return finding("drive-need-recommend", "keep", "ASK", "", "drive-auto", 1, "-")
+    if soft_held(*parts) or held(*parts):
+        return finding("real-hold", "keep", "ASK", "", "chat-confirm", 1, "-")
     if quote and w.is_nudge(quote):
         return finding("rubber-proceed", "waste", "CORRECT", "", "H1", 1, "-")
     if quote and w.nudge_kind(quote) == "named":
@@ -175,6 +371,9 @@ def judge_stop(quote: str, stop: str, nxt: str, signals: str, decision: bool) ->
         return finding("work", "keep", "ASK", "", "chat-confirm", 1, "-")
     if not quote and ask_known(stop):
         return finding("ask-known", "unreasonable", "CORRECT", "", "chat-confirm", 1, "-")
+    # Auto + recommend on a plain stop (no person quote) = adopt, don't ask.
+    if drive == "auto" and recommend and stop and not quote:
+        return finding("drive-auto", "keep", "CORRECT", "", "drive-auto", 1, recommend)
     if stop or quote:
         return finding("unclassified", "keep", "ASK", "", "chat-confirm", 1, "-")
     return finding("none", "keep", "KEEP", "", "", 0, "-")
@@ -437,7 +636,43 @@ def proposals_dir(explicit: str) -> Path:
 
 
 def cmd_stop(args: argparse.Namespace, _table: dict[str, dict]) -> int:
-    row = judge_stop(args.quote, args.stop, args.next, args.signals, args.decision)
+    drive = str(getattr(args, "drive", "") or "").strip().lower()
+    drive_mod = None
+    if not drive:
+        try:
+            import drive_mode as drive_mod  # noqa: WPS433
+            from product_sink import product_repo  # noqa: WPS433
+            from roots import kernel_root  # noqa: WPS433
+
+            drive, _source = drive_mod.resolve(product_repo(), kernel_root() / "state")
+        except Exception:
+            drive = "assisted"
+    print("DRIVE mode=%s" % drive)
+    recommend = blank(getattr(args, "recommend", "") or "")
+    if drive == "auto" and not recommend:
+        if drive_mod is None:
+            try:
+                import drive_mode as drive_mod  # noqa: WPS433
+            except Exception:
+                drive_mod = None
+        if drive_mod is not None:
+            inferred = drive_mod.report_recommend(
+                "\n".join(
+                    [
+                        str(getattr(args, "stop", "") or ""),
+                        str(getattr(args, "signals", "") or ""),
+                        str(getattr(args, "next", "") or ""),
+                    ]
+                ),
+                loose=True,
+            )
+            if inferred:
+                recommend = inferred
+                print("DRIVE_AUTO infer-recommend=%s" % recommend)
+    row = judge_stop(
+        args.quote, args.stop, args.next, args.signals, args.decision,
+        drive=drive, recommend=recommend,
+    )
     print(emit([row], [], "stop"), end="")
     return 0
 
@@ -476,6 +711,8 @@ def main(argv: list[str] | None = None) -> int:
     stop.add_argument("--next", default="")
     stop.add_argument("--signals", default="")
     stop.add_argument("--decision", action="store_true")
+    stop.add_argument("--drive", default="", help="assisted|auto; empty reads session/product default")
+    stop.add_argument("--recommend", default="", help="AI recommendation; required for drive-auto")
     stop.set_defaults(func=cmd_stop)
 
     scan = sub.add_parser("scan", help="judge recent traces")

@@ -51,7 +51,7 @@ reviewed() {
 report() {
   local raw="STATUS: PASS\\nEVIDENCE: r.md\\nFACTS: codegraph src/app.py:main and git diff\\nDOC_DRIFT: none\\nASSUMED: none"
   raw+="\\nSCOPE: $1\\nREAD: $1\\nCHANGED: $1\\nREVERT: git checkout -- $1"
-  raw+="\\nCHANGE_KIND: local\\nCANON_TRIGGER: none\\nTABLE_HIT: none\\n"
+  raw+="\\nCHANGE_KIND: local\\nCANON_TRIGGER: none\\nTABLE_HIT: none\\nIDEA_HITS: none\\n"
   printf '%s\n' 'step: c' 'attempt: 1' 'kind: deliver.code_pass' 'agent: idev-coder' 'report:' \
     "  raw: \"$raw\"" > "$(records)/c-1.yaml"
 }

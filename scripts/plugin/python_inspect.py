@@ -65,6 +65,73 @@ def _if_statement_lines(text: str) -> set[int] | None:
     return {node.lineno for node in ast.walk(tree) if isinstance(node, ast.If)}
 
 
+def _ast_funcs(text: str) -> list[dict] | None:
+    """§2.4 function facts from the AST, or None when unparsable.
+
+    Nested functions are measured on their own def, not their parent's
+    (the parent's span excludes them because ast.walk finds each FunctionDef
+    separately and the parent's end_lineno still includes the nested body —
+    so nested defs are skipped here and reported once under their own name).
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return None
+    parents: dict[ast.AST, list[ast.AST]] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parents[child] = parents.get(child, []) + [node]
+
+    def complexity(node: ast.AST) -> int:
+        total = 1
+        for sub in ast.walk(node):
+            if isinstance(sub, (ast.If, ast.For, ast.While, ast.AsyncFor, ast.ExceptHandler)):
+                total += 1
+            elif isinstance(sub, ast.BoolOp):
+                total += len(sub.values) - 1
+            elif isinstance(sub, ast.match_case):
+                total += 1
+        return total
+
+    funcs = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        nested = False
+        for p in parents.get(node, []):
+            if isinstance(p, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if isinstance(p, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    nested = True
+        if nested:
+            continue
+        args = [*node.args.posonlyargs, *node.args.args, *node.args.kwonlyargs]
+        params = len(args)
+        if node.args.vararg:
+            params += 1
+        if node.args.kwarg:
+            params += 1
+        funcs.append({
+            "name": node.name,
+            "line": node.lineno,
+            "lines": (node.end_lineno or node.lineno) - node.lineno + 1,
+            "params": params,
+            "complexity": complexity(node),
+        })
+    return funcs
+
+
+def _threshold_hits(text: str, rel: str) -> list[tuple[str, int, str]]:
+    """§2.4 quantitative thresholds; AST-based, so no hits without a parse."""
+    funcs = _ast_funcs(text)
+    if funcs is None:
+        return []
+    return (
+        canon_smells.func_length_hits(funcs, rel)
+        + canon_smells.param_count_hits(funcs, rel)
+        + canon_smells.complexity_hits(funcs, rel)
+    )
+
+
 def _inside(spans: list[tuple[int, int]], pos: int) -> bool:
     return any(start <= pos < end for start, end in spans)
 
@@ -99,6 +166,7 @@ def inspect_text(text: str, rel: str) -> list[tuple[str, int, str]]:
         )
     )
     hits.extend(canon_smells.swallow_hits(masked, rel, python=True))
+    hits.extend(_threshold_hits(text, rel))
     return hits
 
 

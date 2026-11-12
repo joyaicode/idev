@@ -230,6 +230,24 @@ class KnowledgeTest(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("+1", out)
 
+    def test_deliver_heading_outranks_weak_convention_note_stays_behind(self):
+        idev = self.root / "idev"
+        files = {
+            "conventions/canon.md": "# CANON\n" + ("无关背景词\n" * 80) + "这里出现一次需求 边界\n",
+            "deliver/references/req-quality.md": "# 需求质量判据\n需求 边界 需求 边界\n",
+            "scripts/docs/notes/book-精读缺口.md": "# 需求边界精读\n" + ("需求 边界\n" * 20),
+        }
+        for rel, text in files.items():
+            path = idev / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        rc, out = _run(knowledge.cmd_search, repo=str(idev), query="需求 边界", feature="", top=10, json=False)
+        self.assertEqual(rc, 0, out)
+        paths = [line.split(" · ")[0] for line in out.splitlines() if line.strip()]
+        self.assertEqual(paths[0], "deliver/references/req-quality.md", paths)
+        note = "scripts/docs/notes/book-精读缺口.md"
+        self.assertLess(paths.index("conventions/canon.md"), paths.index(note), paths)
+
     def test_questions_missing_file(self):
         rc, out = self._run_questions()
         self.assertEqual(rc, 2)

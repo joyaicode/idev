@@ -1026,9 +1026,21 @@ def _progress_line(run: dict) -> str:
     return line
 
 
+def _drive_line() -> str:
+    try:
+        import drive_mode  # noqa: WPS433
+
+        mode, source = drive_mode.current()
+        return drive_mode.format_line(mode, source)
+    except Exception:
+        return "DRIVE mode=assisted source=default"
+
+
 def next_line(run: dict) -> list[str]:
     digest = digest_line(run)
-    head = [digest] if digest else []
+    head = [_drive_line()]
+    if digest:
+        head.append(digest)
     if run["status"] in ("done", "aborted"):
         lines = [f"RUN {run['status'].upper()}"]
     else:
@@ -1221,11 +1233,17 @@ def _missing_slots(run: dict, step: dict) -> list[str]:
 
 
 def _ask_lines(step: dict, missing: list[str]) -> list[str]:
-    return [
+    lines = [
         f"NEXT {step['id']}  kind={step['kind']}  status={step.get('status', 'pending')}",
         f"OPEN {KINDS.get(step['kind'], '-')}",
         "ASK slot " + ",".join(missing),
     ]
+    if _drive_is_auto():
+        lines.append(
+            "DRIVE_HINT uniquely known slots autofill on next; else "
+            "workflow.py param <name>=<value> (do not ask to confirm the fill)"
+        )
+    return lines
 
 
 def _take_branch(run: dict, step: dict, status: str) -> str:
@@ -1298,9 +1316,16 @@ def _step_lines(run: dict, step: dict) -> list[str]:
             tiers = auto_tiers(step)
             check = AUTO_CHECKS.get(gate_type(step))
             if tiers and check:
+                if _drive_is_auto():
+                    gate_tail = (
+                        "a FAIL or another tier means stop; a SIGNAL under drive=auto means "
+                        "write recommend then decide --all-open --source auto (hard holds still ask)"
+                    )
+                else:
+                    gate_tail = "a FAIL, a SIGNAL or another tier means stop and ask"
                 lines.append(
                     f"GATE at {'/'.join(sorted(tiers))}: record AUTO runs check-feature {check.stage} "
-                    f"and keeps its output in {check.log}; a FAIL, a SIGNAL or another tier means stop and ask"
+                    f"and keeps its output in {check.log}; {gate_tail}"
                 )
                 lines.append(f"Will write: {will_write_line(step)}")
             else:
@@ -1407,6 +1432,29 @@ def cmd_start(args: argparse.Namespace) -> int:
     stamp_open_group(run, ticket_of(run_path))
     claim_run(run_path, run)
     write_report(run_path, run)
+    if _drive_is_auto() and repo is not None:
+        try:
+            import staffing as staff_mod  # noqa: WPS433
+
+            _staff, written = staff_mod.auto_solo_under_drive(
+                repo, git_name=staff_mod.git_user(),
+            )
+            if written is not None:
+                print("DRIVE_AUTO staffing=solo %s" % written)
+        except Exception:
+            pass
+        if feature:
+            _settle_ticket_under_drive(run, args)
+        if slots_to_autofill(run):
+            filled: list[str] = []
+
+            def mutate(data: dict) -> dict:
+                filled[:] = try_autofill_slots(data)
+                return data
+
+            run = save_run(run_path, mutate)
+            if filled:
+                print("DRIVE_AUTO slots=%s" % ",".join(filled))
     print(f"RUN {run_path}")
     print("\n".join(next_line(run)))
     return 0
@@ -1453,12 +1501,82 @@ def _set_slot(run: dict, key: str, value: str) -> None:
 
 
 
+def _drive_is_auto() -> bool:
+    try:
+        import drive_mode  # noqa: WPS433
+
+        mode, _source = drive_mode.current()
+        return mode == "auto"
+    except Exception:
+        return False
+
+
+def _feedback_signer() -> str:
+    try:
+        import staffing as staff_mod  # noqa: WPS433
+
+        name = str(staff_mod.git_user() or "").strip()
+    except Exception:
+        name = ""
+    if name and is_human(name):
+        return name
+    return ""
+
+
+def _auto_agent_feedback(path: Path, feature: str, done: list) -> bool:
+    """Under drive=auto, write status:none once and clear the stop.
+
+    Does not overwrite a file that already has tags (person started filling).
+    """
+    if not _drive_is_auto():
+        return False
+    if path.is_file():
+        doc = safeyaml.mapping(path) or {}
+        status = str(doc.get("status") or "").strip().lower()
+        if status in ("received", "none"):
+            return True
+        tags = doc.get("tags") or []
+        if isinstance(tags, list) and any(str(t).strip() for t in tags):
+            return False
+    payload = {
+        "schema_version": 1,
+        "feature": feature if feature and feature != "-" else "",
+        "status": "none",
+        "tags": [],
+        "by": _feedback_signer(),
+        "note": "auto:drive-mode; round feedback deferred (%s)" % ",".join(str(x) for x in done),
+    }
+    wrote = {"ok": False}
+
+    def mutate(data: dict) -> dict:
+        status = str(data.get("status") or "").strip().lower()
+        if status in ("received", "none"):
+            return data
+        tags = data.get("tags") or []
+        if isinstance(tags, list) and any(str(t).strip() for t in tags):
+            return data
+        wrote["ok"] = True
+        return dict(payload)
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        safeyaml.save_locked(path, mutate)
+    except Exception:
+        path.write_text(safeyaml.dump(payload), encoding="utf-8")
+        wrote["ok"] = True
+    if not wrote["ok"]:
+        return True
+    print(f"DRIVE_AUTO agent-feedback=none {path}")
+    return True
+
+
 def agent_feedback_block(run: dict, run_path: Path) -> str | None:
     """Hard stop once per round when every delegated step has a terminal status.
 
     Contract:整轮一次. Missing or pending agent-feedback.yaml blocks next.
     status received|none clears the stop. Env IDEV_AGENT_FEEDBACK=off is the
-    break-glass for golden/selfcheck (not for product runs).
+    break-glass for golden/selfcheck (not for product runs). drive_mode=auto
+    writes status:none once and continues (unless tags were already filled).
     """
     flag = (os.environ.get("IDEV_AGENT_FEEDBACK") or "").strip().lower()
     if flag in ("0", "false", "no", "off"):
@@ -1481,6 +1599,8 @@ def agent_feedback_block(run: dict, run_path: Path) -> str | None:
         return None
     path = Path(run_path).resolve().parent / "agent-feedback.yaml"
     if not path.is_file():
+        if _auto_agent_feedback(path, str(run.get("feature") or ""), done):
+            return None
         return (
             f"STOP agent-feedback: round of delegations finished ({', '.join(done)}); "
             f"write {path} once (status: received|none + tags/by/note). "
@@ -1490,10 +1610,223 @@ def agent_feedback_block(run: dict, run_path: Path) -> str | None:
     status = str(doc.get("status") or "").strip().lower()
     if status in ("received", "none"):
         return None
+    if _auto_agent_feedback(path, str(run.get("feature") or ""), done):
+        return None
     return (
         f"STOP agent-feedback: {path} status={status or 'pending'}; "
         "set status: received (with tags/by/note) or status: none"
     )
+
+
+def slots_to_autofill(run: dict) -> dict[str, str]:
+    """Slot name → value the run already knows uniquely. Does not mutate."""
+    if not _drive_is_auto():
+        return {}
+    params = run.get("params") if isinstance(run.get("params"), dict) else {}
+    feature = str(run.get("feature") or "").strip()
+    workflow_id = str(run.get("workflow_id") or "").strip()
+    product = ""
+    repo = None
+    try:
+        from product_marker import load_marker  # noqa: WPS433
+        from product_sink import product_repo  # noqa: WPS433
+
+        repo = product_repo()
+        if repo is not None:
+            product = str((load_marker(repo) or {}).get("id") or "").strip()
+    except Exception:
+        product = ""
+        repo = None
+    found: dict[str, str] = {}
+    for step in open_steps(run):
+        for name in _asked_names(step):
+            cur = params.get(name)
+            if cur is not None and str(cur).strip():
+                continue
+            if name in found:
+                continue
+            if name == "feature" and feature and feature != "-":
+                found[name] = feature
+            elif name == "product" and product:
+                found[name] = product
+            elif name == "repo" and repo is not None:
+                found[name] = str(repo)
+            elif name in ("workflow", "workflow_id") and workflow_id:
+                found[name] = workflow_id
+            elif name == "scope":
+                with_scope = str((step.get("with") or {}).get("scope") or "").strip()
+                if with_scope:
+                    found[name] = with_scope
+    return found
+
+
+def try_autofill_slots(run: dict) -> list[str]:
+    """Under drive=auto, fill slots that the run already knows uniquely."""
+    found = slots_to_autofill(run)
+    if not found:
+        return []
+    params = run.setdefault("params", {})
+    if not isinstance(params, dict):
+        return []
+    for name, value in found.items():
+        params[name] = value
+    run.setdefault("revisions", []).append({
+        "at": now(),
+        "note": "auto:drive-mode slots %s" % ",".join(found),
+    })
+    return list(found)
+
+
+def _signal_hint_lines(run: dict, path: Path) -> list[str]:
+    """Under drive=auto, surface open signals with a ready decide --all-open skeleton."""
+    if not _drive_is_auto():
+        return []
+    feature = str(run.get("feature") or "")
+    lines: list[str] = []
+    try:
+        import drive_mode  # noqa: WPS433
+    except Exception:
+        drive_mode = None
+    for step in open_steps(run):
+        sid = str(step.get("id") or "")
+        if not sid:
+            continue
+        asked = unanswered(path, sid)
+        if not asked:
+            continue
+        lines.append("SIGNALS open=%s step=%s" % ("; ".join(asked), sid))
+        if all(hard_held_signal(s) for s in asked):
+            lines.append(
+                "DRIVE_HINT remaining signals are hard holds; "
+                "ask the person (never auto-decide)"
+            )
+        elif drive_mode is not None:
+            lines.append("DRIVE_HINT %s" % drive_mode.decide_hint(sid, feature))
+        else:
+            hint = f"workflow.py decide {sid} --all-open --source auto --recommend <档>"
+            if feature and feature != "-":
+                hint += f" --feature {feature}"
+            lines.append("DRIVE_HINT %s" % hint)
+    return lines
+
+
+def _settle_ticket_under_drive(run: dict, args: argparse.Namespace) -> None:
+    """Under drive=auto, settle verify feedback + scope_debt for this ticket."""
+    if not _drive_is_auto():
+        return
+    feature = str(run.get("feature") or getattr(args, "feature", "") or "").strip()
+    if not feature or feature == "-":
+        return
+    repo = session_repo(str(getattr(args, "repo", "") or ""))
+    if repo is None:
+        return
+    try:
+        import drive_mode  # noqa: WPS433
+    except Exception:
+        return
+    try:
+        fb = drive_mode.settle_verify_feedback(repo, feature)
+        if fb is not None:
+            print("DRIVE_AUTO verify-feedback=none %s" % fb)
+    except Exception:
+        pass
+    try:
+        debt = drive_mode.settle_scope_debt(repo, feature)
+        if debt is not None:
+            print("DRIVE_AUTO scope-debt %s" % debt)
+    except Exception:
+        pass
+
+
+def _settle_open_signals_under_drive(run: dict, path: Path) -> int:
+    """Under drive=auto, adopt stamped RECOMMEND or [承重]+PASS default.
+
+    Walks every step (not only open ones): a settled step can still leave
+    unanswered signals that later gates refuse.
+    """
+    if not _drive_is_auto():
+        return 0
+    try:
+        import drive_mode  # noqa: WPS433
+    except Exception:
+        return 0
+    total = 0
+    for step in run.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        sid = str(step.get("id") or "")
+        if not sid:
+            continue
+        asked = unanswered(path, sid)
+        if not asked:
+            continue
+        record = latest_delegation(path, sid) or {}
+        raw = report_text(record)
+        structured = str(((record.get("report") or {}).get("status") or "")).strip()
+        stamped, quote = drive_mode.resolve_signal_recommend(
+            raw, asked, status=structured,
+        )
+        if not stamped:
+            continue
+        decided = _auto_decide_open_signals(path, sid, asked, stamped, quote=quote)
+        if decided:
+            print("DRIVE_AUTO decided=%d step=%s recommend=%s" % (decided, sid, stamped))
+            total += decided
+    return total
+
+
+def _auto_decide_open_signals(
+    path: Path,
+    step_id: str,
+    signals: list[str],
+    recommend: str,
+    quote: str = "auto:recommend",
+) -> int:
+    """Adopt recommend for open signals that are not irreversible holds.
+
+    Skips hard-held signals one by one so a mixed batch can still settle
+    safe [承重] assumptions.
+    """
+    if not signals or not recommend:
+        return 0
+    tag = str(quote or "").strip() or "auto:recommend"
+    count = 0
+    for signal in signals:
+        text = str(signal or "").strip()
+        if not text:
+            continue
+        if hard_held_signal(text):
+            continue
+        append_decision(path, step_id, {
+            "signal": text,
+            "question": "auto:" + text,
+            "answer": recommend,
+            "quote": tag,
+            "options": "",
+            "recommend": recommend,
+            "source": "auto",
+        })
+        count += 1
+    return count
+
+
+def hard_held_signal(signal: str) -> bool:
+    try:
+        import drive_mode  # noqa: WPS433
+
+        return drive_mode.hard_held_signal(signal)
+    except Exception:
+        return False
+
+
+def hard_held_signals(signals: list[str]) -> bool:
+    try:
+        import drive_mode  # noqa: WPS433
+
+        return drive_mode.hard_held_signals(signals)
+    except Exception:
+        return False
+
 
 def cmd_next(args: argparse.Namespace) -> int:
     path = find_run(args)
@@ -1502,7 +1835,21 @@ def cmd_next(args: argparse.Namespace) -> int:
     if block:
         print(block, file=sys.stderr)
         raise Blocked(block)
+    _settle_ticket_under_drive(run, args)
+    _settle_open_signals_under_drive(run, path)
+    if slots_to_autofill(run):
+        filled: list[str] = []
+
+        def mutate(data: dict) -> dict:
+            filled[:] = try_autofill_slots(data)
+            return data
+
+        run = save_run(path, mutate)
+        if filled:
+            print("DRIVE_AUTO slots=%s" % ",".join(filled))
     print("\n".join(next_line(run)))
+    for line in _signal_hint_lines(run, path):
+        print(line)
     return 0
 
 
@@ -1892,8 +2239,36 @@ def cmd_record(args: argparse.Namespace) -> int:
             # the token away before release is known to have succeeded.
             done["release"] = pairs
         if status == "PASS":
+            if _drive_is_auto():
+                settled = _settle_open_signals_under_drive(run, path)
+                if settled:
+                    done["drive_auto_decided"] = settled
             open_signals = unanswered(path, step["id"])
             if open_signals:
+                if _drive_is_auto():
+                    if all(hard_held_signal(s) for s in open_signals):
+                        raise Blocked(
+                            f"{step['id']} has signals waiting: "
+                            + "; ".join(open_signals)
+                            + " — drive=auto: hard holds still ask the person"
+                        )
+                    try:
+                        import drive_mode  # noqa: WPS433
+
+                        hint = drive_mode.decide_hint(
+                            step["id"], str(run.get("feature") or ""),
+                        )
+                    except Exception:
+                        hint = (
+                            f"workflow.py decide {step['id']} --all-open "
+                            "--source auto --recommend <档>"
+                        )
+                    raise Blocked(
+                        f"{step['id']} has signals waiting: "
+                        + "; ".join(open_signals)
+                        + f" — drive=auto: stamp RECOMMEND / "
+                        f"or PASS+[承重] default, then {hint}"
+                    )
                 raise Blocked(
                     f"{step['id']} has signals waiting for a person's decision: "
                     + "; ".join(open_signals)
@@ -1942,7 +2317,16 @@ def cmd_record(args: argparse.Namespace) -> int:
         print("BRANCH %s %s -> %s" % (step["id"], which, done["branch"]))
     elif status in STEP_STOP:
         ask = (run.get("policy") or {}).get("on_fail") == "ask"
-        print(f"BLOCKED {step['id']} {status}; " + ("ask the person how to go on" if ask else "stop; fix and record again"))
+        if ask and _drive_is_auto():
+            tail = (
+                "drive=auto: write recommend, then decide --all-open --source auto "
+                "(hard holds still ask); or fix and record again"
+            )
+        elif ask:
+            tail = "ask the person how to go on"
+        else:
+            tail = "stop; fix and record again"
+        print(f"BLOCKED {step['id']} {status}; " + tail)
     print("\n".join(next_line(run)))
     return 0
 
@@ -1950,10 +2334,12 @@ def cmd_record(args: argparse.Namespace) -> int:
 def cmd_delegate(args: argparse.Namespace) -> int:
     """Hand the current step, or every open agent step, to its agent."""
     path = find_run(args)
+    run = load_yaml(path) or {}
+    _settle_ticket_under_drive(run, args)
+    _settle_open_signals_under_drive(run, path)
     if args.open:
         if args.step:
             raise SystemExit("delegate --open does not take a step")
-        run = load_yaml(path) or {}
         opened = [
             step for step in open_steps(run)
             if kind_agents.KIND_AGENTS.get(step["kind"], "-") != "-"
@@ -2184,6 +2570,14 @@ NO_GUIDE = ("", "无", "none", "-")
 
 
 def _report_status(raw: str) -> str:
+    try:
+        import drive_mode  # noqa: WPS433
+
+        status = drive_mode.report_status(raw)
+        if status:
+            return status
+    except Exception:
+        pass
     hit = REPORT_STATUS.search(raw)
     return hit.group(1).split("(")[0].upper() if hit else ""
 
@@ -2381,11 +2775,26 @@ def print_brief(run: dict, step: dict, agent: str, attempt: int, brief: dict, ro
     if "packet_includes" in brief:
         names = brief.get("packet_includes") or []
         print("包含: " + (", ".join(names) if names else "无"))
+    if brief.get("pattern_hints"):
+        print("arch 预判(候选非授权,编码 §0 独立对表,零命中即推翻;回报 FORECAST 行交代):")
+        for row in brief["pattern_hints"]:
+            print(
+                "  - %s: %s → %s" % (
+                    row.get("slice_id") or "-",
+                    row.get("signal") or "-",
+                    row.get("candidates") or "-",
+                )
+            )
     print(f"IDEV_ROOT: {brief['idev_root']}")
     if brief.get("artifact"):
         print(f"artifact: {brief['artifact']}")
     print("禁止: 写 sealed/accepted/aligned/resolved/reopen_baseline/semantic_gate.*;改密封基线正文")
     print("回报: 按你定义里的回报格式,STATUS + EVIDENCE 必填")
+    if _drive_is_auto():
+        print(
+            "DRIVE: 若回报会出 SIGNAL/[承重]，另起一行盖 RECOMMEND: <档>（或 AI建议:），"
+            "land/next 按建议代决；硬停点仍问人"
+        )
     if brief.get("guide"):
         print(f"领域约束: {brief['guide']}")
     if brief.get("shard"):
@@ -2509,6 +2918,8 @@ def cmd_step(args: argparse.Namespace) -> int:
     if block:
         print(block, file=sys.stderr)
         raise Blocked(block)
+    _settle_ticket_under_drive(run, args)
+    _settle_open_signals_under_drive(run, path)
     shard = str(getattr(args, "shard", "") or "").strip()
     agent = kind_agents.KIND_AGENTS[step["kind"]]
     if shard:
@@ -2594,6 +3005,7 @@ def _retry_brief(args: argparse.Namespace, path: Path, shard: str) -> int:
 def cmd_land(args: argparse.Namespace) -> int:
     """Take an agent's report for a step: its record, then the verifier's turn or the step's record."""
     path, run, step = _ticket_run(args)
+    _settle_ticket_under_drive(run, args)
     raw = (sys.stdin.read() if args.report in ("", "-") else Path(args.report).read_text(encoding="utf-8")).strip()
     if not raw:
         raise Blocked("land needs the agent's report: --report - with the text on stdin, or a file")
@@ -2636,9 +3048,56 @@ def cmd_land(args: argparse.Namespace) -> int:
               f"then workflow.py step {sid} for the next attempt")
         return 1
     asked = unanswered(path, sid)
+    if asked and _drive_is_auto():
+        try:
+            import drive_mode  # noqa: WPS433
+
+            structured = str(status or "").strip()
+            stamped, quote = drive_mode.resolve_signal_recommend(
+                raw, asked, status=structured,
+            )
+        except Exception:
+            stamped, quote = "", "auto:recommend"
+        if stamped:
+            decided = _auto_decide_open_signals(path, sid, asked, stamped, quote=quote)
+            if decided:
+                print("DRIVE_AUTO decided=%d recommend=%s" % (decided, stamped))
+                asked = unanswered(path, sid)
     if asked:
-        print(f"STOP {sid} has signals for a person: {'; '.join(asked)} — ask, "
-              f"workflow.py decide {sid} --signal ..., then land the same report again")
+        try:
+            import drive_mode  # noqa: WPS433
+
+            guide = drive_mode.signal_guide(step=sid, feature=feature)
+        except Exception:
+            guide = "ask the person; record the answer with workflow.py decide"
+        print(
+            f"STOP {sid} has signals: {'; '.join(asked)} — {guide}; "
+            f"then land the same report again"
+        )
+        if _drive_is_auto():
+            try:
+                import drive_mode  # noqa: WPS433
+
+                if asked and all(hard_held_signal(s) for s in asked):
+                    print(
+                        "DRIVE_HINT remaining signals are hard holds; "
+                        "ask the person (never auto-decide)"
+                    )
+                else:
+                    print("DRIVE_HINT %s" % drive_mode.decide_hint(sid, feature))
+                    print(
+                        "DRIVE_HINT stamp RECOMMEND: <档> in the report "
+                        "to auto-decide on land"
+                    )
+                    print(
+                        "DRIVE_HINT or STATUS: PASS with only [承重] signals "
+                        "defaults to recommend=1"
+                    )
+            except Exception:
+                print(
+                    "DRIVE_HINT workflow.py decide %s --all-open --source auto "
+                    "--recommend <档> --feature %s" % (sid, feature)
+                )
         return 1
     if status == "PASS" and verifier:
         if not (step.get("verify_lease") or {}).get("id"):
@@ -2909,6 +3368,10 @@ def append_decision(run_path: Path, step: str, fields: dict) -> dict:
             "quote": fields["quote"],
             "at": now(),
         })
+        source = str(fields.get("source") or "").strip().lower()
+        if source == "auto":
+            entry["source"] = "auto"
+            entry["overturned"] = False
         items.append(entry)
         return data
 
@@ -2923,20 +3386,54 @@ def cmd_decide(args: argparse.Namespace) -> int:
     steps = {s["id"]: s for s in run.get("steps") or []}
     if args.step not in steps:
         raise Blocked(f"no step {args.step} in this run")
-    for name in ("signal", "question", "answer"):
-        if not str(getattr(args, name) or "").strip():
-            raise Blocked(f"a decision needs --{name}")
-    if not is_answer(args.quote):
+    source = str(getattr(args, "source", "") or "").strip().lower()
+    recommend = str(args.recommend or "").strip()
+    answer = str(args.answer or "").strip()
+    quote = str(args.quote or "").strip()
+    all_open = bool(getattr(args, "all_open", False))
+    if all_open and source != "auto":
+        raise Blocked("--all-open only works with --source auto")
+    if source == "auto":
+        if not recommend:
+            raise Blocked("auto decide needs --recommend")
+        if not answer:
+            answer = recommend
+        elif answer != recommend:
+            raise Blocked("auto decide answer must equal --recommend")
+        if not quote:
+            quote = "auto:recommend"
+        elif not quote.startswith("auto:"):
+            raise Blocked("auto decide --quote must start with auto:")
+    signals: list[str]
+    if all_open:
+        signals = unanswered(path, args.step)
+        if not signals:
+            print("SIGNALS none left")
+            return 0
+    else:
+        signals = [str(args.signal or "").strip()]
+    if not answer:
+        raise Blocked("a decision needs --answer")
+    if not is_answer(quote):
         raise Blocked(NUDGE_DECIDE)
-    entry = append_decision(path, args.step, {
-        "signal": args.signal.strip(),
-        "question": args.question.strip(),
-        "answer": args.answer.strip(),
-        "quote": args.quote.strip(),
-        "options": args.options.strip(),
-        "recommend": args.recommend.strip(),
-    })
-    print(f"DECISION {entry['id']} {decisions_path(path)}")
+    for signal in signals:
+        if not signal:
+            raise Blocked("a decision needs --signal (or --all-open with open signals)")
+        question = str(args.question or "").strip() or ("auto:" + signal)
+        entry = append_decision(path, args.step, {
+            "signal": signal,
+            "question": question,
+            "answer": answer,
+            "quote": quote,
+            "options": args.options.strip(),
+            "recommend": recommend,
+            "source": source,
+        })
+        print(f"DECISION {entry['id']} {decisions_path(path)}")
+    if source == "auto":
+        print("DRIVE source=auto")
+        if all_open:
+            print("DRIVE_AUTO decided=%d" % len(signals))
     left = unanswered(path, args.step)
     print("SIGNALS none left" if not left else "SIGNALS still open: " + "; ".join(left))
     return 0
@@ -3240,6 +3737,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--quote", default="")
     p.add_argument("--options", default="")
     p.add_argument("--recommend", default="")
+    p.add_argument(
+        "--source", default="",
+        help="auto = drive-mode adopted the recommendation; quote must be auto:…",
+    )
+    p.add_argument(
+        "--all-open", action="store_true",
+        help="with --source auto: decide every unanswered signal on this step with the same recommend",
+    )
     locate(p)
     p.set_defaults(func=cmd_decide)
     p = sub.add_parser("abort")

@@ -1,0 +1,84 @@
+feature: rootcause-gvisor
+goal: 根因阶段 --step rootcause 的探针经 gVisor 的 runsc 执行,该探针在宿主仓库新建的文件数等于 0。
+human_signoff:
+    - by: wangwei794
+      id: req-review
+      status: ACCEPTED
+items:
+    - acceptance: 1 次 --step rootcause 的写文件片段执行后,回执中的 runtime 等于 runsc,宿主上该新建路径的个数等于 0。
+      comparison:
+        differs: 隔离边界只认 runsc,不接受 runc 或 sandbox-exec 代替。
+        grill: Q4
+        peers:
+            - behaviour: 用 Linux namespace 隔离,与宿主共享内核。
+              name: runc
+            - behaviour: 用 Seatbelt 限制本机进程,不能在 Linux 上提供同一边界。
+              name: macOS sandbox-exec
+        why: 原话点名 gVisor。runc 与宿主共享内核,沙箱内的系统调用仍进入宿主内核。sandbox-exec 不能在 Linux 代理上复现同一边界。
+      grounding:
+        boundary:
+            - 不改 --step 不等于 rootcause 的宿主执行路径。
+            - 不拦截 Cursor Shell 工具;没有 runsc 回执的 transcript 不得作为根因命令证据。
+        conflicts:
+            - existing: cmd_run 用宿主 subprocess.run 执行片段,cwd 是仓库根。模块说明写明这不是沙箱,guard() 只做静态扫描。
+              grill: Q1
+              tension: 本需求要求 --step rootcause 的同一次调用改经 runsc,且不能把 guard() 的扫描说成隔离。
+              where: scripts/repl.py:cmd_run
+        direction: |
+            与 repl.py 文首一致:真隔离要容器,正则扫描不是隔离。
+            这次只给根因探针补 runsc 边界,不改证据优先,也不改根因六条的判定含义。
+        impact:
+            - scripts/repl.py:main
+        touches:
+            - scripts/repl.py:cmd_run
+            - scripts/repl.py:guard
+      id: B1
+      must: 当 --step 等于 rootcause 时,repl.py 的 cmd_run 经 runsc 执行片段,宿主仓库内该片段新建的文件数等于 0。
+    - acceptance: 在 PATH 不含 runsc 的环境执行 1 次写文件探针后,cmd_run 退出码不等于 0,目标路径个数等于 0。
+      grounding:
+        boundary:
+            - 不在本票为 Darwin 安装 Linux 虚拟机。
+            - 不把 runsc 二进制提交进仓库。
+        conflicts: []
+        direction: |
+            开发机可以没有 runsc。缺失时拒绝执行,而不是换一种隔离假装已经进了 gVisor。
+        impact:
+            - scripts/repl.py:main
+        touches:
+            - scripts/repl.py:cmd_run
+      id: B2
+      must: 当 --step 等于 rootcause 且 runsc 不在 PATH 时,cmd_run 退出码不等于 0,且该片段要新建的路径在宿主上的个数等于 0。
+    - acceptance: 1 条指向无回执 transcript 的 evidence 使 check 的失败次数等于 1。
+      grounding:
+        boundary:
+            - 不改变六条强约束里服务名、时间窗、调用链、双证据、代码证据、排除依据的判定。
+            - code、log、metric、trace、config、change 类证据不因缺少 runsc 回执失败。
+        conflicts: []
+        direction: |
+            回执检查补在命令证据上,避免根因阶段改走宿主命令仍能把输出写成证据。
+        impact:
+            - scripts/hypothesis.py:cmd_set
+        touches:
+            - scripts/hypothesis.py:check
+            - scripts/hypothesis.py:cmd_check
+      id: B3
+      must: 当 evidence 指向的 repl transcript 没有 runsc 回执时,hypothesis.py 的 check 退出码不等于 0。
+    - acceptance: 1 次 --step arch 的片段执行后,票目录 transcript 文件数等于 1,且该记录不含 runtime=runsc。
+      grounding:
+        boundary:
+            - 不把编码、提测、巡检包的 repl 调用改成 runsc。
+        conflicts: []
+        direction: |
+            repl.py 对其它阶段仍是可重跑的计算记录,隔离边界只加在 rootcause 这一步。
+        impact:
+            - scripts/repl.py:main
+        touches:
+            - scripts/repl.py:cmd_run
+      id: B4
+      must: 当 --step 不等于 rootcause 时,repl.py 的 cmd_run 仍用宿主 Python 执行片段,并在票目录写下 1 个 transcript 文件。
+non_goal: 不把 Cursor 模型进程放进 runsc。不把 codegraph 查询、假设台账写入和文件只读放进 runsc。不在本票安装虚拟机,也不把 runsc 二进制提交进仓库。不给编码、提测和巡检包套沙箱。不打开网络,不挂载家目录凭证、docker.sock 和 kubeconfig。不把 guard() 的静态扫描当成隔离。
+objections: []
+review_questions: []
+revision: 1
+schema_version: 2
+sealed: true

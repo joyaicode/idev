@@ -127,14 +127,124 @@ def book_reports(kernel: Path) -> list[Path]:
     return sorted((kernel / "scripts" / "docs" / "notes").glob("*-精读缺口.md"))
 
 
+# A "真缺口" entry is landed when its body carries one of these markers —
+# the reports themselves record the landing commit ("已于 12ab1c4 落地",
+# "落地状态（已提交）", "已落地"). This is a text shape, not a semantic
+# judgement: whether the landing was *good* stays with the proposal review.
+# DDD-style reports additionally mark the whole section landed ("均已落地")
+# while each item cites its landed proposal — so a per-item citation of a
+# landed proposal ("landed") counts too, and so does the section-level note.
+LANDED_MARK = re.compile(r"已(?:于\s*[0-9a-f]+\s*)?落地|落地状态|已承载于|已由.*同轮落地")
+SECTION_LANDED = re.compile(r"均已落地|均已按最小 diff 落到")
+# Gap items come in three shapes across the reports: "### 1. 标题" (the
+# EffectiveJava style), "### 缺口 A｜标题" / "### 缺口1｜标题" (代码大全 /
+# 微服务设计 style), and AOSA's plain numbered list "1. **标题**".
+GAP_ITEM = re.compile(r"^(?:###\s+(?:缺口\s*)?(\d+|[A-Z])[｜.]?\s*(.+)|(\d+)\.\s+\*\*(.+)\*\*)$", re.M)
+
+
+def pending_gaps(kernel: Path) -> tuple[list[dict], list[str]]:
+    """Entries in each report's 「## 三、真缺口」 section, by landing state.
+
+    Complements audit(): that answers "did the landed numbers reach code",
+    this answers "did the report's own gaps get landed at all". Returns
+    (entries, unparsed) — entries carry report path, item number, title,
+    and landed/unlanded; unparsed names reports whose 真缺口 section could
+    not be read, because silence would read as "no gaps" (the DECLINED
+    trade again: a missed parse must be visible, not tidy).
+    """
+    entries: list[dict] = []
+    unparsed: list[str] = []
+    defined = defined_ids(kernel)
+    for report in book_reports(kernel):
+        text = read(report)
+        body = section(text, r"##\s*三、真缺口")
+        if not body:
+            continue  # a report with no 真缺口 section has nothing pending
+        items = [(a or c, (b or d).strip()) for a, b, c, d in GAP_ITEM.findall(body)]
+        if not items:
+            # The reports that found no gaps say so in prose ("无。本书…已由
+            # T1/T3… 承载" / "**零缺口。** …"). That is a stated zero, not a
+            # parse failure — but only when the body actually carries the
+            # zero; anything else is a shape this parser does not know and
+            # must say so.
+            if re.search(r"(?:^|\*\*)\s*(?:无|零缺口|没有真缺口)[。，.]", body):
+                continue
+            unparsed.append(str(report.relative_to(kernel)))
+            continue
+        # Each item runs to the next item heading or the end of the section.
+        heads = [m for m in GAP_ITEM.finditer(body)]
+        spans = []
+        for i, m in enumerate(heads):
+            start = m.start()
+            end = heads[i + 1].start() if i + 1 < len(heads) else len(body)
+            spans.append((start, end))
+        for (num, title), (start, end) in zip(items, spans):
+            item_body = body[start:end]
+            # Landed = any of three text shapes: the item records its landing
+            # commit ("已于 12ab1c4 落地"), the report marks the whole batch
+            # landed ("均已落地" / a "landed" proposal citation), or the
+            # number the item proposes to ADD now exists in the source tables.
+            # The add shape is 建议落点/落点 … 新增 C33 — existing numbers the
+            # item merely cites (T3 / T4 / C23 as kin) must not count, or
+            # every item that names its neighbours reads as landed. A
+            # negation ("不新增 C 编号，改为映射到既有 T4 / T6") is an explicit
+            # not-adding, the opposite of a landing — skip those lines whole.
+            proposed = {
+                n for n in ID.findall(
+                    "".join(m.group(0) for m in re.finditer(
+                        r"(?:建议落点|落点)[^\n]*?(?<!不)新增([^\n]*)", item_body))
+                ) if n in defined
+            }
+            entries.append({
+                "report": str(report.relative_to(kernel)),
+                "item": num,
+                "title": title.strip(),
+                "landed": bool(
+                    LANDED_MARK.search(item_body)
+                    or SECTION_LANDED.search(text)
+                    or re.search(r"landed", item_body)
+                    or proposed
+                ),
+                "evidence": (re.search(r"\*\*书中依据\*\*[:：]?\s*(.+)", item_body) or [None, ""])[1]
+                if re.search(r"\*\*书中依据\*\*", item_body) else "",
+            })
+    return entries, unparsed
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--kernel", default=str(kernel_root()))
     ap.add_argument("--report", type=Path, help="a notes/*-精读缺口.md to pull numbers from")
     ap.add_argument("--ids", help="comma separated, e.g. C22,P18,T5")
     ap.add_argument("--all-books", action="store_true", help="summarize every notes/*-精读缺口.md")
+    ap.add_argument("--pending-gaps", action="store_true",
+                    help="inventory every report's 真缺口 entries: landed vs still to propose")
     args = ap.parse_args(argv)
     kernel = Path(args.kernel).expanduser().resolve()
+
+    if args.pending_gaps:
+        entries, unparsed = pending_gaps(kernel)
+        landed = [e for e in entries if e["landed"]]
+        pending = [e for e in entries if not e["landed"]]
+        print("# deep-read-audit pending gaps（只清点，不裁定；落地走提案 + 拷问）")
+        print()
+        print("已落地 %d 条；待提案 %d 条；解析失败 %d 份" % (len(landed), len(pending), len(unparsed)))
+        if unparsed:
+            print()
+            print("UNPARSED（真缺口节有内容但解析不出条目，人工看）:")
+            for name in unparsed:
+                print("  %s" % name)
+        if pending:
+            print()
+            print("待提案（有真缺口但报告里没有落地标记）:")
+            for e in pending:
+                print("  %s  %s. %s" % (e["report"], e["item"], e["title"]))
+        print()
+        if pending:
+            print("NEXT 把上面的条目逐条对照真源原文，够格的走 state/proposals/ 提案（硬规则 7）")
+            return 1
+        print("PASS 没有待提案的真缺口")
+        return 0
 
     if args.all_books:
         reports = book_reports(kernel)

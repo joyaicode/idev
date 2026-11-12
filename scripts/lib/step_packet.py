@@ -56,8 +56,26 @@ def includes(ticket: Path) -> list[str]:
     return out
 
 
+def pattern_hints(ticket: Path) -> list[dict]:
+    """arch.yaml's structure forecast, forwarded so the coder can answer FORECAST.
+
+    Optional by design (state/proposals/20261112-arch-structure-hints.md):
+    an empty list means the arch stage chose not to predict, and the coder's
+    FORECAST line is not demanded. Rows keep their yaml shape — the coder
+    reads signal/candidates/note, delegation.check_forecast only needs the
+    list to be non-empty to know a comparison is owed.
+    """
+    arch = ticket / "arch.yaml"
+    data = safeyaml.mapping(arch) if arch.is_file() else {}
+    rows = (data or {}).get("pattern_hints") or []
+    return [row for row in rows if isinstance(row, dict)]
+
+
 def attach(brief: dict, ticket: Path, step_id: str) -> dict:
     brief["packet_includes"] = includes(ticket)
+    hints = pattern_hints(ticket)
+    if hints:
+        brief["pattern_hints"] = hints
     page = Path(str(brief.get("must_read") or ""))
     shown = excerpt(page)
     if not shown:

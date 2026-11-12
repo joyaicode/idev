@@ -362,6 +362,7 @@ report:
     CHANGE_KIND: 追加行为
     CANON_TRIGGER: 无
     TABLE_HIT: 零命中
+    IDEA_HITS: 零命中
     CONCLUSION: 零命中,写了具体类型
 YAML
 expect 0 "a complete §0 declaration passes" -- \
@@ -626,6 +627,7 @@ report:
     CHANGE_KIND: 追加行为
     CANON_TRIGGER: 无
     TABLE_HIT: 零命中
+    IDEA_HITS: 零命中
     SCOPE: scripts/delegation.py:check_accuracy
     READ: scripts/delegation.py:check_accuracy
     CHANGED: scripts/delegation.py:check_accuracy
@@ -2629,6 +2631,7 @@ report:
     CHANGE_KIND: 追加行为
     CANON_TRIGGER: 无
     TABLE_HIT: $1
+    IDEA_HITS: 零命中
     FACTS: 源码 a.py:1
     DOC_DRIFT: 无
     ASSUMED: 无

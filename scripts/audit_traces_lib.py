@@ -57,6 +57,46 @@ def _open_joint_fails(trace_dir: Path) -> int:
     return count
 
 
+def _drive_auto_counts(trace_dir: Path) -> tuple[int, int]:
+    """Count auto decisions and overturns from nearby decisions.yaml files.
+
+    Not a HARD alert. Used to decide whether to tighten drive_mode=auto.
+    """
+    roots: list[Path] = []
+    parent = trace_dir.parent
+    if parent.name == ".idev":
+        roots.append(parent / "task")
+        roots.append(parent.parent / "docs" / "task")
+    else:
+        roots.append(parent)
+    auto = overturned = 0
+    seen: set[Path] = set()
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in root.rglob("decisions.yaml"):
+            try:
+                resolved = path.resolve()
+            except OSError:
+                continue
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            try:
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            # Per-entry: source: auto under a list item; overturned: true on same entry.
+            chunks = re.split(r"(?m)^(?=  - )", text)
+            for chunk in chunks:
+                if re.search(r"(?m)^\s+source:\s*auto\s*$", chunk):
+                    auto += 1
+                    if re.search(r"(?m)^\s+overturned:\s*true\s*$", chunk):
+                        overturned += 1
+    # Also count traces that recorded drive-auto this window (observation only).
+    return auto, overturned
+
+
 def main() -> int:
     if len(sys.argv) < 3:
         print("usage: audit_traces_lib.py <trace_dir> <n>", file=sys.stderr)
@@ -84,6 +124,7 @@ def main() -> int:
         "obs_model": 0,
         "obs_hop": 0,
         "obs_tool_hop": 0,
+        "obs_drive_auto": 0,
     }
     weak_files: list[str] = []
     unbound_files: list[str] = []
@@ -181,6 +222,8 @@ def main() -> int:
             stats["obs_hop"] += 1
         if re.search(r"(?m)^[ \t]+from:\s*react:", text) and re.search(r"(?m)^[ \t]+to:\s*tool:", text):
             stats["obs_tool_hop"] += 1
+        if re.search(r"(?m)drive-auto|DRIVE source=auto|source:\s*auto", text):
+            stats["obs_drive_auto"] += 1
 
         # Soft: S1 must open grilling; missing is MUST_ZERO, not HARD.
         if scenario == "S1" and not re.search(
@@ -287,6 +330,15 @@ def main() -> int:
     print(
         f"| 写了工具跳 | {stats['obs_tool_hop']} | {pct(stats['obs_tool_hop'])}% | "
         "`from: react:` 且 `to: tool:` |"
+    )
+    print(
+        f"| 轨迹含自动代决 | {stats['obs_drive_auto']} | {pct(stats['obs_drive_auto'])}% | "
+        "`drive-auto` / `DRIVE source=auto` / `source: auto` |"
+    )
+    drive_auto, drive_overturn = _drive_auto_counts(trace_dir)
+    print(
+        f"DRIVE_AUTO={drive_auto} DRIVE_AUTO_OVERTURN={drive_overturn}"
+        "（decisions.yaml，不计清零、不进 HARD_COUNT；推翻多了就收紧 auto）"
     )
     print(f"未消费关节失败={_open_joint_fails(trace_dir)}（inbox，不计清零、不进 HARD_COUNT）")
     print()

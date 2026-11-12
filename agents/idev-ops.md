@@ -293,6 +293,8 @@ PY
 preamble 已给好 `IDEV` / `REPO` / `TICKET`(都是 `Path`)并把 idev 的 lib 放进 `sys.path`,
 所以 `safeyaml` / `doc_home` / `workflow_spec` 直接 import,不要自己拼路径。
 
+根因论证里会碰到仓库的探针,`--step` 必须写成 `rootcause`。这一步由 gVisor 的 `runsc` 执行,仓库只读挂进沙箱,不挂家目录,网络关闭。`runsc` 不在 PATH 时该步退出码不等于 0,片段不会在宿主执行。回执写在同名 `.receipt`(`runtime: runsc`)。`hypothesis.py check` 拒绝没有这份回执的 repl transcript。其它 step 仍在宿主执行,那些 transcript 不能当作根因命令证据。
+
 产物:`<票目录>/repl/<step>-<n>.py`(源码原文)+ `.out`(stdout/stderr/退出码),
 后者就是回报里的 `EVIDENCE` 路径 —— **别人能重跑同一份源码得到同一个答案**,
 这才是它算证据的原因。

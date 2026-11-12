@@ -121,7 +121,9 @@ python3 scripts/delegation.py replay --feature <f> --step <step>   # 打印可�
 放行要带理由并进审计(规则在 [workflow-schema.md](workflow-schema.md) 的 `record` 一段)。
 
 **另有一组只对 `idev-coder` 生效的检查** —— `s0-declared` / `canon-walked` /
-`struct-gated` / `hit-applied`,查的是 `coding.md` §0 的三项交代有没有真做。契约在
+`struct-gated` / `hit-applied` / `idea-declared` / `idea-numbered` /
+`forecast-declared` / `forecast-numbered`,查的是 `coding.md`
+§0 的三项交代、写码时的念头命中、arch 预判对照有没有真做。契约在
 [boost.md](boost.md) 第一节。它们由同一个 `delegation.py` 算并写回同一个 `checks` 块,
 但**其它 agent 的留痕里不会出现**:per-agent 的契约跟着那个 agent 走,不摊给所有人。
 
@@ -215,6 +217,7 @@ verify 层已有 8 个 tag(`missed-impact` / `false-green` / … / `ok`),管的�
 
 `status: pending` 直到人写 `tags` 或明确 `none`。Agent 可代写人口述,但 `by` 必须是人。
 试运行期每轮委派结束**停问一次**(整轮一次,不是每步一次 —— 每步都停会违反内核 H5「不为观测另停」)。
+`drive_mode=auto` 时：缺文件或仍 `pending` 且 tags 空，自动写 `status: none` + `note: auto:drive-mode` 并继续；已填 tags 的仍停等人收口。`IDEV_AGENT_FEEDBACK=off` 仍是 golden/selfcheck 豁免。
 
 ## 六、nudge(并入内核现有四条)
 

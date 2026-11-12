@@ -14,13 +14,20 @@
 python3 scripts/process-eval.py stop --stop "<将要问的那句>"
 ```
 
+自动模式（或显式传入）且决策包已有推荐：
+
+```bash
+python3 scripts/process-eval.py stop --stop "<将要问的那句>" \
+  --drive auto --recommend "1" [--signals "SIGNAL …"] [--decision]
+```
+
 人已经回了一句：
 
 ```bash
 python3 scripts/process-eval.py stop --quote "<原话>" --stop "<将要记下的 stop>"
 ```
 
-打开的步骤是决策闸（`with.decision: true`）时加 `--decision`。目前是提交推送和自进化落地。`next` 打出 `DECISION` 就带上，没打出不要带。
+打开的步骤是决策闸（`with.decision: true`）时加 `--decision`。目前是提交推送和自进化落地。`next` 打出 `DECISION` 就带上，没打出不要带。未传 `--drive` 时读会话/产品 `drive_mode`（见 [chat-confirm-signoff.md](chat-confirm-signoff.md)）。
 
 看最近的轨迹，重复出现才起草：
 
@@ -47,9 +54,13 @@ python3 scripts/process-eval.py scan --traces <traces 目录> --except <起草�
 
 `FINDING` 行上的 `now=KEEP` 是另一回事：这个补丁还在挡住失败，不准收窄。
 
-`DO` 那一行是当轮要做的事。`rule=H1` 做还开着的事，不改密封基线的 goal / items / non_goal，不记 stop，不写 next。`rule=chat-confirm` 把这一步做完；检查没过就改到通过。
+`DO` 那一行是当轮要做的事。`rule=H1` 做还开着的事，不改密封基线的 goal / items / non_goal，不记 stop，不写 next。`rule=chat-confirm` 把这一步做完；检查没过就改到通过。`rule=drive-auto` 采纳 `--recommend`，`decide --all-open --source auto`，不停。
 
-矛盾、冲突、不清楚、解封、回退、promote、生产写、`git push`、经验入库，以及 `frontier` / `BLOCKED` / `SIGNAL` / `未决` / `承重`，都是 `ASK`。这些词出现时不做 `CORRECT`。
+硬停（两档都是 `ASK`，不做 `CORRECT`）：解封/启封/开封/unseal、打开基线、回退/回滚/rollback、promote、生产写/上线生产/write-to-production、`git push`、经验入库（繁简混写归一）。否定+短语（不要回退 / 無需生產寫 / 不必 promote / no promote 等）不硬停；`要不要回退` 这类 A不A 仍硬停。NFKC+去零宽；CJK 词内空白等价（生产 写）；ASCII 词边认「准备git push」。`STATUS: ＰＡＳＳ` 可代决；`STATUS：PASS`（全角冒号）仍不认。权威 `scripts/lib/drive_mode.py`。
+
+软停（`frontier` / `BLOCKED` / `ARTIFACT` / `SIGNAL` / `baseline conflict` / `未决` / `承重` / 矛盾 / 冲突 / 不清楚）：`assisted` 为 `ASK`；`auto` 且带了 `--recommend` 为 `CORRECT`（`id=drive-auto`）。否定+短语（不矛盾 / 无需冲突）不软停。`auto` 下其它普通停问（非硬停、非决策闸、无人原话）只要带了 `--recommend` 也是 `CORRECT`。
+
+决策闸（`--decision`，提交推送 / 自进化落地）两档都是 `ASK`（催办式原话仍可 `leave-decision`），不做 `drive-auto`。
 
 ## 三类
 
@@ -71,8 +82,37 @@ python3 scripts/process-eval.py scan --traces <traces 目录> --except <起草�
 - 要不要提测
 - 是否验收
 - 请验收
+- 请确认一下
+- 是否没问题
+- 可以继续吗
+- 要不要推进
+- 是否对齐
+- 确认一下方案
+- 可以吗
+- 没问题吧
+- 继续吗
+- 这样可以吗
+- 先这样吧
+- 请审核一下
+- 麻烦确认
+- 看下可以吗
+- 帮确认一下
+- 是否可行
+- 这样行吗
+- 帮看下
+- 瞅一眼
+- 过一下
+- 走个确认
+- 确认下
+- 再确认
+- 最后确认一下
+- 顺便确认
 
 前四条与 [chat-confirm-signoff.md](chat-confirm-signoff.md) 一致。增减句子时改本页，并改脚本里的 `NON_STOPS`。
+
+`auto` 且未传 `--recommend` 时，若停问 / signals 文里已有 `RECOMMEND:` / `AI建议:` / `建议:`，脚本会推断并打出 `DRIVE_AUTO infer-recommend=`。
+
+`drive=auto` 且命中软停、但没带 `--recommend`：`id=drive-need-recommend`（仍 `ASK`），先补推荐再重跑，不要空手问人。
 
 `stop-on-nudge` 看相邻两条轨迹：上一条停在非决策问题上，下一条原话只是催办。人被多问了一轮，就是代价。催办本身又被写成了 stop，校验仍在挡住失败，这时 `KEEP`，提议去找那个写入点，不删校验。
 

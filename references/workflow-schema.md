@@ -148,7 +148,7 @@ $W record <gate-step> AUTO --feature <f>        # 仅当档位在 with.auto_tier
 $W record <step> PASS --feature <f> --evidence <路径> --verified-by <复核 agent> --verify-evidence <复核报告>
 $W delegate <step> --verify --feature <f>        # 写手回来后给复核者领复核租约（Go 引擎）
 $W record <step> PASS --feature <f> --evidence <路径> --accept-with-findings "<为什么仍然过>"   # 留痕机检有 FAIL 时
-$W decide <step> --feature <f> --signal "<信号原样>" --question <问题> --answer <结论> --quote "<人的原话>" [--options …] [--recommend …]
+$W decide <step> --feature <f> --signal "<信号原样>" --question <问题> --answer <结论> --quote "<人的原话>" [--options …] [--recommend …] [--source auto]
 $W status --feature <f>
 $W abort --note <原因> --feature <f>
 ```

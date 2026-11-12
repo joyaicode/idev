@@ -100,6 +100,17 @@ SIGNOFF_NEG = re.compile(r"(?i)(?:不写|未写|不碰|没有写|不准写|禁�
 S0_CHANGE_KIND = delegation_return.line_field("CHANGE_KIND")
 S0_CANON_TRIGGER = delegation_return.line_field("CANON_TRIGGER")
 S0_TABLE_HIT = delegation_return.line_field("TABLE_HIT")
+# coding.md's 念头表 (the "听到自己在想" table): the in-flight discipline of
+# catching one's own thought mid-write. Declared like the §0 trio so a
+# missing line fails the same way — silence and zero must stay distinct.
+IDEA_HITS = delegation_return.line_field("IDEA_HITS")
+# §3.5's number ranges. The idea table's right column cites 底线/T/A/F/P/C/R
+# numbers; a made-up one (C41) means the agent invented a second numbering —
+# hard rule 9. 底线 N is prose, not a §3.5 number, so it is not checked.
+IDEA_RANGE = {
+    "T": (1, 14), "A": (1, 8), "F": (1, 7),
+    "P": (1, 19), "C": (1, 40), "R": (1, 7),
+}
 T_NUMBER = re.compile(r"\bT\d+\b")
 # Anchored to the start of the value and allowing a parenthesised note, so
 # that a row name containing "none" ("§1 nonexistent-row") is not read as a
@@ -338,7 +349,9 @@ def check_accuracy(record: dict) -> dict[str, str]:
         out["assumption-tagged"] = (
             "PASS" if not untagged
             else "FAIL:ASSUMED 没标 [承重] / [非承重]:" + ";".join(untagged)[:120]
-                 + " —— 一行一条,结论依赖它就标 [承重](会停下请人决定),否则标 [非承重]")
+                 + " —— 一行一条,结论依赖它就标 [承重]"
+                   "(drive=auto 时另盖 RECOMMEND: <档> 代决;否则停下请人决定),"
+                   "否则标 [非承重]")
 
     if agent in kind_agents.FACTS_AGENTS:
         # A FACTS line that names no source kind is indistinguishable from
@@ -631,7 +644,9 @@ def check_boost(record: dict, repo: Path | None) -> dict[str, str]:
     ]
     if missing:
         # Without the declarations the other three have nothing to check.
+        # FORECAST still can: it depends on the brief, not on §0.
         out["s0-declared"] = "FAIL:" + ",".join(missing)
+        out.update(check_forecast(record))
         return out
     out["s0-declared"] = "PASS"
 
@@ -667,6 +682,108 @@ def check_boost(record: dict, repo: Path | None) -> dict[str, str]:
                  "「运用 / 纠正 / 已改 / 当轮改」—— 命中必须当轮改掉,不能只记账。"
                  "若其实是零命中,写「零命中」或「无」")
 
+    out.update(check_idea(record, review))
+    out.update(check_forecast(record))
+    return out
+
+
+def check_idea(record: dict, review: str | None) -> dict[str, str]:
+    """The coding.md 念头表 declaration: heard the thought, named the number.
+
+    Two checks, both about the line's existence and format — never about
+    whether the agent actually had the thought. "Did you hear yourself
+    think 抽个接口" is an internal state no diff can contradict; pretending
+    otherwise would teach agents to fill the field for the checker, not
+    for the code. Missed thoughts are what idev-reviewer's re-sweep and
+    the person/grill catch, same as hit-applied's blind side.
+
+    idea-declared: the line must exist, zero included (硬规则 4 — silence
+    and a declared zero are different facts).
+    idea-numbered: every cited number must exist in the §3.5 source table
+    (硬规则 9 — no second numbering scheme). A declared hit does NOT need
+    to show in review.md the way TABLE_HIT does: the fix for a thought is
+    "don't write it", which leaves no artifact to find.
+    """
+    if str(record.get("agent", "")) != kind_agents.S0_AGENT:
+        return {}
+    raw = str((record.get("report") or {}).get("raw", ""))
+    idea = IDEA_HITS.search(raw)
+    if idea is None:
+        return {"idea-declared": "FAIL:回报缺 IDEA_HITS 行 —— 写码时的念头命中要显式交代,零命中也要写「零命中」(coding.md 念头表)"}
+    out: dict[str, str] = {}
+    out["idea-declared"] = "PASS"
+    value = idea.group(1).strip()
+    if NO_HIT.search(value):
+        return out
+    made_up = []
+    for m in re.finditer(r"\b([TAPCRF])(\d{1,2})\b", value):
+        family, num = m.group(1), int(m.group(2))
+        lo, hi = IDEA_RANGE.get(family, (0, 0))
+        if not lo <= num <= hi:
+            made_up.append(m.group(0))
+    if made_up:
+        out["idea-numbered"] = (
+            "FAIL:IDEA_HITS 里的 " + ",".join(made_up)
+            + " 不在 §3.5 编号范围(硬规则 9:不自造第二套编号);"
+              "念头行的编号认 coding.md 念头表右列"
+        )
+    else:
+        out["idea-numbered"] = "PASS"
+    return out
+
+
+# The arch stage's structure forecast (state/proposals/20261112-arch-structure-hints.md,
+# grilled 2026-11-12): arch.yaml may carry pattern_hints, the delegation brief
+# forwards them, and the coder answers with a FORECAST line — prediction vs
+# what §0 actually hit. Overthrowing a prediction is a normal outcome, so the
+# check only demands the comparison be stated, never that it matched.
+FORECAST_LINE = delegation_return.line_field("FORECAST")
+# §1's P range only: pattern_hints candidates are P numbers or prose concepts
+# (表驱动/值对象/高阶语法), and prose is not checked.
+FORECAST_RANGE = {"P": (1, 19)}
+NO_FORECAST = re.compile(r"(?i)^\s*(?:无预判|无|none|-)\s*(?:[(（].*)?$")
+
+
+def check_forecast(record: dict) -> dict[str, str]:
+    """The arch pattern_hints comparison, on the coder's return.
+
+    forecast-declared: a brief that carried pattern_hints must be answered
+    with a FORECAST line — 无预判 included, so silence and a stated none
+    stay distinct (the s0-declared shape). A brief without pattern_hints
+    demands nothing: the field is optional on arch.yaml precisely so small
+    changes skip the ceremony.
+    forecast-numbered: a cited P# must be inside §1's range (硬规则 9 —
+    no second numbering). Whether the prediction MATCHED reality is a
+    semantic call the machine does not make; an honest 未命中 with a
+    half-sentence reason is exactly what the field exists to collect.
+    """
+    if str(record.get("agent", "")) != kind_agents.S0_AGENT:
+        return {}
+    brief = record.get("brief") or {}
+    if not (brief.get("pattern_hints") or []):
+        return {}
+    raw = str((record.get("report") or {}).get("raw", ""))
+    line = FORECAST_LINE.search(raw)
+    if line is None:
+        return {"forecast-declared": "FAIL:委派包带了 arch 预判(pattern_hints),回报缺 FORECAST 行 —— 预判命中或被推翻都要如实写,没有预判写「无预判」"}
+    out: dict[str, str] = {}
+    out["forecast-declared"] = "PASS"
+    value = line.group(1).strip()
+    if NO_FORECAST.match(value):
+        return out
+    made_up = []
+    for m in re.finditer(r"\b([TAPCRF])(\d{1,2})\b", value):
+        family, num = m.group(1), int(m.group(2))
+        lo, hi = FORECAST_RANGE.get(family, (0, 0))
+        if not lo <= num <= hi:
+            made_up.append(m.group(0))
+    if made_up:
+        out["forecast-numbered"] = (
+            "FAIL:FORECAST 里的 " + ",".join(made_up)
+            + " 超出 §1 P1–P19 范围(硬规则 9);预判候选只认 coding-tables.md §1 既有编号"
+        )
+    else:
+        out["forecast-numbered"] = "PASS"
     return out
 
 
@@ -1274,8 +1391,32 @@ def cmd_write(args: argparse.Namespace) -> int:
         print(f"HINT    set attempt: {attempt + 1} in the record (with brief.prior_failure) to log a retry", file=sys.stderr)
         return 2
     print(f"OK   {path}" + (f"  ({human_secs(seconds)})" if seconds is not None else ""))
+    try:
+        import drive_mode  # noqa: WPS433
+
+        report = record.get("report") or {}
+        raw = str(report.get("raw") or "")
+        stamped = drive_mode.default_signal_recommend(
+            raw,
+            list(record.get("signals") or []),
+            status=str(report.get("status") or ""),
+        )
+        mode, _source = drive_mode.current()
+        if mode == "auto" and stamped:
+            _signal_guide = (
+                "drive=auto: recommend=%s; land/next/record will "
+                "decide --source auto (hard holds still ask)" % stamped
+            )
+            print("DRIVE_AUTO recommend=%s" % stamped)
+        else:
+            _signal_guide = drive_mode.signal_guide(
+                step=str(record.get("step") or ""),
+                feature=str(args.feature or ""),
+            )
+    except Exception:
+        _signal_guide = "ask the person; record the answer with workflow.py decide"
     for signal in record["signals"]:
-        print(f"SIGNAL {signal}  (ask the person; record the answer with workflow.py decide)")
+        print(f"SIGNAL {signal}  ({_signal_guide})")
     for line in domain_directive(record):
         print(line)
     if seconds is None:

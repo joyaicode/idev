@@ -221,7 +221,7 @@ class Drive(unittest.TestCase):
             "DOC_DRIFT: none\nASSUMED: none\n"
             "SCOPE: a/one.go\nREAD: a/one.go\nCHANGED: a/one.go\n"
             "REVERT: git checkout -- a/one.go\n"
-            "CHANGE_KIND: local\nCANON_TRIGGER: none\nTABLE_HIT: none\n"
+            "CHANGE_KIND: local\nCANON_TRIGGER: none\nTABLE_HIT: none\nIDEA_HITS: none\n"
         )
         land = subprocess.run(
             [sys.executable, str(KERNEL / "scripts" / "workflow.py"),

@@ -1,0 +1,33 @@
+schema_version: 2
+feature: rootcause-gvisor
+stage: done
+risk_tier: P1
+aligned: true
+by: wangwei794
+baseline_revision: 1
+req_revision: 1
+arch_revision: 1
+reopen_baseline: false
+semantic_gate:
+  req-review:
+    passed: true
+    by: wangwei794
+  req:
+    passed: true
+    by: wangwei794
+  arch:
+    passed: true
+    by: wangwei794
+  code:
+    passed: true
+    by: wangwei794
+revisions:
+  - at: "2026-11-12T04:30:00Z"
+    by: wangwei794
+    note: "enter req from S1; drive-auto adopted the grill"
+  - at: "2026-11-12T13:40:00+08:00"
+    by: wangwei794
+    note: "code check 0 FAIL; selftest 8 tests OK; semantic_gate.code; stage=test"
+  - at: "2026-11-12T13:45:00+08:00"
+    by: wangwei794
+    note: "test check 0 FAIL; C1-C4 PASS; aligned and done"

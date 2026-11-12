@@ -1,0 +1,36 @@
+schema_version: 2
+feature: rootcause-gvisor
+revision: 1
+baseline_revision: 1
+accepted: true
+by: wangwei794
+slices:
+  - id: sandbox-rootcause-probe
+    baseline_item_id: B1
+    points: 3
+    must: "当 --step 等于 rootcause 时,repl.py 的 cmd_run 经 runsc 执行片段,宿主仓库内该片段新建的文件数等于 0。"
+    must_not: "不得在 --step rootcause 时用宿主 subprocess.run 执行该片段。"
+    accept_hint: "假 runsc 记录 argv;片段尝试新建仓库内文件;断言宿主路径个数等于 0,回执 runtime 等于 runsc。"
+  - id: refuse-without-runsc
+    baseline_item_id: B2
+    points: 2
+    must: "当 --step 等于 rootcause 且 runsc 不在 PATH 时,cmd_run 退出码不等于 0,且该片段要新建的路径在宿主上的个数等于 0。"
+    must_not: "不得在 runsc 缺失时回落宿主执行。"
+    accept_hint: "PATH 不含 runsc;写文件探针退出码不等于 0;目标路径个数等于 0。"
+  - id: reject-unsandboxed-evidence
+    baseline_item_id: B3
+    points: 2
+    must: "当 evidence 指向的 repl transcript 没有 runsc 回执时,hypothesis.py 的 check 退出码不等于 0。"
+    must_not: "不得把无回执的 transcript 标成可接受的命令证据。"
+    accept_hint: "1 条无回执 evidence 使 check 失败次数等于 1;一条 code 证据仍按原规则。"
+  - id: keep-host-repl
+    baseline_item_id: B4
+    points: 2
+    must: "当 --step 不等于 rootcause 时,repl.py 的 cmd_run 仍用宿主 Python 执行片段,并在票目录写下 1 个 transcript 文件。"
+    must_not: "不得对非 rootcause 的 step 强制 runsc。"
+    accept_hint: "1 次 --step arch 后 transcript 文件数等于 1,记录不含 runtime=runsc。"
+open_questions: []
+human_signoff:
+  - id: req
+    status: ACCEPTED
+    by: wangwei794

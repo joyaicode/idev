@@ -32,7 +32,14 @@ import re
 # The C# this file actually executes. Single source of truth: deep-read-audit.py
 # reads it to tell a landed-but-unenforced entry from an enforced one. Adding a
 # detector means adding its number here in the same edit.
-COVERED = ("C7", "C9", "C12", "C22")
+COVERED = ("C1", "C7", "C9", "C12", "C22")
+
+# coding-tables.md §2.4 quantitative thresholds the plugins can carry. The
+# same numbers appear in the table; they live here once so a threshold change
+# is one edit, not five.
+FUNC_LINE_LIMIT = 20
+PARAM_LIMIT = 3
+COMPLEXITY_LIMIT = 10
 
 # Shapes deliberately left to the human sweep, with the reason each one resists
 # a regex. deep-read-audit.py prints these so "not covered" never reads as
@@ -50,6 +57,8 @@ DECLINED = {
     "C38": "要先知道代码在库/模块还是入口（调用层级），正则分不出来",
     "C39": "要先知道类型是否持有资源/身份/锁（值语义 vs 引用语义，语义层面），正则分不出来",
     "C40": "要先知道内层声明是否遮蔽了外层同名变量/字段（作用域与命名层面），正则分不出来",
+    "重复代码": "§2.4 的三次重复要跨文件比对相似度，正则判不了（与 C3 同类），靠 §0 第 5 步扫表",
+    "箭头函数阈值": "跨行箭头函数的边界正则判不稳，JS/TS 只判 function 声明",
 }
 
 # C12: canon.md §2「新增函数名含 util / helper / manager / common / data / tmp」
@@ -202,3 +211,111 @@ def swallow_hits(masked: str, rel: str, python: bool = False) -> list[tuple[str,
         (rel, _line(masked, m.start()), "C7 吞掉失败：该失败就失败，降级要写明条件")
         for m in pattern.finditer(masked)
     ]
+
+
+# --- §2.4 quantitative thresholds -------------------------------------------
+#
+# The four function-level thresholds from coding-tables.md §2.4. They land on
+# C1 (length / params — the table itself says 多为「并且」职责 → C1 拆开) and
+# C1/P5 (complexity — 拆函数 / 提策略). Per §2.4 these lines are "stop and
+# look" signals, not auto-rejections: the plugin output is an advisory warning
+# the coder answers in review.md, either by fixing or by writing the reason.
+#
+# Each language plugin collects its own `funcs` list (name, line, span, params)
+# — Python via AST, the brace languages via their declaration regexes and a
+# brace-matching span — and hands it to these three detectors.
+
+
+def func_length_hits(funcs: list[dict], rel: str, limit: int = FUNC_LINE_LIMIT) -> list[tuple[str, int, str]]:
+    """§2.4 函数长度 — over the line is usually two jobs wearing one name."""
+    return [
+        (rel, f["line"], "C1 函数 %s 长达 %d 行（§2.4 线 %d）：多为「并且」职责，拆开；review.md 说得出理由就记理由" % (f["name"], f["lines"], limit))
+        for f in funcs
+        if f.get("lines", 0) > limit
+    ]
+
+
+def param_count_hits(funcs: list[dict], rel: str, limit: int = PARAM_LIMIT) -> list[tuple[str, int, str]]:
+    """§2.4 参数数量 — over the line is multi-responsibility or a missing value object."""
+    return [
+        (rel, f["line"], "C1 函数 %s 有 %d 个参数（§2.4 线 %d）：多职责或缺值对象；互斥创建看 C8" % (f["name"], f["params"], limit))
+        for f in funcs
+        if f.get("params", 0) > limit
+    ]
+
+
+def complexity_hits(funcs: list[dict], rel: str, limit: int = COMPLEXITY_LIMIT) -> list[tuple[str, int, str]]:
+    """§2.4 圈复杂度 — over the line wants smaller functions or a strategy."""
+    return [
+        (rel, f["line"], "C1 函数 %s 圈复杂度 %d（§2.4 线 %d）：拆函数 / 提策略（P5）；review.md 说得出理由就记理由" % (f["name"], f["complexity"], limit))
+        for f in funcs
+        if f.get("complexity", 0) > limit
+    ]
+
+
+# Branch keywords/ops that add an independent path in the brace languages.
+# The count is + 1 per §2.4's 测量方法 (独立分支路径数 +1), so complexity
+# starts at 1 for the straight-line body.
+_BRANCH_KEYWORD = re.compile(r"\b(?:if|for|while|case|catch)\b")
+_BRANCH_OP = re.compile(r"&&|\|\|")
+
+
+def brace_complexity(body: str) -> int:
+    """Path count of a masked function body: keywords + short-circuit ops + 1.
+
+    `else` is deliberately absent: an else adds no path its `if` did not
+    already count. Ternaries (`? :`) are absent too — a `?` in masked text
+    can also be a wildcard generic, and one miscounted path is not worth
+    the false positives (the DECLINED-table trade, applied inline).
+    """
+    return 1 + len(_BRANCH_KEYWORD.findall(body)) + len(_BRANCH_OP.findall(body))
+
+
+def brace_func_spans(masked: str, decls: list[re.Match]) -> list[dict]:
+    """Function dicts for brace languages: name, line, span, params.
+
+    `decls` are the language plugin's declaration matches; every one must
+    capture group `name`. The body span runs from the declaration's own
+    body brace to its matching `}`. The brace is located by scanning
+    forward for the first `{` that sits before any statement separator
+    (`;` or a non-annotation identifier line) — but the declaration regexes
+    end at or just past the params `)`, so the first `{` after the return
+    type is the body; a declaration without a brace (interface / abstract
+    method / forward decl) is skipped, and so is a `{` that belongs to the
+    enclosing type because `masked.find` from a body-less declaration
+    would fall through to it — the `;` guard below is what catches that.
+    """
+    funcs = []
+    for m in decls:
+        # The declaration regex may already end at the body brace; when it
+        # does, that brace is the match's last character and the search
+        # must start one earlier or it will look past the whole method.
+        brace_at = m.end() - 1 if masked[m.end() - 1:m.end()] == "{" else m.end()
+        open_brace = masked.find("{", brace_at)
+        if open_brace < 0:
+            continue
+        if masked.find(";", m.end(), open_brace) >= 0:
+            continue  # `... someMethod();` — no body to measure
+        depth = 0
+        close = -1
+        for i in range(open_brace, len(masked)):
+            if masked[i] == "{":
+                depth += 1
+            elif masked[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    close = i
+                    break
+        if close < 0:
+            continue
+        params = m.group("params") if "params" in (m.groupdict() or {}) else ""
+        count = len([p for p in params.split(",") if p.strip()]) if params else 0
+        funcs.append({
+            "name": m.group("name"),
+            "line": _line(masked, m.start("name")),
+            "start": open_brace,
+            "end": close,
+            "lines": masked.count("\n", open_brace, close) + 1,
+            "params": count,
+        })
+    return funcs

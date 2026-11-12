@@ -1,0 +1,55 @@
+schema_version: 1
+feature: rootcause-gvisor
+mode: test
+accepted: true
+auto: verify/plan-check.log
+goal: "根因阶段 --step rootcause 的探针经 gVisor 的 runsc 执行,该探针在宿主仓库新建的文件数等于 0。"
+non_goal: "不把 Cursor 模型进程放进 runsc。不把 codegraph 查询、假设台账写入和文件只读放进 runsc。不在本票安装虚拟机,也不把 runsc 二进制提交进仓库。不给编码、提测和巡检包套沙箱。不打开网络,不挂载家目录凭证、docker.sock 和 kubeconfig。不把 guard() 的静态扫描当成隔离。"
+baseline_revision: 1
+entry:
+  kind: diff
+  intent_ref: "HEAD"
+cases:
+  - id: C1
+    slice_id: sandbox-rootcause-probe
+    baseline_item_id: B1
+    dimension: correctness
+    accepted: true
+    runner:
+      kind: shell
+      command: python3 scripts/test_runsc_probe.py
+    status: PASS
+    evidence: verify/evidence/selftest-rerun.log
+  - id: C2
+    slice_id: refuse-without-runsc
+    baseline_item_id: B2
+    dimension: boundary
+    accepted: true
+    runner:
+      kind: shell
+      command: python3 scripts/test_runsc_probe.py
+    status: PASS
+    evidence: verify/evidence/selftest-rerun.log
+  - id: C3
+    slice_id: reject-unsandboxed-evidence
+    baseline_item_id: B3
+    dimension: correctness
+    accepted: true
+    runner:
+      kind: shell
+      command: python3 scripts/test_runsc_probe.py
+    status: PASS
+    evidence: verify/evidence/selftest-rerun.log
+  - id: C4
+    slice_id: keep-host-repl
+    baseline_item_id: B4
+    dimension: compat
+    accepted: true
+    runner:
+      kind: shell
+      command: python3 scripts/test_runsc_probe.py
+    status: PASS
+    evidence: verify/evidence/selftest-rerun.log
+revisions:
+  - at: "2026-11-12T13:40:00+08:00"
+    note: "verify-plan 0 FAIL 且无 SIGNAL，记 auto。review.fix 之后复跑 8 tests OK，四条 case 回写 PASS。"

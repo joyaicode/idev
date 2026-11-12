@@ -1,0 +1,40 @@
+OK  no extensions for verify-plan
+PASS  no stage extensions
+# idev product-checks
+OK  .idev/checks has no scripts
+product-checks PASS
+PASS  product checks
+PASS  baseline sealed
+PASS  baseline sealed row matches YAML projection
+PASS  baseline format-only change (WARN)
+PASS  plan cases match case_intents
+PASS  plan.goal matches baseline.goal
+PASS  every correctness case is runnable
+PASS  every baseline item has a plan case
+PASS  no PASS without run evidence
+PASS  every plan case has slice_id
+PASS  plan slice_id exists in req
+PASS  plan baseline_item_id matches req slice
+PASS  design.md has 目标
+PASS  design.md has 方案
+PASS  design.md has 契约
+PASS  design.md has 影响面
+PASS  design.md has 回退
+PASS  design.md has 用例
+PASS  design.md names C1
+PASS  design.md names C2
+PASS  design.md names C3
+PASS  design.md names C4
+PASS  plan case matches C1
+PASS  plan case matches C2
+PASS  plan case matches C3
+PASS  plan case matches C4
+PASS  no agent-filled signoff by
+PASS  no staged generatedverify
+PASS  no tracked generatedverify
+PASS  grill.md convention grilling
+PASS  grill.md uses grilling question lines
+PASS  grill.md closed with sealed baseline
+PASS  human spec .idev/docs/spec/rootcause-gvisor.md
+---
+0 FAIL

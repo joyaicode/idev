@@ -297,8 +297,9 @@
    它会算五项诚实性检查并写回,`duration_s` 由两个时间戳算出。
    `no-signoff-write` 或 `metrics-shape` 失败 → 退出码 2,**停下来**,不要 record。
    `delegation.py write` 打出的 `HANDOFF` / `CONSULT` / `REBRIEF` 照着做：`HANDOFF` 把 `GUIDE` 原样抄进下一委派包的 `领域约束:`；`CONSULT <agent>` 另派该执行者咨询一次，不问人，不套娃；`REBRIEF` 按 `BLOCKED(brief)` 打回。咨询收回的 `GUIDE` 抄进原角色的重派委派包。
-   打印 `SIGNAL …`(回报是 `BLOCKED(logic)`、有 `[承重]` 假设,或 `ARTIFACT: UNKNOWN`)→ **停下来问人**:
-   一个问题、选项、你的推荐;人答了用 `workflow.py decide <step> --signal "<原样>"
+   打印 `SIGNAL …`(回报是 `BLOCKED(logic)`、有 `[承重]` 假设,或 `ARTIFACT: UNKNOWN`)→
+   写出选项与推荐。`drive_mode=auto` 时在回报盖 `RECOMMEND: <档>`（或 `AI建议:`），`land` 会按建议代决；
+   否则停下来问人，人答了用 `workflow.py decide <step> --signal "<原样>"
    --question … --answer … --quote "<人的原话>"` 记进 `decisions.yaml`。
    `继续` / `验收` / `ok` 不是答案，不记，不再问一次。没有信号就不停
 6. `workflow.py record <step> <STATUS> --evidence <路径>`。`human.gate` 另须

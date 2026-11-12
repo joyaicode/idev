@@ -29,10 +29,11 @@ instead of re-deriving paths.
 
 ## What this deliberately is not
 
-- **Not a sandbox.** The signoff guard below is a static scan — a tripwire
-  in the same spirit as the rest of this layer's honesty checks, not an
-  isolation boundary. Real isolation needs a container, and pretending a
-  regex provides it would be worse than saying so.
+- **Not a sandbox by itself.** The signoff guard below is a static scan —
+  a tripwire, not an isolation boundary. `--step rootcause` is the
+  exception: that one step is executed by `runsc_probe` (gVisor `runsc`).
+  Every other step still runs on the host. Pretending the regex is the
+  isolation boundary would be worse than saying so.
 - **Not a second test framework.** verify owns red/green (its hard rule 10:
   no second assertion engine). A snippet computes facts; whether a case
   passes is still `verify.run`'s answer.
@@ -56,6 +57,7 @@ import kind_agents  # noqa: E402
 sys.path.insert(0, str(kind_agents.kernel_root() / "scripts" / "lib"))
 try:
     import doc_home  # noqa: E402
+    import runsc_probe  # noqa: E402
 except ImportError:
     print(f"BLOCKED cannot import doc_home from {kind_agents.kernel_root()}", file=sys.stderr)
     raise SystemExit(2) from None
@@ -177,26 +179,41 @@ def cmd_run(args: argparse.Namespace) -> int:
     src_path = target / f"{args.step}-{n}.py"
     out_path = target / f"{args.step}-{n}.out"
 
-    full = PREAMBLE.format(
-        idev=str(kind_agents.kernel_root()),
-        repo=str((repo or Path.cwd()).resolve()),
-        ticket=str(home),
-    ) + code
+    repo_root = (repo or Path.cwd()).resolve()
+    kernel = kind_agents.kernel_root()
+    sandboxed = args.step == "rootcause"
+    if sandboxed:
+        idev_p, repo_p, ticket_p = runsc_probe.container_layout(repo_root, home, kernel)
+    else:
+        idev_p, repo_p, ticket_p = str(kernel), str(repo_root), str(home)
+    full = PREAMBLE.format(idev=idev_p, repo=repo_p, ticket=ticket_p) + code
     src_path.write_text(full, encoding="utf-8")
 
     started = dt.datetime.now().astimezone()
-    try:
-        proc = subprocess.run(  # noqa: S603 - running the snippet is the point
-            [sys.executable, str(src_path)],
-            capture_output=True,
-            text=True,
-            timeout=TIMEOUT_S,
-            cwd=str((repo or Path.cwd()).resolve()),
-        )
-        out, err, rc = proc.stdout, proc.stderr, proc.returncode
-    except subprocess.TimeoutExpired:
-        out, err, rc = "", f"timed out after {TIMEOUT_S}s", 124
+    launched = False
+    mounts: tuple[str, ...] = ()
+    if sandboxed:
+        result = runsc_probe.execute(src_path, repo_root, kernel)
+        out, err, rc = result.stdout, result.stderr, result.exit_code
+        launched = result.launched
+        mounts = result.mounts
+    else:
+        try:
+            proc = subprocess.run(  # noqa: S603 - host repl is the non-rootcause path
+                [sys.executable, str(src_path)],
+                capture_output=True,
+                text=True,
+                timeout=TIMEOUT_S,
+                cwd=str(repo_root),
+            )
+            out, err, rc = proc.stdout, proc.stderr, proc.returncode
+        except subprocess.TimeoutExpired:
+            out, err, rc = "", f"timed out after {TIMEOUT_S}s", 124
     elapsed = (dt.datetime.now().astimezone() - started).total_seconds()
+
+    if launched:
+        receipt = target / f"{args.step}-{n}.receipt"
+        receipt.write_text(runsc_probe.receipt_body(rc, mounts), encoding="utf-8")
 
     transcript = [
         f"# repl {args.step}-{n}",
@@ -204,6 +221,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         f"# source: {src_path}",
         f"# exit: {rc}   elapsed: {elapsed:.1f}s",
     ]
+    if launched:
+        transcript.append("# " + runsc_probe.RUNTIME_MARK)
     if args.note:
         transcript.append(f"# note: {args.note}")
     transcript += ["", "## stdout", out.rstrip() or "(empty)"]

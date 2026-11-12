@@ -20,6 +20,17 @@ scope_debt:
   child: ""
   requirement_lines: 28
   debt_lines: 2
+# 可选：结构预判（候选，不是授权——编码期 §0 独立对表，零命中即推翻并在回报里写明）
+pattern_hints:
+  - slice_id: skip-when-disabled
+    signal: "开关分流：disabled 直接放行、enabled 走拦截，同一入口两种行为"
+    candidates: P2
+    note: "互斥创建两条路；编码期若实际是追加行为而非互斥，按零命中推翻"
+# 可选：§2.4 变更级阈值的事前声明；超预算在 review.md 写一句为何超（人审）
+size_budget:
+  net_lines: 40
+  new_files: 0
+  touched_files: 2
 case_intents:
   - id: disabled-executes
     slice_id: skip-when-disabled

@@ -180,9 +180,26 @@ def format_line(staff: Staffing) -> str:
     )
 
 
-def note_line(staff: Staffing) -> str:
+def note_line(staff: Staffing, drive: str = "") -> str:
     if staff.ask == "none":
         return ""
+    mode = str(drive or "").strip().lower()
+    if mode == "auto":
+        if staff.ask == "name":
+            return (
+                "NOTE drive=auto: 名单空；用对话人名 "
+                "`staffing.py write --solo <名>` 或 `drive-mode.py settle`，不停问确认。"
+            )
+        if staff.ask == "chat":
+            people = " / ".join(staff.people)
+            return (
+                f"NOTE drive=auto: 把对话人对上名单（{people}）或写 solo，"
+                "不停问确认。"
+            )
+        return (
+            "NOTE drive=auto: 跑 `drive-mode.py settle` / `staffing.auto_solo` 写 solo，"
+            "不问岗位表。"
+        )
     if staff.ask == "name":
         return "NOTE 名单是空的。只问一次名字，并进当前消息。不问岗位。"
     if staff.ask == "chat":
@@ -198,6 +215,53 @@ def note_line(staff: Staffing) -> str:
         f"{who}同一人兼任就各岗填同一人，并 staffing.py write --solo <名字>。"
         "写完之前不签字、不再拆开问。"
     )
+
+
+def auto_solo_under_drive(
+    repo: Path | None,
+    git_name: str = "",
+    chat: str = "",
+    kernel: Path | None = None,
+) -> tuple[Staffing, Path | None]:
+    """When drive=auto and staffing is unassigned, write a solo map for the chat person.
+
+    Picks chat, then git_user, then refuses if neither is on the people list.
+    Returns (staffing, written_path_or_None). Does nothing when not auto or
+    already assigned.
+    """
+    staff = resolve(repo, kernel=kernel, chat=chat, git_name=git_name)
+    if staff.mode != "unassigned" or repo is None:
+        return staff, None
+    try:
+        import drive_mode  # noqa: WPS433
+
+        mode, _source = drive_mode.current(repo)
+    except Exception:
+        mode = "assisted"
+    if mode != "auto":
+        return staff, None
+    who = staff.chat.strip()
+    if not who:
+        for candidate in (chat, git_name or git_user()):
+            found = _match(candidate, staff.people)
+            if found:
+                who = found
+                break
+    if not who:
+        # Empty people list + human git name: treat as solo writer.
+        candidate = (chat or git_name or git_user()).strip()
+        if candidate and not _by_blacklisted(candidate.casefold()):
+            who = candidate
+        else:
+            return staff, None
+    roles = {role: [who] for role in ROLES}
+    path = write_map(repo, roles)
+    # Annotate so audits know this was drive-auto, not a person typing.
+    text = path.read_text(encoding="utf-8")
+    if "note:" not in text:
+        path.write_text(text.rstrip() + "\nnote: auto:drive-mode solo\n", encoding="utf-8")
+    refreshed = resolve(repo, kernel=kernel, chat=who, git_name=git_name)
+    return refreshed, path
 
 
 def write_map(repo: Path, roles: dict[str, list[str]]) -> Path:

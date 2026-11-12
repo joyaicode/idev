@@ -27,6 +27,8 @@
 
 **流程机制：** 停下来问人之前跑 `python3 scripts/process-eval.py stop`。`now=CORRECT` 当轮按既有规则做。要改规则才起草。详见 [process-eval.md](process-eval.md)。
 
+**驱动模式：** 原话含「自动模式 / 开启自动 / drive auto / 关闭自动」→ `scripts/drive-mode.py set auto|assisted`。`DRIVE mode=auto` 时有推荐的 B 类/认知分叉按建议代决；硬停点仍问人。权威 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
+
 **小改捷径：** 原话含「轻量改动 / 小改 / 小修 / lite change」→ 优先 S8 `workflows/lite-change.yaml`（见 [operator-cheatsheet.md](operator-cheatsheet.md) §3、[lite-change-pitfalls.md](lite-change-pitfalls.md)）。不改 goal/baseline；禁止跳签与自动 promote。
 
 

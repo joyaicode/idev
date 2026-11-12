@@ -54,6 +54,7 @@ import safeyaml  # noqa: E402
 sys.path.insert(0, str(kind_agents.kernel_root() / "scripts" / "lib"))
 try:
     import doc_home  # noqa: E402
+    import runsc_probe  # noqa: E402
 except ImportError:
     print(f"BLOCKED cannot import doc_home from {kind_agents.kernel_root()}; set IDEV_ROOT", file=sys.stderr)
     raise SystemExit(2) from None
@@ -310,6 +311,18 @@ def tier_of(evidence: list) -> str:
     return best
 
 
+def repl_transcript_missing_receipt(path: str) -> bool:
+    """A repl transcript is command evidence only with a runsc receipt beside it."""
+    transcript = Path(path)
+    if transcript.suffix != ".out" or transcript.parent.name != "repl":
+        return False
+    receipt = transcript.with_suffix(".receipt")
+    if not receipt.is_file():
+        return True
+    text = receipt.read_text(encoding="utf-8", errors="replace")
+    return runsc_probe.RUNTIME_MARK not in text
+
+
 def check(data: dict, verbose: bool = True) -> int:
     items = safeyaml.as_list(data.get("items"))
     errors: list[str] = []
@@ -389,6 +402,12 @@ def check(data: dict, verbose: bool = True) -> int:
         for path in evidence:
             if not Path(str(path)).exists():
                 warns.append(f"{hid}: evidence path not found: {path}")
+            if repl_transcript_missing_receipt(str(path)):
+                errors.append(
+                    f"{hid}: repl-transcript-without-runsc-receipt — "
+                    f"{path} 是 repl transcript,旁边没有 {runsc_probe.RUNTIME_MARK} 的回执。"
+                    "根因命令证据必须来自 runsc;没有回执就不能把这段输出当成证据"
+                )
 
     # 排除也要举证. A ruled-out candidate with no reason sends the next
     # round down the same path — the record exists to stop exactly that.

@@ -34,7 +34,7 @@ COMPLETE = (
     "STATUS: PASS\nEVIDENCE: r.md\nFACTS: codegraph src/app.py:main and git diff\n"
     "DOC_DRIFT: none\nASSUMED: none\nSCOPE: src/app.py:main\nREAD: src/app.py:main\n"
     "CHANGED: src/app.py\nREVERT: git checkout -- src/app.py\n"
-    "CHANGE_KIND: local\nCANON_TRIGGER: none\nTABLE_HIT: none\n"
+    "CHANGE_KIND: local\nCANON_TRIGGER: none\nTABLE_HIT: none\nIDEA_HITS: none\n"
 )
 NO_EVIDENCE = COMPLETE.replace("EVIDENCE: r.md\n", "")
 REVIEW = "STATUS: PASS\nEVIDENCE: review.md\nFACTS: read src/app.py:main and git diff\nDOC_DRIFT: none\nASSUMED: none\n"

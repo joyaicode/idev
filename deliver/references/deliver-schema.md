@@ -118,6 +118,8 @@ semantic_gate:
 | `scope_debt.recommend` | 建议：`mark` 或 `fix-first`。人还没选时也要写。判据只在架构阶段 |
 | `scope_debt.child` | `fix-first` 时写子需求的 feature；其它情况空 |
 | `scope_debt.requirement_lines` / `debt_lines` | 与 `design.md` 前置节同一对行数 |
+| `pattern_hints[]` | 可选。`{slice_id, signal, candidates, note}`：场景信号的候选预判（非授权，编码期 §0 独立对表，零命中即推翻）。`candidates` 里的编号只认 §1 既有 P 编号；「表驱动/值对象/高阶语法」这类非编号概念不校验。空合法 |
+| `size_budget` | 可选。`{net_lines, new_files, touched_files}`：§2.4 变更级阈值的事前声明。编码超预算在 `review.md` 写一句为何超（人审，不 FAIL） |
 | `accepted` | 检查通过且没有未决分叉就写 true |
 
 每个 include 的影响面、每条基线 item 至少一条 `case_intents`。`approach` 与 `non_approach` 都要有正文。行数怎么比、什么时候不另开子需求，只在 [deliver/SKILL.md](../SKILL.md) 的架构阶段。`pending` 时不准 `accepted`。`fix-first` 在子需求 `done` 之前不准进入本需求编码。

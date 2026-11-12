@@ -1370,6 +1370,8 @@ for f in \
   "${KERNEL}/references/process-eval.md" \
   "${KERNEL}/references/scaffolds.yaml" \
   "${KERNEL}/scripts/process-eval.py" \
+  "${KERNEL}/scripts/drive-mode.py" \
+  "${KERNEL}/scripts/lib/drive_mode.py" \
   "${KERNEL}/scripts/evolve-review.sh" \
   "${KERNEL}/scripts/evolve-curator.sh" \
   "${KERNEL}/scripts/install-weekly-evolve.sh" \
@@ -1380,6 +1382,7 @@ done
 [ -x "${KERNEL}/scripts/evolve-review.sh" ] || fail "evolve-review.sh not executable"
 [ -x "${KERNEL}/scripts/evolve-curator.sh" ] || fail "evolve-curator.sh not executable"
 [ -x "${KERNEL}/scripts/process-eval.py" ] || fail "process-eval.py not executable"
+[ -x "${KERNEL}/scripts/drive-mode.py" ] || fail "drive-mode.py not executable"
 # dry-run must not fail
 bash "${KERNEL}/scripts/evolve-review.sh" --dry-run >"${SCRATCH}"/idev-evolve-dry.out 2>&1 \
   || fail "evolve-review --dry-run failed"
@@ -1882,7 +1885,7 @@ gate_out="$(python3 "${KERNEL}/scripts/workflow-check.py" "$WFT/nogate.yaml" 2>&
   DEL="$(python3 "${KERNEL}/scripts/delegation.py" dir --feature demo)" || exit 140
   mkdir -p "$DEL"
   printf '%s\n' 'step: a' 'attempt: 1' 'kind: deliver.code_pass' 'agent: idev-coder' 'report:' \
-    '  raw: "STATUS: PASS\nEVIDENCE: r.md\nFACTS: codegraph src/app.py:main and git diff\nDOC_DRIFT: none\nASSUMED: none\nSCOPE: src/app.py:main\nCHANGE_KIND: local\nCANON_TRIGGER: none\nTABLE_HIT: none\n"' \
+    '  raw: "STATUS: PASS\nEVIDENCE: r.md\nFACTS: codegraph src/app.py:main and git diff\nDOC_DRIFT: none\nASSUMED: none\nSCOPE: src/app.py:main\nCHANGE_KIND: local\nCANON_TRIGGER: none\nTABLE_HIT: none\nIDEA_HITS: none\n"' \
     > "$DEL/a-1.yaml"
   "$W" record a PASS --feature demo --evidence r.md --verified-by idev-reviewer --verify-evidence r.md >/dev/null 2>&1 && exit 143
   printf '%s\n' 'step: review' 'attempt: 1' 'kind: review.report' 'agent: idev-reviewer' 'report:' \
@@ -1988,6 +1991,8 @@ python3 "${KERNEL}/scripts/test_nudge.py" >/dev/null 2>&1 \
   || fail "a nudge recorded a stop or asked again (python3 scripts/test_nudge.py)"
 run_test test_process_eval.py \
   || fail "process-eval corrected a real hold or edited the skill (python3 scripts/test_process_eval.py)"
+run_test test_drive_mode.py \
+  || fail "drive_mode resolve/auto-decide broke (python3 scripts/test_drive_mode.py)"
 python3 "${KERNEL}/scripts/test_staffing.py" >/dev/null 2>&1 \
   || fail "staffing mode or the role check on a gate broke (python3 scripts/test_staffing.py)"
 python3 "${KERNEL}/scripts/test_concurrency.py" >/dev/null 2>&1 \

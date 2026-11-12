@@ -315,6 +315,26 @@ def _filter_coverage(rows: list, conn: sqlite3.Connection, repo: str,
     return out
 
 
+def _prefer_named_source(rows: list, query: str) -> list:
+    """deliver 标题命中且 bm25 更强时排到 conventions 前；精读缺口不抬。"""
+    conv = sorted((r for r in rows if r[0].startswith("conventions/")), key=lambda r: r[5])
+    rest = sorted((r for r in rows if not r[0].startswith("conventions/")), key=lambda r: r[5])
+    if not conv:
+        return rest
+    best = conv[0][5]
+    lifted, stayed = [], []
+    for row in rest:
+        blob = f"{row[1]} {Path(row[0]).stem}".lower()
+        named = row[0].startswith("deliver/") and any(
+            word and word.lower() in blob for word in query.split()
+        )
+        if named and row[5] < best:
+            lifted.append(row)
+        else:
+            stayed.append(row)
+    return lifted + conv + stayed
+
+
 def _run_search(repo: Path, name: str, query: str, top: int) -> list:
     """search 与 questions 共用的检索体：宽召回 -> 覆盖数门 -> 真源优先 -> 裁 top。
 
@@ -341,13 +361,7 @@ def _run_search(repo: Path, name: str, query: str, top: int) -> list:
             (fts_q, name, max(top * 4, 40)),
         ).fetchall()
         rows = _filter_coverage(rows, conn, name, query, min_hits)
-        # 排序：真源目录优先（稳定排序，bm25 分相同层内定序）。书的缺口
-        # 报告短而词密，bm25 会把它排在执法真源之前——但报告本来就是对
-        # 真源的溯源（「对照结论」节引用的就是真源编号），要执行指导的
-        # 调用方先要真源原文，再要出处。conventions/ 前缀只影响 idev 仓，
-        # 产品仓无此目录、排序不生效。
-        rows.sort(key=lambda r: (0 if r[0].startswith("conventions/") else 1, r[5]))
-        return rows[:top]
+        return _prefer_named_source(rows, query)[:top]
     finally:
         conn.close()
 

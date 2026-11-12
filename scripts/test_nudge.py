@@ -108,6 +108,22 @@ class Nudge(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertIn("NUDGE proceed\nBASELINE_ITEMS no\nSTOP no\n", done.stdout)
 
+    def test_cli_prints_adopt_recommend(self):
+        done = subprocess.run(
+            [sys.executable, str(NUDGE), "--quote", "按建议"],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("NUDGE adopt-recommend", done.stdout)
+        self.assertIn("STOP no", done.stdout)
+        self.assertIn("DRIVE_HINT", done.stdout)
+        trad = subprocess.run(
+            [sys.executable, str(NUDGE), "--quote", "按建議"],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(trad.returncode, 0, trad.stderr)
+        self.assertIn("NUDGE adopt-recommend", trad.stdout)
+
     def test_append_rejects_a_nudge_stop_and_keeps_a_clean_one(self):
         bad = BODY.format(trigger="验收", stop="验收没有写入。关卡没有变化", nxt="")
         errors = TRACE_MOD.validate(bad, for_append=True)

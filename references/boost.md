@@ -162,7 +162,19 @@ TABLE_HIT: §1 <行号/名称> | 零命中
 | `canon-walked` | `CANON_TRIGGER` 非 `无`,但 `review.md` 里没有对应 `T#` | 机检 |
 | `struct-gated` | `CHANGE_KIND` 含「结构」,但回报与 `review.md` 都没回答 §3「满足条件」 | 机检 |
 | `hit-applied` | `TABLE_HIT` 非零命中,但 `review.md` 没写该行的「运用 / 纠正 / 已改」 | 机检 |
+| `idea-declared` | `IDEA_HITS` 行没写(写码时的念头命中,零命中也要显式写;念头表在 `coding.md`) | 机检 |
+| `idea-numbered` | `IDEA_HITS` 里出现了 §3.5 范围外的编号(如 `C41`) | 机检 |
+| `forecast-declared` | 委派包带了 arch 预判(`pattern_hints`),回报缺 `FORECAST` 行 —— 预判命中或被推翻都要如实写,没有预判写「无预判」;brief 没带预判时不查 | 机检 |
+| `forecast-numbered` | `FORECAST` 里出现了 §1 P1–P19 范围外的编号(如 `P20`) | 机检 |
 | 零命中却新增抽象 | `TABLE_HIT` 零命中却新增了接口 / 抽象层(§0 第 4 步:零命中写具体类型) | **人工** |
+| 念头漏报 | 写码时起了念头但没自察(diff 里有形状、回报却写零命中) | **人工** |
+
+**`IDEA_HITS` 为什么只验存在与编号、不验诚实:** 「写的时候有没有听到那个念头」
+是内部状态,diff 对照不出来;机检假装能判,只会教 agent 为检查器填表。漏报由
+`idev-reviewer`(Review 第 2–4 步再扫一遍 §1/§2/念头表)和 grill 把关——与
+`hit-applied` 不验漏报是同一条哲学。念头命中**不需要**像 `TABLE_HIT` 那样在
+`review.md` 留「已改」:念头被当场改掉的正确形态是「那段代码没写出来」,
+没有工件可对。
 
 **最后一项为什么不机检:** 判断一个新接口是否「过早」要读 diff 并理解设计意图,
 机器判不了。写成机检只会得到一个假的绿灯 —— 所以它明确交给 `idev-reviewer`

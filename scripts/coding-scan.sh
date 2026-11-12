@@ -140,6 +140,29 @@ if git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "  diff:"
   git -C "$REPO" diff --stat HEAD -- . \
     ':(exclude)node_modules' ':(exclude)target' ':(exclude)dist' || true
+  echo "  changed files over the 400-line hard line:"
+  # A repo with no commits yet has no HEAD to diff against (git exits 128);
+  # that is a state, not a scan failure — `|| true` keeps pipefail quiet.
+  { git -C "$REPO" diff --name-only HEAD -- '*.java' '*.go' '*.vue' '*.ts' '*.tsx' '*.py' '*.js' 2>/dev/null || true; } \
+    | REPO="$REPO" python3 -c '
+import os, sys
+repo = os.environ["REPO"]
+flagged = 0
+for rel in sys.stdin.read().splitlines():
+    if not rel:
+        continue
+    path = os.path.join(repo, rel)
+    try:
+        with open(path, "rb") as fh:
+            n = sum(1 for _ in fh)
+    except OSError:
+        continue
+    if n > 400:
+        flagged += 1
+        print("  %6d %s  (C12/C1: 一文件一理由，超线要 review.md 写清)" % (n, rel))
+if not flagged:
+    print("  (none)")
+'
   echo "  longest tracked source files:"
   REPO="$REPO" git -C "$REPO" ls-files -z -- '*.java' '*.go' '*.vue' '*.ts' '*.tsx' '*.py' '*.js' \
     | REPO="$REPO" python3 -c '

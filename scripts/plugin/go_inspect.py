@@ -100,7 +100,40 @@ def inspect_text(text: str, rel: str) -> list[tuple[str, int, str]]:
     hits.extend(canon_smells.chain_hits(masked, rel))
     hits.extend(canon_smells.naming_hits(masked, rel, _DECL))
     hits.extend(canon_smells.nesting_hits(masked, rel))
+    hits.extend(_threshold_hits(masked, rel))
     return hits
+
+
+_FUNC_PARAMS = re.compile(r"\((?P<params>[^(){}]*)\)\s*[\w\.\[\]\* ]*\{")
+
+
+def _threshold_hits(masked: str, rel: str) -> list[tuple[str, int, str]]:
+    """§2.4 function-level thresholds over `func` declarations.
+
+    The declaration regex captures the receiver but not the parameter list,
+    so params are re-read from the parenthesised group right before the
+    body brace. The receiver is §2.4's documented exclusion ("不含
+    this/receiver"), which falls out naturally: `_FUNC_PARAMS` matches the
+    parameter parens, not the receiver parens, because the receiver parens
+    are followed by a name, not a brace.
+    """
+    funcs = []
+    for m in canon_smells.brace_func_spans(masked, list(_DECL.finditer(masked))):
+        params = ""
+        look = _FUNC_PARAMS.search(masked, max(0, m["start"] - 400), m["start"] + 1)
+        if look:
+            params = look.group("params")
+        count = len([p for p in params.split(",") if p.strip()])
+        funcs.append({**m, "params": count})
+    with_cx = [
+        {**f, "complexity": canon_smells.brace_complexity(masked[f["start"]:f["end"]])}
+        for f in funcs
+    ]
+    return (
+        canon_smells.func_length_hits(funcs, rel)
+        + canon_smells.param_count_hits(funcs, rel)
+        + canon_smells.complexity_hits(with_cx, rel)
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

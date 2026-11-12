@@ -56,7 +56,8 @@ S8：`self-evolve-review`（别名：自进化 / 进化复盘）。
 | `ok` | 这次没有导体问题 |
 
 `status: pending` 直到人写 `tags` 或明确 `none`。Agent 可代写人口述，但 `by` 必须是人。  
-试运行每次 run 后 **停问**：哪些 tag、一句话证据。收到后复制一份到当前会话的 inbox（产品工程 `.idev/inbox/<feature>-<n>.yaml`；没有当前产品才是内核 `verify/state/inbox/`）。
+试运行每次 run 后 **停问**：哪些 tag、一句话证据。收到后复制一份到当前会话的 inbox（产品工程 `.idev/inbox/<feature>-<n>.yaml`；没有当前产品才是内核 `verify/state/inbox/`）。  
+`drive_mode=auto`：缺档或 pending 且 tags 空时自动写 `status: none`（`note: auto:drive-mode`），不停问；已填 tags 的仍停。
 
 ## 提案 → 拷问 → 落地
 

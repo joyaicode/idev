@@ -32,16 +32,26 @@ VIOLATES_ALL = """public class Svc {
         if (a) { if (b) { if (c) { g(); } } }
         try { f(); } catch (Exception e) { return false; }
     }
+
+    public int buildDataHelperToo(Order o, Cfg c, Audit a, Plan p, Sort s) {
+        return 1;
+    }
 }
 """
 
 
 class CoveredIsHonest(unittest.TestCase):
     def test_covered_matches_detectors(self):
-        """Every number in COVERED fires, and nothing fires that is not in it."""
+        """Every number in COVERED fires, and nothing fires that is not in it.
+
+        canon_hits carries the C# smell detectors; the §2.4 threshold
+        detectors (also C1) live in threshold_hits and have their own
+        positives in test_canon_smells.py, so both surfaces fire here.
+        """
         sys.path.insert(0, str(ROOT / "scripts" / "plugin"))
         import java_inspect as ji
         titles = [t for _r, _l, t in ji.canon_hits(VIOLATES_ALL, "Svc.java")]
+        titles += [t for _r, _l, t in ji.threshold_hits(VIOLATES_ALL, "Svc.java")]
         fired = {re.match(r"(C\d+)", t).group(1) for t in titles if re.match(r"C\d+", t)}
         self.assertEqual(fired, set(cs.COVERED))
 

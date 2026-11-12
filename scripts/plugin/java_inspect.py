@@ -307,8 +307,50 @@ def canon_hits(text: str, rel: str) -> list[tuple[str, int, str]]:
     )
 
 
+_SIG_PARAMS = re.compile(
+    rf"(?m)^(?P<indent>[ \t]*)"
+    rf"(?:(?:{_MOD})[ \t]+)*"
+    rf"[\w.<>\[\],?]+[ \t]+(?P<name>[A-Za-z_]\w*)[ \t]*"
+    rf"\((?P<params>[^()]*)\)[ \t]*(?:throws[ \t]+[\w., \t]+)?[ \t]*\{{"
+)
+
+
+def threshold_hits(text: str, rel: str) -> list[tuple[str, int, str]]:
+    """§2.4 function-level thresholds, over masked method bodies.
+
+    `_SIG` (used by canon_hits) demands at least one modifier, which skips
+    package-private methods; `_SIG_PARAMS` is the same shape with a params
+    group and no modifier floor. Methods under a test/entry annotation are
+    excluded by `_methods()`'s rule; here the same annotations gate the
+    whole check, because generated tests and container callbacks are long
+    by design, not by negligence.
+    """
+    comments, _strings = _spans(text)
+    masked = canon_smells.mask(text, comments, _strings)
+    funcs = []
+    for m in _SIG_PARAMS.finditer(masked):
+        if _inside(comments, m.start("name")):
+            continue
+        ann = _annotations(text, m.start())
+        if any(tag in ann for tag in _ENTRY):
+            continue
+        spans = canon_smells.brace_func_spans(masked, [m])
+        if not spans:
+            continue
+        f = spans[0]
+        params = len([p for p in m.group("params").split(",") if p.strip()])
+        f["params"] = params
+        f["complexity"] = canon_smells.brace_complexity(masked[f["start"]:f["end"]])
+        funcs.append(f)
+    return (
+        canon_smells.func_length_hits(funcs, rel)
+        + canon_smells.param_count_hits(funcs, rel)
+        + canon_smells.complexity_hits(funcs, rel)
+    )
+
+
 def inspect_text(text: str, rel: str) -> list[tuple[str, int, str]]:
-    return arm_hits(text, rel) + method_hits(text, rel) + canon_hits(text, rel)
+    return arm_hits(text, rel) + method_hits(text, rel) + canon_hits(text, rel) + threshold_hits(text, rel)
 
 
 def inspect_repo(repo: Path, module: str = "") -> tuple[list[tuple[str, int, str]], str]:

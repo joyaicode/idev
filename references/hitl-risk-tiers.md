@@ -9,8 +9,8 @@
 2. 闸门放在**副作用前**：先让 Agent 起草 plan / 跑自测 / 写报告。检查通过就写 `sealed` / `accepted` / `aligned`。`promote.sh` 仍等人点名。
 2a. **不清楚处先 grilling：** 边界、异议或分叉没订死，先自动唤起 grilling。没有分叉不要送人盖章。
 3. 真要问的那一次必须带**证明上下文**（见 [chat-confirm-signoff.md](chat-confirm-signoff.md) §证明上下文），避免只批摘要。
-4. 进度信任：周审计里「`AUTO` / `[非承重]` 后被推翻」的次数，才是再加停点的依据。交付主路径不为确认停。promote 仍等人点名。
-5. 停问看信号，不看位置：AI 拿不准（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）或卡住时才问；机检能判的点不让人盖章。当前工程的人岗关系先认出来，交互按这个编制收束。做法只在 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
+4. 进度信任：周审计里「`AUTO` / `[非承重]` / `drive_mode=auto` 代决后被推翻」的次数，才是再加停点或收紧 `auto` 的依据。交付主路径不为确认停。promote 仍等人点名。
+5. 停问看信号，不看位置：AI 拿不准（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）或卡住时才问；机检能判的点不让人盖章。`drive_mode=auto` 且决策包已有推荐时，这些 B 类（含 P0 需求/架构认知分叉）按建议代决，不停。当前工程的人岗关系先认出来，交互按这个编制收束。做法只在 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
 
 档位的典型：P0 鉴权 / 数据面 / 跨仓契约；P1 默认功能票；P2 文档 / 小修 / 低爆破。
 

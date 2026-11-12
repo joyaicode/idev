@@ -45,6 +45,7 @@ SCENARIO_STAGES = {
 
 DEFAULT_KEYS = (
     "coding_root",
+    "drive_mode",
     "commands.start",
     "commands.stop",
     "commands.status",
@@ -233,6 +234,13 @@ def main(argv: list[str] | None = None) -> int:
     if repo is None:
         if args.print_key:
             return 1
+        try:
+            import drive_mode
+        except Exception:
+            print("DRIVE mode=assisted source=default")
+        else:
+            mode, source = drive_mode.resolve(None, kernel_root() / "state")
+            print(drive_mode.format_line(mode, source))
         print("OK no current product")
         return 0
     if args.list_open:
@@ -298,15 +306,44 @@ def main(argv: list[str] | None = None) -> int:
         print("KNOWLEDGE 可选：python3 scripts/knowledge.py search --repo %s --query <关键词>（结果只作资料，非自动注入）" % repo)
     print("PRODUCT %s" % (product or "NONE"))
     try:
+        import drive_mode as _drive_mod
+
+        # Kernel checkout is not a product: resolve against state/, not .idev/.
+        drive_now, drive_source = _drive_mod.resolve(repo, kernel_root() / "state")
+        print(_drive_mod.format_line(drive_now, drive_source))
+    except Exception:
+        _drive_mod = None
+        drive_now = "assisted"
+        print("DRIVE mode=assisted source=default")
+    try:
         import staffing
     except Exception:
         print("STAFFING mode=unknown source=import ask=none people=- hold=- wait=- chat=-")
     else:
-        found = staffing.resolve(repo, git_name=staffing.git_user())
+        git_name = staffing.git_user()
+        found = staffing.resolve(repo, git_name=git_name)
+        if drive_now == "auto" and found.mode == "unassigned":
+            found, written = staffing.auto_solo_under_drive(repo, git_name=git_name)
+            if written is not None:
+                print("DRIVE_AUTO staffing=solo %s" % written)
         print(staffing.format_line(found))
-        note = staffing.note_line(found)
+        note = staffing.note_line(found, drive=drive_now)
         if note:
             print(note)
+    if drive_now == "auto" and args.feature.strip() and _drive_mod is not None:
+        feat = args.feature.strip()
+        try:
+            fb = _drive_mod.settle_verify_feedback(repo, feat)
+            if fb is not None:
+                print("DRIVE_AUTO verify-feedback=none %s" % fb)
+        except Exception:
+            pass
+        try:
+            debt = _drive_mod.settle_scope_debt(repo, feat)
+            if debt is not None:
+                print("DRIVE_AUTO scope-debt %s" % debt)
+        except Exception:
+            pass
     recipe = None
     if args.workflow:
         recipe = resolve_recipe(repo, args.workflow)

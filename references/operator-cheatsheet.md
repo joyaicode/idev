@@ -76,7 +76,11 @@ bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> <workflow_id> [--pr
 | 动作 | 怎么走 |
 |------|--------|
 | 复盘挖信号 | S8 `self-evolve-review` 或 `bash ~/.cursor/skills/idev/scripts/evolve-review.sh` |
-| 停问前看这一步 | `python3 ~/.cursor/skills/idev/scripts/process-eval.py stop --stop "<将问的话>"` |
+| 开/关自动模式 | `drive-mode.py set auto\|assisted`；或整句「开启自动模式 / 关闭自动模式」经 `nudge.py`；产品默认写 `workflow-defaults.yaml` 的 `drive_mode` |
+| 结算自动代办 | `drive-mode.py settle [--feature <票>]`：编制 solo、verify feedback none、`scope_debt.pending`→recommend |
+| 看当前驱动模式 | `drive-mode.py show`；`session-context` / `workflow next` 的 `DRIVE` 行 |
+| 批量代决信号 | `workflow.py decide <step> --all-open --source auto --recommend <档>`；回报盖 `RECOMMEND:`/`AI 建议:`（裸「建议:」不算）；或仅 `[承重]`+PASS 默认档 `1`；混合批次跳过硬停；原话「按建议」经 `nudge` |
+| 停问前看这一步 | `process-eval.py stop --stop "<将问的话>"`（`auto` 时加 `--recommend "<档>"`；缺推荐会打 `drive-need-recommend`） |
 | 归档超龄提案 | `bash ~/.cursor/skills/idev/scripts/evolve-curator.sh`（落地归档加 `--apply`） |
 | 清理执行残留 | `bash ~/.cursor/skills/idev/scripts/execution-clean.sh`（删除加 `--apply`）。`--compact` 在引用满 2 次或满 3 代时先写入 `.idev/memory.md` 再删热集合以外的文件。不碰 `docs/task`、打开的提案和 `memory.md` |
 | nudge | 修缺口 / inbox 同类 tag≥2 / HARD>0 / 人要沉淀 → **一句话**问要不要写提案 |

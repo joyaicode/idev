@@ -36,10 +36,10 @@ class Enhance(unittest.TestCase):
     def test_a_missing_slot_asks_before_any_delegate(self):
         step = {"id": "look", "kind": "route.s4", "slots": ["scope"]}
         lines = workflow._step_lines({"params": {"feature": "demo"}}, step)
-        self.assertEqual(lines[-1], "ASK slot scope")
+        self.assertIn("ASK slot scope", lines)
         self.assertFalse(any(line.startswith("DELEGATE") for line in lines))
         blank = workflow._step_lines({"params": {"scope": "  "}}, step)
-        self.assertEqual(blank[-1], "ASK slot scope")
+        self.assertIn("ASK slot scope", blank)
         filled = workflow._step_lines({"params": {"scope": "api"}, "feature": "-"}, step)
         self.assertTrue(any(line.startswith("DELEGATE") for line in filled))
         self.assertFalse(any(line.startswith("ASK") for line in filled))
@@ -153,7 +153,7 @@ class Enhance(unittest.TestCase):
     def test_a_tool_input_is_asked_like_a_slot(self):
         step = {"id": "gate", "kind": "tool.step", "tool": "stage-gate"}
         lines = workflow._step_lines({"params": {}}, step)
-        self.assertEqual(lines[-1], "ASK slot feature")
+        self.assertIn("ASK slot feature", lines)
         self.assertFalse(any(line.startswith("TOOL") for line in lines))
         filled = workflow._step_lines({"params": {"feature": "demo"}, "feature": "-"}, step)
         self.assertTrue(any(line.startswith("TOOL") for line in filled))
@@ -190,7 +190,8 @@ class Enhance(unittest.TestCase):
                 "steps": [{"id": "look", "kind": "route.s4", "slots": ["scope"], "status": "pending"}],
             }
             lines = workflow.next_line(run)
-            self.assertEqual(lines[0], "DIGEST match %s" % digest)
+            self.assertTrue(lines[0].startswith("DRIVE mode="), lines[0])
+            self.assertEqual(lines[1], "DIGEST match %s" % digest)
             self.assertEqual(lines[-1], "PROGRESS closed=0/1 open=look")
             recipe_path.write_text("id: demo\nchanged: true\n", encoding="utf-8")
             self.assertTrue(workflow.digest_line(run).startswith("DIGEST drift "))

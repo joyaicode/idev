@@ -49,6 +49,7 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 | `LOOP <status> hops=<已用>/<上限>` | `next` 从循环文件数出来的。没有循环文件时仍是 `LOOP absent` |
 | `COUNT hops=<已用>/<上限>` | `react_loop.py show` 打在逐跳记录之前 |
 | `PROGRESS closed=<已收口>/<总步数> open=<步骤 id>` | `next` 末尾，也打在委派包 `END BRIEF` 前。已收口是不再做的步骤，含跳过、未证明和失败后已改道。`open` 是还没收口的步骤 id |
+| `DRIVE mode=<assisted\|auto> source=<session\|product\|default>` | `session-context` 打出。`auto` 时有推荐的 B 类/认知分叉按建议代决；硬停点仍问人。见 [chat-confirm-signoff.md](chat-confirm-signoff.md) |
 | `PRIOR <经验/程序>` / `PRIOR_NOTE` | 阶段入口自动带出的已过闸约束：`lessons.py` 的 `authoritative` 与 `sediment.py` 的 `kept`。它是约束、边界和证据指针，不是答案；没列出不代表没有，采纳与否仍以本轮证据为准 |
 | `步进:` / `包含:` | 委派包里必读页的前 80 行（最多 4000 字）和文件 sha256，以及 `arch.yaml` 里 `include: true` 的路径。没有索引时这里没有符号 |
 | `请求头:` | 执行者定义文件的 sha256，以及该文件声明的 `tools`。用的是派发时冻进 brief 的那一份。定义文件缺失就写明缺失 |
@@ -64,8 +65,8 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 ## 什么时候必须停下来问人（STOP）
 
 - 需求、设计对齐认知和信息。矛盾、冲突、不合理或不清楚才问。编码及之后按阶段规范做，验收不过就自省改到通过，再进入下一阶段。检查没过，或这些点还开着，却要写 `sealed` / `accepted` / `aligned` / `resolved` / `semantic_gate.*.passed`，就先补那一项。对齐且检查过了就写，不问确认。审查签收、实现审核、测试结果确认、文档定稿都不是停点。`next` 打出 `DECISION`，或还有未答的矛盾、冲突、不清楚，才问。`GATE pass` 就记下并继续。`reopen_baseline` 仍要点名。P1/P2 的 plan / resolved 机检无信号时写 `auto:`。
-- 进入阶段先看 `STAFFING` 行。一个人兼任全部岗位就一次问全。多人只问当前这个人持有的岗位，别人的列成待。岗位还没写明时只问一次岗位表。做法见 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
-- 执行者回报出现 `SIGNAL`（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）：按决策包问，答案用 `workflow.py decide` 记。`BLOCKED(domain)` 不是停问：按 [agents.md](agents.md)「角色能力」另派 `DOMAIN` 点名的执行者咨询一次。
+- 进入阶段先看 `STAFFING` 与 `DRIVE` 行。一个人兼任全部岗位就一次问全。多人只问当前这个人持有的岗位，别人的列成待。岗位还没写明时只问一次岗位表。`DRIVE mode=auto` 时：有推荐的 B 类 / grilling / 需求与架构分叉（含 P0）按建议代决，不停；解封、回退、promote、生产写、push、经验入库仍停。做法见 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
+- 执行者回报出现 `SIGNAL`（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）：按决策包问，答案用 `workflow.py decide` 记。`DRIVE mode=auto` 且有推荐 → `decide --source auto`，不停。`BLOCKED(domain)` 不是停问：按 [agents.md](agents.md)「角色能力」另派 `DOMAIN` 点名的执行者咨询一次。
 - 全表与档位：[chat-confirm-signoff.md](chat-confirm-signoff.md)。
 - 要改 goal（必须人说「解除密封」或 `reopen`）。
 - 要跑 `promote.sh`、写生产、回退 origin（人没提就不问，也不做；见 H2）。
@@ -74,7 +75,7 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 
 ## 什么时候不要停（H1–H6，别为它们请签）
 
-见 [invoke.md](invoke.md)「非门禁不停」。核心一句：**没有未决分叉就在同一轮接着做。检查过了就写这一关。不请人确认，不擅自 promote，不为观测再停。** 原话只有「验收 / 继续 / 确认 / 通过」或其组合时，先跑 `python3 scripts/nudge.py --quote "<原话>"`。`NUDGE proceed` 就做当前阶段还开着的事：检查没过就补那一项，检查过了就写这一关。不改密封基线的 goal / items / non_goal，不记 `stop`，不写 `next`，不复述「没有写入」或「关卡没有变化」。停下来问人之前先跑 `python3 scripts/process-eval.py stop --stop "<将要问的那句>"`；决策闸加 `--decision`。`now=CORRECT` 按 `rule` 做，不问；`now=ASK` 才停；`later=PROPOSE` 只起草。全文 [process-eval.md](process-eval.md)。
+见 [invoke.md](invoke.md)「非门禁不停」。核心一句：**没有未决分叉就在同一轮接着做。检查过了就写这一关。不请人确认，不擅自 promote，不为观测再停。** 原话只有「验收 / 继续 / 确认 / 通过」或其组合，或整句「开启/关闭自动模式」时，先跑 `python3 scripts/nudge.py --quote "<原话>"`。`NUDGE proceed` 就做当前阶段还开着的事：检查没过就补那一项，检查过了就写这一关。不改密封基线的 goal / items / non_goal，不记 `stop`，不写 `next`，不复述「没有写入」或「关卡没有变化」。`NUDGE drive-auto|drive-assisted` 已切模式，接着做开着的事。`NUDGE adopt-recommend`（原话「按建议 / 听你的」）按推荐 `decide`，不再问。停下来问人之前先跑 `python3 scripts/process-eval.py stop --stop "<将要问的那句>"`（自动模式带上 `--recommend "<档>"`；决策闸加 `--decision`）。`now=CORRECT` 按 `rule` 做，不问；`id=drive-need-recommend` 先补推荐或回报盖 `RECOMMEND:`；其它 `now=ASK` 才停。`drive=auto` 且回报 `STATUS: PASS`、信号全是 `[承重]` 时，默认可代决（档 `1`）。全文 [process-eval.md](process-eval.md) / [chat-confirm-signoff.md](chat-confirm-signoff.md)。
 
 ## 冲突时听谁（从高到低）
 

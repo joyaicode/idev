@@ -86,7 +86,7 @@ parent: idev
 需求通过后先交方案，把做法、契约、回退和还缺的信息摊开。不要只留 `arch.yaml` 里的一行 `approach`。用例文件这阶段不写。
 
 1. **方案叙述** `<票目录>/design.md`（照 [design.example.md](references/design.example.md)）。六节都要有正文：目标、方案、契约、影响面、回退、用例。目标节照抄基线 `goal`。每条基线 item、每条 `case_intent` 都在文中点名。细到人能按节评审，不写实现代码。方案节顺着读能指出重点；业务落在带行为的类型上，不计划一串只有 get/set 的对象（[coding.md](../conventions/coding.md) 底线 4、5）。**交出方案时告诉人文件路径，并说明可以直接在文里标注** —— `<!-- @me: ... -->`（md）或 `# @me: ...`（yaml），比在聊天里复述十处要改的地方更不容易漏。下一轮先 `python3 $IDEV/scripts/annotate.py scan --feature <f>`，逐条处理、`settle` 留处置、把 `@me:` 改成 `@done:`，**原文一个字不动**。`check-feature` 在 `arch` 查这三条。全文 [annotate.md](../references/annotate.md)。
-2. **机读方案** `arch.yaml`。`approach` / `non_approach` 都要有。`case_intents` 挂 `baseline_item_id`。方案若「更好」但超出基线 → 拒过，不改基线。
+2. **机读方案** `arch.yaml`。`approach` / `non_approach` 都要有。`case_intents` 挂 `baseline_item_id`。方案若「更好」但超出基线 → 拒过，不改基线。切片里已有 ≥2 分支且还会增、协议要挡 SDK、创建方式互斥这类**编码期才扫 §1 的场景信号**，架构期已看得见的就写进可选字段 `pattern_hints`（`{slice_id, signal, candidates}`）：**候选预判，不是授权**——编码 §0 仍独立对表，零命中即推翻。变更量可预估时写可选字段 `size_budget`（净增行 / 新增文件 / 触及文件），编码超预算在 `review.md` 写一句为何超。两字段空着合法，小变更不预判。
 3. **先审影响范围内已经存在的问题，再请人评方案。** 范围是 `impact_candidates` 里 hop ≤ 1、这次方案要碰到的路径，不是整仓，也不是当前分支 diff（本需求的代码还没写）。Java 对这些路径跑 `python3 scripts/lib/java_hygiene.py --repo <仓> <路径…>`。`problems-scan.sh` 和 `lang-scan.sh` 只看 diff，这一步覆盖不到；同一批规则直接读这些文件，把 `file:line` 记下来。读不到就写 `UNPROVEN`，不能当成没有问题。结果写在 `design.md` 的 `## 前置`，放在 `## 目标` 之前。六节仍都要有。
    行数按文件加总，写进这一节。**需求行数**只计为基线 goal 必须新增或改写的行，原样留下的不算。**既有问题行数**只计把范围内的规范、质量问题改掉要动的行。比例是既有问题行数 / 需求行数；需求行数是 0 时不除，当作和本次改动分不开。小于 1/5 是既有问题行数 × 5 < 需求行数。
    **重大缺陷**是行为与已有契约或调用方可见结果不符、会写错或丢掉数据、会让这次验收不可信，或有安全问题。不改变对外行为的规范、可读性、内聚、未使用、重复，不算重大。

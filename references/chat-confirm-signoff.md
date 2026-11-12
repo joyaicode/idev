@@ -14,6 +14,28 @@
 
 审查签收、实现审核、测试结果确认、文档定稿都不是停点。`next` 打出 `DECISION`，或这一步以及它前面的步骤还有未答的矛盾、冲突、不清楚，才停下来问。`GATE pass` 就记下并继续。`by` 写名单里担任这一关的人；只有一个人就写这个人，不问。
 
+## 驱动模式（`drive_mode`）
+
+`assisted`（默认）与 `auto`。看 `session-context` 的 `DRIVE` 行，或：
+
+```bash
+python3 scripts/drive-mode.py show [--repo <仓>]
+python3 scripts/drive-mode.py set auto [--repo <仓>] [--by <人>]   # 会话覆盖
+python3 scripts/drive-mode.py set assisted …
+python3 scripts/drive-mode.py clear …                             # 去掉会话覆盖
+```
+
+优先级：会话 `.idev/drive-mode.yaml`（无产品则内核 `state/drive-mode.yaml`）→ 产品 `.idev/workflow-defaults.yaml` 的 `drive_mode:` → `assisted`。
+
+| 模式 | 行为 |
+|------|------|
+| `assisted` | 现有规则。停问前跑 `process-eval.py stop`；`now=CORRECT` 不问。决策包 CTA 只接受选项号或 `按建议` |
+| `auto` | 决策包**已写出推荐**时，B 类信号、grilling frontier、`scope_debt.pending`、需求/架构认知分叉（含 P0）以及带推荐的普通停问默认采纳：`workflow.py decide … --all-open --source auto --recommend <档>`；`by` 仍写编制真人。不停问。回报在 **PASS** 下盖 `RECOMMEND:` / `AI 建议:`（不含裸「建议:」）时，`land` / `next` / `record` / `step` / `delegate` 直接代决（quote=`auto:recommend`）；**仅** `[承重]` 且 PASS、无盖章时默认档 `1`（quote=`auto:default-accept`；`[承重]` 文中的「生产/回退」不算硬停；混合批次逐条跳过硬停）。FAIL/BLOCKED 不代决。原话「按建议 / 听你的」→ `nudge` `adopt-recommend`。`start` 顺带 solo/settle/槽位自填（含 `with.scope`）；缺槽位打 `param` 指引。原话「开启自动模式」走 `nudge.py`。另自动：feedback none；`scope_debt.pending`→recommend。硬停 / 决策闸 / `BLOCKED` / `ARTIFACT` 仍问 |
+
+**永不代决（两档相同）：** 解封 / 打开基线 / 回退 origin / promote / 生产写 / `git push` / 经验入库；配方里的决策闸（`--decision`，如提交推送与自进化落地）；推荐缺失；证据冲突到写不出唯一推荐。
+
+自动代决写入 `decisions.yaml` 的 `source: auto`、`overturned: false`。人后来推翻时把该条改成 `overturned: true` 并补人答。周审计与 `ticket-metrics` 计 `DRIVE_AUTO` / `DRIVE_AUTO_OVERTURN`（不进 `HARD_COUNT`）；推翻多了就收紧 `auto`，不凭感觉加停点。
+
 ## 编制：先认人岗，再决定怎么问
 
 当前工程里谁担任哪个岗位，先认出来，再决定这一轮问谁、问多少。岗位是产品、设计、架构、开发、测试、交付、排障。认法只在 `scripts/staffing.py`（`session-context` 打出一行 `STAFFING`）。
@@ -23,7 +45,7 @@
 | `.idev/staffing.yaml` 里全部岗位落在同一个人 | `solo` | 七个视角一次列全，问这一个人 |
 | 岗位落在两个以上的人 | `collaborative` | 只问 `hold` 里当前这个人的岗位。`wait` 里别人的岗位列成「待」，不向当前这个人问，也不为此再开一轮 |
 | 产品 `.idev/people.yaml` 只有一个人，没有岗位文件 | `solo` | 这个人兼任七岗。不问「你是哪个角色」 |
-| 产品名单有两个人以上，还没有岗位文件 | `unassigned` | 只问一次岗位表（同一人兼任就各岗填同一人）。写完 `staffing.py write` 之前不签字，不再拆开问 |
+| 产品名单有两个人以上，还没有岗位文件 | `unassigned` | 只问一次岗位表（同一人兼任就各岗填同一人）。写完 `staffing.py write` 之前不签字，不再拆开问。`drive_mode=auto` 且能认出当前对话人（在名单内或 git 用户）时，自动 `write --solo` 该人，打出 `DRIVE_AUTO staffing=solo` |
 | 产品没有名单 | 回落内核 `config/people.yaml` | 内核只有一个人时视为兼任。内核也没有人、git 用户名是人，则视为这一个人 |
 
 产品名单不并入内核名单。内核名单只在产品还没写名单时，表示当前操作的人。
@@ -55,7 +77,7 @@
 | lessons 候选 → 权威 | 所有档位，人要点名 |
 
 先起草、自测、写报告。检查过了才写这些字段。promote、生产写仍等人点名。
-不可逆动作在任何档位都不降级。降档的依据是周审计里「`AUTO` / `[非承重]` 后被推翻」的次数，不是感觉。
+不可逆动作在任何档位都不降级。降档的依据是周审计里「`AUTO` / `[非承重]` / `drive_mode=auto` 代决后被推翻」的次数，不是感觉。
 
 ## B 类：信号
 
@@ -86,7 +108,15 @@ workflow.py decide <step> --feature <f> --signal "<SIGNAL 原样>" \
   --answer "<结论>" --quote "<人的原话>"
 ```
 
-只追加到 `<票目录>/decisions.yaml`。有效回答是选项号或针对问题的自由文本。`继续` / `验收` / `ok` / `好` 不选任何东西：`decide` 拒收，不记回答，不再问一次，决定保持原样。留痕里没有的信号拒收。`decide` 本身不写签字字段。同一句如果也是当前这一步的对齐，导体接着 `record`，不再向人要第二句。
+`drive_mode=auto` 且已有推荐时：
+
+```bash
+workflow.py decide <step> --feature <f> --signal "<SIGNAL 原样>" \
+  --question "<一句话问题>" --options "1 … / 2 …" --recommend "1" \
+  --answer "1" --quote "auto:recommend" --source auto
+```
+
+只追加到 `<票目录>/decisions.yaml`。有效回答是选项号或针对问题的自由文本。`继续` / `验收` / `ok` / `好` 不选任何东西：`decide` 拒收，不记回答，不再问一次，决定保持原样。留痕里没有的信号拒收。`decide` 本身不写签字字段。同一句如果也是当前这一步的对齐，导体接着 `record`，不再向人要第二句。`--source auto` 时 `answer` 必须等于 `--recommend`，`quote` 必须以 `auto:` 开头。
 
 ## 决策包（每次停问唯一格式）
 
@@ -103,8 +133,10 @@ workflow.py decide <step> --feature <f> --signal "<SIGNAL 原样>" \
 
 - 一条消息只含当前这个人能答的未决。没有未决，就只摆方案和证据。
 - 人选了不推翻的那一档，或只说 `按建议` / `听你的` / 选项号，这句就是对齐，直接落笔。人选了包里写明会让这幅图不成立的那一档，就改方案，不落笔。
+- `drive_mode=auto` 且包里有 `AI 建议`：不把包发出去等人，直接按建议 `decide --source auto` 并落笔（硬停点除外）。
 - `待` 里的事项不向当前这个人问。
 - 没有 A 类闸、也没有信号、编制也不缺岗位，就不停。
+- 停问前先跑 `process-eval.py stop`（自动模式加当前 `DRIVE` 与 `--recommend`）。`now=CORRECT` 不得出决策包。
 
 ## 交付阶段：检查过了就写
 

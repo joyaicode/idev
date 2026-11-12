@@ -77,6 +77,7 @@ __pycache__/
 
 # One-off local console and OCR logs; they are run residue, not book notes.
 /state/console/
+/state/drive-mode.yaml
 /ocr*.log
 
 # idev: execution residue stays untracked; durable product characteristics stay
@@ -94,3 +95,9 @@ __pycache__/
 !.idev/task/**
 !.idev/docs/
 !.idev/docs/**
+
+# Ticket run residue inside .idev/task (locks and workflow logs). These lines
+# come after the !.idev/task/** un-ignore above so they win; the ticket's
+# yaml/md findings themselves stay tracked.
+*.lock
+.idev/task/*/workflow/logs/

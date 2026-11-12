@@ -111,7 +111,37 @@ def inspect_text(text: str, rel: str) -> list[tuple[str, int, str]]:
     hits.extend(canon_smells.naming_hits(masked, rel, _DECL_ASSIGN))
     hits.extend(canon_smells.nesting_hits(masked, rel))
     hits.extend(canon_smells.swallow_hits(masked, rel))
+    hits.extend(_threshold_hits(masked, rel))
     return hits
+
+
+_FUNC_PARAMS = re.compile(
+    r"\bfunction\s+(?P<name>\w+)\s*\((?P<params>[^()]*)\)\s*\{")
+
+
+def _threshold_hits(masked: str, rel: str) -> list[tuple[str, int, str]]:
+    """§2.4 function-level thresholds, named `function` declarations only.
+
+    Arrow functions and object-method shorthand are deliberately out
+    (canon_smells.DECLINED): a multi-line arrow body has no brace the
+    regex can trust to find, and flagging a correctly-measured arrow as
+    3 lines (or worse, swallowing the next function's brace) is the kind
+    of false positive that teaches people to skip the report.
+    """
+    funcs = []
+    for m in _FUNC_PARAMS.finditer(masked):
+        spans = canon_smells.brace_func_spans(masked, [m])
+        if not spans:
+            continue
+        f = spans[0]
+        f["params"] = len([p for p in m.group("params").split(",") if p.strip()])
+        f["complexity"] = canon_smells.brace_complexity(masked[f["start"]:f["end"]])
+        funcs.append(f)
+    return (
+        canon_smells.func_length_hits(funcs, rel)
+        + canon_smells.param_count_hits(funcs, rel)
+        + canon_smells.complexity_hits(funcs, rel)
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

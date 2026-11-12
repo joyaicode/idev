@@ -45,6 +45,8 @@ is_background: false
    - `CHANGE_KIND`:一句话说清本轮变化属于哪类(校验 / 换协议 / 追加行为 / 加头 / 两通道 / 纯结构 / 结构+行为)
    - `CANON_TRIGGER`:是否涉及**新增一层 / 拆分 / 缓存 / 队列 / 重试 / 重写 / 新依赖**。非「无」则**先**走 `$IDEV/conventions/canon.md` §1 协议(扫 §2 信号 + §4 念头),命中即按 DO 做,并在 `review.md` 记 `T#`
    - `TABLE_HIT`:用那句话扫 `coding-tables.md` §1,**命中第一行就停**,按「运用」做、按「不要」拒绝。零命中就**显式写零命中**,然后写具体类型 —— 零命中还新增接口/抽象层是 §0 第 4 步明禁的
+   - `IDEA_HITS`:写码过程中念头表(`coding.md` 文首「写的时候对念头」)命中即当场改,并把命中的编号记进本行 —— 念头被改掉的正确形态是「那段代码没写出来」,没有工件,所以只需交代命中,不像 `TABLE_HIT` 要在 review.md 留「已改」
+   - `FORECAST`:委派包里给了 arch 的 `pattern_hints` 时,逐一对照本轮实际 `TABLE_HIT`:预判一致写「预判 P# 命中」;被推翻写「预判 P# 未命中,原因:<半句>」——推翻是正常结果不是偏差,如实写。没有 pattern_hints 写「无预判」。`size_budget` 有且本轮 diff 超了预算,`review.md` 写一句为何超(不 FAIL,人审)
    - 若 `CHANGE_KIND` 含「结构」:先过 `coding-tables.md` §3「满足条件」;不满足就补测试或拆轮次,**不准硬改**;大 diff、无护栏或无回退是 F6,先缩小步子
    - **底线**:写第一行之前用那一句话过 `coding.md` 文首底线。关键路径(失败会让基线结果错或没有)当轮写上失败条件、怎么停或怎么降、日志。没有这条路径就不写 `catch`、默认值、重试、扩展点；吞异常、返回空值当成功是 F4，改为立刻失败。说不出依据的段落不要写。逻辑要顺着读能指出重点。每处对但风格/边界与现有实现不一致是 F3，对照现有实现纠偏。不新开只有 get/set 的业务类型。定义只在那一节
 
@@ -176,6 +178,10 @@ mkdir -p <票目录>/workflow/logs
 | `red-first` | review.fix 没有 RED_FIRST —— 没见它红过就修 |
 | `java-hygiene` | `deliver.code_pass` / `review.fix` 改过的 Java 仍有 java.md 黄条（钻石 `<>`、显式方法类型实参、`valueOf`）。先改文件，再写总则 |
 | `s0-declared` | 缺 CHANGE_KIND / CANON_TRIGGER / TABLE_HIT |
+| `idea-declared` | 缺 IDEA_HITS 行 —— 写码时的念头命中零命中也要显式写 |
+| `idea-numbered` | IDEA_HITS 里出现 §3.5 范围外的编号(如 C41) —— 编号只认真源,不自造 |
+| `forecast-declared` | 委派包有 pattern_hints 却缺 FORECAST 行 —— 预判对照必须交代,「无预判」也要显式写 |
+| `forecast-numbered` | FORECAST 里的编号超出 §1 P 范围(如 P20) —— 预判只认既有表号 |
 
 每条检查都对应回报里的一个字段。**不确定格式就看本页的「回报格式」一节** ——
 字段缺了会被打回重做,比写错更费时间。
@@ -201,6 +207,8 @@ EVIDENCE: <review.md 路径>
 CHANGE_KIND: <校验|换协议|追加行为|加头|两通道|纯结构|结构+行为>
 CANON_TRIGGER: <无|新增一层|拆分|缓存|队列|重试|重写|新依赖>
 TABLE_HIT: <§1 行号/名称 | 零命中 | 无>
+IDEA_HITS: <写码时念头表命中的编号+半句触发语,如 "C12 名字带 util"、"底线 1 + T1 先搭框架";零命中写「零命中」>
+FORECAST: <有 pattern_hints:预判 P# 命中 | 预判 P# 未命中(原因:<半句>) | 无预判>
 IMPACT: codegraph depth=1,候选 <n> 个(<列表或路径>)| 查不到:<原因>
 
 SCOPE: <动手前就定好:本轮打算改哪些 file:symbol>
