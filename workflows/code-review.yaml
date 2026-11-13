@@ -23,7 +23,7 @@ steps:
     label: 识别语言并出报告（不改代码）
   - id: gate-report
     kind: human.gate
-    label: 审查不签收（无 I* 则跳过本闸之后的步骤）
+    label: 审查签收：人看 I* 清单后过（无 I* 才跳过本闸之后的步骤；人看报告是信息层，不设机检代过）
     with:
       will_write: ["review.md 的 I* 进入修复，不另签收"]
       proof: "review.md 命中数 / I* 清单"

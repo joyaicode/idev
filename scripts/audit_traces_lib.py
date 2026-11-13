@@ -125,6 +125,7 @@ def main() -> int:
         "obs_hop": 0,
         "obs_tool_hop": 0,
         "obs_drive_auto": 0,
+        "obs_gate_auto": 0,
     }
     weak_files: list[str] = []
     unbound_files: list[str] = []
@@ -224,6 +225,8 @@ def main() -> int:
             stats["obs_tool_hop"] += 1
         if re.search(r"(?m)drive-auto|DRIVE source=auto|source:\s*auto", text):
             stats["obs_drive_auto"] += 1
+        if re.search(r"(?m)^\s+auto_stage:\s*\S", text):
+            stats["obs_gate_auto"] += 1
 
         # Soft: S1 must open grilling; missing is MUST_ZERO, not HARD.
         if scenario == "S1" and not re.search(
@@ -334,6 +337,10 @@ def main() -> int:
     print(
         f"| 轨迹含自动代决 | {stats['obs_drive_auto']} | {pct(stats['obs_drive_auto'])}% | "
         "`drive-auto` / `DRIVE source=auto` / `source: auto` |"
+    )
+    print(
+        f"| 机检自动过的阶段闸 | {stats['obs_gate_auto']} | {pct(stats['obs_gate_auto'])}% | "
+        "recorded 条目带 `auto_stage:`（GATE_AUTO，run 层机检过，非人签）|"
     )
     drive_auto, drive_overturn = _drive_auto_counts(trace_dir)
     print(

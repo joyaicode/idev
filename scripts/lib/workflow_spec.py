@@ -40,6 +40,12 @@ REACT_FIELDS = {"candidates", "max_hops", "on_exhaust", "on_fail"}
 REACT_EXITS = {"human", "stop"}
 FAIL_EXITS = {"human", "stop", "skip"}
 RISK_TIERS = {"P0", "P1", "P2"}
+# check-feature.py's --stage choices; the only stages a gate can name as its
+# machine judge. Mirror by hand — importing check-feature here would make the
+# spec depend on the checker, and a missing entry fails loud at recipe-check.
+CHECK_STAGES = frozenset({
+    "req-review", "req", "arch", "code", "test", "verify-plan", "ops",
+})
 POLICY: dict[str, Any] = {
     "on_fail": {"stop", "ask"},
     "on_gate": {"stop"},
@@ -650,14 +656,25 @@ def _check_gate(step: dict, where: str, errors: list[str]) -> None:
             errors.append(f"{where} human.gate with.will_write must be a list of non-empty strings ([] = 将代写: 无)")
     elif "将代写" not in str(step.get("label") or ""):
         errors.append(f"{where} human.gate needs with.will_write or 将代写 in label")
+    auto_stage = payload.get("auto_stage")
+    if auto_stage is not None and auto_stage not in CHECK_STAGES and auto_stage != AUTO_STAGE_CURRENT:
+        errors.append(
+            f"{where} human.gate with.auto_stage must be one of {sorted(CHECK_STAGES)} "
+            f"or '{AUTO_STAGE_CURRENT}' (the ticket's current deliver stage) "
+            "— the check-feature stage whose 0 FAIL + no SIGNAL is this gate's machine judge"
+        )
     if "auto_tiers" in payload:
         tiers = payload["auto_tiers"]
         if not isinstance(tiers, list) or not tiers or not set(tiers) <= RISK_TIERS:
             errors.append(f"{where} human.gate with.auto_tiers must be a non-empty list of {sorted(RISK_TIERS)}")
-        elif gate_type(step) not in AUTO_CHECKS:
+        elif auto_stage is None and gate_type(step) not in AUTO_CHECKS:
             errors.append(
-                f"{where} human.gate with.auto_tiers needs a gate a machine check can pass "
-                f"({', '.join(sorted(AUTO_CHECKS))}); a {gate_type(step)} gate is signed by a person"
+                f"{where} human.gate with.auto_tiers needs a gate a machine check can pass: "
+                f"a {gate_type(step)} gate declares with.auto_stage, or uses one of {sorted(AUTO_CHECKS)}"
+            )
+        elif auto_stage is not None and gate_type(step) in AUTO_CHECKS:
+            errors.append(
+                f"{where} a {gate_type(step)} gate already has its check; auto_stage is for step_confirm gates"
             )
     if "decision" in payload and payload["decision"] is not True:
         errors.append(f"{where} human.gate with.decision must be true")
@@ -702,6 +719,30 @@ class AutoCheck(NamedTuple):
 
 # By gate type. A gate type missing here has no check that could pass it.
 AUTO_CHECKS = {"accepted_plan": AutoCheck("verify-plan", "verify/plan-check.log", "verify.plan")}
+# A step_confirm gate may declare `with.auto_stage: current`, meaning the
+# check runs against whatever deliver stage the ticket is on right now —
+# the deliver-next stage gate. Resolved at record time by the caller that
+# knows the ticket; the recipe check takes the word on faith.
+AUTO_STAGE_CURRENT = "current"
+
+
+def auto_check(step: dict) -> AutoCheck | None:
+    """The machine check that may pass this gate, or None when a person signs.
+
+    Two sources, in order: the static per-gate-type map (accepted_plan), and
+    the recipe's own `with.auto_stage` — a step_confirm gate naming the
+    check-feature stage whose 0 FAIL + no SIGNAL is its judge. The unanswered-
+    signal sweep for a declared gate covers every earlier step, not one
+    source kind: a stage gate is a checkpoint over the whole ticket so far.
+    """
+    check = AUTO_CHECKS.get(gate_type(step))
+    if check is not None:
+        return check
+    stage = str((step.get("with") or {}).get("auto_stage") or "")
+    if stage != AUTO_STAGE_CURRENT and stage not in CHECK_STAGES:
+        return None
+    log = "workflow/gate-%s-check.log" % (stage if stage != AUTO_STAGE_CURRENT else "current")
+    return AutoCheck(stage, log, "")
 
 
 def auto_tiers(step: dict) -> set:

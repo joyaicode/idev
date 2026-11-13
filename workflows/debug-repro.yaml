@@ -23,10 +23,11 @@ steps:
     label: 起草 debug plan（环境/产物/可观察物）
   - id: gate-plan
     kind: human.gate
-    label: 环境与 plan（无信号则记过，不请人）
+    label: 环境与 plan（机检自动过，不请人；FAIL/信号停下问人）
     with:
       will_write: ["verify/plan.yaml accepted"]
       proof: "verify-plan 门禁结果 / case 数"
+      auto_tiers: [P0, P1, P2]
   - id: run
     kind: verify.run
     with: { mode: debug }

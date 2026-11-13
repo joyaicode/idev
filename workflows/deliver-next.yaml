@@ -22,7 +22,9 @@ steps:
     label: 拒过清单机检（TOOL 行只打印；导体补 --feature/--stage 跑，record 后结果进请签 proof）
   - id: gate
     kind: human.gate
-    label: 无未决分叉就写下这一关
+    label: 无未决分叉就写下这一关（P1/P2 机检自动过；P0 与有分叉/信号仍要人）
     with:
       will_write: ["当前 stage 的签收字段（按 chat-confirm 列出；本步无停问点则无）"]
       proof: "check-feature.sh <feature> <stage> + stage-gate 双检结果（stage-gate 为上一步 TOOL，record 后自动并入）"
+      auto_tiers: [P1, P2]
+      auto_stage: current

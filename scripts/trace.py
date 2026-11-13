@@ -974,6 +974,7 @@ def round_facts(repo: Path, since: dt.datetime | None, until: dt.datetime) -> tu
                 continue
             signed = step.get("signoff") if isinstance(step.get("signoff"), dict) else {}
             delegated = step.get("delegated") if isinstance(step.get("delegated"), dict) else {}
+            auto = step.get("auto") if isinstance(step.get("auto"), dict) else {}
             gate = step.get("kind") == "human.gate" and step.get("status") == "PASS" and signed.get("by")
             verification = step.get("verification") if isinstance(step.get("verification"), dict) else {}
             recorded.append((_when(step.get("at")), {
@@ -985,6 +986,10 @@ def round_facts(repo: Path, since: dt.datetime | None, until: dt.datetime) -> tu
                 "verify_evidence": str(verification.get("evidence") or "").strip(),
                 "by": str(signed.get("by") or delegated.get("agent") or "conductor"),
                 "mark": GATE_MARK.get(gate_type(step), "") if gate else "",
+                # An AUTO-passed gate is a machine checkpoint, not a person's
+                # signoff: recorded as GATE_AUTO so audits count it, and so
+                # signoff_errors never mistakes it for a missing by.
+                "auto_stage": str(auto.get("stage") or ""),
                 "run": run_path.relative_to(repo).as_posix(),
             }))
     by_time = lambda pair: pair[0]  # noqa: E731

@@ -9,14 +9,7 @@ params:
     from: user
 policy:
   on_fail: stop
-  on_gate: stop
 steps:
   - id: changelog
     kind: docs.changelog
     label: 起草变更说明
-  - id: gate
-    kind: human.gate
-    label: 文档写完即过（无分叉不请人）
-    with:
-      will_write: ["特性文档定稿（docs/SKILL.md 解析出的落点）"]
-      proof: "文档差异摘要"

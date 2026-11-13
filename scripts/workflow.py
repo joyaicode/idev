@@ -60,12 +60,12 @@ from product_marker import resolve_extension_repo  # noqa: E402
 import workflow_compose  # noqa: E402
 from product_sink import kernel_root, product_repo, sink_dir  # noqa: E402
 from workflow_spec import (  # noqa: E402
-    AUTO_CHECKS,
     KINDS,
     AutoCheck,
     STEP_DONE,
     STEP_STATUS,
     STEP_STOP,
+    auto_check,
     auto_tiers,
     is_decision_gate,
     check_recipe,
@@ -78,6 +78,7 @@ from workflow_spec import (  # noqa: E402
     signoff_by_refusal,
     will_write_line,
 )
+import workflow_spec  # noqa: E402  (module constants: AUTO_STAGE_CURRENT, CHECK_STAGES)
 
 try:
     import yaml
@@ -354,6 +355,22 @@ def checkout_of(ticket: Path, feature: str, hint: Path | None) -> Path | None:
         if doc_home.homes(repo, feature)["task"].resolve() == ticket.resolve():
             return repo
     return None
+
+
+def _resolved_auto_check(check: AutoCheck, path: Path) -> AutoCheck:
+    """An auto_stage: current gate checks whatever stage the ticket is on.
+
+    The recipe cannot name the stage — it changes as the ticket advances —
+    so the recipe says `current` and the resolution happens here, where the
+    run (and its deliver.yaml) is at hand. An empty stage stays empty: the
+    check will refuse with the no-checkout message rather than guessing.
+    """
+    if check.stage != workflow_spec.AUTO_STAGE_CURRENT:
+        return check
+    stage = deliver_stage(path)
+    if stage not in workflow_spec.CHECK_STAGES:
+        return check  # the run_auto_check refusal names `current` and stops
+    return AutoCheck(stage, check.log.replace("current", stage), check.source)
 
 
 def run_auto_check(run_path: Path, feature: str, check: AutoCheck, hint: Path | None) -> dict:
@@ -1314,7 +1331,7 @@ def _step_lines(run: dict, step: dict) -> list[str]:
             lines.append(f"Will write: {will_write_line(step)}")
         else:
             tiers = auto_tiers(step)
-            check = AUTO_CHECKS.get(gate_type(step))
+            check = auto_check(step)
             if tiers and check:
                 if _drive_is_auto():
                     gate_tail = (
@@ -2022,7 +2039,7 @@ def cmd_record(args: argparse.Namespace) -> int:
                 and (_step_open(run, step) or args.note)
                 and risk_tier_of(run, path) in auto_tiers(step)
                 and not (args.by or args.quote)):
-            pre["auto"] = AUTO_CHECKS.get(gate_type(step))
+            pre["auto"] = auto_check(step)
 
     safeyaml.load_locked(path, peek)
     verifier_pre = pre.get("verifier")
@@ -2040,7 +2057,11 @@ def cmd_record(args: argparse.Namespace) -> int:
         signed = signed_answer({"id": args.step, "gate": {"id": pre["gate_id"]}})
     check = pre.get("auto")
     if check and args.evidence in ("", check.log):
+        # `current` resolves to the ticket's stage before the check runs, and
+        # the lock-side validation below compares against the same resolution.
+        check = _resolved_auto_check(check, path)
         pre["auto_run"] = run_auto_check(path, pre["feature"], check, session_repo(args.repo))
+        pre["auto"] = check
     if (pre.get("seen") and not flags_missing and pre.get("purpose")
             and pre.get("lease_id") and pre.get("changed")):
         outside = idev(
@@ -2143,11 +2164,14 @@ def cmd_record(args: argparse.Namespace) -> int:
                 )
             if args.by or args.quote:
                 raise Blocked("AUTO is not a signoff; drop --by / --quote")
-            check = AUTO_CHECKS.get(gate_type(step))
+            # pre["auto"] carries the peek-side resolution (a `current` stage
+            # already resolved to the ticket's stage); auto_check(step) alone
+            # would rebuild the unresolved recipe value and never match.
+            check = pre.get("auto") or auto_check(step)
             if check is None:
                 raise Blocked(
-                    f"{step['id']} is a {gate_type(step)} gate; no machine check can pass it, "
-                    "so it needs a person's signoff"
+                    f"{step['id']} is a {gate_type(step)} gate; no machine check can pass it "
+                    "(with.auto_stage names one), so it needs a person's signoff"
                 )
             if args.evidence and args.evidence != check.log:
                 raise Blocked(
@@ -2159,11 +2183,24 @@ def cmd_record(args: argparse.Namespace) -> int:
                 raise Blocked(f"{step['id']} changed while it was being recorded; record again")
             if ran["refusal"]:
                 raise Blocked(ran["refusal"])
-            asked = [
-                f"{s['id']}: {signal}"
-                for s in run["steps"] if s["kind"] == check.source
-                for signal in unanswered(path, s["id"])
-            ]
+            if check.source:
+                # A static-map gate sweeps one source kind (verify.plan).
+                asked = [
+                    f"{s['id']}: {signal}"
+                    for s in run["steps"] if s["kind"] == check.source
+                    for signal in unanswered(path, s["id"])
+                ]
+            else:
+                # An auto_stage gate is a checkpoint over the whole ticket so
+                # far: every earlier step's unanswered signals are questions
+                # this pass must not skip (_block_earlier_open_signals' sweep,
+                # gathered so the message can name them all).
+                gate_pos = next((i for i, s in enumerate(run["steps"]) if s["id"] == step["id"]), 0)
+                asked = [
+                    f"{s['id']}: {signal}"
+                    for s in run["steps"][:gate_pos]
+                    for signal in unanswered(path, s["id"])
+                ]
             if asked:
                 raise Blocked(
                     "AUTO refused: signals still wait for a person's decision — "
@@ -3221,6 +3258,16 @@ def cmd_ask(args: argparse.Namespace) -> int:
             raise Blocked(f"{args.step} is {step['kind']}, not a human.gate; only a gate asks a person")
         if not _step_open(run, step):
             raise Blocked(f"{args.step} is not the current step")
+        # A gate with a machine judge does not open a channel: asking would
+        # put it in pending, and pending demands a human principal to approve
+        # (the Go gate domain's is-human check). The whole point of auto_tiers
+        # is that nobody is asked, so the channel stays shut and record AUTO
+        # passes it on machine evidence.
+        if auto_tiers(step) and auto_check(step):
+            raise Blocked(
+                f"{args.step} passes on machine checks (record {args.step} AUTO); "
+                "an auto gate does not ask a person"
+            )
         prepared["prior"] = str((step.get("gate") or {}).get("id") or "")
         prepared["question"] = gate_question(run, path, step)
 

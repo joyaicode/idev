@@ -39,7 +39,9 @@ steps:
     label: 汇总 report 要点
   - id: gate-result
     kind: human.gate
-    label: 测试结果（检查通过就写 aligned，不请人）
+    label: 测试结果（机检自动过，不请人；FAIL/信号/其它档位停下问人）
     with:
       will_write: ["deliver.aligned", "deliver.stage=done"]
       proof: "PASS/FAIL/UNPROVEN 计数；残留 UNPROVEN"
+      auto_tiers: [P1, P2]
+      auto_stage: test

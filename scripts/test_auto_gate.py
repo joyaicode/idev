@@ -214,7 +214,7 @@ class GoWriterRecords(unittest.TestCase):
 
 
 class OnlyAGateWithACheckMayAuto(unittest.TestCase):
-    def test_a_step_confirm_gate_may_not_declare_auto_tiers(self) -> None:
+    def test_a_step_confirm_gate_without_auto_stage_may_not(self) -> None:
         errors: list = []
         spec._check_gate(
             {"id": "g", "kind": "human.gate", "label": "将代写: x", "with": {"auto_tiers": ["P1"]}},
@@ -230,6 +230,126 @@ class OnlyAGateWithACheckMayAuto(unittest.TestCase):
             "steps[0]", errors,
         )
         self.assertEqual(errors, [])
+
+    def test_a_step_confirm_gate_with_auto_stage_may(self) -> None:
+        errors: list = []
+        spec._check_gate(
+            {"id": "g", "kind": "human.gate", "label": "将代写: x",
+             "with": {"auto_tiers": ["P1", "P2"], "auto_stage": "code"}},
+            "steps[0]", errors,
+        )
+        self.assertEqual(errors, [])
+
+    def test_auto_stage_must_name_a_real_stage(self) -> None:
+        errors: list = []
+        spec._check_gate(
+            {"id": "g", "kind": "human.gate", "label": "将代写: x",
+             "with": {"auto_tiers": ["P1"], "auto_stage": "deploy"}},
+            "steps[0]", errors,
+        )
+        self.assertTrue(any("auto_stage" in e for e in errors), errors)
+
+    def test_auto_stage_current_is_the_deliver_next_gate(self) -> None:
+        errors: list = []
+        spec._check_gate(
+            {"id": "g", "kind": "human.gate", "label": "将代写: x",
+             "with": {"auto_tiers": ["P1", "P2"], "auto_stage": "current"}},
+            "steps[0]", errors,
+        )
+        self.assertEqual(errors, [])
+
+    def test_the_plan_gate_does_not_redeclare_auto_stage(self) -> None:
+        errors: list = []
+        spec._check_gate(
+            {"id": "g", "kind": "human.gate",
+             "with": {"will_write": ["verify/plan.yaml accepted"],
+                      "auto_tiers": ["P1"], "auto_stage": "verify-plan"}},
+            "steps[0]", errors,
+        )
+        self.assertTrue(any("already has its check" in e for e in errors), errors)
+
+
+class StageConfirmAutoGate(unittest.TestCase):
+    """A step_confirm gate with auto_stage passes on the stage's own check.
+
+    The deliver-next shape: `auto_stage: current` resolves at record time to
+    whatever deliver stage the ticket is on. Same refusal family as the plan
+    gate: FAIL / SIGNAL / unanswered earlier signals / tier outside.
+    """
+
+    STAGE_LOG = "workflow/gate-code-check.log"
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name).resolve()
+        self.ticket = assemble(self.repo)
+        # The example ticket sits at req-review; move it to the code stage so
+        # `current` resolves to code and check-feature code has all its inputs
+        # (the example ticket ships semantic_gate priors in deliver.yaml).
+        deliver = self.ticket / "deliver.yaml"
+        data = safeyaml.mapping(deliver)
+        data["stage"] = "code"
+        deliver.write_text(safeyaml.dump(data), encoding="utf-8")
+        self.run_path = self.ticket / "workflow" / "run.yaml"
+        (self.repo / ".idev" / "workflows").mkdir(parents=True, exist_ok=True)
+        # A marked product repo carries its own recipe; without the marker the
+        # resolver falls back to the kernel's workflows and cannot see this one.
+        (self.repo / ".idev" / "marker.yaml").write_text(
+            "schema_version: 1\nmarker: idev\nid: demo\nevolve: false\n", encoding="utf-8",
+        )
+        (self.repo / ".idev" / "workflows" / "stage-confirm.yaml").write_text(
+            "schema_version: 1\nid: stage-confirm\nsummary: x\nparams:\n"
+            "  - {name: feature, required: true, from: user}\n"
+            "steps:\n"
+            "  - id: gate\n    kind: human.gate\n    label: 阶段关\n    with:\n"
+            "      will_write: [\"当前 stage 的签收字段\"]\n"
+            "      auto_tiers: [P1, P2]\n      auto_stage: current\n",
+            encoding="utf-8",
+        )
+        done = cli(self.repo, "workflow.py", "start", "stage-confirm", "--feature", FEATURE)
+        self.assertEqual(done.returncode, 0, said(done))
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def auto(self) -> subprocess.CompletedProcess:
+        return cli(self.repo, "workflow.py", "record", "gate", "AUTO", "--feature", FEATURE)
+
+    def gate(self) -> dict:
+        run = safeyaml.mapping(self.run_path) or {}
+        return next(s for s in run["steps"] if s["id"] == "gate")
+
+    def test_the_hint_names_the_resolved_stage(self) -> None:
+        out = said(cli(self.repo, "workflow.py", "next", "--feature", FEATURE))
+        self.assertIn("record AUTO runs check-feature", out)
+
+    def test_a_clean_stage_passes_and_logs_its_own_check(self) -> None:
+        done = self.auto()
+        self.assertEqual(done.returncode, 0, said(done))
+        gate = self.gate()
+        self.assertEqual(gate["status"], "AUTO")
+        # `current` resolved to the ticket's stage, and the log path follows it
+        self.assertEqual(gate["auto"]["stage"], "code")
+        self.assertEqual(gate["evidence"], self.STAGE_LOG)
+        log = self.ticket / self.STAGE_LOG
+        self.assertTrue(log.is_file())
+
+    def test_ask_does_not_open_a_channel_for_an_auto_gate(self) -> None:
+        # The Python lane has no gate channel at all, so any ask is refused;
+        # the auto-gate refusal line is the Go lane's contract. What this
+        # lane shares is the shape: no channel opens, and record AUTO is the
+        # only way this gate closes.
+        done = cli(self.repo, "workflow.py", "ask", "gate", "--feature", FEATURE)
+        self.assertNotEqual(done.returncode, 0)
+
+    def test_tier_outside_auto_tiers_still_needs_a_person(self) -> None:
+        deliver = self.ticket / "deliver.yaml"
+        data = safeyaml.mapping(deliver)
+        data["risk_tier"] = "P0"
+        deliver.write_text(safeyaml.dump(data), encoding="utf-8")
+        done = self.auto()
+        self.assertEqual(done.returncode, 2, said(done))
+        self.assertIn("needs a person", said(done))
 
 
 if __name__ == "__main__":

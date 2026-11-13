@@ -66,15 +66,18 @@ python3 scripts/drive-mode.py clear …                             # 去掉会�
 |----|----------|
 | 需求通过 → `baseline.sealed` + `req.accepted` | 认知已对齐、检查通过且 frontier 空，同时写密封和拆解。还有矛盾、冲突或不清楚就不写 |
 | 架构通过 → `arch.accepted` | 方案和还缺的信息已经摊开，没有未决分叉、矛盾、冲突或不清楚，写架构通过并进入 `code` |
-| 实现审核 → `semantic_gate.code` | 用例、编码、自测做完。验收不过就自省改到通过，然后写这一关并进入提测 |
-| 提测结果 → `deliver.aligned` | 提测验收通过就写 `aligned` 并 `done`。不过就改到通过 |
+| 实现审核 → `semantic_gate.code` | 用例、编码、自测做完。验收不过就自省改到通过，然后写这一关并进入提测。lite-change 的 gate-review 在 P0–P2 机检自动过（判据见 AUTO 节） |
+| 提测结果 → `deliver.aligned` | 提测验收通过就写 `aligned` 并 `done`。不过就改到通过。test-pack 的 gate-result 在 P1/P2 机检自动过 |
+| 阶段关（deliver-next gate） | 检查通过、无信号即写。P1/P2 机检自动过（`auto_stage: current`）；P0 与有信号时停下问人 |
 | verify plan → `plan.accepted` | 无 `SIGNAL` → `AUTO`（含 P0）。有 `SIGNAL` 留到实现审核一起答，不提前停 |
+| 审查报告（code-review gate-report） | **人签**：人看 I* 清单后过。报告确认是信息层，机检代过会让人没看过报告就改代码——不设 AUTO |
 | ops 分类 | B，所有档位：`kind` 拿不准时执行者回 `BLOCKED(logic)` |
 | 环境 / 产物 | B，所有档位：`ARTIFACT: UNKNOWN` |
 | ops `resolved` | 账本收敛（有证成根因、无 open）就写。没收敛是 B，答完再写 |
 | origin 回退 / 解封基线 | 所有档位，回复里要点名那件事 |
 | `promote` / 生产写 / `git push` | 所有档位，人要点名 |
 | lessons 候选 → 权威 | 所有档位，人要点名 |
+| 文档配方（docs-feature / docs-contract） | 产物写完即 done，无 gate 步（写完即过的仪式闸已删） |
 
 先起草、自测、写报告。检查过了才写这些字段。promote、生产写仍等人点名。
 不可逆动作在任何档位都不降级。降档的依据是周审计里「`AUTO` / `[非承重]` / `drive_mode=auto` 代决后被推翻」的次数，不是感觉。
@@ -214,16 +217,21 @@ agent 不得跑 `idev token init`，不得读取或改写 `~/.idev/secrets/`。`
 
 | 点 | 写法 | 谁查 |
 |----|------|------|
-| S8 `human.gate` | 配方 `with.auto_tiers` 含本票档位，且只给 plan 闸（`accepted_plan`）；`workflow.py record <gate> AUTO`，不带 `--by` / `--quote`。它自己跑 `check-feature verify-plan`，输出写进 `verify/plan-check.log`，退出码和 sha256 记进该步 `auto:`；`--evidence` 可省，写了只能是这个文件 | `workflow.py`：它跑出的输出要有 `0 FAIL` 行、没有 `SIGNAL` 行，且 `verify.plan` 步留痕里的信号都已 `decide`。事先存好的文件不算数，会被覆盖 |
+| S8 `human.gate`（plan 闸） | 配方 `with.auto_tiers` 含本票档位，`accepted_plan` 闸（静态映射）；`workflow.py record <gate> AUTO`，不带 `--by` / `--quote`。它自己跑 `check-feature verify-plan`，输出写进 `verify/plan-check.log`，退出码和 sha256 记进该步 `auto:`；`--evidence` 可省，写了只能是这个文件 | `workflow.py`：它跑出的输出要有 `0 FAIL` 行、没有 `SIGNAL` 行，且 `verify.plan` 步留痕里的信号都已 `decide`。事先存好的文件不算数，会被覆盖 |
+| S8 `human.gate`（stage 闸） | 配方 `with.auto_stage` 声明判据 stage（`current` = 票当前 stage）：交付阶段关（deliver-next）、实现审核（lite-change gate-review）、测试结果（test-pack gate-result）等过场闸。判据三条件同一：该 stage 的 `check-feature` 输出有 `0 FAIL` 行、没有 `SIGNAL` 行、**本闸之前所有步骤留痕的信号都已 `decide`**（stage 闸是整票到目前的检查点，信号扫全前序，不只一种 kind）。输出写进 `workflow/gate-<stage>-check.log` | `workflow.py record <gate> AUTO` 自己跑检查、覆盖式写日志，不认事先存好的文件 |
 | `plan.yaml` | `accepted: true` + `auto: <检查输出>`，`cases[].accepted: true`；`human_signoff` 保持 `PENDING`，实现审核时给人看。有 `SIGNAL` 不记 `AUTO`，并进实现审核 | `check-feature test`：文件存在、没有人名 `by`。每个档位都可以 |
 | `ops.yaml` | `resolved: true` + `auto: <路径>`，不写 `by` | `check-feature ops`：档位在 P1/P2、`hypothesis.py check` 绿、无 `open`、至少一条 `proven` |
+
+**AUTO 闸不 `ask`、不开 gate 通道**：`workflow.py ask` 对配了机检判据的闸直接拒绝——开了通道就要 human principal 才能批（Go 门的 is-human 检查），与「机检可判不请人」相反。判据任一不满足（FAIL / SIGNAL / 未答信号 / 档位不在 auto_tiers）时 `record AUTO` 被拒，那才是停下来问人的时候。
+
+**两轨分离**：run 层的 gate 可以 `AUTO`（无 `by`、无 signoff，`auto:` 记 stage/log/sha256）；**票 YAML 字段层**（`sealed` / `accepted` / `aligned` / `semantic_gate.*`）的 `by` 仍是真人名——`check-feature` 对这些字段的人名检查不动，人名由导体按编制规则取（票内已有 / 编制当前人 / git 用户），不需要人新输入。AUTO 过的 gate 不等于人的认知对齐——报告确认类（人应看产物的闸，如 review 报告的 I*）与决策 / 不可逆闸**永不 AUTO**，列在「永不代决」清单里。
 
 `semantic_gate.*` 在检查通过后写入，不另设确认。
 
 ## 诚实性
 
 检查没过，或还有未决分叉，却把 `sealed` / `accepted` / `aligned` / `resolved` / `human_signoff` / `semantic_gate.*.passed` 写成 true / `ACCEPTED` → 伪造。`by` 写成 agent / AI → 伪造。`AUTO` 格子以外写 `auto:` 也是伪造。
-检查过了就写，这是本规则，不是伪造。
+检查过了就写，这是本规则，不是伪造。run 层 AUTO 过的 gate 在 trace 记 `GATE_AUTO`（stage / log sha256），不冒充人的 signoff——两轨分离，票字段层的真人 `by` 照写。
 
 ## 不准
 

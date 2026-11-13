@@ -85,6 +85,25 @@ def _drive_auto_stats(repo: Path | None, feat: str) -> tuple[str, str]:
     return str(auto), str(overturned)
 
 
+def _gate_auto_stats(repo: Path | None, feat: str) -> str:
+    """Count run steps the ticket passed on machine checks (status AUTO).
+
+    The run layer's GATE_AUTO counterpart to _drive_auto_stats: an auto-passed
+    gate wrote no decisions.yaml row, so without this count the weekly audit
+    could not see how often machine judges are replacing person stops.
+    """
+    if feat == "-" or repo is None:
+        return "n/a"
+    task = homes(repo, feat)["task"]
+    total = 0
+    for run_path in sorted(task.glob("workflow/run.yaml")):
+        data = load(run_path)
+        for step in data.get("steps") or []:
+            if isinstance(step, dict) and str(step.get("status") or "") == "AUTO":
+                total += 1
+    return str(total)
+
+
 def main() -> int:
     args = sys.argv[1:]
     root = Path(__file__).resolve().parent.parent
@@ -117,11 +136,11 @@ def main() -> int:
     print()
     print(
         "| feature | traces | 首次 trace | 最近 trace | 跨度(天) | S2 推进次数 | "
-        "reopen 次数 | 签字后被推翻次数 | auto 代决 | auto 被推翻 |"
+        "reopen 次数 | 签字后被推翻次数 | auto 代决 | auto 被推翻 | 机检过闸 |"
     )
     print(
         "|---------|--------|-----------|-----------|---------|-------------|"
-        "-------------|------------------|-----------|------------|"
+        "-------------|------------------|-----------|------------|----------|"
     )
     for feat in sorted(per, key=lambda k: (k == "-", k)):
         e = per[feat]
@@ -131,14 +150,16 @@ def main() -> int:
         span = str((ats[-1].date() - ats[0].date()).days) if ats else "n/a"
         reopen, overturn = _deliver_reopen_overturn(repo, feat)
         auto_n, auto_ov = _drive_auto_stats(repo, feat)
+        gate_auto = _gate_auto_stats(repo, feat)
         print(
             f"| {feat} | {e['traces']} | {first} | {last} | {span} | {e['s2']} | "
-            f"{reopen} | {overturn} | {auto_n} | {auto_ov} |"
+            f"{reopen} | {overturn} | {auto_n} | {auto_ov} | {gate_auto} |"
         )
     print()
     print("口径：S2=trace 中 route.scenario 为 S2 的条数；reopen=max(revisions[] 备注含「解除密封/reopen」条数, baseline_revision-1)；")
     print("被推翻=revisions[] 备注含「作废/推翻/回退/rewind」条数（仅有 last_rewind 时记 1，为下界）；无票 yaml / 未绑票 → n/a。")
     print("auto 代决=decisions.yaml 中 source: auto；auto 被推翻=其中 overturned: true（收紧 drive_mode 的依据）。")
+    print("机检过闸=run.yaml 步骤 status: AUTO（GATE_AUTO，run 层机检代替人；周审计同口径观测）。")
     return 0
 
 
