@@ -4,6 +4,7 @@
 -- exit --
 0
 -- output --
+DRIVE mode=auto source=session
 DIGEST match 16ca2529b42d6b28
 NEXT run  kind=verify.run  status=pending
 OPEN verify/SKILL.md

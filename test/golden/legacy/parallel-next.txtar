@@ -4,7 +4,8 @@
 -- exit --
 0
 -- output --
-DIGEST match f91ad7060df91b01
+DRIVE mode=auto source=session
+DIGEST match 6fca639c70d52ae6
 PARALLEL check
 NEXT plan  kind=verify.plan  status=pending
 OPEN verify/SKILL.md

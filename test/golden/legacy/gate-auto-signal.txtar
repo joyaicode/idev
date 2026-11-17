@@ -4,4 +4,4 @@
 -- exit --
 2
 -- output --
-BLOCKED AUTO refused: the checks raised a question for a person — plan leaves UNPROVEN for a person to accept: compat-enabled-unchanged
+BLOCKED AUTO refused: the checks raised a question for a person — plan leaves UNPROVEN for a person to accept: compat-enabled-unchanged  (drive=auto: stamp RECOMMEND / PASS+[承重] defaults to 1 / decide --all-open --source auto)
