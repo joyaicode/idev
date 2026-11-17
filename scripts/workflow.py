@@ -1043,6 +1043,47 @@ def _progress_line(run: dict) -> str:
     return line
 
 
+def _clean_line(run: dict, run_path: Path | None) -> str:
+    """`CLEAN attempt=<n>/<cap>` — clean-pass rounds this run has burned, or untracked.
+
+    Policy `require_clean_pass: true` says a round with any FAIL does not
+    count as delivered and the lifecycle restarts from the top, capped by
+    `max_clean_attempts` (default 5). Before B2 nobody counted the rounds:
+    the cap was a policy field with no reader, so nearing it was invisible
+    (proposal 20261117 A2). The count is derived — the revision rows record
+    writes when a recorded step changes status, and a `FAIL -> ` prefix is
+    the one honest trace of "a round failed and was redone". No new file, no
+    second source of truth; a run whose revisions carry no such row and
+    holds no standing FAIL cannot be counted from anything, and the line
+    says `untracked` instead of guessing a number.
+    """
+    policy = run.get("policy") or {}
+    if not policy.get("require_clean_pass"):
+        return ""
+    cap = safeyaml.as_int(policy.get("max_clean_attempts"), 5)
+    steps = run.get("steps") or []
+    revisions = [row for row in (run.get("revisions") or []) if isinstance(row, dict)]
+    # The revision row record writes when a recorded step changes status is
+    # `"<old> -> <new>: <note>"` (workflow-schema.md revisions[]); a step
+    # re-recorded after FAIL carries `FAIL -> ` in that row. That is the one
+    # honest trace of "a round failed and was redone" — counting on it
+    # keeps this derived, no second ledger.
+    redone = sum(
+        1 for row in revisions
+        if str(row.get("note") or "").startswith("FAIL -> ")
+    )
+    standing = sum(
+        1 for step in steps
+        if isinstance(step, dict) and str(step.get("status") or "") == "FAIL"
+    )
+    rounds = redone + standing
+    if rounds < 1:
+        if revisions:
+            return "CLEAN attempt=untracked"
+        return "CLEAN attempt=1/%d" % cap
+    return "CLEAN attempt=%d/%d" % (rounds + 1, cap)
+
+
 def _drive_line() -> str:
     try:
         import drive_mode  # noqa: WPS433
@@ -1079,6 +1120,9 @@ def next_line(run: dict) -> list[str]:
     progress = _progress_line(run)
     if progress:
         lines.append(progress)
+    clean = _clean_line(run, None)
+    if clean:
+        lines.append(clean)
     return head + lines
 
 
@@ -2779,6 +2823,8 @@ def _print_replay(brief: dict) -> None:
         print(f"上下文失效: {row['span']} {row.get('reason') or '文件已变'}，这一段不算上下文")
     for row in brief.get("context_omitted") or []:
         print(f"上下文未放入: {row['span']} sha256={row['sha256']} 本轮上下文是新的，需要时 load 这一段")
+    for row in brief.get("context_pruned") or []:
+        print(f"上下文剪除: {row['span']} sha256={row['sha256']} {row.get('reason') or '不在本次改动邻域内'}")
     for row in brief.get("context_refused") or []:
         print(f"上下文拒绝: {row['span']} 不在仓根内")
 
@@ -3039,6 +3085,16 @@ def _retry_brief(args: argparse.Namespace, path: Path, shard: str) -> int:
     return 1
 
 
+def dock(reason: str, detail: str, loop: str = "land") -> None:
+    """One observability line: why the outer loop stopped (agents.md「统一停靠表」).
+
+    Assembled from this function's own variables — same exit, same reason.
+    To stderr after the payload so consumers parsing stdout see it second;
+    it names a stop, never judges the work (proposal 20261117 B2).
+    """
+    print("DOCK reason=%s loop=%s %s" % (reason, loop, detail), file=sys.stderr)
+
+
 def cmd_land(args: argparse.Namespace) -> int:
     """Take an agent's report for a step: its record, then the verifier's turn or the step's record."""
     path, run, step = _ticket_run(args)
@@ -3078,11 +3134,13 @@ def cmd_land(args: argparse.Namespace) -> int:
         print(f"SEND BACK {sid}: the report fails {', '.join(findings)}; "
               "the retry brief follows, or land again with "
               "--accept-with-findings \"<why it passes anyway>\"")
+        dock("BLOCKED-REPORT", "checks failed: %s" % ",".join(findings))
         return _retry_brief(args, path, "")
     status = _report_status(raw)
     if status == "BLOCKED":
         print(f"STOP {sid} came back BLOCKED: follow the HANDOFF / CONSULT / REBRIEF / SIGNAL lines above, "
               f"then workflow.py step {sid} for the next attempt")
+        dock("BLOCKED-REPORT", "agent reported BLOCKED")
         return 1
     asked = unanswered(path, sid)
     if asked and _drive_is_auto():
@@ -3111,6 +3169,7 @@ def cmd_land(args: argparse.Namespace) -> int:
             f"STOP {sid} has signals: {'; '.join(asked)} — {guide}; "
             f"then land the same report again"
         )
+        dock("SIGNAL", "unanswered: %s" % "; ".join(asked))
         if _drive_is_auto():
             try:
                 import drive_mode  # noqa: WPS433

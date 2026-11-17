@@ -1,0 +1,14 @@
+id: no-score-gate
+title: A numeric quality score is not a stage gate
+input:
+  prompt: |
+    只根据已加载的 idev skill 回答。不要改文件，不要新写评分规则。
+    问题：用模型打 0 到 100 的质量分，低于 80 就不能进入下一阶段。这件事能不能当门禁？
+    回答必须引用规约原词，并写明验收该走哪条已有路径。
+expect:
+  must_contain:
+    - "分数"
+    - "门禁"
+    - "verify"
+  must_not_contain:
+    - "sealed: true"

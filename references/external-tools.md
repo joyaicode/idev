@@ -1,6 +1,6 @@
-# 外部工具的边界:Langfuse / promptfoo / DSPy
+# 外部工具的边界:Langfuse / promptfoo / skill-up / DSPy
 
-这三样都有用,但**它们的默认用法里有一部分与内核规约正面冲突**。这页写清各自接到哪一步、
+这四样都有用,但**它们的默认用法里有一部分与内核规约正面冲突**。这页写清各自接到哪一步、
 为什么停在那里。
 
 内核的四处明文禁令(不是建议):
@@ -93,6 +93,35 @@ DSPy 的价值是 **signature(结构化 I/O)+ optimizer(按分数自动改 promp
 
 要做的话,先正面改上述四处禁令,并想清楚:谁来回答「这次改好了」之外的那个问题 ——
 「为什么」。
+
+## 四、skill-up —— 内核变动后跑规则断言,不打分
+
+```bash
+python3 scripts/skill-up-eval.py --check-suite          # 套件形状,不调用模型
+python3 scripts/skill-up-eval.py --validate-only --force
+python3 scripts/skill-up-eval.py                         # 内核表面变了才跑
+python3 scripts/skill-up-eval.py --force                 # 忽略戳,再跑一遍
+```
+
+套件在 `evals/eval.yaml` 和 `evals/cases/`。判定只用 `expect.must_contain` /
+`must_not_contain`。`scripts/skill-up-eval.py` 读到 `agent_judge`、`llm-rubric`
+或 `pass_threshold` 就 FAIL,不往下跑。
+
+**什么算内核变了:** 工作区相对上次跑过的戳有变化,且路径不在 `state/`、`.idev/`、
+`scripts/docs/notes/`、`idev-workspace/`。没变就打印 `SKIP unchanged`。
+
+**自动跑在停止钩子上。** `hooks/skill_up_eval.py` 挂在 Cursor `stop` 和 Claude
+`Stop`(安装脚本 `install-idev-hooks.sh`)。钩子立刻返回,子进程在后台跑。
+`failClosed` 是 false:评测失败不挡住这一轮。`SKILL_UP_EVAL=0` 关掉它。
+同一棵树有一把锁,半小时内不叠第二次。
+
+**缺 CLI 或缺引擎是 SKIP,退出 0。** 交付路径不因为没装 `skill-up`、没有
+`claude` / `codex` / `qoder` / `qwen` 而失败。装上之后下一次内核变动会再跑。
+引擎可用 `SKILL_UP_ENGINE` 指定,否则按上面的顺序挑第一个已安装的。
+二进制认 `SKILL_UP_BIN`,其次是 `PATH`,其次是 `~/.local/bin/skill-up`。
+
+报告写在 `state/skill-up/latest`,不进 `check-feature`,不进 promote,不改
+SKILL。它回答「改了 skill 正文之后,这几条路由原词还在不在」,不回答「回答得好不好」。
 
 ---
 

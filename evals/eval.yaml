@@ -1,0 +1,28 @@
+# skill-up suite for the idev skill. Rule checks only.
+schema_version: v1alpha1
+
+environment:
+  type: none
+
+skills:
+  - source: local_path
+    path: .
+    include:
+      - SKILL.md
+
+engine:
+  name: claude_code
+
+cases:
+  files:
+    - evals/cases/route-small-change.yaml
+    - evals/cases/no-score-gate.yaml
+  defaults:
+    timeout_seconds: 180
+    max_turns: 3
+    expect:
+      exit_code: 0
+  parallelism: 1
+
+report:
+  formats: [json]

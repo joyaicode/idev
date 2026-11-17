@@ -674,14 +674,17 @@ def render(result: dict, feature: str) -> str:
             f"MERGE {activity} shard drafts are in; do not delegate",
             "MERGE python3 scripts/fanout.py merge --feature "
             f"{feature} --activity {activity}",
+            _dock("MERGE-DUE", "%s shard drafts are in" % activity),
         ])
     lines = []
     pending = {str(item) for item in (result.get("pending_ids") or [])}
     if result["decision"] == "SERIAL":
         lines.append(f"SERIAL {activity} {result['reason']}")
+        lines.append(_dock("DELEGATE", "%s stays one agent: %s" % (activity, result["reason"])))
     else:
         shown = [shard for shard in result["shards"] if not pending or str(shard["id"]) in pending]
         lines.append(f"FANOUT {activity} {len(shown)} cap={result['cap']}")
+        lines.append(_dock("PARALLEL-WAVE", "%s splits into %d shards" % (activity, len(shown))))
         for prep in result.get("prep") or []:
             lines.append(f"PREP {prep}")
         for shard in shown:
@@ -690,6 +693,8 @@ def render(result: dict, feature: str) -> str:
             lines.append(f"SCOPE {shard['scope']}")
         for shard in result.get("queued") or []:
             lines.append(f"QUEUED {shard['id']}")
+        if result.get("queued"):
+            lines.append(_dock("CAP-REACHED", "%d shards queue behind cap=%d" % (len(result["queued"]), result["cap"])))
         lines.append(
             "MERGE python3 scripts/fanout.py merge --feature "
             f"{feature} --activity {activity}"
@@ -701,6 +706,17 @@ def render(result: dict, feature: str) -> str:
     if result.get("hint"):
         lines.append(f"HINT {result['hint']}")
     return "\n".join(lines)
+
+
+def _dock(reason: str, detail: str) -> str:
+    """One observability line, same wording as drive/workflow's dock.
+
+    fanout's assess is one of the four inner loops (agents.md「统一停靠表」,
+    proposal 20261117 B2): its verdict is where the conductor stops. A
+    DOCK line on the verdict keeps the four loops speaking one vocabulary
+    without fanout gaining a state of its own.
+    """
+    return "DOCK reason=%s loop=fanout %s" % (reason, detail)
 
 
 def write_manifest(feature: str, result: dict, repo: Path | None) -> Path | None:

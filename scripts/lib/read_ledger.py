@@ -70,6 +70,16 @@ def project(ticket: Path, step: str, repo: Path, skip: set[str] | None = None) -
 
     A matching sha256 contributes the file text. A changed file, a span that
     no longer exists, or a path outside the repo contributes no text.
+
+    Diff pruning (proposal 20261117-agent-loop-enhancement C1, grilling
+    4a): when the working tree names changed symbols and the span's file is
+    among them but the span sits outside the changed neighborhood, the span
+    moves to `context_pruned` with the load instruction — visible, one line,
+    never silently gone. Only `ast` mode (python) prunes; brace and file
+    modes are PREP nominations and never touch a replay. No diff at all
+    (`none` mode) leaves every span exactly as before this hook existed.
+    The sha256 admission above still runs first: a changed file is stale by
+    digest before it is ever a pruning question.
     """
     repo = repo.resolve()
     skipped = skip or set()
@@ -78,10 +88,12 @@ def project(ticket: Path, step: str, repo: Path, skip: set[str] | None = None) -
         if str(row.get("step") or "") == step and row.get("span") and row.get("sha256")
         and str(row["span"]) not in skipped
     ]
+    prune = _symbol_pruner(repo)
     blocks: list[dict] = []
     stale: list[dict] = []
     omitted: list[dict] = []
     refused: list[dict] = []
+    pruned: list[dict] = []
     remaining = MAX_CHARS
     for row in reversed(rows):
         span = str(row["span"])
@@ -105,6 +117,10 @@ def project(ticket: Path, step: str, repo: Path, skip: set[str] | None = None) -
         if start > len(lines):
             stale.append({"span": span, "reason": "区间已不在文件里"})
             continue
+        reason = prune(path, start, end)
+        if reason:
+            pruned.append({"span": span, "sha256": digest, "reason": reason})
+            continue
         last = min(end, len(lines))
         window = lines[start - 1:last][:MAX_LINES]
         body = "\n".join(f"{start + i}|{_clip(line)}" for i, line in enumerate(window))
@@ -126,4 +142,42 @@ def project(ticket: Path, step: str, repo: Path, skip: set[str] | None = None) -
         out["context_omitted"] = list(reversed(omitted))
     if refused:
         out["context_refused"] = list(reversed(refused))
+    if pruned:
+        out["context_pruned"] = list(reversed(pruned))
     return out
+
+
+def _symbol_pruner(repo: Path):
+    """A path→(start,end)→reason gate, or a never-prune gate.
+
+    Import lazily and fail to `none` (never prune) on any error: a pruning
+    layer that throws would take the replay down with it, and a replay that
+    cannot decide is safer unreduced — R3 in the proposal's own terms. The
+    `ast`-mode restriction is the part grilling 4a settled: approximation
+    modes that cannot name a symbol's true span get to nominate for the
+    scan, not to edit what a delegated agent will read back.
+    """
+    try:
+        import symbol_diff
+
+        out = symbol_diff.spans(repo)
+        table: dict[str, dict] = {}
+        for row in out["changed"]:
+            if row["mode"] == "ast":
+                table[Path(row["path"]).as_posix()] = row
+
+        def gate(path: str, start: int, end: int) -> str:
+            row = table.get(Path(path).as_posix())
+            if row is None:
+                return ""
+            lo, hi = row["neighborhood"]
+            if start > hi or end < lo:
+                return "区间在本次改动的函数邻域之外，需要时 load 这一段"
+            return ""
+
+        return gate
+    except Exception:
+        def never(path: str, start: int, end: int) -> str:
+            return ""
+
+        return never

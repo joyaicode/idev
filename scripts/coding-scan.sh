@@ -189,6 +189,41 @@ for n, rel in rows[:5]:
 else
   echo "  git: none"
 fi
+if [ "${IDEV_SYMBOL_DIFF:-}" != "off" ]; then
+  echo "=== 改动邻域 (symbol_diff；提名不是授权，需要时 load) ==="
+  # 4 blocks / 4000 chars per the 2026-11-17 grilling (Q8): a big diff must
+  # not flood the PREP output. IDEV_SYMBOL_DIFF=off keeps old behavior whole.
+  REPO="$REPO" IDEV_LIB="${IDEV}/scripts/lib" python3 -c '
+import os, sys
+sys.path.insert(0, os.environ["IDEV_LIB"])
+try:
+    from pathlib import Path
+    import symbol_diff
+    out = symbol_diff.spans(Path(os.environ["REPO"]).resolve())
+except Exception as exc:
+    print("  symbol-diff fail: %s" % exc)
+    raise SystemExit(0)
+print("  " + out["status"])
+shown = 0
+budget = 4000
+for row in out["changed"]:
+    if shown >= 4 or budget <= 0:
+        print("  (其余文件略，调用 symbol_diff.py --repo 自查或按需 load)")
+        break
+    lo, hi = row["neighborhood"]
+    names = ",".join(f["name"] for f in row["symbols"]) or "-"
+    line = "  %-6s %s:%d:%d  %s" % (row["mode"], row["path"], lo, hi, names)
+    if len(line) > budget:
+        print("  (篇幅已满，其余略)")
+        break
+    print(line)
+    shown += 1
+    budget -= len(line)
+if not out["changed"]:
+    print("  (none)")
+'
+fi
+
 run_configured_scanner() {
   local wf flags name ran=0
   wf="$(grep -Rls 'super-linter' "$REPO/.github" 2>/dev/null | head -1 || true)"

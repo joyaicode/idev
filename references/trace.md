@@ -138,7 +138,7 @@ bash ~/.cursor/skills/idev/scripts/trace.sh list
 
 **`calls[]` 不自动填。** 一条命令算不算一次调用、归哪个 `kind`，那是判断不是事实；trace 是审计记录，填错比缺失更糟 —— 这正是下面「不准伪造 `calls`」那条的另一面。`route.why`、`invoke.matched`、`thinking.summary` 同理，脚本一律不填：一份推理由脚本写出来的 trace 什么也没记下。
 
-补完之后 `append` 还会多打两行（都不改退出码，不挡本轮）：本会话助手轮数到 `HANDOFF_ROUNDS`（100）时打 `HANDOFF`，提示可以收口新开会话；轮数够 `BUDGET_FROM_ROUND`（6）时跑一次 `turn-budget.py`，超了预算打 `WARN 回合预算: …`。
+补完之后 `append` 还会多打三行（都不改退出码，不挡本轮）：本会话助手轮数到 `HANDOFF_ROUNDS`（100）时打 `HANDOFF`，提示可以收口新开会话；同一条件下若该票有进行中的 run，还会把结构化恢复包落进 `<票目录>/workflow/resume.yaml` 并打一行 `RESUME <路径>`——每个字段都是既有落盘的拼装或指针（open 步骤、PROGRESS、prior_failures、reads 行、timeline 指针），零生成文本，新会话先读这份按 `open:` 行接着跑；没有票或 run 是常态，打一行 WARN 就过。轮数够 `BUDGET_FROM_ROUND`（6）时跑一次 `turn-budget.py`，超了预算打 `WARN 回合预算: …`。
 
 ### `signoff` 块（v2 增补）
 

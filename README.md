@@ -52,8 +52,9 @@
 | `references/boost.md` | 提效：**本地事实优先**（文档会过时）· §0 交代 · 签名归一化 · 假设台账 |
 | `references/code-agent.md` · `scripts/repl.py` | 用代码表达推理：计算的源码与输出落成证据 |
 | `references/agent-accuracy.md` | 准确率护栏：借 Cursor/Claude Code 的机械约束（6 条机检） |
-| `references/external-tools.md` | Langfuse 导出 · promptfoo 回归断言 · 为什么不装 DSPy |
-| `scripts/langfuse-export.py` · `promptfoo-gen.py` | 离线导出观测 · 生成格式与边界断言（0 评分） |
+| `references/external-tools.md` | Langfuse 导出 · promptfoo 回归断言 · skill-up 规则断言 · 为什么不装 DSPy |
+| `scripts/langfuse-export.py` · `promptfoo-gen.py` · `skill-up-eval.py` | 离线导出观测 · 格式断言（0 评分）· 内核变动后跑 skill-up |
+| `evals/` | skill-up 套件。只含 `must_contain` / `must_not_contain` |
 | `references/agents-evolve.md` · `failure-modes.md` · `agents-todo.md` | 可调试与自进化 · 失败模式清单 · 待办 |
 | `state/` | 仅导体自身会话的中间产物；产品会话写到该仓 `.idev/` |
 

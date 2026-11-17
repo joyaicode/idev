@@ -36,13 +36,19 @@ done
 WF="${WF:-lite-change}"
 
 echo "# idev s8-preflight"
+
+blocked=0
+ok_count=0
+block() { echo "BLOCKED $1"; blocked=1; }
+ok() { echo "OK  $1"; ok_count=$((ok_count + 1)); }
+
 echo "feature=${FEATURE:-?} workflow=$WF product=${PRODUCT:-marker} repo=$REPO"
 
 if [ ! -f "$ROOT/SKILL.md" ]; then
   echo "FAIL idev true source missing: $ROOT/SKILL.md"
   exit 1
 fi
-echo "OK  idev root $ROOT"
+ok "idev root $ROOT"
 
 if [ -z "$FEATURE" ]; then
   echo "FAIL usage: s8-preflight.sh <feature> [workflow_id]"
@@ -83,14 +89,11 @@ sys.exit(0 if isinstance(data, dict) and data.get("needs_ticket") is False else 
 PY
 }
 
-blocked=0
-block() { echo "BLOCKED $1"; blocked=1; }
-
 DELIVER="$(python3 "$ROOT/scripts/lib/doc_home.py" --repo "$REPO" --feature "$FEATURE" --key deliver)"
 PATROL="$(python3 "$ROOT/scripts/lib/doc_home.py" --repo "$REPO" --feature "$FEATURE" --key patrol)"
 RECIPE=""
 if RECIPE="$(resolve_recipe "$WF" "$REPO")"; then
-  echo "OK  recipe $RECIPE"
+  ok "recipe $RECIPE"
 else
   block "no recipe $WF under the marked product .idev/workflows or idev workflows"
 fi
@@ -103,7 +106,7 @@ if [ "$wants_ticket" = 1 ]; then
   if [ ! -f "$DELIVER" ]; then
     block "missing $DELIVER (set IDEV_REPO or cd to product repo)"
   else
-    echo "OK  deliver.yaml $DELIVER"
+    ok "deliver.yaml $DELIVER"
   fi
 fi
 
@@ -115,7 +118,7 @@ if [ "$wants_ticket" = 1 ] && [ -f "${DELIVER:-}" ] && [ "$WF" = "test-pack" ]; 
   if [ -n "$DELIVER_STAGE" ] && [ "$DELIVER_STAGE" != "test" ]; then
     block "test-pack expects stage=test, got stage=$DELIVER_STAGE"
   else
-    echo "OK  stage=${DELIVER_STAGE:-unknown}"
+    ok "stage=${DELIVER_STAGE:-unknown}"
   fi
 fi
 
@@ -123,7 +126,7 @@ if [ "$WF" = "patrol-replay" ]; then
   if [ ! -f "$PATROL" ]; then
     block "missing patrol pack $PATROL"
   else
-    echo "OK  patrol pack $PATROL"
+    ok "patrol pack $PATROL"
   fi
 fi
 
@@ -142,14 +145,14 @@ if [ "${IDEV_PREFLIGHT_COMPILE:-0}" = "1" ]; then
       if ! (cd "$REPO" && mvn -pl "$modules" -am -DskipTests compile -q); then
         block "mvn compile failed (modules=$modules); fix drift before selftest"
       else
-        echo "OK  mvn compile ($modules)"
+        ok "mvn compile ($modules)"
       fi
     else
       echo "RUN  mvn -DskipTests compile"
       if ! (cd "$REPO" && mvn -DskipTests compile -q); then
         block "mvn compile failed; fix drift before selftest"
       else
-        echo "OK  mvn compile"
+        ok "mvn compile"
       fi
     fi
   fi
@@ -188,7 +191,11 @@ fi
 
 if [ "$blocked" -ne 0 ]; then
   echo "RESULT BLOCKED — list missing inputs above; do not invent seal/coverage"
+  # HEALTH is a fact count, never a score (agent-loop.md 探针规约): the
+  # person glancing at the tail sees the shape without scrolling the body.
+  echo "HEALTH ok=$((ok_count)) fail=$((blocked)) (PASS 只说明没撞上已知的硬错)"
   exit 2
 fi
 echo "RESULT OK"
+echo "HEALTH ok=$((ok_count)) fail=0 (PASS 只说明没撞上已知的硬错)"
 exit 0

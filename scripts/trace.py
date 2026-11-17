@@ -1065,6 +1065,135 @@ HANDOFF_ROUNDS = 100
 # the check — it is not paying for one that cannot have a verdict yet.
 BUDGET_FROM_ROUND = 6
 
+# resume_pack caps: pointers are kept by count, never by token — the
+# no-token-budget decision (proposal 20261102) stands. The reads ledger is
+# copied as {step, span, sha256} rows, body text never (disk replays it);
+# timeline pointers are last-N, matching read_ledger's newest-first style.
+RESUME_READ_LIMIT = 40
+RESUME_EVENT_LIMIT = 20
+
+
+def resume_pack(text: str, rounds: int, ctx: int) -> Path | None:
+    """Assemble the ticket's structured resume bundle, or None when it can't.
+
+    Proposal 20261117-agent-loop-enhancement B2: the HANDOFF line tells the
+    person a fresh session can pick up from the ticket, but until now the
+    fresh session had to re-read the whole ticket to know where "the stage"
+    is. This bundle is the mechanism that sentence promised — and it is
+    assembly, not summarization: every field is an existing structured
+    store (run.yaml, reads.yaml, timeline, delegation records) copied or
+    pointed at, never generated. Zero LLM text.
+
+    Why failures return None instead of raising: this runs inside
+    `trace.sh append`, a write point that fires every round. The
+    merge_facts rule applies — a helper that could turn a writable trace
+    into a failing one would be a net loss. A bundle is optional; the
+    trace is not.
+    """
+    try:
+        import doc_home
+        import read_ledger
+        import yaml as yaml_mod
+
+        feature = field(text, "feature") or ""
+        if not feature or feature == "-":
+            return None
+        repo = product_repo()
+        if repo is None:
+            return None
+        ticket = doc_home.homes(repo, feature)["task"]
+        run_path = ticket / "workflow" / "run.yaml"
+        if not run_path.is_file():
+            return None
+        run = yaml_mod.safe_load(run_path.read_text(encoding="utf-8")) or {}
+        if not isinstance(run, dict):
+            return None
+        steps = run.get("steps") or []
+        open_ids = [
+            str(step.get("id")) for step in steps
+            if isinstance(step, dict) and not step.get("status")
+        ]
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import workflow as wf
+
+        prior: dict[str, str] = {}
+        for step_id in open_ids:
+            record = wf.latest_delegation(run_path, step_id)
+            if record:
+                prior[step_id] = wf.prior_failure(run_path, record)
+        reads = read_ledger.load(ticket)[-RESUME_READ_LIMIT:]
+        bundle: dict = {
+            "schema_version": 1,
+            "feature": feature,
+            "rounds": rounds,
+            "ctx_last_round": ctx,
+            "handoff_note": handoff_line(text, rounds, ctx),
+            "open": open_ids,
+            "progress": _progress_of(run),
+            "prior_failures": prior,
+            "reads": reads,
+        }
+        events = _resume_events(repo, feature)
+        if events:
+            bundle["timeline_events"] = events
+        dest = ticket / "workflow" / "resume.yaml"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        body = yaml_mod.safe_dump(
+            bundle, allow_unicode=True, sort_keys=False, default_flow_style=False,
+        )
+        dest.write_text(body, encoding="utf-8")
+        return dest
+    except Exception:
+        return None
+
+
+def _progress_of(run: dict) -> str:
+    total = len(run.get("steps") or [])
+    closed = sum(
+        1 for step in (run.get("steps") or [])
+        if isinstance(step, dict) and step.get("status")
+    )
+    open_ids = [
+        str(step.get("id")) for step in (run.get("steps") or [])
+        if isinstance(step, dict) and not step.get("status")
+    ]
+    tail = " open=" + ",".join(open_ids) if open_ids else ""
+    return "PROGRESS closed=%d/%d%s" % (closed, total, tail)
+
+
+def _resume_events(repo: Path, feature: str) -> list[dict]:
+    """Last timeline pointers for this feature, newest facts only.
+
+    structured_retain keeps invoke/decisions/delegations/recorded under
+    .idev/timeline/ (product) or state/timeline/ (kernel). The bundle takes
+    pointers — the source trace name plus a fact, never a body: disk
+    replays the bodies, and the bundle only says where they are.
+    """
+    try:
+        import safeyaml
+
+        base = (repo / ".idev" / "timeline") if repo is not None else None
+        if base is None:
+            return []
+        path = base / ("%s.yaml" % re.sub(r"[^\w.-]+", "_", feature))
+        if not path.is_file():
+            return []
+        data = safeyaml.mapping(path) or {}
+        events = [e for e in (data.get("events") or []) if isinstance(e, dict)]
+        keep: list[dict] = []
+        for event in reversed(events[-RESUME_EVENT_LIMIT:]):
+            keep.append({
+                "source": str(event.get("_source") or ""),
+                "recorded": [
+                    str(row) for row in (event.get("recorded") or [])
+                    if isinstance(row, (str, dict))
+                ],
+                "delegations": len(event.get("delegations") or []),
+            })
+        return keep
+    except Exception:
+        return []
+
 
 def session_rounds() -> tuple[int, int]:
     """This session's assistant rounds, and the context size of the last one.
@@ -1221,6 +1350,110 @@ def merge_opened(text: str, folder: Path) -> str:
     return text
 
 
+def merge_reads(folder: Path, text: str) -> list[str]:
+    """Fold whole-file Reads of this round into the ticket's reads ledger.
+
+    Proposal 20261117-agent-loop-enhancement D2, grilling 3a: the ledger
+    (workflow/reads.yaml) records context-stage loads and delegation
+    must-read pages, but an ordinary Read of a project file left no row —
+    so the next attempt replayed without knowing what the last hand had
+    actually read. The transcript already holds the fact.
+
+    The line this module must not cross is the one the 20261102 grilling
+    drew for calls[]: a span and a sha256 are facts, "was it understood" is
+    a judgement and stays out. Facts it records, and only these:
+
+    - whole-file Reads only (no offset/limit on the tool input — a partial
+      read cannot name a span without guessing, and a missed entry costs
+      less than a wrong one);
+    - ticket-repo files only (read_ledger refuses spans outside the repo,
+      so an outside row could never replay anyway);
+    - only rows the ledger does not already have (this fills gaps, it does
+      not rewrite history);
+    - a fresh digest per read, because the ledger's sha256 is what makes
+      replay honest.
+
+    Best effort like the rest of this family: no transcript, no usable
+    step context, no recognition — the function says nothing and nothing
+    fails. The returned list is what it noted, for the caller that wants
+    to say so.
+    """
+    try:
+        import hashlib
+
+        import doc_home
+        import read_ledger
+
+        feature = field(text, "feature") or ""
+        step = _reads_step(text)
+        if not feature or feature == "-" or not step:
+            return []
+        repo = product_repo()
+        if repo is None:
+            return []
+        ticket = doc_home.homes(repo, feature)["task"]
+        uses = session_transcript.tool_uses(
+            session_transcript.newest(), previous_until(folder),
+            dt.datetime.now().astimezone(),
+        )
+        known = {
+            (str(row.get("step")), str(row.get("span")))
+            for row in read_ledger.load(ticket)
+        }
+        noted: list[str] = []
+        for name, raw in uses:
+            if name != "Read":
+                continue
+            if raw.get("offset") is not None or raw.get("limit") is not None:
+                continue  # a partial read cannot name a span without guessing
+            path_raw = str(raw.get("file_path") or "").strip()
+            if not path_raw:
+                continue
+            try:
+                full = Path(path_raw).expanduser().resolve()
+            except OSError:
+                continue
+            try:
+                rel = full.relative_to(repo.resolve())
+            except ValueError:
+                continue  # outside the ticket's repo: read_ledger would refuse the span anyway
+            if not full.is_file():
+                continue
+            # splitlines(), the same line count read_ledger replays
+            # with — a trailing newline must not invent a phantom last line.
+            total = len(full.read_text(encoding="utf-8", errors="replace").splitlines())
+            rel_posix = rel.as_posix()
+            span = f"{rel_posix}:1:{total}"
+            if (step, span) in known:
+                continue
+            digest = hashlib.sha256(full.read_bytes()).hexdigest()
+            read_ledger.note(ticket, step, span, digest)
+            known.add((step, span))
+            noted.append(span)
+        return noted
+    except Exception:
+        return []
+
+
+def _reads_step(text: str) -> str:
+    """The step this round's reads belong to, or "".
+
+    A trace names its step nowhere directly; the machine blocks trace.py
+    writes itself do. `recorded:` rows carry step ids (machine_items is
+    that block's own parser), and a `next`-shaped delegation hint names
+    the open step. When neither is there the honest answer is empty: a
+    row with a guessed step is a wrong row in an audit ledger.
+    """
+    for row in machine_items(text, "recorded"):
+        step = str(row.get("step") or "").strip()
+        if step:
+            return step
+    match = re.search(r"(?m)^\s*(?:NEXT|DELEGATE)\s+(\S+)", text)
+    if match:
+        return match.group(1)
+    return ""
+
+
 def budget_line() -> str:
     """What turn-budget.py says about this session, as one line, or "".
 
@@ -1269,6 +1502,7 @@ def cmd_append(path: str) -> int:
         print("WARN  " + round_warn, file=sys.stderr)
     text = merge_facts(text)
     text = merge_opened(text, folder)
+    merge_reads(folder, text)
     errors = validate(text, for_append=True)
     if errors:
         for e in errors:
@@ -1292,6 +1526,19 @@ def cmd_append(path: str) -> int:
     rounds, ctx = session_rounds()
     if rounds >= HANDOFF_ROUNDS:
         print(handoff_line(text, rounds, ctx))
+        # B2: the line above promises "pick up from the ticket" — the bundle
+        # is what makes that sentence true. Missing ticket/run/product is the
+        # normal small-ticket case: resume stays a promise, append is fine.
+        # A write failure only warns, the merge_facts rule (a helper that
+        # could fail the round cannot run here).
+        try:
+            packed = resume_pack(text, rounds, ctx)
+        except Exception:
+            packed = None
+        if packed is not None:
+            print("RESUME %s — 新会话先读这份，按 open: 行接着跑" % packed)
+        else:
+            print("WARN  resume pack not written (no ticket/run for this feature)")
     if rounds >= BUDGET_FROM_ROUND:
         budget = budget_line()
         if budget:

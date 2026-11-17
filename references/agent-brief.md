@@ -50,6 +50,7 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 | `COUNT hops=<已用>/<上限>` | `react_loop.py show` 打在逐跳记录之前 |
 | `PROGRESS closed=<已收口>/<总步数> open=<步骤 id>` | `next` 末尾，也打在委派包 `END BRIEF` 前。已收口是不再做的步骤，含跳过、未证明和失败后已改道。`open` 是还没收口的步骤 id |
 | `DRIVE mode=<assisted\|auto> source=<session\|product\|default>` | `session-context` 打出。`auto` 时有推荐的 B 类/认知分叉按建议代决；硬停点仍问人。见 [chat-confirm-signoff.md](chat-confirm-signoff.md) |
+| `HANDOFF` / `RESUME <路径>` | 轮数过百后 `trace.sh append` 打出。`RESUME` 指 `<票目录>/workflow/resume.yaml`：新开会话先读这份，按 `open:` 行接着跑，不必重述本轮。没有这一行（无票/无 run）就按 `deliver.yaml` 的 stage 进入，与以前相同 |
 | `PRIOR <经验/程序>` / `PRIOR_NOTE` | 阶段入口自动带出的已过闸约束：`lessons.py` 的 `authoritative` 与 `sediment.py` 的 `kept`。它是约束、边界和证据指针，不是答案；没列出不代表没有，采纳与否仍以本轮证据为准 |
 | `步进:` / `包含:` | 委派包里必读页的前 80 行（最多 4000 字）和文件 sha256，以及 `arch.yaml` 里 `include: true` 的路径。没有索引时这里没有符号 |
 | `请求头:` | 执行者定义文件的 sha256，以及该文件声明的 `tools`。用的是派发时冻进 brief 的那一份。定义文件缺失就写明缺失 |

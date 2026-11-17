@@ -5,6 +5,14 @@ FANOUT prints one brief per shard. MERGE with no SHARD runs the merge.
 A PARALLEL wave prints one brief per member. A kernel-script PREP runs before those briefs.
 ASK slot is printed unchanged.
 Nothing here spawns an agent.
+
+One DOCK line rides out with every return, naming why the loop stopped
+(reference: agents.md「统一停靠表」— proposal 20261117 B2). It is a fact
+assembled from the output the loop already holds, never a new judgment:
+the same exit path prints the same reason every time. It goes to stderr
+after the stdout text so a consumer parsing the next-step lines still
+sees them first, and returns carry it because drive stops *at* these
+docks, it does not resolve them.
 """
 from __future__ import annotations
 
@@ -21,6 +29,11 @@ CAP = 8
 EXECUTABLE = ("preflight.inputs", "scope.baseline", "shell.confirmed", "tool.step")
 
 
+def dock(reason: str, detail: str, loop: str = "drive") -> None:
+    """One observability line: why the loop stopped. Never a verdict."""
+    print("DOCK reason=%s loop=%s %s" % (reason, loop, detail), file=sys.stderr)
+
+
 def _has_line(text: str, needle: str) -> bool:
     return any(needle in line for line in text.splitlines())
 
@@ -31,6 +44,17 @@ def wake(text: str) -> bool:
     if text.startswith("PARALLEL ") or "\nPARALLEL " in text:
         return True
     return "ASK slot" in text
+
+
+def wake_reason(text: str) -> str:
+    """The STOP_REASON for why this next-output stopped the drive loop."""
+    if "DELEGATE idev-" in text:
+        return "DELEGATE"
+    if text.startswith("PARALLEL ") or "\nPARALLEL " in text:
+        return "PARALLEL-WAVE"
+    if "ASK slot" in text:
+        return "ASK-SLOT"
+    return "NONE"
 
 
 def parse_next(text: str) -> dict | None:
@@ -116,28 +140,38 @@ def drive(repo: Path, ticket: Path, hooks: dict) -> int:
             if prepared is not None:
                 hcode, hout = prepared
                 sys.stdout.write(hout)
+                dock(wake_reason(text) or "DELEGATE", "step %s handed to the conductor" % (step or {}).get("id", "?"))
                 return hcode
             sys.stdout.write(text)
+            if code != 0:
+                dock("CMD-FAIL", "next exited %d" % code)
+            else:
+                dock(wake_reason(text) or "DELEGATE", "next stopped the loop")
             return code
         if step["kind"] == "human.gate":
             if _has_line(text, "DECISION"):
                 sys.stdout.write(text)
+                dock("DECISION", "gate %s awaits a person" % step["id"])
                 return 0
             status = "AUTO" if _has_line(text, "record AUTO") else "PASS" if _has_line(text, "GATE pass") else ""
             if not status:
                 sys.stdout.write(text)
+                dock("HUMAN-GATE", "gate %s has no machine verdict" % step["id"])
                 return 0
             code, out = hooks["record"](step["id"], status, "")
             sys.stdout.write(out)
             if code != 0:
+                dock("CMD-FAIL", "record %s %s exited %d" % (step["id"], status, code))
                 return code
             continue
         if step["kind"] not in EXECUTABLE:
             sys.stdout.write(text)
+            dock("DELEGATE", "step %s renders for the conductor" % step["id"])
             return 0
         spec = command_for(step["kind"], _step_row(load, step["id"]), repo, feature, workflow_id)
         if spec is None:
             sys.stdout.write(text)
+            dock("DELEGATE", "step %s has no conductor command" % step["id"])
             return 0
         cmd, cwd = spec
         status, log = run_logged(cmd, cwd, repo)
@@ -146,10 +180,13 @@ def drive(repo: Path, ticket: Path, hooks: dict) -> int:
         dest.write_text(log, encoding="utf-8")
         if status != 0:
             sys.stdout.write(log)
+            dock("CMD-FAIL", "step %s command exited %d; log at %s" % (step["id"], status, dest.name))
             return 1
         code, out = hooks["record"](step["id"], "PASS", _evidence(ticket, repo, step["id"]))
         sys.stdout.write(out)
         if code != 0:
+            dock("CMD-FAIL", "record %s PASS exited %d" % (step["id"], code))
             return code
     print("BLOCKED drive stopped after 8 conductor steps", file=sys.stderr)
+    dock("CAP-REACHED", "drive ran %d conductor steps without docking" % CAP)
     return 2

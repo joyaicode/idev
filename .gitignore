@@ -30,6 +30,8 @@ state/*.lock
 /state/traces/
 /state/reviews/
 /state/promptfoo/
+/state/skill-up/
+/idev-workspace/
 /state/outbound-config.json
 /state/proposals/
 /state/research/

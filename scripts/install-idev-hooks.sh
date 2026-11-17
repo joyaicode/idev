@@ -30,9 +30,10 @@ PROMPT_LOG="${PY} ${ROOT}/hooks/prompt_log.py"
 PRE_TOOL="${PY} ${ROOT}/hooks/pre_tool.py"
 SUB_STOP="${PY} ${ROOT}/hooks/subagent_stop.py"
 STOP_TRACE="${PY} ${ROOT}/hooks/stop_trace.py"
+SKILL_UP="${PY} ${ROOT}/hooks/skill_up_eval.py"
 # An idev entry is known by its hook script, not by the checkout's directory
 # name: a kernel cloned as anything but idev/ must still replace its own block.
-export IDEV_HOOK_RE='idev/hooks/|/hooks/(prompt_log|pre_tool|subagent_stop|stop_trace)\.py --client '
+export IDEV_HOOK_RE='idev/hooks/|/hooks/(prompt_log|pre_tool|subagent_stop|stop_trace|skill_up_eval)\.py --client '
 # subagentStop asks a subagent with no summary to continue; only idev's own
 # agents owe a delegation return, so other subagents never see that nudge.
 AGENTS_RE="^($("${PY}" -c "import sys; sys.path.insert(0, sys.argv[1]); import kind_agents; print('|'.join(kind_agents.AGENTS))" "${ROOT}/scripts/lib"))\$"
@@ -80,7 +81,8 @@ PY
     --pre-tool "${PRE_TOOL} --client cursor" \
     --sub-stop "${SUB_STOP} --client cursor" \
     --sub-stop-matcher "${AGENTS_RE}" \
-    --stop-trace "${STOP_TRACE} --client cursor" <<'PY'
+    --stop-trace "${STOP_TRACE} --client cursor" \
+    --skill-up-eval "${SKILL_UP} --client cursor" <<'PY'
 import json, os, re, sys
 from pathlib import Path
 ours = re.compile(os.environ["IDEV_HOOK_RE"]).search
@@ -117,7 +119,10 @@ idev = {
         {"command": cmds["pre_tool"], "failClosed": False},
     ],
     "subagentStop": [{"command": cmds["sub_stop"], "matcher": cmds["sub_stop_matcher"], "failClosed": False}],
-    "stop": [{"command": cmds["stop_trace"], "failClosed": False}],
+    "stop": [
+        {"command": cmds["stop_trace"], "failClosed": False},
+        {"command": cmds["skill_up_eval"], "failClosed": False},
+    ],
 }
 for event, entries in idev.items():
     existing = drop_idev(list(hooks.get(event) or []))
@@ -178,7 +183,8 @@ PY
     --prompt-log "${PROMPT_LOG} --client claude" \
     --pre-tool "${PRE_TOOL} --client claude" \
     --sub-stop "${SUB_STOP} --client claude" \
-    --stop-trace "${STOP_TRACE} --client claude" <<'PY'
+    --stop-trace "${STOP_TRACE} --client claude" \
+    --skill-up-eval "${SKILL_UP} --client claude" <<'PY'
 import json, os, re, sys
 from pathlib import Path
 ours = re.compile(os.environ["IDEV_HOOK_RE"]).search
@@ -228,7 +234,7 @@ idev = {
         {"matcher": "Edit|Write|Bash", "hooks": [cmd_hook(cmds["pre_tool"])]},
     ],
     "SubagentStop": [{"hooks": [cmd_hook(cmds["sub_stop"])]}],
-    "Stop": [{"hooks": [cmd_hook(cmds["stop_trace"])]}],
+    "Stop": [{"hooks": [cmd_hook(cmds["stop_trace"]), cmd_hook(cmds["skill_up_eval"])]}],
 }
 for event, entries in idev.items():
     hooks[event] = drop_idev_blocks(hooks.get(event)) + entries

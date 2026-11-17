@@ -106,8 +106,10 @@ python3 scripts/turn-budget.py [--max 8] [--min-reads 6] [--min-ratio 1.5] [<tra
 | 交付后 | reopen 次数 / 签字后被推翻次数 → 改**关口**而非单张票 | `ticket-metrics.sh --repo <仓>` | [feedback-loop.md](references/feedback-loop.md) |
 | 每一格 | 停问前判断低效、不合理，或只为较弱模型付的代价。`CORRECT` 当轮按既有规则做；`PROPOSE` 只起草 | `process-eval.py stop` | [process-eval.md](references/process-eval.md) |
 | 动态关节 | 声明了 `react` 的步骤，`next` 打出 `REACT_OPEN` 到 `REACT_SHOW`；用尽走 `on_exhaust`，失败走 `on_fail`；缺槽位先 `ASK`，用 `param` 写回；`next` 打 `DIGEST`、`LOOP hops=`，末尾打 `PROGRESS closed=` `open=`，都不挡步骤 | `react_loop.py` | [workflow-schema.md](references/workflow-schema.md) |
+| 双层回路 | 外层导体回路 / 内层 step 循环的统一停靠表（STOP_REASON 一套词汇）、循环上限总表、探针规约、`DOCK`/`CLEAN` 观测行 | — | [agent-loop.md](references/agent-loop.md) |
+| 治理 | 治理点登记表（G 系列：签字权 / AUTO 现场跑 / 五查 / hooks / 审计四硬项…各在哪层、什么形式）；登记≠新建检查 | — | [governance.md](references/governance.md) |
 | 流水线 | 步骤可写 `tool` / `tool_group` / `use`，并用 `adjust` 跳过、排序、替换、追加。工具命令只打印 | `workflow.py` | [workflow-schema.md](references/workflow-schema.md) |
-| 外部工具 | Langfuse 只导出 · promptfoo 只断言不打分 · **不装 DSPy** | — | [external-tools.md](references/external-tools.md) |
+| 外部工具 | Langfuse 只导出 · promptfoo 只断言不打分 · skill-up 内核变动后跑规则断言,不打分 · **不装 DSPy** | `skill-up-eval.py` | [external-tools.md](references/external-tools.md) |
 
 **一条贯穿所有阶段的规矩：** 这些工具的 PASS 都只说明「没撞上已知的硬错」，
 **不说明做对了**。每个工具在 PASS 时都会把这句话打出来 —— 因为一个声称能判质量的门禁，

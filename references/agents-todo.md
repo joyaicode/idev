@@ -83,6 +83,10 @@ Claude 专有的 `tools` 字段。Claude Code 侧官方明示会静默忽略未�
 
 ---
 
+## P0–P3 编号之外的架构批次（2026-11-17 提案，未占 #/E 号）
+
+来源：[state/proposals/20261117-agent-loop-enhancement.md](../state/proposals/20261117-agent-loop-enhancement.md)——**已落地**（拷问 2026-11-17 过，B1–B6 同日落码；全链验证与逐批记录见提案文末）。遗留待裁：golden 13 例漂移系 b7a5ae3 前既有漂移（HEAD 干净态复跑同数），重录超本提案范围。
+
 ## P1 装好之后
 
 | # | 待办 | 状态 | 卡在什么上 |
