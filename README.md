@@ -207,4 +207,4 @@ git push -u origin main
 | `912c836` | workflow 三件套快照（语法 / 校验 / 驱动 + 14 份内核配方） |
 | （本说明之后） | 补齐 `will_write` 校验说明 + 本 README |
 
-变更细节见 [references/changelog.md](references/changelog.md)。使用说明见 [references/guide.md](references/guide.md)。
+变更细节见 [references/changelog.md](references/changelog.md)；发版摘要见 [references/releases.md](references/releases.md)。使用说明见 [references/guide.md](references/guide.md)。
