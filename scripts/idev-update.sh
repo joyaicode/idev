@@ -53,15 +53,22 @@ echo "## pull (ff-only)"
 git pull --ff-only --quiet || { echo "FAIL git pull --ff-only（本地分叉了？先 git rebase）" >&2; exit 1; }
 echo "OK   $old -> $(git rev-parse --short HEAD)"
 
-# --- rebuild the binary ------------------------------------------------------
+# --- rebuild the binaries -----------------------------------------------------
 # Same authority rule as init: build when Go exists; without it the python
 # lane keeps running and idev_bin.py rebuilds lazily if Go arrives later.
+# ideva/idevd are pure Go additions — they fail independently of idev.
 if command -v go >/dev/null 2>&1; then
   echo "## rebuild bin/idev"
   if go build -o bin/idev ./cmd/idev; then
     echo "OK   bin/idev rebuilt"
   else
     echo "MISS go build failed — IDEV_ENGINE=python lane still works" >&2
+  fi
+  echo "## rebuild bin/ideva bin/idevd"
+  if go build -o bin/ideva ./cmd/ideva && go build -o bin/idevd ./cmd/idevd; then
+    echo "OK   bin/ideva bin/idevd rebuilt"
+  else
+    echo "MISS agent CLI build failed — bin/idev above is unaffected" >&2
   fi
 fi
 

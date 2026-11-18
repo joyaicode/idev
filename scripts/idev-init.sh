@@ -78,16 +78,23 @@ if [ "$dep_missing" -ne 0 ]; then
   echo "     (missing deps degrade features; install them yourself, then re-run)"
 fi
 
-# --- binary ----------------------------------------------------------------
+# --- binaries ----------------------------------------------------------------
 # bin/ is gitignored by design; a fresh checkout has none. Build when a Go
 # toolchain exists; without one the python lane still runs (IDEV_ENGINE=python,
 # README「构建」节), and idev_bin.py rebuilds lazily later if Go arrives.
+# ideva/idevd are pure Go additions — they fail independently of idev.
 if command -v go >/dev/null 2>&1; then
   echo "## build bin/idev"
   if (cd "$ROOT" && go build -o bin/idev ./cmd/idev); then
     echo "OK   $ROOT/bin/idev"
   else
     echo "MISS go build failed — the python lane still works (IDEV_ENGINE=python)" >&2
+  fi
+  echo "## build bin/ideva bin/idevd"
+  if (cd "$ROOT" && go build -o bin/ideva ./cmd/ideva && go build -o bin/idevd ./cmd/idevd); then
+    echo "OK   $ROOT/bin/ideva $ROOT/bin/idevd"
+  else
+    echo "MISS agent CLI build failed — bin/idev above is unaffected" >&2
   fi
 else
   echo "MISS go toolchain — run with IDEV_ENGINE=python, or install Go and re-run" >&2
