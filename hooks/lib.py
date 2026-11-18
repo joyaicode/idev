@@ -50,11 +50,20 @@ def allow(extra: dict | None = None) -> int:
 
 
 def deny(user_message: str, agent_message: str = "") -> int:
-    print(json.dumps({
+    # Both hosts get the verdict, each through the channel it reads:
+    # Cursor consumes the stdout JSON; Claude Code's command hook reads the
+    # deny reason from stderr (its docs: exit 2 blocks, stderr feeds back
+    # to the model). Until 2026-11-17 the reason never reached Claude Code —
+    # the deny fired with empty stderr and the host printed a bare
+    # "No stderr output", leaving the model to guess which of four refusals
+    # it hit. Same JSON, same exit code, one extra line of stderr.
+    body = json.dumps({
         "permission": "deny",
         "user_message": user_message,
         "agent_message": agent_message or user_message,
-    }, ensure_ascii=False))
+    }, ensure_ascii=False)
+    print(body)
+    print(user_message, file=sys.stderr)
     return 2
 
 

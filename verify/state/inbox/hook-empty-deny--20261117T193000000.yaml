@@ -1,0 +1,9 @@
+schema_version: 1
+feature: '-'
+status: pending
+tags:
+- hook-empty-deny
+note: 'pre_tool hook 对长复合命令（heredoc/多行 git commit）两次 deny 且无 stderr
+  文案（「No stderr output」），同一命令拆短或用 git commit -F <文件> 即过；
+  probe 直喂 JSON 均 allow，四个 refuse 正则无一命中。属 deny 路径输出形态
+  问题，不是误拦逻辑。2026-11-17 8dab16c 提交时发现。'
