@@ -44,7 +44,11 @@ state/*.lock
 /verify/target/
 
 # Go build and test residue. bin/idev is built locally (workflow.py looks there).
+# A stray `go build -o ideva ./cmd/ideva` at the repo root leaves a 19MB
+# binary that -A sweeps in; the built artifacts live in bin/.
 /bin/
+/ideva
+/idevd
 /cover.out
 /coverage.out
 
