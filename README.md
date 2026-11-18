@@ -64,6 +64,19 @@
 
 其它产品仓只留 `marker.yaml` + `extension_root: ../joypaas`（或等价相对路径）。
 
+## 第一方 agent CLI（ideva）
+
+ideva 是把导体装进自己的二进制：模型经 OpenAI 兼容层接入（ollama / JDCloud / 本地 JCP 同一路径），SKILL.md 组装为系统提示词，五执行者以子 agent 委派（frontmatter 工具白名单宿主级强制），控制面 16 工具经 MCP 客户端挂载，idevd 另有 `mcp-http` HTTP 传输；ideva 自身也暴露 MCP server（executors/delegate 两工具），A2A Agent Card 与 LSP 客户端为协议骨架。人签通道不变：`gate approve` 永不出现在任何 agent 面上。
+
+```bash
+go build -o bin/ideva ./cmd/ideva && go build -o bin/idevd ./cmd/idevd
+IDEVA_MODEL=qwen2.5:14b bin/ideva                  # REPL（本机 ollama）
+IDEVA_MODEL=<model> IDEVA_BASE_URL=<网关> bin/ideva -p "一次性问题"
+idevd mcp-http 127.0.0.1:7788                       # 控制面 HTTP MCP
+```
+
+会话转录落 `~/.idev/agent.db`（sessions/messages 表，append-only）。架构与边界全文见 `state/proposals/20261118-ideva-main-agent.md`。
+
 ## 一键安装
 
 ```bash

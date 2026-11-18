@@ -104,6 +104,15 @@ func TestAStaleSchemaIsStillMigrated(t *testing.T) {
 	if _, err := s.DB().Exec(`DELETE FROM goose_db_version WHERE version_id >= 2`); err != nil {
 		t.Fatal(err)
 	}
+	// The stale-schema fixture rewinds the ledger to version 1; tables
+	// created by migrations after that must go with it, or the replay
+	// collides with what is still on disk. Every new migration's tables
+	// belong on this list — the collision error names the missing one.
+	for _, stale := range []string{"agent_sessions", "agent_messages"} {
+		if _, err := s.DB().Exec(`DROP TABLE IF EXISTS ` + stale); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
