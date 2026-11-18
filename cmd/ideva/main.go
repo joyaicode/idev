@@ -7,6 +7,11 @@
 // guest: its tools enforce the boundaries in code (signoff fields, git
 // push, engine fallbacks). And exactly one it still does not have:
 // signing anything. The person's terminal keeps that, same as always.
+//
+// Model access resolves in this order: -model/-preset/-base-url/-api-key
+// flags (and IDEVA_* env), then the channels file (-channels, default
+// ~/.idev/channels.yaml: several named providers, each with its own
+// models; /use and /model switch mid-session without losing history).
 package main
 
 import (
@@ -51,6 +56,21 @@ func findIdevd(kernel string, binDir string) string {
 	return ""
 }
 
+type runtime struct {
+	// p is the live provider; swapped in place by /use and /model.
+	p *provider.OpenAI
+	// model is the current model name (loop providers carry it in cfg).
+	model string
+	// channels is nil when no channels file loaded — flag/env mode.
+	channels *provider.ChannelSet
+	// channelName is the active channel from the file, "" in flag mode.
+	channelName string
+}
+
+func (rt *runtime) describe() string {
+	return rt.p.Describe()
+}
+
 func main() {
 	os.Exit(run(os.Args[1:]))
 }
@@ -62,13 +82,10 @@ func run(args []string) int {
 	preset := fs.String("preset", os.Getenv("IDEVA_PRESET"), "provider preset: ollama | jdcloud | jcp (IDEVA_PRESET); fills base URL/key defaults, overridden by -base-url/-api-key")
 	baseURL := fs.String("base-url", os.Getenv("IDEVA_BASE_URL"), "OpenAI-compatible base URL (IDEVA_BASE_URL)")
 	apiKey := fs.String("api-key", os.Getenv("IDEVA_API_KEY"), "API key (IDEVA_API_KEY)")
+	channelsPath := fs.String("channels", os.Getenv("IDEVA_CHANNELS"), "channels file with several providers/models (default ~/.idev/channels.yaml); /use and /model switch mid-session")
 	kernel := fs.String("kernel", "", "kernel checkout root (default: resolve like the rest of idev)")
 	dbPath := fs.String("db", "", "session database path (default: ~/.idev/agent.db)")
 	if err := fs.Parse(args); err != nil {
-		return 2
-	}
-	if *model == "" {
-		fmt.Fprintln(os.Stderr, "ideva: -model is required (or IDEVA_MODEL); e.g. -model qwen3:14b")
 		return 2
 	}
 	root := *kernel
@@ -103,29 +120,71 @@ func run(args []string) int {
 		return 1
 	}
 
-	// A preset fills defaults; explicit flags and env win — that order
-	// is what "preset is a default, not a lock" means in code.
-	cfg := provider.Config{Model: *model}
-	if *preset != "" {
-		pre, err := provider.Preset(*preset)
+	// Model access resolves in this order: explicit flags/env, then the
+	// channels file, then hard requirements. A channels file with neither
+	// -model nor -preset is self-sufficient (its default channel and
+	// default model carry the session); flags still win when given.
+	chPath := *channelsPath
+	if chPath == "" {
+		home, _ := os.UserHomeDir()
+		chPath = filepath.Join(home, ".idev", "channels.yaml")
+	}
+	channels, chErr := provider.LoadChannels(chPath)
+	if chErr != nil {
+		// A present-but-broken channels file is a startup error, not a
+		// silent flag-mode fallback: the person wrote the file to be
+		// used; half-ignoring it lands /use on the wrong endpoint.
+		fmt.Fprintf(os.Stderr, "ideva: %v\n", chErr)
+		return 2
+	}
+	rt := &runtime{channels: channels}
+	if *preset != "" || *baseURL != "" || *apiKey != "" || *model != "" {
+		if *model == "" {
+			fmt.Fprintln(os.Stderr, "ideva: -model is required with explicit provider flags (or IDEVA_MODEL); e.g. -model qwen3:14b")
+			return 2
+		}
+		// A preset fills defaults; explicit flags and env win — that order
+		// is what "preset is a default, not a lock" means in code.
+		cfg := provider.Config{Model: *model}
+		if *preset != "" {
+			pre, err := provider.Preset(*preset)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "ideva: %v\n", err)
+				return 2
+			}
+			if pre.BaseURL != "" {
+				cfg.BaseURL = pre.BaseURL
+			}
+			if pre.APIKey != "" {
+				cfg.APIKey = pre.APIKey
+			}
+		}
+		if *baseURL != "" {
+			cfg.BaseURL = *baseURL
+		}
+		if *apiKey != "" {
+			cfg.APIKey = *apiKey
+		}
+		rt.p = provider.NewOpenAI(cfg)
+		rt.model = *model
+	} else if channels != nil {
+		name := channels.DefaultChannel()
+		if name == "" {
+			name = channels.Names()[0]
+		}
+		cfg, err := channels.Build(name, "")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ideva: %v\n", err)
 			return 2
 		}
-		if pre.BaseURL != "" {
-			cfg.BaseURL = pre.BaseURL
-		}
-		if pre.APIKey != "" {
-			cfg.APIKey = pre.APIKey
-		}
+		rt.p = provider.NewOpenAI(cfg)
+		rt.model = cfg.Model
+		rt.channelName = name
+	} else {
+		fmt.Fprintln(os.Stderr, "ideva: -model is required (or IDEVA_MODEL); or configure ~/.idev/channels.yaml with providers/models; e.g. -model qwen3:14b")
+		return 2
 	}
-	if *baseURL != "" {
-		cfg.BaseURL = *baseURL
-	}
-	if *apiKey != "" {
-		cfg.APIKey = *apiKey
-	}
-	p := provider.NewOpenAI(cfg)
+	p := rt.p
 	cwd, _ := os.Getwd()
 	toolSet := map[string]loop.Tool{
 		"bash":  &tools.Bash{WorkDir: cwd, Deny: tools.DefaultDenyRules(), LogDir: filepath.Join(cwd, ".idev", "agent-logs")},
@@ -163,7 +222,7 @@ func run(args []string) int {
 		}
 	}
 
-	sess := session.Session{Kind: "main", Agent: "conductor", Provider: p.Describe(), Model: *model, Repo: cwd}
+	sess := session.Session{Kind: "main", Agent: "conductor", Provider: rt.describe(), Model: rt.model, Repo: cwd}
 	if err := sessions.CreateSession(context.Background(), &sess); err != nil {
 		fmt.Fprintf(os.Stderr, "ideva: session: %v\n", err)
 		return 1
@@ -186,7 +245,7 @@ func run(args []string) int {
 
 	// REPL: the conversation continues until the person says exit.
 	// Slash commands are host conveniences; everything else is a prompt.
-	fmt.Printf("ideva session %s — provider %s — /exit to quit\n", sess.ID, p.Describe())
+	fmt.Printf("ideva session %s — provider %s — /exit to quit\n", sess.ID, rt.describe())
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 0, 64*1024), 1<<20)
 	for {
@@ -199,14 +258,41 @@ func run(args []string) int {
 		if line == "" {
 			continue
 		}
-		switch line {
-		case "/exit", "/quit":
+		switch {
+		case line == "/exit", line == "/quit":
 			return 0
-		case "/agents":
+		case line == "/agents":
 			listAgents(root)
 			continue
-		case "/help":
-			fmt.Println("/agents — list the five executors; /exit — quit")
+		case line == "/help":
+			printHelp(rt)
+			continue
+		case line == "/channels":
+			listChannels(rt)
+			continue
+		case line == "/models":
+			listModels(rt)
+			continue
+		case strings.HasPrefix(line, "/use"), strings.HasPrefix(line, "/model"):
+			fields := strings.Fields(line)
+			if len(fields) < 2 {
+				fmt.Println("usage: /use <channel> | /model <name> — see /channels, /models")
+				continue
+			}
+			switch fields[0] {
+			case "/use":
+				if err := switchChannel(rt, fields[1]); err != nil {
+					fmt.Printf("not switched: %v\n", err)
+				} else {
+					fmt.Printf("switched to %s — %s\n", fields[1], rt.describe())
+				}
+			case "/model":
+				if err := switchModel(rt, fields[1]); err != nil {
+					fmt.Printf("not switched: %v\n", err)
+				} else {
+					fmt.Printf("model %s — %s\n", rt.model, rt.describe())
+				}
+			}
 			continue
 		}
 		res, err := l.Run(context.Background(), &history, line)
@@ -218,6 +304,95 @@ func run(args []string) int {
 		if res.Text == "" {
 			fmt.Println("(no text answer)")
 		}
+	}
+}
+
+// switchChannel swaps the live provider to another channel from the
+// loaded config. History is untouched: the same conversation continues on
+// the new model, the way a person changes desks, not the topic.
+func switchChannel(rt *runtime, name string) error {
+	if rt.channels == nil {
+		return fmt.Errorf("no channels file loaded (start ideva without provider flags and with a valid ~/.idev/channels.yaml)")
+	}
+	cfg, err := rt.channels.Build(name, "")
+	if err != nil {
+		return err
+	}
+	rt.p = provider.NewOpenAI(cfg)
+	rt.model = cfg.Model
+	rt.channelName = name
+	return nil
+}
+
+// switchModel swaps only the model; the channel (base URL, key) stays.
+// In flag mode there is no channel and no list — any model name is
+// accepted, same as the -model flag itself; the new provider is built
+// from the current one's config with the model replaced.
+func switchModel(rt *runtime, name string) error {
+	var cfg provider.Config
+	if rt.channels == nil {
+		cfg = rt.p.Config()
+		cfg.Model = name
+	} else {
+		var err error
+		cfg, err = rt.channels.Build(rt.channelName, name)
+		if err != nil {
+			return err
+		}
+	}
+	rt.p = provider.NewOpenAI(cfg)
+	rt.model = cfg.Model
+	return nil
+}
+
+func printHelp(rt *runtime) {
+	fmt.Println("/agents — list the five executors")
+	fmt.Println("/channels — list configured model channels")
+	fmt.Println("/models — list models of the active channel")
+	fmt.Println("/use <channel> — switch provider/channel")
+	fmt.Println("/model <name> — switch model within the channel")
+	fmt.Println("/exit — quit")
+}
+
+func listChannels(rt *runtime) {
+	if rt.channels == nil {
+		fmt.Println("no channels file loaded — running from flags/env only")
+		return
+	}
+	for _, name := range rt.channels.Names() {
+		e, _ := rt.channels.Entry(name)
+		mark := " "
+		if name == rt.channelName {
+			mark = "*"
+		}
+		def := ""
+		if name == rt.channels.DefaultChannel() {
+			def = " (default)"
+		}
+		fmt.Printf(" %s%-10s preset=%s base_url=%s models=%d%s\n", mark, name, e.Preset, e.BaseURL, len(e.Models), def)
+	}
+}
+
+func listModels(rt *runtime) {
+	if rt.channels == nil {
+		fmt.Printf("active model: %s (no channels file; any /model <name> is accepted)\n", rt.model)
+		return
+	}
+	e, ok := rt.channels.Entry(rt.channelName)
+	if !ok {
+		fmt.Printf("active model: %s (channel %q not in the loaded config)\n", rt.model, rt.channelName)
+		return
+	}
+	if len(e.Models) == 0 {
+		fmt.Printf("channel %s lists no models; any /model <name> is accepted (current: %s)\n", rt.channelName, rt.model)
+		return
+	}
+	for _, m := range e.Models {
+		mark := " "
+		if m == rt.model {
+			mark = "*"
+		}
+		fmt.Printf(" %s %s\n", mark, m)
 	}
 }
 

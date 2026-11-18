@@ -78,6 +78,29 @@ idevd mcp-http 127.0.0.1:7788                       # 控制面 HTTP MCP
 
 `-preset`（或 `IDEVA_PRESET`）填 `ollama` / `jdcloud` / `jcp` 三选；preset 是默认不是锁——显式 `-base-url`/`-api-key` 恒覆盖之。
 
+**多通道配置与 REPL 内切换**：`~/.idev/channels.yaml`（`-channels` / `IDEVA_CHANNELS` 可改路径）可配多个提供方，每个带自己的模型清单；不带 provider 旗标启动时按文件里的 `default` 通道起会话。REPL 内 `/channels` 列通道、`/models` 列当前通道模型、`/use <通道>` 切提供方、`/model <名>` 切模型——历史不丢，同一对话继续。文件里列了 `models` 的通道会拒绝清单外的模型名（拼错在 `/use` 时报，不是三次回合后网关 404）；没列清单的通道接受任意名。
+
+```yaml
+# ~/.idev/channels.yaml 示例
+default: jcp
+default_model: GLM-5.3      # 只作用于 default 通道；其余通道取自己 models 的第一个
+providers:
+  jcp:
+    preset: jcp             # 继承 preset 的 base_url/key，可再被本块 base_url/api_key 覆盖
+    models: [GLM-5.3, DeepSeek-V4.1-Flash, Kimi-K3.1]
+  ollama-local:
+    preset: ollama
+    models: [qwen2.5:14b, qwen3:8b]
+  work:
+    base_url: https://<网关>/v1
+    api_key_env: WORK_KEY   # 从环境变量读 key，真密钥不进文件
+    models: [m-a, m-b]
+    timeout_s: 60           # 可选：单请求超时（默认 120s）
+    extra_headers: {X-Org: acme}
+```
+
+显式旗标/env 恒优先于文件（旗标模式下 `/use` 不可用、`/model` 接受任意名）；文件存在但解析失败是启动错误，不是静默回退。
+
 会话转录落 `~/.idev/agent.db`（sessions/messages 表，append-only）。架构与边界全文见 `state/proposals/20261118-ideva-main-agent.md`。
 
 ## 一键安装

@@ -181,6 +181,13 @@ func Preset(name string) (Config, error) {
 	}
 }
 
+// Config returns a copy of the live configuration. Mid-session model
+// switches rebuild the provider from it; the copy keeps callers from
+// mutating what the live client still uses.
+func (p *OpenAI) Config() Config {
+	return p.cfg
+}
+
 // Describe implements Provider.
 func (p *OpenAI) Describe() string {
 	return fmt.Sprintf("openai-compatible %s model=%s", p.cfg.BaseURL, p.cfg.Model)
