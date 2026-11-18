@@ -59,6 +59,7 @@ func run(args []string) int {
 	fs := flag.NewFlagSet("ideva", flag.ContinueOnError)
 	prompt := fs.String("p", "", "one-shot prompt: run once, print the answer, exit")
 	model := fs.String("model", os.Getenv("IDEVA_MODEL"), "model name (IDEVA_MODEL)")
+	preset := fs.String("preset", os.Getenv("IDEVA_PRESET"), "provider preset: ollama | jdcloud | jcp (IDEVA_PRESET); fills base URL/key defaults, overridden by -base-url/-api-key")
 	baseURL := fs.String("base-url", os.Getenv("IDEVA_BASE_URL"), "OpenAI-compatible base URL (IDEVA_BASE_URL)")
 	apiKey := fs.String("api-key", os.Getenv("IDEVA_API_KEY"), "API key (IDEVA_API_KEY)")
 	kernel := fs.String("kernel", "", "kernel checkout root (default: resolve like the rest of idev)")
@@ -102,7 +103,29 @@ func run(args []string) int {
 		return 1
 	}
 
-	p := provider.NewOpenAI(provider.Config{BaseURL: *baseURL, APIKey: *apiKey, Model: *model})
+	// A preset fills defaults; explicit flags and env win — that order
+	// is what "preset is a default, not a lock" means in code.
+	cfg := provider.Config{Model: *model}
+	if *preset != "" {
+		pre, err := provider.Preset(*preset)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "ideva: %v\n", err)
+			return 2
+		}
+		if pre.BaseURL != "" {
+			cfg.BaseURL = pre.BaseURL
+		}
+		if pre.APIKey != "" {
+			cfg.APIKey = pre.APIKey
+		}
+	}
+	if *baseURL != "" {
+		cfg.BaseURL = *baseURL
+	}
+	if *apiKey != "" {
+		cfg.APIKey = *apiKey
+	}
+	p := provider.NewOpenAI(cfg)
 	cwd, _ := os.Getwd()
 	toolSet := map[string]loop.Tool{
 		"bash":  &tools.Bash{WorkDir: cwd, Deny: tools.DefaultDenyRules(), LogDir: filepath.Join(cwd, ".idev", "agent-logs")},

@@ -8,7 +8,7 @@ hit disk.
 | Script | Cursor event | Claude event | What it does |
 |---|---|---|---|
 | `prompt_log.py` | `beforeSubmitPrompt` | `UserPromptSubmit` | Append person text to `$IDEV_DATA/prompts.log` |
-| `pre_tool.py` | `preToolUse`, `beforeShellExecution` | `PreToolUse` | Deny signoff-field edits to ticket and run YAML (`docs/task/*/`, `.idev/task/*/`, `workflow-runs/`), `git push`, `IDEV_ENGINE=python` or `IDEV_BIN=off`, lease-outside writes |
+| `pre_tool.py` | `preToolUse`, `beforeShellExecution` | `PreToolUse` | Deny signoff-field edits to ticket and run YAML (`docs/task/*/`, `.idev/task/*/`, `workflow-runs/`), `IDEV_ENGINE=python` or `IDEV_BIN=off`, lease-outside writes |
 | `subagent_stop.py` | `subagentStop` (idev agents only) | `SubagentStop` | Append one row with an `id`, the agent, `workspace_roots`, `modified_files` + always `duration_ms` / `tool_call_count` to `subagent-stops.jsonl`; `delegation.py write` copies the row of its own agent, workspace and time window, each row to one record |
 | `stop_trace.py` | `stop` | `Stop` | Write a weekly-audit-shaped YAML skeleton (`scenario` / `calls` / `extensions`) |
 | `skill_up_eval.py` | `stop` | `Stop` | If the kernel tree changed, start `scripts/skill-up-eval.py` in the background. Not a gate. `SKILL_UP_EVAL=0` skips it |

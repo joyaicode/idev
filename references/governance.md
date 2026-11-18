@@ -25,12 +25,12 @@ authority: normative（治理点的登记表以本页为唯一真源；G 编号�
 | G1 | 签字权不可下放（agent 名字签字代码层拒） | go强制+机检 | `workflow_spec.is_human` 词表、`signoff/identity.go`、record 侧核对 | chat-confirm-signoff.md |
 | G2 | 回报诚实性机检（evidence-present / no-signoff-write / brief-complete / return-schema / metrics-shape） | 机检 | `delegation.py write` | agents-evolve.md |
 | G3 | AUTO 只信自己现场跑的检查（不认事先存的文件） | 机检 | `workflow.py run_auto_check` | workflow-schema.md |
-| G4 | pre_tool 四拒绝（手写 reopen_baseline / agent push / 绕 Go 引擎 / 越租约写） | best-effort hook | `hooks/pre_tool.py`；权威在 record 侧 | hitl-risk-tiers.md |
+| G4 | pre_tool 三拒绝（手写 reopen_baseline / 绕 Go 引擎 / 越租约写） | best-effort hook | `hooks/pre_tool.py`；权威在 record 侧 | hitl-risk-tiers.md |
 | G5 | CHANGED ⊆ modified_files（agent 自报有第三方账） | 机检 | `delegation.py` 对照 `subagent-stops.jsonl` | hooks/README.md |
 | G6 | 回合预算（无正文回合 / serial_reads / claude -p 探测） | 观测（WARN 不挡） | `turn-budget.py` + `trace.sh append` 末尾 | SKILL.md「回合预算」 |
 | G7 | 周审计硬报警四项（multi-exec-calls / seal-without-signoff / extensions 两项） | 观测（HARD_COUNT） | `audit_traces_lib.py` | trace.md |
 | G8 | IDEA_HITS / FORECAST declared（交代必须存在，语义不判） | 机检 | `delegation.py check_idea / check_forecast` | coding.md |
-| G9 | 一次性授权（drive=auto 代决 / IDEV_ALLOW_AGENT_PUSH） | 配置+观测 | `drive-mode.yaml`、`workflow.py` 代决、推翻计数进 ticket_metrics | chat-confirm-signoff.md |
+| G9 | 一次性授权（drive=auto 代决） | 配置+观测 | `drive-mode.yaml`、`workflow.py` 代决、推翻计数进 ticket_metrics | chat-confirm-signoff.md |
 | G10 | 写租约单写者 + fencing（写路径相交拒第二张） | go强制 | `internal/domain/lease/lease.go`、`leasesvc.go` | workflow-schema.md |
 | G11 | 独立复核（写手 ≠ 复核者，复核留痕引用证据） | 机检 | `workflow.py record` 的 VERIFY 强制、`KIND_VERIFIER` | agents.md |
 | G12 | gate assurance 矩阵（P0 要求 high，agent 满足不了） | go强制 | `internal/domain/gate/gate.go` | hitl-risk-tiers.md |

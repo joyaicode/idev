@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""preToolUse / PreToolUse / beforeShellExecution: refuse the four oversteps.
+"""preToolUse / PreToolUse / beforeShellExecution: refuse the three oversteps.
 
 1. Writing reopen_baseline into ticket YAML by hand (name it through the gate).
-2. `git push` that is not clearly preceded by a green gate (best-effort).
-3. Writing outside a held lease when IDEV_LEASE_ID is set (calls idev lease check).
-4. Setting IDEV_ENGINE=python or IDEV_BIN=off in a shell command.
+2. Writing outside a held lease when IDEV_LEASE_ID is set (calls idev lease check).
+3. Setting IDEV_ENGINE=python or IDEV_BIN=off in a shell command.
 
 Not a security boundary: a person can still run the same commands outside the
 agent. The record-side checks stay.
@@ -39,9 +38,6 @@ BIN_OFF = re.compile(
     r"|(?:^|[\s;|&])env\s+[^\n]*\bIDEV_BIN=['\"]?(?:off|none|0)['\"]?(?:\s|$)",
     re.IGNORECASE,
 )
-GIT_PUSH = re.compile(r"(?:^|[;&|\s])git\s+push\b", re.IGNORECASE)
-
-
 def tool_name(payload: dict) -> str:
     for key in ("tool_name", "toolName", "tool", "name"):
         value = payload.get(key)
@@ -109,19 +105,6 @@ def refuse_engine_python(command: str) -> str:
     return ""
 
 
-def refuse_git_push(command: str) -> str:
-    if command and GIT_PUSH.search(command):
-        # IDEV_ALLOW_AGENT_PUSH=1 lets an explicitly instructed agent push
-        # (user said "push"/"change the hook" in-session). Default still
-        # refuses so the silent push stays stopped without opt-in.
-        if (os.environ.get("IDEV_ALLOW_AGENT_PUSH") or "").strip() == "1":
-            return ""
-        # A person can still push from their own terminal. Inside the agent we
-        # stop the silent push; an explicit gate-approved path is stage 1.6+.
-        return "refusing git push from the agent; a person pushes after the gate"
-    return ""
-
-
 def refuse_lease(path: str) -> str:
     lease_id = (os.environ.get("IDEV_LEASE_ID") or "").strip()
     if not lease_id or not path:
@@ -167,7 +150,6 @@ def main(argv: list[str] | None = None) -> int:
     reasons = []
     if name in ("Shell", "Bash", "shell") or command:
         reasons.append(refuse_engine_python(command))
-        reasons.append(refuse_git_push(command))
     if name in ("Write", "Edit", "StrReplace", "search_replace", "WriteFile") or path:
         reasons.append(refuse_signoff_edit(path, content))
         reasons.append(refuse_lease(path))

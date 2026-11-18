@@ -71,9 +71,12 @@ ideva 是把导体装进自己的二进制：模型经 OpenAI 兼容层接入（
 ```bash
 go build -o bin/ideva ./cmd/ideva && go build -o bin/idevd ./cmd/idevd
 IDEVA_MODEL=qwen2.5:14b bin/ideva                  # REPL（本机 ollama）
+bin/ideva -preset jcp -model GLM-5.3               # 本机 JCP 代理（127.0.0.1:11435，占位 key）
 IDEVA_MODEL=<model> IDEVA_BASE_URL=<网关> bin/ideva -p "一次性问题"
 idevd mcp-http 127.0.0.1:7788                       # 控制面 HTTP MCP
 ```
+
+`-preset`（或 `IDEVA_PRESET`）填 `ollama` / `jdcloud` / `jcp` 三选；preset 是默认不是锁——显式 `-base-url`/`-api-key` 恒覆盖之。
 
 会话转录落 `~/.idev/agent.db`（sessions/messages 表，append-only）。架构与边界全文见 `state/proposals/20261118-ideva-main-agent.md`。
 

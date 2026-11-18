@@ -156,6 +156,12 @@ func NewOpenAI(cfg Config) *OpenAI {
 // Preset fills a Config for the three supported targets. Unknown preset
 // names are an error, not a guess — a wrong base URL fails much later and
 // much more confusingly than a startup error.
+//
+// jcp: the local JCP proxy (~/go/bin/jcp -port 11435) fronting JDCloud
+// models with an OpenAI-compatible face; the placeholder key "jcp" is
+// what the proxy accepts (same convention the product repos' local-dev
+// scripts use: `-Djoypaas.access-layer.agent.api-key=jcp`). Every
+// IDEVA_* field overrides the preset — a preset is a default, not a lock.
 func Preset(name string) (Config, error) {
 	switch name {
 	case "ollama":
@@ -166,9 +172,10 @@ func Preset(name string) (Config, error) {
 		// model name is per-project.
 		return Config{}, nil
 	case "jcp":
-		// Local JCP assumed OpenAI-compatible (2026-11-18 grilling); base
-		// URL and key from the environment for the same reason.
-		return Config{}, nil
+		return Config{
+			BaseURL: "http://127.0.0.1:11435/v1",
+			APIKey:  "jcp",
+		}, nil
 	default:
 		return Config{}, fmt.Errorf("provider: unknown preset %q (ollama, jdcloud, jcp)", name)
 	}
