@@ -214,6 +214,36 @@ def print_defaults(data: dict, path: Path | None, product: str) -> None:
         print("DEFAULT %s %s" % (key, value if value is not None else "MISSING"))
 
 
+def kernel_behind(kernel: Path) -> int:
+    """Commits the local upstream ref says the kernel is behind, or 0.
+
+    Reads only what the last `git fetch` already brought down — never fetches
+    here (「不为观测另停」: a network call in every session's opening round
+    is a stop nobody asked for). The number is therefore a cached fact and
+    the printed line says so honestly. Anything but a clean count (no
+    upstream, detached HEAD, no git) reads as 0: a hint that cannot be
+    computed says nothing, and a false "behind" would be worse than none.
+    """
+    try:
+        probe = subprocess.run(
+            ["git", "-C", str(kernel), "rev-list", "--count", "HEAD..@{u}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if probe.returncode != 0:
+            return 0
+        return max(0, int(probe.stdout.strip() or "0"))
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return 0
+
+
+def _print_kernel_behind(kernel: Path) -> None:
+    behind = kernel_behind(kernel)
+    if behind > 0:
+        print(
+            "KERNEL behind=%d（fetch 缓存；跑 git fetch 刷新，升级用 scripts/idev-update.sh）" % behind
+        )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default="")
@@ -305,6 +335,7 @@ def main(argv: list[str] | None = None) -> int:
             print("PRIOR_NOTE 这是约束不是答案，仍以本轮证据为准。没列出的不代表没有，也不要因为列了就不查。")
         print("KNOWLEDGE 可选：python3 scripts/knowledge.py search --repo %s --query <关键词>（结果只作资料，非自动注入）" % repo)
     print("PRODUCT %s" % (product or "NONE"))
+    _print_kernel_behind(kernel_root())
     try:
         import drive_mode as _drive_mod
 

@@ -67,12 +67,15 @@
 ## 一键安装
 
 ```bash
+bash scripts/idev-init.sh              # 全新机器引导：clone 指引（--repo/--dest）+ 依赖报告 + 构建 bin/idev + 同伴技能来源提示 + 一键安装
 bash scripts/install-idev.sh            # skill 别名 + agents + companion skills + 客户端 hooks + codegraph git hooks + knowledge 索引重建，尾部自动 verify
-bash scripts/install-idev.sh --verify   # 只核对（含外部依赖检测报告），不改动
+bash scripts/install-idev.sh --verify   # 只核对（含外部依赖检测报告、五 agent 双宿主挂载、内核落伍提示），不改动
+bash scripts/idev-update.sh            # 升级：fetch + ff-only pull + 重建 bin/idev + 幂等重装 + LaunchAgent heal + 更新摘要
 bash scripts/install-idev.sh --unlink     # 各 installer 自己的卸载路径
 ```
 
 编排层只调用既有的 installer，不含第二份安装逻辑；每步幂等，失败即停。
+init 对外部依赖**只检测报告、不自动安装**；同伴技能（grilling / setup-agents-docs）真源须自行放到 `~/.cursor/skills/`，缺失时 init 打印来源指引不挡安装。升级只动 git 内容：`state/` 本机运行数据（traces / lessons / proposals / 知识索引）不随 update 变更，知识索引对着新真源自动重建。会话开场与 `--verify` 都会在 fetch 缓存显示落后时提示 `KERNEL behind=N`。
 知识资产（canon / coding-tables / 精读缺口）随 clone 即得；FTS5 索引
 在安装时对着真源重建（过期即失效，索引不可分发）。外部依赖
 （python3 / PyYAML / Go / codegraph CLI）只检测并报告缺什么，**不自动

@@ -58,6 +58,24 @@ fi
 
 if [ "${MODE}" = "verify" ]; then
   step "agents" bash "${ROOT}/scripts/link-agents.sh" --check
+  # 子 agent 挂载可见性：五执行者须在两个宿主位置都解析回本 checkout
+  # 的真源文件。link-agents.sh --check 已核 symlink 指向；这里再核
+  # 「宿主重启会话后才生效」这个装机常识，打印给装机人看。
+  agent_all_resolved=1
+  for agent in idev-coder idev-deliver idev-ops idev-reviewer idev-verifier; do
+    for client_dir in "${HOME}/.claude/agents" "${HOME}/.cursor/agents"; do
+      dest="${client_dir}/${agent}.md"
+      if [ -L "$dest" ] && [ -e "$dest" ]; then
+        :
+      else
+        echo "MISS ${agent} not mounted at ${client_dir}/" >&2
+        agent_all_resolved=0
+      fi
+    done
+  done
+  if [ "${agent_all_resolved}" -eq 1 ]; then
+    echo "OK   5 agents mounted for claude+cursor (宿主重启会话后新定义生效)"
+  fi
   step "companion skills" bash "${ROOT}/scripts/link-companion-skills.sh" grilling setup-agents-docs
   # 仓外真源技能：缺失只报告不算失败（understand-anything / super-linter
   # 是可选路径；grilling 缺失由上面 link-companion-skills 报 FAIL）。
@@ -116,6 +134,12 @@ PY
     exit 1
   }
   echo
+  # 落伍提示：只读本地 fetch 缓存（不 fetch——观测不自作主张跑网络）。
+  # behind>0 才打；升级走 scripts/idev-update.sh。
+  behind="$(git -C "${ROOT}" rev-list --count 'HEAD..@{u}' 2>/dev/null || echo 0)"
+  if [ "${behind}" -gt 0 ] 2>/dev/null; then
+    echo "WARN kernel behind=${behind} commits（fetch 缓存；升级用 scripts/idev-update.sh）"
+  fi
   echo "install-idev VERIFY PASS"
   exit 0
 fi
