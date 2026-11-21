@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -114,20 +115,67 @@ def _append_gitignore(repo: Path) -> None:
         handle.write("\n".join(missing) + "\n")
 
 
-def ensure_marker(repo: Path) -> None:
-    """First save in a product checkout writes the opt-in scaffold.
+# Durable paths that stay tracked on purpose. _GITIGNORE_KEEP mixes exact
+# files (.idev/memory.md) with directory governs (.idev/pack/, .idev/task/**):
+# ls-files lists files, so every rule is normalized to a directory prefix
+# match — an exact rule keeps exactly that path, a dir rule keeps anything
+# under it.
+def _durable_prefix(rule: str) -> str | None:
+    """Normalized prefix for one keep rule, or None when it cannot decide."""
+    body = rule.lstrip("!")
+    if not body.startswith(".idev/"):
+        return None
+    path = "/" + body.rstrip("*").rstrip("/")
+    return path if len(path) > len("/.idev") else None
 
-    Later sessions recognize the directory by marker: idev. evolve stays
-    off until the product asks to join self-evolution. An existing marker
-    is left unchanged. The scaffold is an empty stage list, a checks
-    directory, an empty strip-token file, and a gitignore that keeps memory.md,
-    native tickets (.idev/task, .idev/docs), and the other durable files.
-    An existing marker is not rewritten. A later save still fills any
-    gitignore keep-lines that the first scaffold missed.
-    """
+
+_DURABLE_RULES = tuple(
+    prefix
+    for prefix in (_durable_prefix(rule) for rule in _GITIGNORE_KEEP)
+    if prefix
+)
+
+
+def _report_tracked_process_files(repo: Path) -> None:
+    tracked = _tracked_process_files(repo)
+    for path in tracked:
+        print(
+            "WARN idev process file already git-tracked (untrack is yours to "
+            f"decide, not automatic): {path}",
+            file=sys.stderr,
+        )
+
+
+def _tracked_process_files(repo: Path) -> list[str]:
+    """Process paths git already tracks. The ignore block below only stops
+    *new* files; ones tracked before it landed stay in the index and keep
+    receiving diffs. Report them — cancelling the tracking is the person's
+    call, never ours (learned from joy-dev's prepare-workspace)."""
+    tracked = subprocess.run(
+        ["git", "-C", str(repo), "ls-files", "--", ".idev/"],
+        capture_output=True, text=True, check=False,
+    )
+    if tracked.returncode != 0:
+        return []
+    durable = []
+    for line in tracked.stdout.splitlines():
+        path = "/" + line.strip()
+        if not path or path == "/":
+            continue
+        if any(
+            path == rule or path.startswith(rule + "/")
+            for rule in _DURABLE_RULES
+        ):
+            continue
+        durable.append(path)
+    return sorted(set(durable))
+
+
+def ensure_marker(repo: Path) -> None:
     path = repo / ".idev" / "marker.yaml"
     if path.is_file():
         _append_gitignore(repo)
+        _report_tracked_process_files(repo)
         return
     ident = re.sub(r"[^A-Za-z0-9._-]+", "-", repo.name).strip("-") or "product"
     idev = path.parent
@@ -147,6 +195,7 @@ def ensure_marker(repo: Path) -> None:
     if not tokens.is_file():
         tokens.write_text("# one product token per line\n", encoding="utf-8")
     _append_gitignore(repo)
+    _report_tracked_process_files(repo)
 
 
 def sink_dir(kind: str, *, mkdir: bool = False, start: Path | None = None) -> Path:

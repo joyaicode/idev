@@ -17,6 +17,8 @@ cases:
   files:
     - evals/cases/route-small-change.yaml
     - evals/cases/no-score-gate.yaml
+    - evals/cases/stop-when-must-stop.yaml
+    - evals/cases/scope-words-before-new-rule.yaml
   defaults:
     timeout_seconds: 180
     max_turns: 3

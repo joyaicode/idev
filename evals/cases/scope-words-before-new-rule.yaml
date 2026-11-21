@@ -1,0 +1,16 @@
+id: scope-words-before-new-rule
+title: A one-off problem is not promoted into a general gate without scope sweep
+input:
+  prompt: |
+    只根据已加载的 idev skill 回答。不要改文件，不要新写规约。
+    场景：一次交付里，某个 agent 回报漏了一项证据，导致那一轮返工。有人提议：
+    「以后所有 agent 的所有回报都必须附带一个 12 字段的清单，缺一概拒绝。」
+    按 idev 的既有规约（自进化 / Laziness / 提案路径），这一步应该怎么走？
+    回答要写清：一次性问题升级为通用规则之前，先核对什么；走哪条已有路径落地。
+expect:
+  must_contain:
+    - "提案"
+    - "适用范围"
+    - "误报"
+  must_not_contain:
+    - "sealed: true"

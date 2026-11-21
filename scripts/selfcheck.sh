@@ -2021,6 +2021,8 @@ python3 "${KERNEL}/scripts/test_context_stage.py" >/dev/null 2>&1 \
   || fail "a code preview included a function body, or a failed source erased the other (python3 scripts/test_context_stage.py)"
 python3 "${KERNEL}/scripts/test_sediment.py" >/dev/null 2>&1 \
   || fail "one success was kept, or a registered script was executed (python3 scripts/test_sediment.py)"
+run_test lib/test_product_sink.py \
+  || fail "a process file git already tracked stopped being reported, or a durable keep raised a false WARN (python3 scripts/lib/test_product_sink.py)"
 echo "OK  tier signoffs and single writer"
 
 echo "=== lock: a gate is answered by the person's 确认 ==="
