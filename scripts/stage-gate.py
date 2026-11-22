@@ -44,6 +44,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import termview  # noqa: E402
 import kind_agents  # noqa: E402
 import safeyaml  # noqa: E402
 import ticketless  # noqa: E402
@@ -506,8 +507,8 @@ def main() -> int:
     corrected = bool(deliver.get("reopen_baseline") or deliver.get("last_rewind")
                      or safeyaml.as_int(baseline_now.get("revision"), 1) > 1)
 
-    print(f"# stage-gate  {args.feature}")
-    print(f"# {home}")
+    print(termview.paint(f"# stage-gate  {args.feature}", "HEAD"))
+    print(termview.paint(f"# {home}", "DIM"))
     print(f"# stages: {', '.join(ran) or '(none)'}")
     print()
     if corrected:
@@ -519,12 +520,12 @@ def main() -> int:
         for f in findings:
             print(f)
         print()
-        print(f"stage-gate FAIL  {len(findings)} finding(s)")
+        print(termview.paint(f"stage-gate FAIL  {len(findings)} finding(s)", "FAIL"))
         print("这些是**可机检的那一半**。专业判断(拆解是否忠实 / 架构是否合理 /")
         print("用例是否有意义)仍要人按 deliver/references/experts.md 过一遍。")
         return 1
 
-    print(f"stage-gate PASS  {len(ran)} stage(s), 0 findings")
+    print(termview.paint(f"stage-gate PASS  {len(ran)} stage(s), 0 findings", "PASS"))
     print()
     print("**没发现 ≠ 没问题。** 这里只查机器能判的那一半;拒过清单的另一半")
     print("(专业判断)仍要人过 —— experts.md,以及 grill。")

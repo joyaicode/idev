@@ -5,6 +5,10 @@ tools:
     limit: 不写签字，不改票。
     command: python3 scripts/stage-gate.py
     inputs: [feature]
+  - id: termview
+    summary: 终端渲染原语（颜色/OSC 8 超链/对齐表格）。人看的脚本输出用它；管道与 golden 走纯文本通道，字节不变。
+    limit: 只渲染，不判定、不打分；非 TTY 或 NO_COLOR 必须降级为纯文本。
+    command: python3 scripts/lib/termview.py
   - id: req-ground
     summary: 核对一条需求落在哪些符号上。调用时自己补 --feature。
     limit: 不改代码。

@@ -36,10 +36,12 @@ Exit: 0 printed the roster (possibly "no lenses: <reason>").
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import termview  # noqa: E402
 import doc_home  # noqa: E402
 import safeyaml  # noqa: E402
 
@@ -284,17 +286,33 @@ def render(result: dict, feature: str) -> str:
         ])
     stage = result["stage"]
     lines = [
-        "LENS lean-review stage=%s %d 视角" % (stage, len(result["shards"])),
+        termview.paint("LENS lean-review stage=%s %d 视角" % (stage, len(result["shards"])), "HEAD"),
         "DOCK LENS-ROUND %s" % WAVE_MERGE[stage],
     ]
     for shard in result["shards"]:
-        lines.append("SHARD %s" % shard["id"])
-        lines.append("SCOPE %s" % shard["scope"])
+        lines.append(termview.paint("SHARD %s" % shard["id"], "HINT") + "  " + shard["challenge"])
+        lines.append("SCOPE %s" % _linkify(shard["scope"]))
     lines.append(
         "NOTE 三律：引不出尺的问题删；问题必带失败场景；零 finding 合法且要明说。"
         "finding 按 %s 归并，不另开文件、不另请签、不新停点。" % _merge_note(result["shards"])
     )
     return "\n".join(lines)
+
+
+_RULER_PATH = re.compile(r"(?<![\w/.])((?:deliver|references|conventions|verify|ops|agents)/[\w./-]+)")
+
+
+def _linkify(text: str) -> str:
+    """Make ruler paths clickable in a terminal; pipes keep plain text."""
+    def repl(m: re.Match) -> str:
+        rel = m.group(1).rstrip("。，；）")
+        tail = m.group(1)[len(rel):]
+        # Ruler mentions name a kernel page; only real files link.
+        cand = Path(__file__).resolve().parents[1] / rel
+        if not cand.is_file():
+            return m.group(1)
+        return termview.link(rel, str(cand)) + tail
+    return _RULER_PATH.sub(repl, text)
 
 
 def _merge_note(shards: list[dict]) -> str:

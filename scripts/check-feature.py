@@ -22,6 +22,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import termview  # noqa: E402
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import idev_bin  # noqa: E402
 import annotate  # noqa: E402
@@ -647,11 +648,13 @@ def run_outbound_skills_check(repo: Path, errors: list[str]) -> None:
 
 def fail(msg: str, errors: list[str]) -> None:
     errors.append(msg)
-    print("FAIL  " + msg)
+    # Terminal gets color; a pipe gets the same bytes it always did —
+    # golden and CI read the plain lane.
+    print(termview.paint("FAIL  ", "FAIL") + termview.paint(msg, "FAIL"))
 
 
 def ok(msg: str) -> None:
-    print("PASS  " + msg)
+    print(termview.paint("PASS  ", "PASS") + msg)
 
 
 # Actionable next steps for common structural fails (printed once at end).
@@ -704,7 +707,7 @@ def print_fail_hints(errors: list[str]) -> None:
     for err in errors:
         for pat, hint in FAIL_HINTS:
             if pat.search(err) and hint not in seen:
-                print(hint)
+                print(termview.paint(hint, "HINT"))
                 seen.add(hint)
 
 
@@ -1677,10 +1680,10 @@ def main() -> int:
 
     print("---")
     if errors:
-        print("%d FAIL" % len(errors))
+        print(termview.paint("%d FAIL" % len(errors), "FAIL"))
         print_fail_hints(errors)
         return 1
-    print("0 FAIL")
+    print(termview.paint("0 FAIL", "PASS"))
     return 0
 
 
