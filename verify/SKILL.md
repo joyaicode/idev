@@ -17,6 +17,7 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 2. 起草或改了用例后跑 `check-feature.sh <f> verify-plan`（已 accepted 再 run 不重跑）。无 `SIGNAL` 由导体记 `AUTO`，不请人 `accepted`。S8 的 `workflow.py record <gate> AUTO` 自己跑这一步。
 3. 按 mode 跑 cases；只许 PASS/FAIL/UNPROVEN；PASS 必须有证据路径。
 4. 提测维表六族：`mode: test` + `unproven.md`；人没提 promote 不问不跑。
+5. **多角色镜头（lean-review，按需）：** 触发命中（P0 / grounding.conflicts / assumptions / 人点名）时，`lean-review.py assess --feature <f> --stage test` 打出的镜头（test / ops·SRE，ui 票加 ui）附进本波 `idev-verifier` 委派包，同一上下文按镜头过；finding 修维表 `UNPROVEN` 或补 case（`unproven.md`），**不进 grill、不另派、不新停点**。三律同 lean-review 正文：引用尺 / 带失败场景 / 零 finding 合法且要明说。
 5. 写 `conductor-eval` 件数；试运行停问 feedback tags；`trace.sh append`。
 
 | Need | Doc |

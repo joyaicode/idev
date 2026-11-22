@@ -444,3 +444,8 @@ python3 $IDEV/scripts/sediment.py transform --feature <f> --id S1 \
 `add` 永远是候选。只有一条结果时 `transform` 拒绝。事实、判断和外部内容不进这本账。留下时钉住脚本和结果的字节。脚本再改，原来的结果不能把它重新留下。命令不执行脚本，也不改提示词。全文 `references/sediment.md`。
 
 知识过时就 `retire --why <为什么>`。不清的话,下一轮会把它读成当前有效。
+
+
+## 多角色镜头（lean-review --stage ops，恒触发）
+
+ops 票存在即触发。镜头附进你的委派包：**ops·SRE**（假设可证伪 / 证据链断点 / 变更记录查过没，尺：evidence.md 闭环与排查递进 + 产线 pack 运维知识）、**dev**（修复是否落在产生现象的那一层 / 是否在错误修复上叠补丁，尺：evidence.md 闭环 5/6 + 有界修复红线）、现象涉用户可感知时加 **product**。finding 进**假设台账**（`hypothesis.py add`，可证伪动作 + 证据路径），**不进 grill、不另派**。三律：引用尺 / 带失败场景 / 零 finding 合法且要明说。

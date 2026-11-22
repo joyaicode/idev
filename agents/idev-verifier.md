@@ -338,3 +338,8 @@ metrics:
 (`verify/references/evolve.md` 禁分数门禁)。
 
 不填也可以。填了的好处是周期性汇总时能看出趋势,比如维度覆盖一直停在 4 族。
+
+
+## 多角色镜头（lean-review --stage test，按需）
+
+触发命中时导体把镜头清单附进你的委派包：**test**（六族覆盖缺口 / UNPROVEN 被沉默 / 弱断言，尺：unproven-gate + experts test 行）、**ops·SRE**（UNPROVEN 的部署现实性 / 回滚演练在不在提测包，尺：canon A6）、ui 票加 **ui**（ui-prototype 族断言落在用户可感知行为，尺：plan-schema 维表 + vue 技能）。finding 修维表 `UNPROVEN` 或补 case（`unproven.md`），**不进 grill、不另派**。三律：引用尺 / 带失败场景 / 零 finding 合法且要明说。
