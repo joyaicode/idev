@@ -1055,7 +1055,10 @@ func (a app) runRecord(args []string) error {
 	if err := runyaml.Record(*file, *step, *status, *evidence, *note); err != nil {
 		return err
 	}
-	_ = a.projectYAML(*file, raw) // external projection; YAML remains driver until Start migrates
+	_ = a.projectYAML(*file, raw) // external projection; for live-path run.yaml the
+	// YAML file IS the driver — the SQLite row exists so lease/gate/delegation
+	// foreign keys resolve, and the step rows feed only the e2e SQLite-live
+	// lane (proposal 20261121-e21-run-truth, option B, 2026-11-22)
 	return json.NewEncoder(a.stdout).Encode(map[string]string{
 		"file": *file, "step": *step, "status": *status, "truth": "yaml",
 	})

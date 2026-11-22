@@ -149,7 +149,7 @@ code-review 技能截胡（必须 `/idev` 前缀）、后台等待 600s 上限�
 
 ## 架构演进（2026-10-19）
 
-活路径是 `workflow.py` 写 `run.yaml`。Go 的 `runsvc` 在进程内 e2e 里成立，`record` 不进入它。SQLite 可写的是 gate、lease、audit；run 的 `Create`/`Save`、delegation、baseline 仍返回未接线。先让一笔状态迁移落在一个事务里，再暴露 MCP。
+活路径是 `workflow.py` 写 `run.yaml`（E2.1 于 2026-11-22 由人拍板确认为正式架构，非中间态：YAML 是唯一真源，SQLite 的 runs 行只服务 lease/gate/delegation 的外键与审计链；`idev run start/apply/record` 的 SQLite-live 通道是 e2e 专用，见提案 `state/proposals/20261121-e21-run-truth.md`）。Go 的 `runsvc` 在进程内 e2e 里成立，`record` 不进入它。SQLite 可写的是 gate、lease、audit；run 的 `Create`/`Save`、delegation、baseline 仍返回未接线。先让一笔状态迁移落在一个事务里，再暴露 MCP。
 
 阶段 1 不接 passkey。`AllowLowForHigh` 保持开着，降级继续进审计。有意不做、不必列入下面表格的：第二个顶层 Skill、分数门禁、把导体做成 subagent、B 类另开 decision gate、现在改用 sqlc。写集已订死的一组步骤，以及 `fanout.py` 的分片，已放开；多份活跃 run 仍不做，见上表 #12。
 

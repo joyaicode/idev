@@ -1474,9 +1474,10 @@ def cmd_start(args: argparse.Namespace) -> int:
     run_path = run_path_for(recipe, feature, repo)
     run = {
         "schema_version": 1,
-        # Written, never read. idevd keys runs on this from P2 on; writing it
-        # now means the runs created during the migration already have the
-        # identity the Go side will look for.
+        # Read by the Go side on every record: lease acquire keys the
+        # single-writer slot by run_id, and the audit chain links step
+        # events to it. The file stays the driver (E2.1 option B,
+        # 2026-11-22); this id is how SQLite rows tie back to the file.
         "run_id": ids.ulid(),
         "workflow_id": recipe["id"],
         "recipe": str(recipe_path),
