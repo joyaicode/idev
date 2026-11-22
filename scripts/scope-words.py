@@ -19,17 +19,28 @@ is the same one, kept here so the kernel does not depend on an external repo.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
-SCOPE_WORDS = (
-    "只有", "一律", "全部", "不再", "必须", "不得", "均",
-    "所有", "仅", "无一例外",
-)
+# Split vocabulary (refinement of joy-dev's single list, by experiment on
+# real proposals and rule pages, 2026-11-22): normative words carve scope
+# wherever they appear; quantifiers alone are usually statistical prose
+# ("8 个脚本全部直读 run.yaml") and only count inside an imperative
+# sentence. Before the split, 3 of 3 hits on a real proposal were
+# evidence statements, not rules.
+NORM_WORDS = ("只有", "一律", "必须", "不得")
+QUANT_WORDS = ("全部", "不再", "均", "所有", "仅", "无一例外")
+_IMPERATIVE = re.compile(r"[要应需]|不准|禁止|禁止?不")
 
 
 def scan(path: Path) -> list[tuple[int, list[str], str]]:
-    """Return (lineno, words, stripped-line) for each line carrying a word."""
+    """Return (lineno, words, stripped-line) for each line carrying a word.
+
+    Normative words count anywhere. Quantifiers count only when the same
+    line carries an imperative marker — "全部" in "8 个脚本全部直读" is
+    evidence, in "所有回报都要附清单" it is scope.
+    """
     hits: list[tuple[int, list[str], str]] = []
     try:
         text = path.read_text(encoding="utf-8")
@@ -37,7 +48,11 @@ def scan(path: Path) -> list[tuple[int, list[str], str]]:
         print(f"WARN cannot read {path}: {exc}", file=sys.stderr)
         return hits
     for index, line in enumerate(text.splitlines(), start=1):
-        found = [word for word in SCOPE_WORDS if word in line]
+        found = [word for word in NORM_WORDS if word in line]
+        if not found:
+            quant = [word for word in QUANT_WORDS if word in line]
+            if quant and _IMPERATIVE.search(line):
+                found = quant
         if found:
             hits.append((index, found, line.strip()))
     return hits
@@ -63,8 +78,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if total:
         print(
-            f"NOTE {total} line(s) carry scope words — a hit narrows or justifies, "
-            "it is not an error. PASS here only means no known hard error.",
+            f"NOTE {total} line(s) carry scope words (normative anywhere; "
+            "quantifiers only in imperative lines) — a hit narrows or "
+            "justifies, it is not an error. PASS here only means no known "
+            "hard error.",
             file=sys.stderr,
         )
     if args.check and total:

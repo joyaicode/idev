@@ -1377,6 +1377,25 @@ def check_plan_stage(
     cases = entries(plan, "cases")
     if args.stage == "test":
         check_unproven_surfaces(root, plan, cases, errors)
+        # Anti-fabrication identity (joy-dev build Completion): a report
+        # that claims more or fewer executed runs than pass+fail left the
+        # file, or a number was invented. not-applicable is not part of the
+        # identity — UNPROVEN travels in unproven.md, not in the count.
+        stats = plan.get("stats")
+        if isinstance(stats, dict):
+            executed = stats.get("executed")
+            passed = stats.get("passed")
+            failed = stats.get("failed")
+            if isinstance(executed, int) and isinstance(passed, int) and isinstance(failed, int):
+                if executed != passed + failed:
+                    fail("plan.stats identity broken: executed=%s but passed+failed=%s"
+                         % (executed, passed + failed), errors)
+                else:
+                    ok("plan.stats identity holds (executed = passed + failed)")
+                if executed == 0:
+                    fail("plan.stats.executed is 0; a test report executed nothing", errors)
+        elif stats is not None:
+            fail("plan.stats must be a mapping of executed/passed/failed", errors)
     if args.stage == "verify-plan":
         check_correctness_runner(plan, errors)
         for signal in plan_signals(

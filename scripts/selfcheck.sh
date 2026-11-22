@@ -2133,6 +2133,8 @@ run_test test_lean_review.py \
   || fail "the lean-review lens roster no longer matches what the ticket hits (python3 scripts/test_lean_review.py)"
 run_test lib/test_termview.py \
   || fail "the terminal lane stopped degrading to the plain lane — golden and CI read the plain one (python3 scripts/lib/test_termview.py)"
+run_test test_scope_words.py \
+  || fail "the quantifier sweep missed its own word list, or --check stopped flipping the exit code (python3 scripts/test_scope_words.py)"
 echo "OK  tier signoffs and single writer"
 
 echo "=== lock: a gate is answered by the person's 确认 ==="

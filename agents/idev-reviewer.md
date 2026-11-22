@@ -195,4 +195,4 @@ preamble 已给好 `IDEV` / `REPO` / `TICKET`(都是 `Path`)并把 idev 的 lib 
 
 ## 多角色镜头（lean-review --stage code，按需）
 
-触发命中（P0 / grounding.conflicts / assumptions / 人点名）时，导体把 `lean-review.py assess --stage code` 打出的镜头清单附进你的委派包：**dev**（异常处理与降级 / 无依据代码 / 哑对象，尺：coding.md 文首底线与 §2）、**test**（自测覆盖影响面 / 断言是否用户现象，尺：plan-schema + evidence.md 红绿判据）、**ops·SRE**（关键路径异常 / 回退可执行 / 观测面随行为变更，尺：canon A6）。同一上下文按镜头过，**不另派、不第二波**；每条 finding 引用尺原文 + 写失败场景，写 `review.md` 的 I*/P#，走既有 `review.fix`。零 finding 合法且要明说——为凑数提的问题在 review.fix 会被逐条核对，赔掉的是审查者的信用。
+触发命中（P0 / grounding.conflicts / assumptions / 人点名）时，导体把 `lean-review.py assess --stage code` 打出的镜头清单附进你的委派包：**dev**（异常处理与降级 / 无依据代码 / 哑对象，尺：coding.md 文首底线与 §2）、**test**（自测覆盖影响面 / 断言是否用户现象，尺：plan-schema + evidence.md 红绿判据）、**ops·SRE**（关键路径异常 / 回退可执行 / 观测面随行为变更，尺：canon A6）。同一上下文按镜头过，**不另派、不第二波**；每条 finding 引用尺原文 + 写失败场景，写 `review.md` 的 I*/P#，走既有 `review.fix`。零 finding 合法且要明说——为凑数提的问题在 review.fix 会被逐条核对，赔掉的是审查者的信用。五律全条目见 lean-review SCOPE 行：引用尺 / 失败场景与条款出处 / 阻塞建议二分 / 零 finding 合法 / 旧 finding 不推定、参与过修复的镜头本轮更换。

@@ -63,7 +63,7 @@ parent: idev
    `kind=patrol`：只重放 `doc_home.py --feature <feature> --key patrol` 输出的巡检包。
 4. **根因** — 锁定故障源 ≠ 查明根因：候选根因要有固定则红、消除则绿的用例钉死，用例不过继续向下挖。读代码之前先 `bash ~/.cursor/skills/idev/scripts/codegraph-sync.sh --repo <仓根> rootcause`。能红/绿切换才写进 report。对照密封基线 item。超出基线 → `baseline-conflict`。台账里有两条以上 `open` 假设时，先跑 `fanout.py assess --activity rootcause`。`FANOUT` 时每个 `idev-ops` 只查一个 id，只写 `verify/shards/rootcause-<id>.yaml`。另一片的结论不是证据。先完成的一片不取消其余。导体 `merge` 才改 `hypotheses.yaml`。只有一条 `open` 时不拆。
 5. **回退** — 人写下 `defect_origin` 后，把 `deliver.yaml.stage` 回到 origin，作废其后 accepted / aligned，按 deliver 再向后走。
-6. **多角色镜头（lean-review，ops 票恒触发）：** `lean-review.py assess --feature <f> --stage ops` 打出的镜头（ops·SRE / dev；现象涉用户可感知时加 product）附进本次 `idev-ops` 委派包，同一上下文按镜头过；finding 进**假设台账**（`hypothesis.py add`，可证伪动作 + 证据路径），**不进 grill、不另派**。三律：引用尺（evidence.md 闭环 / 产线 pack 运维知识）/ 带失败场景 / 零 finding 合法且要明说。
+6. **多角色镜头（lean-review，ops 票恒触发）：** `lean-review.py assess --feature <f> --stage ops` 打出的镜头（ops·SRE / dev；现象涉用户可感知时加 product）附进本次 `idev-ops` 委派包，同一上下文按镜头过；finding 进**假设台账**（`hypothesis.py add`，可证伪动作 + 证据路径），**不进 grill、不另派**。五律：引用尺（evidence.md 闭环 / 产线 pack 运维知识）/ 失败场景与条款出处 / 阻塞建议二分 / 零 finding 合法且要明说 / 旧 finding 不推定、修复者更换。
 7. **关闭** — `check-feature.sh <feature> ops`。P0：人写 `resolved: true` + `by:`。P1/P2：`hypothesis.py check` 绿、无 `open`、有 `proven` 时写 `resolved: true` + `auto: hypotheses.yaml`，不停；否则停问人。人没提提升 / 巡检包 / promote 则不问是否把本次 debug case 晋升巡检包。
 
 `deliver.yaml.stage`：仅当当前已是 `done` 时才改成 `ops`；交付中途的现象就地 `debug`，不要跳阶段。关闭且无回退 → 回到 `done`。

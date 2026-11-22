@@ -342,4 +342,9 @@ metrics:
 
 ## 多角色镜头（lean-review --stage test，按需）
 
-触发命中时导体把镜头清单附进你的委派包：**test**（六族覆盖缺口 / UNPROVEN 被沉默 / 弱断言，尺：unproven-gate + experts test 行）、**ops·SRE**（UNPROVEN 的部署现实性 / 回滚演练在不在提测包，尺：canon A6）、ui 票加 **ui**（ui-prototype 族断言落在用户可感知行为，尺：plan-schema 维表 + vue 技能）。finding 修维表 `UNPROVEN` 或补 case（`unproven.md`），**不进 grill、不另派**。三律：引用尺 / 带失败场景 / 零 finding 合法且要明说。
+触发命中时导体把镜头清单附进你的委派包：**test**（六族覆盖缺口 / UNPROVEN 被沉默 / 弱断言，尺：unproven-gate + experts test 行）、**ops·SRE**（UNPROVEN 的部署现实性 / 回滚演练在不在提测包，尺：canon A6）、ui 票加 **ui**（ui-prototype 族断言落在用户可感知行为，尺：plan-schema 维表 + vue 技能）。finding 修维表 `UNPROVEN` 或补 case（`unproven.md`），**不进 grill、不另派**。五律：引用尺 / 失败场景与条款出处 / 阻塞建议二分 / 零 finding 合法且要明说 / 旧 finding 不推定、修复者更换。
+
+
+## 复用已有测试：先过 case 可信度四查
+
+挂进 `cases[]` 的已有测试只证明存在，不证明结论配得上基线 item。复用前四查（[plan-schema.md](../verify/references/plan-schema.md)「复用已有测试前」）：替身限制了哪些结论、断言是否含副作用、是否被项目命令收集或常被 skip、是否依赖共享状态。查不过的结论写进 case 的 `evidence` 备注，或降 `UNPROVEN`——替身绿了只证明替身之外的半段。

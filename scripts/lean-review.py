@@ -252,8 +252,10 @@ def assess(repo: Path, feature: str, stage: str) -> dict:
             "id": lens,
             "scope": (
                 "%s 视角再审（%s 阶段）；只挑疑问不改工件；每条 finding 必须引用领域尺原文"
-                "（%s）并写失败场景；零 finding 合法且要明说；"
-                "拿不到的事实回 UNPROVEN(事实) 不猜；%s" % (lens, stage, "；".join(rulers), hint)
+                "（%s）的具体条款出处并写失败场景，且标注【阻塞】或【建议】；"
+                "零 finding 合法且要明说；拿不到的事实回 UNPROVEN(事实) 不猜；"
+                "旧 finding 不推定本轮仍成立，参与过修复的镜头本轮更换；%s"
+                % (lens, stage, "；".join(rulers), hint)
             ),
             "challenge": challenge,
             "rulers": list(rulers),
@@ -293,7 +295,8 @@ def render(result: dict, feature: str) -> str:
         lines.append(termview.paint("SHARD %s" % shard["id"], "HINT") + "  " + shard["challenge"])
         lines.append("SCOPE %s" % _linkify(shard["scope"]))
     lines.append(
-        "NOTE 三律：引不出尺的问题删；问题必带失败场景；零 finding 合法且要明说。"
+        "NOTE 五律：引不出尺的问题删；问题必带失败场景与条款出处；标注【阻塞】或【建议】；"
+        "零 finding 合法且要明说；旧 finding 不推定本轮仍成立，参与过修复的镜头更换。"
         "finding 按 %s 归并，不另开文件、不另请签、不新停点。" % _merge_note(result["shards"])
     )
     return "\n".join(lines)
