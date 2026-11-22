@@ -2135,6 +2135,8 @@ run_test lib/test_termview.py \
   || fail "the terminal lane stopped degrading to the plain lane — golden and CI read the plain one (python3 scripts/lib/test_termview.py)"
 run_test test_scope_words.py \
   || fail "the quantifier sweep missed its own word list, or --check stopped flipping the exit code (python3 scripts/test_scope_words.py)"
+run_test test_stage_handoff.py \
+  || fail "a stage flip stopped demanding a fresh session, or the opening stage started counting as one (python3 scripts/test_stage_handoff.py)"
 echo "OK  tier signoffs and single writer"
 
 echo "=== lock: a gate is answered by the person's 确认 ==="

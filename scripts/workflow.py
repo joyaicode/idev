@@ -296,6 +296,82 @@ def deliver_stage(run_path: Path) -> str:
     return ""
 
 
+def stage_hops(run: dict) -> list[dict]:
+    """The stage transitions this run has recorded (proposal stage-handoff).
+
+    Each row: {at, from, to, session}. A hop is *undigested* when its
+    `session` flag is false — the stage flipped but no fresh session has
+    recorded since. Unknown-field tolerance: a run from before this
+    feature simply has no stage_hops.
+    """
+    rows = run.get("stage_hops")
+    return rows if isinstance(rows, list) else []
+
+
+def pending_stage_hop(run: dict, run_path: Path) -> dict | None:
+    """The newest undigested stage hop, or None.
+
+    The stage written on deliver.yaml is the person's/stage's answer to
+    "where are we"; the run's stage_hops record when it changed. A change
+    with no fresh-session record since is the handoff this run is owed.
+    """
+    rows = stage_hops(run)
+    # The first hop (from: "") is the run's opening stage, not a handoff:
+    # no fresh session is owed for a stage nobody worked in yet.
+    if rows and rows[-1].get("session"):
+        return None
+    if rows and not rows[-1].get("from"):
+        return None
+    return rows[-1] if rows else None
+
+
+def _refuse_undigested_stage_hop(run: dict, path: Path) -> None:
+    """Refuse to delegate into a new stage from the session that closed it.
+
+    Proposal 20261123-stage-handoff, the honest edge of "force": a skill
+    cannot kill the host session, so the machine refuses the *dispatch* —
+    next / drive / step exit with the STAGE_HANDOFF line, and the first
+    record of a fresh session (--new-session, told by session-context's
+    RESUME line) digests the hop. IDEV_NO_STAGE_HANDOFF is the CI/e2e
+    escape hatch, same convention as the other IDEV_* lanes.
+    """
+    if os.environ.get("IDEV_NO_STAGE_HANDOFF"):
+        return
+    hop = pending_stage_hop(run, path)
+    if not hop:
+        return
+    resume = ticket_of(path) / "workflow" / "resume.yaml"
+    raise Blocked(
+        "STAGE_HANDOFF %s→%s 已收口；下一阶段在新会话里继续（上下文过大或压缩会失真）。"
+        "新会话先跑 session-context，首次 record 带 --new-session 消化本跳；"
+        "恢复包（零生成文本）: %s"
+        % (hop.get("from") or "(start)", hop.get("to"), resume if resume.is_file() else "trace append 后生成"
+           )
+    )
+
+
+def snapshot_stage_hop(run: dict, run_path: Path) -> None:
+    """Record a stage flip into run["stage_hops"] (called on each record).
+
+    Same-run no-ops (stage unchanged, first hop from an empty stage) do
+    not append. The hop starts undigested; the first record from a fresh
+    session (or --new-session) digests it by setting session: true.
+    """
+    current = deliver_stage(run_path)
+    if not current:
+        return
+    rows = run.setdefault("stage_hops", [])
+    prev = rows[-1]["to"] if rows else ""
+    if prev == current:
+        return
+    rows.append({
+        "at": now(),
+        "from": prev,
+        "to": current,
+        "session": False,
+    })
+
+
 def cites(blob: str, evidence: str) -> bool:
     """True when evidence is its own token, not a suffix of a longer path."""
     if not evidence:
@@ -1897,6 +1973,7 @@ def cmd_next(args: argparse.Namespace) -> int:
     if block:
         print(block, file=sys.stderr)
         raise Blocked(block)
+    _refuse_undigested_stage_hop(run, path)
     _settle_ticket_under_drive(run, args)
     _settle_open_signals_under_drive(run, path)
     if slots_to_autofill(run):
@@ -2384,6 +2461,18 @@ def cmd_record(args: argparse.Namespace) -> int:
         check_run(run, path, errors)
         if errors:
             raise Blocked("; ".join(errors))
+        # Stage-handoff snapshot (proposal 20261123): the stage on
+        # deliver.yaml moves when a stage closes. Record it here so next /
+        # drive can see the flip and demand a fresh session before
+        # delegating into the new stage. --new-session (or the first
+        # record from a fresh session, told by session-context's RESUME
+        # line) digests the pending hop instead of adding one.
+        snapshot_stage_hop(run, path)
+        if args.new_session:
+            hops = stage_hops(run)
+            if hops and not hops[-1].get("session"):
+                hops[-1]["session"] = True
+                hops[-1]["session_at"] = now()
         done["run"] = run
         done["step"] = step
         return run
@@ -2923,6 +3012,9 @@ def _ticket_run(args: argparse.Namespace) -> tuple[Path, dict, dict]:
 
 
 def _locate(args: argparse.Namespace, **extra: Any) -> argparse.Namespace:
+    # new_session defaults False here too: land's internal record rides the
+    # same session that landed the report (stage hops stay undigested).
+    extra.setdefault("new_session", False)
     return argparse.Namespace(repo=args.repo, feature=args.feature, run=args.run, step=args.step, **extra)
 
 
@@ -3002,6 +3094,7 @@ def cmd_step(args: argparse.Namespace) -> int:
     if block:
         print(block, file=sys.stderr)
         raise Blocked(block)
+    _refuse_undigested_stage_hop(run, path)
     _settle_ticket_under_drive(run, args)
     _settle_open_signals_under_drive(run, path)
     shard = str(getattr(args, "shard", "") or "").strip()
@@ -3572,6 +3665,7 @@ def _record_args(args: argparse.Namespace, step: str, status: str, evidence: str
     rec.verified_by = ""
     rec.verify_evidence = ""
     rec.accept_with_findings = ""
+    rec.new_session = False  # a drive-internal record is not a fresh session
     return rec
 
 
@@ -3818,6 +3912,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--accept-with-findings", default="",
         help="PASS although the delegation fails machine checks; the reason goes to the audit chain",
+    )
+    p.add_argument(
+        "--new-session", action="store_true",
+        help="digest a pending stage handoff: the first record of a fresh session (session-context printed RESUME). The stage flip stays recorded; only the demand for a new session is settled",
     )
     locate(p)
     p.set_defaults(func=cmd_record)

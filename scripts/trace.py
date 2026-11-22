@@ -1216,6 +1216,39 @@ def session_rounds() -> tuple[int, int]:
     return session_transcript.session()
 
 
+def stage_of(text: str) -> str:
+    """The route.stage this trace carried, or "" (observation only)."""
+    route = block(text, "route")
+    return field(route, "stage") or ""
+
+
+def _previous_stage(feature: str, current: str) -> str:
+    """The stage of the most recent earlier trace for this feature.
+
+    Reads the trace folder the way `last` does; any read error means "no
+    previous" — this is an observation, never a failure path (merge_facts
+    rule: a helper must not turn a writable trace into a failing one).
+    """
+    if not feature or feature == "-":
+        return ""
+    try:
+        folder = sink_dir("traces")
+        candidates = sorted(folder.glob("*.yaml"))
+        # The trace for THIS append is already on disk (the file is written
+        # before the closing prints); the "previous" is the one before it.
+        for path in reversed(candidates[:-1]):
+            try:
+                earlier = path.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if field(earlier, "feature") != feature:
+                continue
+            return stage_of(earlier)
+    except Exception:
+        return ""
+    return ""
+
+
 def handoff_line(text: str, rounds: int, ctx: int) -> str:
     feature = field(text, "feature") or "-"
     route = block(text, "route")
@@ -1523,6 +1556,14 @@ def cmd_append(path: str) -> int:
     print("wrote %s" % dest)
     print(render(text))
     print(render_path(text, name=dest.name))
+    # Stage-handoff observation (proposal 20261123): when this round's
+    # stage differs from the previous trace's stage on the same feature,
+    # say so — the person should start a fresh session for the new stage,
+    # and the resume pack below is how the fresh one starts cheap.
+    prev_stage = _previous_stage(field(text, "feature"), stage_of(text))
+    if prev_stage and prev_stage != stage_of(text):
+        print("STAGE_HANDOFF %s→%s 上一阶段已收口；新阶段在新会话里继续（record --new-session 消化）"
+              % (prev_stage, stage_of(text)))
     rounds, ctx = session_rounds()
     if rounds >= HANDOFF_ROUNDS:
         print(handoff_line(text, rounds, ctx))

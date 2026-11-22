@@ -42,6 +42,7 @@ parent: idev
 2a. **落笔前 frontier 必须已空。** 写需求通过之前，`grill.md` 必须在：`frontier` 与 `shared_understanding` 各自单独成行，正文有 `❓` 与 `➡️`。frontier 不是 `empty` → 不准写。`shared_understanding` 由这次落笔写成 `true`。不要先停一次「共享理解」再停一次密封。缺这份文件也不准把基线标成 `sealed: true`。
 3. **密封后不准改 baseline 正文。** 下游只引用 `baseline_item_id`。要改原文：人写 `reopen_baseline`，回到 `req-review`。
 4. **回退 origin 只能是 `req` / `arch` / `code`**（译法、方案、实现）。禁止用提测反馈直接改 goal。
+4a. **阶段切换是新会话的边界（stage handoff）。** 阶段完成写 `deliver.yaml` 的 stage 新值即本阶段收口——上一阶段的证据已全部落盘，下一阶段**在新会话里继续**（长上下文与压缩会失真，恢复包零生成文本）。写完 stage 新值后，同会话 `next` 会打出 `STAGE_HANDOFF` 并拒绝派发新阶段的执行者（退出 2，非请签——是流程边界，同 human.gate）；新会话 `session-context` 后的首次 `record` 带 `--new-session` 消化该跳。恢复包：`<票目录>/workflow/resume.yaml`（HANDOFF 轮数线也会打）。
 5. **编码必须衔 verify**；case 必须同时挂 `slice_id` 与 `baseline_item_id`。
 6. **过专家拒过清单才能写这一关。** 清单不过就停，不要用「资深意见」绕过。编码 / 路由 / PIN 先过 `../conventions/` 对应类。
 7. **检查没过不得写 `sealed` / `accepted` / `aligned`。** 检查过了、没有未决分叉，就按 [chat-confirm-signoff.md](../references/chat-confirm-signoff.md) 只写当前这一关。不问确认。解封须带「解除密封」或 `reopen`。

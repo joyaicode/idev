@@ -100,3 +100,8 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 ## 术语
 
 见 [glossary.md](glossary.md)。遇到不认识的词先查那页，**不要猜**。
+
+
+## 阶段切换是新会话的边界（stage handoff）
+
+阶段完成、写 `deliver.yaml` 的 stage 新值之后，**不要在本会话继续下一阶段**：长上下文与压缩会失真，而上一阶段的证据已全部落盘。同会话 `next` 会打出 `STAGE_HANDOFF` 并拒绝派发（这是流程边界，不是请签）。新会话先跑 `session-context`，首次 `record` 带 `--new-session`；恢复包 `<票目录>/workflow/resume.yaml` 是既有落盘的指针拼装，零生成文本。
