@@ -1,7 +1,100 @@
 #!/usr/bin/env bash
 # Replay example fixtures through check-feature.py. Exit 0 only if positives
 # pass and negatives fail as expected.
+#
+#   bash scripts/selfcheck.sh                  # everything, ~233s
+#   bash scripts/selfcheck.sh --section go     # one lock section, seconds
+#   bash scripts/selfcheck.sh --list-sections  # what the names are
+#
+# A section name is the "=== lock: NAME ===" header with the prefix stripped
+# and spaces turned to dashes ("the Go side builds, vets and tests" → go, see
+# --list-sections for the exact slug). The preflight check always runs: a
+# section selected without its python contracts is a red herring, the same
+# reason CI runs generate before test.
 set -euo pipefail
+
+SECTION=""
+LIST_SECTIONS=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --section)
+      [ $# -ge 2 ] || { echo "FAIL --section needs a slug (see --list-sections)" >&2; exit 1; }
+      SECTION="$2"; shift 2 ;;
+    --section=*) SECTION="${1#--section=}"; shift ;;
+    --list-sections) LIST_SECTIONS=1; shift ;;
+    -h|--help)
+      sed -n '2,14p' "$0" 2>/dev/null || true
+      exit 0 ;;
+    *)
+      # Bare argument: treat the first one as the section slug.
+      if [ -z "${SECTION}" ]; then SECTION="$1"; shift; else
+        echo "FAIL unexpected arg $1 (usage: selfcheck.sh [--section <slug>|--list-sections])" >&2
+        exit 1
+      fi ;;
+  esac
+done
+
+section_header() {
+  # "the Go side builds, vets and tests" -> "the-go-side-builds-vets-and-tests"
+  # echo (not printf): the newline is what keeps names from concatenating
+  # when several headers flow through the caller's while-read loop.
+  echo "$1" | tr ' ,' '--' | tr -s '-' | tr '[:upper:]' '[:lower:]'
+}
+
+want_section() {
+  # Empty SECTION (no flag) means run everything.
+  [ -z "${SECTION}" ] && return 0
+  [ "$(section_header "$1")" = "${SECTION}" ]
+}
+
+if [ "${LIST_SECTIONS}" -eq 1 ]; then
+  echo "# sections: --section <slug>"
+  grep -oE '^echo "=== lock: [^=]+ ==="' "$0" \
+    | sed 's/^echo "=== lock: //; s/ ==="$//' \
+    | while IFS= read -r name; do section_header "${name}"; done \
+    | sort -u
+  exit 0
+fi
+
+if [ -n "${SECTION}" ]; then
+  # One lock, selected by slug. Build a temporary script = everything up to
+  # the first lock header (preflight + helpers + fixture), the selected lock
+  # body (from its header line to the line before the next lock header), and
+  # a DONE marker so cleanup() reports a section run, not a truncated one.
+  # The head derives KERNEL from $0, which for the temp file would be the
+  # scratch dir — patch that one line to the real script path.
+  WANTED="$(grep -oE '^echo "=== lock: [^=]+ ==="' "$0" \
+    | sed 's/^echo "=== lock: //; s/ ==="$//' \
+    | while IFS= read -r name; do
+        if [ "$(section_header "${name}")" = "${SECTION}" ]; then echo "${name}"; fi
+      done | head -1)"
+  if [ -z "${WANTED}" ]; then
+    echo "FAIL no lock matches --section '${SECTION}' (see --list-sections)" >&2
+    exit 1
+  fi
+  HEADER_LINE="$(grep -n '^echo "=== lock: ' "$0" | head -1 | cut -d: -f1)"
+  REAL_SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+  TMP_SECTION="$(mktemp "${TMPDIR:-/tmp}/idev-selfcheck-section.XXXXXX")"
+  {
+    sed -n "1,$((HEADER_LINE - 1))p" "$0" \
+      | sed "s|^ROOT=.*|ROOT=\"${REAL_SELF%/*}\"|"
+    awk -v want="=== lock: ${WANTED} ===" '
+      $0 == "echo \"" want "\"" { inlock = 1; print; next }
+      /^echo "=== lock: / { inlock = 0 }
+      inlock { print }
+    ' "$0"
+    # The last lock has no next header, so awk already carried the file's own
+    # DONE=1 tail; only a mid-file lock needs the appended close-out.
+    if ! grep -q '^DONE=1' "${TMP_SECTION}"; then
+      echo 'DONE="section"'
+      echo 'echo "section PASS (${SECONDS}s) — the full run still owes the other locks"'
+    fi
+  } > "${TMP_SECTION}"
+  bash "${TMP_SECTION}"
+  rm -f "${TMP_SECTION}"
+  exit $?
+fi
+
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 KERNEL="$(cd "${ROOT}/.." && pwd)"
@@ -183,6 +276,11 @@ unrun() {
   echo "selfcheck SKIP: $*" >&2
   printf '%s\n' "$*" >> "${UNRUN}"
 }
+
+# Section mode: `--section <slug>` runs preflight plus the one lock whose
+# header matches (--list-sections prints the slugs). The selected body runs
+# in a subshell whose exit status feeds fail() as usual; skipped locks print
+# one "skip" line each so the output still shows the whole roster.
 
 # CI's python job runs these three; nothing local did. healthcheck has
 # refs-check, but nothing runs healthcheck either. 0.7 seconds for all
@@ -2023,6 +2121,16 @@ python3 "${KERNEL}/scripts/test_sediment.py" >/dev/null 2>&1 \
   || fail "one success was kept, or a registered script was executed (python3 scripts/test_sediment.py)"
 run_test lib/test_product_sink.py \
   || fail "a process file git already tracked stopped being reported, or a durable keep raised a false WARN (python3 scripts/lib/test_product_sink.py)"
+run_test test_ticket_yaml.py \
+  || fail "ticket YAML that is not a mapping stopped raising, or as_str lost a coercion (python3 scripts/test_ticket_yaml.py)"
+run_test test_req_ground.py \
+  || fail "a baseline item without grounding/touches-anchor/conflict-grill stopped being a finding (python3 scripts/test_req_ground.py)"
+run_test test_usage_scan.py \
+  || fail "usage-scan stopped refusing --apply against the kernel, or the module no longer imports (python3 scripts/test_usage_scan.py)"
+run_test test_agent_review.py \
+  || fail "the periodic review stopped drafting-only: it landed, lied about signal, or edited production files (python3 scripts/test_agent_review.py)"
+run_test test_lean_review.py \
+  || fail "the lean-review lens roster no longer matches what the ticket hits (python3 scripts/test_lean_review.py)"
 echo "OK  tier signoffs and single writer"
 
 echo "=== lock: a gate is answered by the person's 确认 ==="

@@ -74,7 +74,7 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
      python3 $IDEV/scripts/ui-spec.py --schema                      # 看格式
      python3 $IDEV/scripts/ui-spec.py --feature <f>                 # 校验 + 生成
      ```
-     **密封前先把需求落到既有代码上**(否则影响面要到 arch 才发现,那时只能 reopen)。深入研究前先更新索引:
+     **密封前先把需求落到既有代码上**(否则影响面要到 arch 才发现,那时只能 reopen)。票是 P0、有 grounding.conflicts / assumptions、或人点名再审时,导体先按 `scripts/lean-review.py assess` 打出的视角行派独立子代理挑战一轮(先读尺再挑,零 finding 合法且要明说),finding 由导体并进 grill 轮——你收到时它们已在问句里,不另答。深入研究前先更新索引:
      ```bash
      bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> research
      python3 $IDEV/scripts/req-ground.py --feature <f> --probe   # 要读什么
@@ -87,7 +87,7 @@ python3 $IDEV/scripts/lib/doc_home.py --repo <仓根> --feature <feature> --key 
      想加义务 → `baseline-conflict`,**停**
    - **`arch`** — 需求签收后交整包方案,再请人签。`design.md` 六节(目标/方案/契约/影响面/回退/用例),目标节照抄基线 goal;每条 item、每条 `case_intent` 点名。`## 前置` 放在 `## 目标` 之前。`arch.yaml` 的 `approach` 与 `non_approach` 都要有（方案没有被拒选项与代价是 F7，补 A3），`case_intents` 挂 `baseline_item_id`。架构期已看得见的编码场景信号（≥2 分支还会增 / 协议挡 SDK / 创建方式互斥）写进可选 `pattern_hints`，变更量可预估写可选 `size_budget` —— 都是**候选预判非授权**，空着合法。本阶段不写 `verify/plan.yaml`。方案"更好"但超基线 → 拒过。没有未决分叉就不要写 `grill.md` 的 `## arch` 轮。有分叉才回报,让导体把问句写进那一轮。需求轮的 `frontier` 保持 empty。影响范围内的既有问题按 deliver/SKILL.md 架构阶段写进前置节。判据唯一就直接写 `scope_debt.decision` 为 `mark` 或 `fix-first`，不要回报问人。定不了才写 `pending`，让导体按 chat-confirm 并进当前这个人的一次决策包。`fix-first` 才另开子需求。
      按 `$IDEV/conventions/canon.md` §1 协议扫 §2 信号与 §4 念头,§5 必答 A1–A8;
-     答不出标 `UNPROVEN` 并写进方案节。方案节同时过 `$IDEV/conventions/coding.md` 底线 4、5:顺着读能指出重点;业务落在带行为的类型上,不计划一串只有 get/set 的对象。引入新领域概念时先过 `conventions/domain-modeling.md` 建通用语言。引入或替换依赖前先读真实契约 / 源码；没读过的 API、配置和字段不得进方案，第三方行为用学习测试钉住（F2）。方案碰到 Vue 组件边界时,跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage arch`，状态所有者和数据流按打出的技能写进方案节
+     答不出标 `UNPROVEN` 并写进方案节。方案节同时过 `$IDEV/conventions/coding.md` 底线 4、5:顺着读能指出重点;业务落在带行为的类型上,不计划一串只有 get/set 的对象。引入新领域概念时先过 `conventions/domain-modeling.md` 建通用语言。引入或替换依赖前先读真实契约 / 源码；没读过的 API、配置和字段不得进方案，第三方行为用学习测试钉住（F2）。方案要改的既有结构说不清「为什么长这样」，先 `git log --follow` 读引入记录——作者原话是事实，自己的推断标推断。依赖版本三问同进方案节：声明 / 实际 / 差异影响哪条设计；资料核对与目标环境已验证分开写。方案碰到 Vue 组件边界时,跑 `python3 $IDEV/scripts/vue-skills.py --repo <仓根> --stage arch`，状态所有者和数据流按打出的技能写进方案节
    - **`test`** — 用例证明基线 item。疑问只拷问理解,**答案不得写成新 must**
 3. 请签前**必须**跑结构检查,FAIL 不准请签:
    ```bash

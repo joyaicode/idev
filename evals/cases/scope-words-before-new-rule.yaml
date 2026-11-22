@@ -12,5 +12,6 @@ expect:
     - "提案"
     - "适用范围"
     - "误报"
+    - "scope-words.py"
   must_not_contain:
     - "sealed: true"

@@ -981,6 +981,107 @@ def check_baseline_ready(root: Path, repo: Path, baseline: dict, errors: list[st
         fail("baseline.review_questions must stay empty; questions belong in grill.md", errors)
     else:
         ok("review_questions empty")
+    _check_original_request(baseline, errors)
+    _check_assumptions(baseline, errors)
+    _check_grounding(root, baseline, errors)
+
+
+# Mirrors req-ground.py's ANCHOR / GRILL_REF (same rule, two entry points:
+# req-ground is the authoring-side check, this is the seal-side gate).
+_GROUNDING_ANCHOR = re.compile(r"[\w./-]+\.\w+:[\w.$<>-]+")
+
+
+def _check_grounding(root: Path, baseline: dict, errors: list[str]) -> None:
+    """Grounding blocks are optional; a present one must be load-bearing.
+
+    Written-but-thin is worse than absent: bare filenames in touches carry
+    no information, and a declared conflict whose grill question was never
+    asked is a note, not a resolution. Same law as original_request and
+    assumptions — absent is legal (UI-only, doc-only), present must hold.
+    """
+    items = baseline.get("items") if isinstance(baseline, dict) else None
+    if not isinstance(items, list):
+        return
+    grills = _grill_question_ids(root)
+    checked = 0
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            continue
+        g = item.get("grounding")
+        if not isinstance(g, dict):
+            continue
+        checked += 1
+        iid = str(item.get("id") or "?")
+        touches = g.get("touches")
+        if isinstance(touches, list):
+            bare = [str(t) for t in touches if not _GROUNDING_ANCHOR.search(str(t))]
+            if bare:
+                fail("baseline.items[%d] (%s) grounding.touches has %d entry(ies)"
+                     " without a file:symbol anchor (e.g. %s)" %
+                     (index, iid, len(bare), bare[0][:60]), errors)
+        conflicts = g.get("conflicts")
+        if isinstance(conflicts, list):
+            for c in conflicts:
+                if not isinstance(c, dict):
+                    continue
+                ref = str(c.get("grill") or "").strip().upper()
+                if ref and ref not in grills:
+                    fail("baseline.items[%d] (%s) grounding.conflicts cites"
+                         " grill question %s which grill.md does not ask"
+                         % (index, iid, ref), errors)
+    if checked and not any("grounding" in e for e in errors):
+        ok("baseline grounding blocks complete")
+
+
+def _grill_question_ids(root: Path) -> set[str]:
+    """Question ids grill.md actually asks, normalized like req-ground."""
+    path = root / "grill.md"
+    if not path.is_file():
+        return set()
+    text = path.read_text(encoding="utf-8", errors="replace")
+    out: set[str] = set()
+    for m in re.finditer(r"(?m)^❓ \*\*(Q[1-9][0-9]*)\*\*", text):
+        out.add(m.group(1).upper())
+    return out
+
+
+def _check_original_request(baseline: dict, errors: list[str]) -> None:
+    """original_request is the verbatim ask. Absent is fine (a small change
+    owes no transcript); present but empty, or present but a copy of goal,
+    means a paraphrase is passing itself off as the original — and everything
+    downstream then works against a second-hand need."""
+    req = scalar(baseline, "original_request")
+    if not req:
+        return
+    goal = scalar(baseline, "goal")
+    if _norm_ws(req) == _norm_ws(goal):
+        fail("baseline.original_request is a copy of goal; the original ask is"
+             " verbatim, the refinement belongs to goal/items", errors)
+        return
+    ok("baseline.original_request verbatim")
+
+
+_ASSUMPTION_KEYS = ("what", "basis", "check", "if_false")
+
+
+def _check_assumptions(baseline: dict, errors: list[str]) -> None:
+    """assumptions: each entry names what is assumed, the basis, how it is
+    checked (or when it fails), and what a false assumption hits. A partial
+    entry is worse than none: it reads like homework was declared."""
+    raw = baseline.get("assumptions")
+    if not isinstance(raw, list) or not raw:
+        return
+    for index, entry in enumerate(raw, start=1):
+        if not isinstance(entry, dict):
+            fail("baseline.assumptions[%d] is not a mapping" % index, errors)
+            continue
+        missing = [k for k in _ASSUMPTION_KEYS if not str(entry.get(k) or "").strip()]
+        if missing:
+            fail("baseline.assumptions[%d] missing %s (what/basis/check/if_false;"
+                 " a declared assumption must say how it is verified and what"
+                 " a false one hits)" % (index, ",".join(missing)), errors)
+    if not errors or not any("assumptions" in e for e in errors):
+        ok("baseline.assumptions complete")
 
 
 def load_ticket(path: Path, errors: list[str]) -> dict:

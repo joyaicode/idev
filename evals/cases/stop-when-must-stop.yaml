@@ -8,7 +8,9 @@ input:
     分别回答，并引用规约原词。
 expect:
   must_contain:
-    - "promote"
+    - "s8-preflight"
+    - "lite-change"
+    - "无停问点不请签、不擅自 promote"
     - "解除密封"
     - "reopen"
   must_not_contain:

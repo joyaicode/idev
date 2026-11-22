@@ -135,7 +135,7 @@ codegraph 的 MCP 说明里原话就是:`codegraph_context` 是 PRIMARY,一次�
 
 一次读多个文件没有合并成本。同一 `group` 且 `writes` 不相交的委派是先订死写集再并行，可以同一轮派出去。`fanout.py assess` 对自测、用例设计、用例执行、根因再做一次按需拆分：少于两片、写集相交、或同一 Maven 模块没有 `runner.parallel: true`，就保持一个 agent。没有这份写集的多开 run 仍然不做。
 
-批量仍不是门禁。`scripts/turn-budget.py` 判的是无正文回合、未先开口的长命令、`claude -p` / `agent -p`，以及把 selfcheck、golden、gate-channel、lease-channel、healthcheck、agent-smoke 的等待设到 30 秒以上。默认连续超过 8 个无正文回合即失败。
+批量仍不是门禁。`scripts/turn-budget.py` 判的是无正文回合、未先开口的长命令、`claude -p` / `agent -p`，以及把 selfcheck、golden、gate-channel、lease-channel、healthcheck、agent-smoke 的等待设到 30 秒以上。默认连续超过 8 个无正文回合即失败。第 5 条（只读合并）也判：一段里只读调用够 `--min-reads`（默认 6）条，而平均每个带只读的回合不到 `--min-ratio`（默认 1.5）个，报 `serial_reads`；Cursor 与 Claude Code 两种转录格式都读，`Shell` 和 `Bash` 是同一个工具。
 
 ---
 

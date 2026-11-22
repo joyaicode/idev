@@ -109,7 +109,7 @@ python3 scripts/delegation.py replay --feature <f> --step <step>
 
 | 不要 | 为什么 |
 |---|---|
-| 没有 `PARALLEL`、也没有 `fanout.py` 的 `FANOUT`，就同一轮派两个 agent | 写集没订死。`next` 打出 `PARALLEL` 时，先 `workflow.py delegate --open`，再把这一波的每个 `DELEGATE` 都派出去。`drive` 已经打出这一波每个 `BRIEF` 时按 `BRIEF` 派，不要再 `delegate --open`。`FANOUT_ASSESS` 先跑 assess：`SERIAL` 仍是一个 agent；`FANOUT` 的每一片写集已经订死，同一条消息派完，并且 `delegate <step> --shard <id>` 给每片一张只锁该片路径的验证租约。`drive` 已经打出每片 `BRIEF` 时按打出的结果派，回报用 `land <step> --shard <id>`，不要再跑一遍。内核脚本的 `PREP` 已经跑完，日志在 `扫描:`。其它 `PREP` 仍先跑。人闸和产品代码写租约不在这一波里 |
+| 没有 `PARALLEL`、也没有 `fanout.py` 的 `FANOUT`，就同一轮派两个 agent | 写集没订死。`next` 打出 `PARALLEL` 时，先 `workflow.py delegate --open`，再把这一波的每个 `DELEGATE` 都派出去。`drive` 已经打出这一波每个 `BRIEF` 时按 `BRIEF` 派，不要再 `delegate --open`。`FANOUT_ASSESS` 先跑 assess：`SERIAL` 仍是一个 agent；`FANOUT` 的每一片写集已经订死，同一条消息派完，并且 `delegate <step> --shard <id>` 给每片一张只锁该片路径的验证租约。`drive` 已经打出每片 `BRIEF` 时按打出的结果派，回报用 `land <step> --shard <id>`，不要再跑一遍。`MERGE` 且没有 `SHARD` 时 merge 已经跑过，不要再派执行者，只 `record` 一次。`land` 打出 `SEND BACK` 时，带 `prior_failure` 的重派包已经在同一段输出里，直接派。`ASK slot` 仍原样打出。手跑 `next` 而没有 drive 时，仍先跑那条 `fanout.py assess`：`SERIAL` 再 `step`，`FANOUT` 再 `step <step> --shard <id>`，`MERGE` 再跑 merge。内核脚本的 `PREP` 已经跑完，日志在 `扫描:`。其它 `PREP` 仍先跑。人闸和产品代码写租约不在这一波里 |
 | 让 agent 去问人 | 它问不到。要停问就 `BLOCKED` 回报，由导体停 |
 | 跳过 `next` 直接派你觉得对的 agent | 配方改过 step 你就派错了；而且 trace 里对不上账 |
 | 替 agent 写 `FACTS` / `EVIDENCE` | 那是它的交代。你代写就等于没有交代 |

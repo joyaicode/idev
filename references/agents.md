@@ -267,6 +267,8 @@
 
 **指导别的角色。** 只写本领域约束和证据路径，不写对方的工件，不改密封基线。角色之间不直接对话。`SUGGEST` 仍只说本定义哪一步含糊。
 
+**lean-review 视角轮。** 多角色视角再审（`scripts/lean-review.py`，密封/accepted 前按需触发）的视角子代理归现有执行者委派：产品 / UI 设计 / 架构师 / 研发 / 测试视角归 `idev-reviewer`（只挑疑问不改工件），运维 / SRE 视角归 `idev-ops`（尺是 canon A6 与产线 pack 运维知识）。不新增第六个执行者。产出是 grill 轮的候选问句，三律（引用尺 / 带失败场景 / 零 finding 合法）见 [lean-review 的正文](../deliver/SKILL.md)。
+
 1. **顺手约束。** 做本步时发现别的角色必须遵守的本领域约束，写回报 `GUIDE:`。没有写 `无`。非空时 `delegation.py write` 打出 `HANDOFF`，导体把原文抄进下一角色委派包的 `领域约束:` 行。
 2. **卡住再咨询。** 本步做不下去，是因为问题落在另一个执行者的领域：`STATUS: BLOCKED(domain)`，`DOMAIN:` 写上表五个名字之一，不写自己。这不是 `SIGNAL`，不问人。`delegation.py write` 打出 `CONSULT <执行者>`。导体另派该领域角色一次。委派包加 `咨询: <原 step>`，并附上对方回报原文。被咨询的角色只回 `GUIDE` 和 `EVIDENCE`，不写原步骤的工件。咨询回来后，导体把 `GUIDE` 抄进原角色的重派委派包。没有 `BLOCKED(domain)` 时不另开咨询。咨询这一轮若也做不下去，回报 `BLOCKED(logic)`；若仍写 `BLOCKED(domain)`，`write` 打出 `CONSULT none` 并带信号 `consult does not nest`，导体问人，不再套娃。`DOMAIN` 缺了、写了自己、或不是上表五个名字，`write` 打出 `REBRIEF`，导体不猜，按 `BLOCKED(brief)` 打回。
 

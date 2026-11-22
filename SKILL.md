@@ -36,8 +36,15 @@ description: >-
 **怎么用**（何时走 `/idev`、何时直接点 agent、委派包最常漏什么、出问题按什么顺序查）：
 [references/agents-playbook.md](references/agents-playbook.md)。
 
-S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none` 表示这一步你自己做
-（`human.gate` 永远是 none）。`workflow.py drive` 打出 `PARALLEL` 时，这一波每个执行者的委派包已经打出，各自的 assess 也跑过。同一条消息把每个 `BRIEF` 派出去，每个回报只 `record` 自己的 step，不要再 `delegate --open`。手跑 `next` 时仍先 `delegate --open`。`verify.plan` / `verify.run`，写集不是单独一份 `review.md` 的 `review.report`，以及 include 路径分属不相交顶层模块的 `deliver.code_pass` / `review.fix`，还会打出 `FANOUT_ASSESS`。`workflow.py drive` 停在单个执行者前会自己跑这条 assess。`SERIAL` 时委派包已经打出，直接把 `BRIEF` 派出去，不要再 `step`。`FANOUT` 且没有 `PREP` 时，每片的委派包已经打出（`分片` / `只写` / `范围`），该片租约已经领好。同一条消息把每个 `BRIEF` 派出去，回报用 `workflow.py land <step> --shard <id>`。最后一片记下且没有打回时，merge 已经跑过。打开证据后再把这一步 `record` 一次。`PREP` 是内核脚本时 drive 已经跑完，日志路径在委派包的 `扫描:`，按打出的 `BRIEF` 派。其它 `PREP`（例如编译）仍由导体先跑，再按片 `step --shard`。`MERGE` 且没有 `SHARD` 时 merge 已经跑过，不要再派执行者，只 `record` 一次。`ASK slot` 仍原样打出。`land` 打出 `SEND BACK` 时，带 `prior_failure` 的重派包已经在同一段输出里，直接派。手跑 `next` 而没有 drive 时，仍先跑那条 `fanout.py assess`；`SERIAL` 再 `step`，`FANOUT` 再 `step <step> --shard <id>`，`MERGE` 再跑 merge。根因定位看假设台账，用 `--activity rootcause`。小改的范围谓词是 `scope.baseline`，不派 `route.s4`。编码片的 activity 是 `code` / `fix`。委派后按 [references/agents-evolve.md](references/agents-evolve.md)
+S8 每步按 `workflow.py next` 打出的 `DELEGATE` 行派活（`DELEGATE none` 这一步你自己做；
+`human.gate` 永远是 none）。口诀只有三条：**drive 打出的东西直接派**（`BRIEF` 已在手上，不要重复
+`delegate --open` / `step`）；**`FANOUT_ASSESS` 先 assess 再派**（`SERIAL` 单派，`FANOUT` 同一消息派每片、
+回报 `land <step> --shard <id>`，`MERGE` 只跑 merge 不派执行者）；**每步只 `record` 一次**。
+内核脚本的 `PREP` drive 已跑完（日志在 `扫描:`），其它 `PREP`（编译等）导体先跑。`land` 打出
+`SEND BACK` 时重派包已在同段输出，直接派。根因定位 `--activity rootcause`；小改范围谓词
+`scope.baseline` 不派 `route.s4`；编码片 activity 是 `code` / `fix`。逐条动作与没 drive 手跑时的
+顺序全文：[references/agents-playbook.md](references/agents-playbook.md)「drive 打出的东西直接派」。
+委派后按 [references/agents-evolve.md](references/agents-evolve.md)
 落一份留痕，它是这一层可调试的全部前提。
 
 ## 提效三板斧
@@ -69,7 +76,11 @@ S8 每步按 `workflow.py next` 打印的 `DELEGATE` 行派活；`DELEGATE none`
 4. 结构问题先跑 `scripts/codegraph-sync.sh`，再一次 `codegraph_context`。查不到就停并写明查不到。时刻和 `reason` 只认 [boost.md](references/boost.md)「索引何时更新」。代码有没有变动由脚本判定，没变就跳过。
 5. **彼此无依赖的只读调用并进一条消息。** 一轮一个只读、连着走十几轮，是人真正在等的那种慢。要看上一条结果才能决定下一条读什么，或者中间有写操作，不在此列 —— 那是有依赖，分开是对的。
 
-`scripts/turn-budget.py` 对一份转录判这些事，无正文回合默认超过 8 即失败：第一句之前的无正文回合、连续无正文回合、`block_until_ms` 大于 30000 且这一条和上一条助手消息都没有正文、命令里出现 `claude -p` 或 `agent -p`。`selfcheck.sh`、`test/golden/record.sh`、`test/gate-channel.sh`、`test/lease-channel.sh`、`healthcheck.sh`、`agent-smoke.sh` 的 `block_until_ms` 大于 30000 也失败，先说一句不算放过。第 5 条也判：一段里只读调用够 `--min-reads`（默认 6）条，而平均每个带只读的回合不到 `--min-ratio`（默认 1.5）个，报 `serial_reads`。判不准是不是只读就不算只读 —— 漏报比误报便宜。Cursor 与 Claude Code 两种转录格式都读，`Shell` 和 `Bash` 是同一个工具。**不给路径就读本会话自己的转录**（`scripts/lib/session_transcript.py` 定位；没有转录不算失败）。结构问题先更新索引再 `codegraph_context`、查不到就停，这是做法，不进这个脚本。
+`scripts/turn-budget.py` 对一份转录判这些事（`serial_reads` 的判法、`--min-reads` / `--min-ratio`、
+哪些长命令名单也判：[agent-accuracy.md](agent-accuracy.md)「批量仍不是门禁」）：第一句之前的
+无正文回合、连续无正文回合、`block_until_ms` 大于 30000 且前后两条都没有正文、`claude -p` /
+`agent -p` 探测。判不准是不是只读就不算只读 —— 漏报比误报便宜。**不给路径就读本会话自己的转录**
+（`scripts/lib/session_transcript.py` 定位；没有转录不算失败）。
 
 ```bash
 python3 scripts/turn-budget.py                     # 本会话，零参数自查
@@ -151,7 +162,11 @@ S1 新票→deliver `req-review`（必开 `docs/SKILL.md` 与 grilling）· S2 �
 5. 签字前 `bash ~/.cursor/skills/idev/scripts/check-feature.sh <feature> <stage>`；已 accepted 的 plan 再 `run` 不重跑 verify-plan。
 6. 巡检包 `verify/scripts/promote.sh <feature>`：人没提 promote / 巡检包则不问、不跑。
 7. **改本 Skill 只改真源** `~/.cursor/skills/idev/`（`~/.claude`、`~/.agents`、`~/.joycode` 是 symlink，勿复制第二份）；提案 + 拷问后再改。
-8. **每轮路由后写 trace（schema v2）**：`bash ~/.cursor/skills/idev/scripts/trace.sh append`。产品仓会话落 `<repo>/.idev/traces/`，不写进 idev 内核；只有导体自身会话才落内核 `state/traces/`。必写 `route.scenario`、`invoke.matched`、`thinking.summary`、真实 `calls[]`，不准伪造调用，不为观测另停。`invoke.trigger` 与 `opened[]` 留空时 `append` 从本会话转录补上（人原话逐字、本轮读过的内核页），只补空的，写过就不动。`calls[]` **不自动填** —— 一条命令算不算一次调用、归哪个 `kind`，那是判断，审计记录里填错比不填更糟。**判断仍然是你的**：`route.why`、`invoke.matched`、`thinking.summary` 脚本一律不填。`append` 末尾若本会话超了回合预算会多打一行 `WARN`，不挡本轮。技能怎么调起、委派给谁、模型与一行思考、组件从哪跳到哪，有就写进 `invoke.how` / `invoke.skills[]`、`decisions` 的 `delegate` / `model`、`calls` 的 `from` / `to` / `model` / `thinking`；缺了不挡本轮。对话给一行运行路径（`scripts/path-view.sh`）。运行中打开中控台：`python3 ~/.cursor/skills/idev/scripts/console.py`。路由前若 `python3 ~/.cursor/skills/idev/scripts/console.py pending` 有未读，当作本轮人话，处理完 `reply --text` 写回；派 agent 前 `live --add --feature --step --agent`，`record` 后 `live --clear`。停问和签字规则不变，控制台不写签字，不为观测另停。[references/trace.md](references/trace.md) · [references/invoke.md](references/invoke.md)
+8. **每轮路由后写 trace（schema v2）**：`bash ~/.cursor/skills/idev/scripts/trace.sh append`。产品仓会话落
+`<repo>/.idev/traces/`，不写进 idev 内核；只有导体自身会话才落内核 `state/traces/`。必写
+`route.scenario`、`invoke.matched`、`thinking.summary`、真实 `calls[]`，不准伪造调用，不为观测另停。
+哪些字段 `append` 自动补、哪些判断永远归你（`calls[]` 的 kind、`route.why`）、控制台 pending/`live`
+的用法：[references/trace.md](references/trace.md) · [references/invoke.md](references/invoke.md)
 
 ## 链接
 

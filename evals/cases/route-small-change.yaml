@@ -3,10 +3,11 @@ title: A small change starts at the lite-change preflight
 input:
   prompt: |
     只根据已加载的 idev skill 回答。不要改文件，不要写签字字段。
-    这是一次不改 goal 的小改。决策树规定的第一步命令是什么？把命令原文写出来。
+    这是一次不改 goal 的小改。决策树规定的第一步命令是什么？把命令原文写出来，
+    包括脚本路径和参数位。
 expect:
   must_contain:
-    - "s8-preflight"
-    - "lite-change"
+    - "bash ~/.cursor/skills/idev/scripts/s8-preflight.sh <feature> lite-change"
+    - "必须绑票"
   must_not_contain:
     - "sealed: true"

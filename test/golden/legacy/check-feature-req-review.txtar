@@ -18,6 +18,9 @@ PASS  baseline.items = B1,B2,B3
 PASS  no status: open in baseline
 PASS  objections empty
 PASS  review_questions empty
+PASS  baseline.original_request verbatim
+PASS  baseline.assumptions complete
+PASS  baseline grounding blocks complete
 PASS  deliver-eval.md exists
 PASS  no agent-filled signoff by
 PASS  no staged generatedverify

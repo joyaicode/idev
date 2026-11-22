@@ -2,15 +2,37 @@ schema_version: 2
 feature: example-change
 revision: 1
 sealed: false
+# original_request（可选）：需求人原话逐字。澄清与提炼写进 goal/items，不回写原话。
+# 有了它，reopen / realign / 下游对照时永远有一手需求可对，不被转述二手化。
+# 机检：写了就必须非空、且与 goal 不同（提炼句冒充原话会被抓）；小改不写合法。
+original_request: "审批开关关掉的时候，打了注解的方法应该直接跑过去，别建单。"
 goal: "When approval.enabled is false, annotated methods run without creating a ticket."
 non_goal: "Do not change Replay, ticket fields, or OMI channels."
 items:
   - id: B1
     must: "enabled=false → method body executes; no ticket side effect."
+    # grounding（可选，密封前）：需求落到既有代码上的五问。
+    # 写了就查：touches 要有 file:symbol 锚；conflicts 每条要挂 grill.md 里真有的问句编号。
+    # 不写合法（UI-only / 纯文档票），写了不齐 → check-feature FAIL。全字段见 req-ground.py --schema。
+    grounding:
+      touches:
+        - "src/main/java/com/x/ApprovalMethodInterceptor.java:intercept"
+      impact:
+        - "ApprovalAnnotationIT（锁 enabled=true 行为的测试）"
+      conflicts: []
+      boundary: "只改 enabled=false 分支；注解与网关不动"
+      direction: "与 ADR-0007『审批为旁路开关』一致"
   - id: B2
     must: "enabled=true keeps current intercept-and-ticket behavior."
   - id: B3
     must_not: "Do not change Replay or ticket field filling."
+# assumptions（可选）：每条四字段——what（假设什么）/ basis（依据）/ check（怎么验证或何时失效）/ if_false（不成立对目标的影响）。
+# 只收非阻塞假设；阻塞项走 grill.md 的问句。机检：写了条目但四字段不齐 → FAIL；空省略合法。
+assumptions:
+  - what: "annotation 的方法都有无参兜底路径"
+    basis: "ApprovalAnnotationIT 里 enabled=true 的现有断言先执行方法体"
+    check: "verify case disabled-executes 直接执行方法体；执行失败即失效"
+    if_false: "B1 的『方法体照常执行』要细化为异常语义，回 grill.md 问一轮"
 boundaries:
   - "Toggle is approval.enabled only."
 details:

@@ -125,7 +125,11 @@ def grill_questions(home: Path) -> set[str]:
         return set()
     text = path.read_text(encoding="utf-8", errors="replace")
     out = set()
-    for m in re.finditer(r"(?mi)^\s*(?:[-*]\s*)?\**\s*(Q\d+|\d+)[.)、]?\s", text):
+    # ❓ **Q1** - … is the format grilling writes (check-feature._GRILL_Q);
+    # plain "Q1"/"1." lines are accepted too so a hand-edited grill still counts.
+    for m in re.finditer(r"(?m)^❓ \*\*(Q[1-9][0-9]*)\*\*", text):
+        out.add(m.group(1).upper())
+    for m in re.finditer(r"(?mi)^\s*(?:[-*]\s*)?(Q\d+|\d+)[.)、]?\s", text):
         q = m.group(1).upper()
         out.add(q if q.startswith("Q") else f"Q{q}")
     return out

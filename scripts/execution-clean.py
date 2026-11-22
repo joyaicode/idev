@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import shutil
 import time
 from pathlib import Path
 
@@ -62,6 +63,9 @@ def execution_dirs(repo: Path | None) -> dict[str, Path]:
             "proposals": sink_dir("proposals"),
             "memory": root / "memory.md",
             "timeline": root / "timeline",
+            # Every skill-up run writes iteration-N/ (~600K each, 47 and
+            # counting at 29M); only the newest few are ever compared.
+            "skill-up-iterations": root / "skill-up" / "latest",
         }
     base = repo / ".idev"
     return {
@@ -275,7 +279,10 @@ def apply_items(
             elif not do_apply and structured_retain.extract_trace_facts(path) is not None:
                 print("KEEP-STRUCT %s (dry-run)" % path.name)
         if do_apply:
-            path.unlink()
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
             print("%s %s/%s" % (apply_label, kind, path.name))
         else:
             print("%s %s/%s" % (dry_label, kind, path.name))
@@ -289,6 +296,20 @@ def run_age(dirs: dict[str, Path], *, days: int, keep: int, do_apply: bool) -> i
     for kind in ("traces", "reviews", "inbox"):
         for path in victims(dirs[kind], kind, days=days, keep=keep, now=now):
             chosen.append((kind, path))
+    # skill-up iterations are directories, not files, so victims() (which
+    # iterates files) cannot see them. Prune by the same age rule, newest
+    # `keep` spared, and only ever whole iteration directories.
+    skillup = dirs.get("skill-up-iterations")
+    if skillup is not None and skillup.is_dir():
+        cutoff = now - days * 86400
+        iterations = [p for p in skillup.iterdir() if p.is_dir() and p.name.startswith("iteration-")]
+        iterations.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
+        for index, path in enumerate(iterations):
+            if index < keep:
+                continue
+            if path.stat().st_mtime >= cutoff:
+                continue
+            chosen.append(("skill-up-iterations", path))
     if do_apply and chosen:
         generation, last, body = read_memory(dirs["memory"])
         write_memory(dirs["memory"], generation, last, body, section_for("age", chosen))
