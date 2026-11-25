@@ -68,8 +68,9 @@ authority: normative（冲突裁决与最小执行回路以本页为准；细节
 - 需求、设计对齐认知和信息。矛盾、冲突、不合理或不清楚才问。编码及之后按阶段规范做，验收不过就自省改到通过，再进入下一阶段。检查没过，或这些点还开着，却要写 `sealed` / `accepted` / `aligned` / `resolved` / `semantic_gate.*.passed`，就先补那一项。对齐且检查过了就写，不问确认。审查签收、实现审核、测试结果确认、文档定稿都不是停点。`next` 打出 `DECISION`，或还有未答的矛盾、冲突、不清楚，才问。`GATE pass` 就记下并继续。`reopen_baseline` 仍要点名。P1/P2 的 plan / resolved 机检无信号时写 `auto:`。
 - 进入阶段先看 `STAFFING` 与 `DRIVE` 行。一个人兼任全部岗位就一次问全。多人只问当前这个人持有的岗位，别人的列成待。岗位还没写明时只问一次岗位表。`DRIVE mode=auto` 时：有推荐的 B 类 / grilling / 需求与架构分叉（含 P0）按建议代决，不停；解封、回退、promote、生产写、push、经验入库仍停。做法见 [chat-confirm-signoff.md](chat-confirm-signoff.md)。
 - 执行者回报出现 `SIGNAL`（`BLOCKED(logic)`、`[承重]` 假设、`ARTIFACT: UNKNOWN`）：按决策包问，答案用 `workflow.py decide` 记。`DRIVE mode=auto` 且有推荐 → `decide --source auto`，不停。`BLOCKED(domain)` 不是停问：按 [agents.md](agents.md)「角色能力」另派 `DOMAIN` 点名的执行者咨询一次。
+- **solo 端到端（编制 solo + drive=auto）**：中间不停，P0 阶段闸走机检 `record AUTO`，解封可代决；done 且 aligned 后 `session-context` 打 `FINAL_REVIEW`——那是唯一停点，人整体审或点名阶段深审。grilling 只由真实卡点触发（frontier 非空、承重假设、`BLOCKED(logic)`、证据冲突），一次问全。promote / push / 生产写仍要点名才做。全文 [chat-confirm-signoff.md](chat-confirm-signoff.md)「solo 端到端」。
 - 全表与档位：[chat-confirm-signoff.md](chat-confirm-signoff.md)。
-- 要改 goal（必须人说「解除密封」或 `reopen`）。
+- 要改 goal（必须人说「解除密封」或 `reopen`；solo_e2e 下解封可代决，见 [chat-confirm-signoff.md](chat-confirm-signoff.md)「solo 端到端」）。
 - 要跑 `promote.sh`、写生产、回退 origin（人没提就不问，也不做；见 H2）。
 - 多张 `stage != done` 的票且原话没点名。
 - 需要 `product` 的配方而原话没点明恰好一个产品名。

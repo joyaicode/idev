@@ -129,6 +129,8 @@ healthcheck：真源实目录、软链、配方、最近 50 条审计、outbound
 
 frontier 未空之前禁止写 `sealed`。答问不是签字。共享理解写在需求通过那一次确认里。架构没有分叉就不要先拷问再给方案。只有回答打开这轮没写到的新分叉才再开一轮。
 
+solo 端到端（编制 solo + drive=auto）收紧：grilling 只由真实未决分叉/卡点触发（frontier 非空、`[承重]` 假设、`BLOCKED(logic)`、证据冲突），一次列全；阶段推进、签字、向下执行不触发。中间不停，done 后 `FINAL_REVIEW` 终审一次（[chat-confirm-signoff.md](chat-confirm-signoff.md)「solo 端到端」）。
+
 ### 7.3 认票
 
 五步全文只在 [invoke.md](invoke.md)「认票」。本页不复述。

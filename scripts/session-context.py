@@ -55,6 +55,17 @@ DEFAULT_KEYS = (
 )
 
 _STAGE_LINE = re.compile(r"^stage:\s*['\"]?([A-Za-z0-9_-]+)")
+_ALIGNED_LINE = re.compile(r"^aligned:\s*['\"]?(true|True|yes)['\"]?\s*$")
+
+
+def _read_aligned(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return False
+    return any(_ALIGNED_LINE.match(line) for line in lines)
 
 
 def _stage_mod():
@@ -379,6 +390,32 @@ def main(argv: list[str] | None = None) -> int:
     if args.workflow:
         recipe = resolve_recipe(repo, args.workflow)
     print("RECIPE %s" % (recipe if recipe else "NONE"))
+    # solo_e2e (proposal 20261125): the one person holding every role under
+    # drive=auto is not asked mid-chain; the FINAL_REVIEW after done is the
+    # single stop. Pointer assembly only — every line names a file that
+    # already exists, zero generated prose (resume-pack convention).
+    if (
+        found_homes is not None
+        and stage == "done"
+        and args.feature.strip()
+        and _drive_mod is not None
+        and drive_now == "auto"
+        and _read_aligned(found_homes["deliver"])
+    ):
+        try:
+            if _drive_mod.solo_e2e(repo):
+                print(
+                    "FINAL_REVIEW %s 全部阶段已收口，待人终审。终审包："
+                    "各阶段检查 workflow/gate-*-check.log · "
+                    "自动代决 decisions.yaml (source: auto 未推翻条目) · "
+                    "审查处置 review.md (I* 与修复) · "
+                    "红绿 verify/plan.yaml 与 PASS/FAIL/UNPROVEN 计数 · "
+                    "未做不可逆 promote/git push/生产写（人点名才做）。"
+                    "整体审或点名阶段深审；推翻用 record FAIL / reopen / decide overturned。"
+                    % args.feature.strip()
+                )
+        except Exception:
+            pass
     if recipe is not None:
         page, doc_err = recipe_doc(recipe)
         if doc_err:

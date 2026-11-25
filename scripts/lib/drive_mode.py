@@ -56,6 +56,22 @@ HARD_HOLDS = (
     "經驗入庫",  # traditional
 )
 
+# Unseal/reopen words, a named subset of HARD_HOLDS. Under solo_e2e the
+# person already said reopen needs no ask, so these may be auto-decided
+# with a recommendation. Everything else in HARD_HOLDS stays held.
+SOLO_RELAXABLE_HOLDS = (
+    "解封",
+    "解除密封",
+    "启封",
+    "开封",
+    "unseal",
+    "打开基线",
+    "重新打开基线",
+    "打開基線",  # traditional
+    "重新打開基線",
+    "reopen",
+)
+
 try:
     import yaml
 except ImportError:  # pragma: no cover
@@ -335,7 +351,7 @@ def _strip_hold_negations(blob: str, marks: tuple[str, ...] | list[str]) -> str:
     return _strip_ascii_negations(cleaned, marks)
 
 
-def hard_held(*parts: str) -> bool:
+def hard_held(*parts: str, relax_solo: bool = False) -> bool:
     """True when any part contains an irreversible hold marker.
 
     ASCII markers (promote, reopen, git push, …) match as whole phrases,
@@ -344,10 +360,18 @@ def hard_held(*parts: str) -> bool:
     「no promote」do not. CJK markers stay exact substring after NFKC,
     dropping zero-width chars, squeezing CJK-internal spaces, and
     stripping negation+mark phrases (不​回退 / 生产 写 / 不必 promote).
+
+    relax_solo=True drops the SOLO_RELAXABLE_HOLDS (unseal/reopen) marks
+    from matching — used only when solo_e2e() already said the person
+    holds every role and chose drive_mode=auto. The rest of HARD_HOLDS
+    (回退/promote/生产写/push/经验入库) never relax.
     """
     blob = "\n".join(str(p or "") for p in parts)
-    cleaned = _strip_hold_negations(blob, HARD_HOLDS)
-    for mark in HARD_HOLDS:
+    marks = HARD_HOLDS
+    if relax_solo:
+        marks = tuple(m for m in HARD_HOLDS if m not in SOLO_RELAXABLE_HOLDS)
+    cleaned = _strip_hold_negations(blob, marks)
+    for mark in marks:
         if not mark.isascii():
             if mark in cleaned:
                 return True
@@ -357,21 +381,21 @@ def hard_held(*parts: str) -> bool:
     return False
 
 
-def hard_held_signal(signal: str) -> bool:
+def hard_held_signal(signal: str, relax_solo: bool = False) -> bool:
     """True when one signal is an irreversible hold (not a [承重] assumption)."""
     text = _normalize_text(signal).strip()
     if not text or text.startswith("[承重]"):
         return False
-    return hard_held(text)
+    return hard_held(text, relax_solo=relax_solo)
 
 
-def hard_held_signals(signals: list[str]) -> bool:
+def hard_held_signals(signals: list[str], relax_solo: bool = False) -> bool:
     """True when any non-[承重] signal contains an irreversible hold keyword.
 
     Load-bearing assumptions often mention 生产/回退 as domain context; those
     are decided via recommend, not blocked by substring hard holds.
     """
-    return any(hard_held_signal(s) for s in signals)
+    return any(hard_held_signal(s, relax_solo=relax_solo) for s in signals)
 
 
 def resolve(repo: Path | None, kernel_state: Path | None = None) -> tuple[str, str]:
@@ -418,6 +442,28 @@ def clear(repo: Path | None, kernel_state: Path | None = None) -> Path | None:
 
 def format_line(mode: str, source: str) -> str:
     return f"DRIVE mode={mode} source={source}"
+
+
+def solo_e2e(repo: Path | None = None, kernel_state: Path | None = None) -> bool:
+    """True when one person holds every role and chose drive_mode=auto.
+
+    The solo end-to-end lane: the person said stage confirmations are not
+    stops, so mid-chain gates record AUTO under the same machine checks
+    and only the FINAL_REVIEW after done still asks. Both axes are
+    existing pieces — staffing.mode and drive_mode — so this adds no
+    third mode. Anything else (collaborative, unassigned, assisted)
+    keeps the current rules.
+    """
+    try:
+        import staffing  # noqa: WPS433
+
+        staff = staffing.resolve(repo, git_name=staffing.git_user())
+        if staff.mode != "solo":
+            return False
+    except Exception:
+        return False
+    mode, _source = current(repo, kernel_state)
+    return mode == "auto"
 
 
 def current(repo: Path | None = None, kernel_state: Path | None = None) -> tuple[str, str]:

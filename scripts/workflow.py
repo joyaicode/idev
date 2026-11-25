@@ -53,6 +53,7 @@ import kind_agents  # noqa: E402
 import read_ledger  # noqa: E402
 import record_paths  # noqa: E402
 import safeyaml  # noqa: E402
+import drive_mode  # noqa: E402
 import step_packet  # noqa: E402
 import staffing  # noqa: E402
 import workflow_defaults  # noqa: E402
@@ -1170,6 +1171,22 @@ def _drive_line() -> str:
         return "DRIVE mode=assisted source=default"
 
 
+def _solo_e2e() -> bool:
+    """One person holds every role and chose drive=auto (see chat-confirm)."""
+    try:
+        return drive_mode.solo_e2e(product_repo(None))
+    except Exception:
+        return False
+
+
+def _solo_e2e_for(args: argparse.Namespace) -> bool:
+    """Same, honoring the record call's --repo instead of cwd."""
+    try:
+        return drive_mode.solo_e2e(session_repo(getattr(args, "repo", "") or ""))
+    except Exception:
+        return False
+
+
 def next_line(run: dict) -> list[str]:
     digest = digest_line(run)
     head = [_drive_line()]
@@ -1453,6 +1470,10 @@ def _step_lines(run: dict, step: dict) -> list[str]:
             tiers = auto_tiers(step)
             check = auto_check(step)
             if tiers and check:
+                if _solo_e2e():
+                    # One person, every role, drive=auto: a P0 tier rides the
+                    # same machine checks instead of stopping mid-chain.
+                    tiers = tuple(sorted(set(tiers) | {"P0"}))
                 if _drive_is_auto():
                     gate_tail = (
                         "a FAIL or another tier means stop; a SIGNAL under drive=auto means "
@@ -1948,11 +1969,11 @@ def _auto_decide_open_signals(
     return count
 
 
-def hard_held_signal(signal: str) -> bool:
+def hard_held_signal(signal: str, relax_solo: bool = False) -> bool:
     try:
         import drive_mode  # noqa: WPS433
 
-        return drive_mode.hard_held_signal(signal)
+        return drive_mode.hard_held_signal(signal, relax_solo=relax_solo)
     except Exception:
         return False
 
@@ -2279,11 +2300,18 @@ def cmd_record(args: argparse.Namespace) -> int:
             )
         elif human_gate and status == "AUTO":
             tier = risk_tier_of(run, path)
-            if tier not in auto_tiers(step):
-                raise Blocked(
-                    f"{step['id']} may not pass on machine checks at {tier}; "
-                    "it needs a person's signoff"
-                )
+            tiers = auto_tiers(step)
+            if tier not in tiers:
+                # solo_e2e (one person, every role, drive=auto): the person
+                # said stage confirmations are not stops, so a P0 tier passes
+                # the same machine checks — 0 FAIL, no SIGNAL, no unanswered
+                # signal — instead of asking mid-chain. The FINAL_REVIEW
+                # after done still shows the person everything.
+                if not (tier == "P0" and _solo_e2e_for(args)):
+                    raise Blocked(
+                        f"{step['id']} may not pass on machine checks at {tier}; "
+                        "it needs a person's signoff"
+                    )
             if args.by or args.quote:
                 raise Blocked("AUTO is not a signoff; drop --by / --quote")
             # pre["auto"] carries the peek-side resolution (a `current` stage
@@ -2405,7 +2433,23 @@ def cmd_record(args: argparse.Namespace) -> int:
             open_signals = unanswered(path, step["id"])
             if open_signals:
                 if _drive_is_auto():
-                    if all(hard_held_signal(s) for s in open_signals):
+                    relax = drive_mode.solo_e2e(session_repo(args.repo))
+                    if all(hard_held_signal(s, relax_solo=relax) for s in open_signals):
+                        if relax and not any(
+                            hard_held_signal(s) for s in open_signals
+                        ):
+                            # solo_e2e: every hold marker left is a relaxed
+                            # unseal/reopen word — adoptable with a
+                            # recommendation, not a mid-chain question.
+                            hint = drive_mode.decide_hint(
+                                step["id"], str(run.get("feature") or ""),
+                            )
+                            raise Blocked(
+                                f"{step['id']} has signals waiting: "
+                                + "; ".join(open_signals)
+                                + f" — solo_e2e: reopen needs no ask, stamp the "
+                                f"recommend and {hint}"
+                            )
                         raise Blocked(
                             f"{step['id']} has signals waiting: "
                             + "; ".join(open_signals)

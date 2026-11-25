@@ -2137,6 +2137,8 @@ run_test test_scope_words.py \
   || fail "the quantifier sweep missed its own word list, or --check stopped flipping the exit code (python3 scripts/test_scope_words.py)"
 run_test test_stage_handoff.py \
   || fail "a stage flip stopped demanding a fresh session, or the opening stage started counting as one (python3 scripts/test_stage_handoff.py)"
+run_test test_solo_e2e.py \
+  || fail "solo_e2e fired outside solo+auto, relaxed a non-reopen hold, or missed the FINAL_REVIEW line (python3 scripts/test_solo_e2e.py)"
 echo "OK  tier signoffs and single writer"
 
 echo "=== lock: a gate is answered by the person's 确认 ==="

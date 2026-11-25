@@ -38,6 +38,7 @@ authority: normative（双层回路的观测词汇表以本页为准；停车理
 | `DECISION` | 决策闸停问 | `DECISION` 行 | drive | 人答 `decide` |
 | `SIGNAL` | 未答信号 | `SIGNAL …` / `land` 的 `STOP <step> has signals` | 外层 land | 人（drive=auto 按 RECOMMEND 代决；硬停点仍问人） |
 | `HUMAN-GATE` | 人闸无 AUTO 判据 | `GATE at …` 无 `record AUTO` | drive | 人签字 |
+| `FINAL-REVIEW` | solo_e2e 全链收口（stage=done 且 aligned） | session-context 的 `FINAL_REVIEW` 行 | 外层（run 之外） | 人终审：整体审或点名阶段深审 |
 | `CMD-FAIL` | 导体命令失败 | `drive-*.log` 退出码≠0 / `record` 非零 | drive | 导体修环境 |
 | `CAP-REACHED` | 上限已到 | `BLOCKED drive stopped after 8…` / fanout `QUEUED` 溢出 | 全部 | 人 |
 | `LOOP-EXHAUSTED` | react 跳数用尽 | `EXIT human\|stop` + inbox `react-exhausted` | react | 按 `on_exhaust` |

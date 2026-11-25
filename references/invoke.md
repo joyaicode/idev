@@ -59,6 +59,8 @@ grilling 不是可选追问，而是**订死边界与不清楚处**的默认动�
 
 **frontier 未空之前：** 不要写需求通过，不要代写 `sealed` / `accepted`。共享理解由需求通过写入，不单独再问一次。
 
+**solo 端到端收紧（编制 solo + drive=auto）：** grilling 只由真实未决分叉/卡点触发——frontier 非空、`[承重]` 假设、`BLOCKED(logic)`、证据冲突。阶段推进、签字、向下执行本身不触发 grilling；触发时按编制一次列全。中间不停，done 后 `FINAL_REVIEW` 终审一次（[chat-confirm-signoff.md](chat-confirm-signoff.md)「solo 端到端」）。
+
 ## 自动打开产线文档技能
 
 写需求、规格、测试设计、票目录，或做 S5 回填时，同一轮打开 `~/.cursor/skills/idev/docs/SKILL.md`。它再打开 setup-agents-docs（目录）和 grilling（问句）。缺同伴技能先跑 `scripts/link-companion-skills.sh`。不要另写一套目录。

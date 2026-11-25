@@ -32,9 +32,20 @@ python3 scripts/drive-mode.py clear …                             # 去掉会�
 | `assisted` | 现有规则。停问前跑 `process-eval.py stop`；`now=CORRECT` 不问。决策包 CTA 只接受选项号或 `按建议` |
 | `auto` | 决策包**已写出推荐**时，B 类信号、grilling frontier、`scope_debt.pending`、需求/架构认知分叉（含 P0）以及带推荐的普通停问默认采纳：`workflow.py decide … --all-open --source auto --recommend <档>`；`by` 仍写编制真人。不停问。回报在 **PASS** 下盖 `RECOMMEND:` / `AI 建议:`（不含裸「建议:」）时，`land` / `next` / `record` / `step` / `delegate` 直接代决（quote=`auto:recommend`）；**仅** `[承重]` 且 PASS、无盖章时默认档 `1`（quote=`auto:default-accept`；`[承重]` 文中的「生产/回退」不算硬停；混合批次逐条跳过硬停）。FAIL/BLOCKED 不代决。原话「按建议 / 听你的」→ `nudge` `adopt-recommend`。`start` 顺带 solo/settle/槽位自填（含 `with.scope`）；缺槽位打 `param` 指引。原话「开启自动模式」走 `nudge.py`。另自动：feedback none；`scope_debt.pending`→recommend。硬停 / 决策闸 / `BLOCKED` / `ARTIFACT` 仍问 |
 
-**永不代决（两档相同）：** 解封 / 打开基线 / 回退 origin / promote / 生产写 / `git push` / 经验入库；配方里的决策闸（`--decision`，如提交推送与自进化落地）；推荐缺失；证据冲突到写不出唯一推荐。
+**永不代决（两档相同）：** 回退 origin / promote / 生产写 / `git push` / 经验入库；配方里的决策闸（`--decision`，如提交推送与自进化落地）；推荐缺失；证据冲突到写不出唯一推荐。解封 / 打开基线在 `solo_e2e` 下可代决（见上节），其余档位照旧硬停。
 
 自动代决写入 `decisions.yaml` 的 `source: auto`、`overturned: false`。人后来推翻时把该条改成 `overturned: true` 并补人答。周审计与 `ticket-metrics` 计 `DRIVE_AUTO` / `DRIVE_AUTO_OVERTURN`（不进 `HARD_COUNT`）；推翻多了就收紧 `auto`，不凭感觉加停点。
+
+### solo 端到端（`solo_e2e`，终审一次）
+
+编制 `solo` 且 `drive_mode=auto` 时（`drive_mode.solo_e2e()`，两轴都是既有件，不新增第三档模式）：一个人执行端到端交付，**中间不停**。
+
+- **P0 阶段闸机检过闸**：`auto_tiers` 不含 P0 的 human.gate（deliver-next 阶段关、test-pack gate-result、dev-selftest / dev-logic / patrol-replay / code-review 的 gate-plan），档位白名单视同含 P0——机检三条件（0 FAIL / 无 SIGNAL / 无未答信号）一条不少，过则 `record AUTO`。两轨分离不动：票字段层 `by` 仍是真人名。
+- **解封可代决**：`SOLO_RELAXABLE_HOLDS`（解封/解除密封/启封/开封/unseal/打开基线/reopen 的中英文词组）在 solo_e2e 下不再是硬停——有推荐就 `decide --source auto`。回退 origin / promote / 生产写 / `git push` / 经验入库**永不放宽**。
+- **推荐缺失不空手停问**：PASS 且仅 `[承重]` 默认档 `1`；证据冲突写不出唯一推荐时并进一次 grilling 问全，不单独停。
+- **终审是唯一停点**：`deliver.yaml` `stage: done` 且 `aligned: true` 后，`session-context` 打 `FINAL_REVIEW` 行（终审包：各阶段 gate 检查日志、decisions.yaml 的 auto 代决、review.md 审查处置、红绿计数、未做不可逆清单）。人整体审或点名阶段深审；推翻用 `record FAIL` / `reopen` / `decide` overturned，推翻计数照常回灌收紧。
+- **grilling 只由真实卡点触发**：frontier 非空、`[承重]` 假设、`BLOCKED(logic)`、证据冲突。阶段推进、签字、向下执行本身不触发；触发时按编制一次列全。
+- **旁路配方不变**：code-review 的 gate-report（I* 人签）、repo-commit-push / self-evolve-review 决策闸、STAGE_HANDOFF（流程边界）照旧。
 
 ## 编制：先认人岗，再决定怎么问
 
