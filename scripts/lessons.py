@@ -145,7 +145,7 @@ SCHEMA = """\
 #   「出现 X 时,先核对 Y,再下结论;若 Z 则不适用」
 # 同一 scope 上 action 不同时打 CONFLICT，被 --top 截掉的那一条也列出。
 # 不改旧行，不挑较新的一条当答案。check 只警告。
-# Agent 仍要回到当前证据自己走一遍 —— hypothesis.py 的六条强约束照常生效。
+# Agent 仍要回到当前证据自己走一遍 —— hypothesis.py 的八条强约束照常生效。
 #
 # 过时就清(retire):知识过期不清,下一轮会把它读成当前有效。
 """

@@ -238,13 +238,13 @@
 | agent | 对应阶段 / 模块 | 角色 | 承接 kind |
 |---|---|---|---|
 | `idev-deliver` | deliver 阶段机 + 产线文档 | 需求 / 架构 / 文档 | `deliver.advance` · `docs.backfill` · `docs.changelog` |
-| `idev-coder` | `code` 阶段 + 构建提交 | 开发 | `deliver.code_pass` · `review.fix` · `ui.playbook_sync` · `frontend.lint_fix` · `java.build` · `git.replace_check` · `git.sensitive_shield` · `git.sensitive_restore` · `git.commit_push` |
+| `idev-coder` | `code` 阶段 + 构建提交 | 开发 | `deliver.code_pass` · `review.fix` · `ops.instrument` · `ui.playbook_sync` · `frontend.lint_fix` · `java.build` · `git.replace_check` · `git.sensitive_shield` · `git.sensitive_restore` · `git.commit_push` |
 | `idev-reviewer` | 评审 | 审查(**独立于开发**) | `review.report` |
 | `idev-verifier` | verify 模块 + 用例所需环境 | 测试 | `verify.plan` · `verify.run` · `localdev.start` · `localdev.stop` · `localdev.approval_off` · `ui.lifecycle_run` · `ui.surface_scan` · `ui.coverage_lock` |
 | `idev-ops` | ops 模块 + S4 论证 | 排障 / 诊断 | `route.s4` · `ops.classify` · `ui.fix_deposit` |
 | **导体** | — | 持签字权 | `preflight.inputs` · `scope.baseline` · `human.gate` · `shell.confirmed` · `tool.step` · `ui.clean_pass_loop` · `ui.product_batch` |
 
-31 个 kind:24 个委派,7 个导体保留。每个 kind 的**落点页**见 `registry/kinds.yaml` 的 `page`,本页不复制那一列。
+32 个 kind:25 个委派,7 个导体保留。每个 kind 的**落点页**见 `registry/kinds.yaml` 的 `page`,本页不复制那一列。
 
 这张表由 `scripts/gen-kinds.py` 从 `registry/kinds.yaml` 生成。加一个 kind 只改那一个文件。
 <!-- agents-table:end -->

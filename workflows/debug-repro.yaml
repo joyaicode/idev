@@ -1,7 +1,7 @@
 schema_version: 1
 id: debug-repro
 aliases: ["复现闭环", "按现象复现", "debug 一键"]
-summary: 现象分类后走 verify debug：plan → run（须能红/绿切换）。无信号不请人确认环境。
+summary: 现象分类后走 verify debug：suspects → plan → instrument → run（须能红/绿切换）→ analyze → cleanup。无信号不请人确认环境。
 risk_tier: P0
 params:
   - name: feature
@@ -17,6 +17,9 @@ steps:
   - id: classify
     kind: ops.classify
     label: 现场分类
+  - id: suspects
+    tool: suspect-changes
+    label: 变更窗归因（时间窗 × 变更记录 → 嫌疑清单进假设台账）
   - id: plan
     kind: verify.plan
     with: { mode: debug }
@@ -28,7 +31,27 @@ steps:
       will_write: ["verify/plan.yaml accepted"]
       proof: "verify-plan 门禁结果 / case 数"
       auto_tiers: [P0, P1, P2]
+  - id: instrument
+    kind: ops.instrument
+    with: { phase: instrument }
+    label: 有界插桩（无需运行时取证时 record SKIPPED --evidence hypotheses.yaml）
   - id: run
     kind: verify.run
     with: { mode: debug }
-    label: 复现与根因红绿
+    label: 复现与根因红绿（agent 自驱；环境不可达 BLOCKED(env) 请人）
+  - id: analyze
+    kind: route.s4
+    label: 根因分析（读运行时证据，hypothesis set --status proven，补 impact/remedy）
+  - id: cleanup
+    kind: ops.instrument
+    with: { phase: cleanup }
+    label: 移除全部插桩（instrument.py set --status removed 逐条清）
+  - id: gate-cleanup
+    kind: human.gate
+    label: 插桩清点（机检：instrument-residue 有 FAIL 停下问人）
+    with:
+      will_write: ["run closed with instruments all removed"]
+      proof: "instrument.py check 全 removed / instruments.yaml"
+      gate_type: step_confirm
+      auto_stage: ops
+      auto_tiers: [P0, P1, P2]

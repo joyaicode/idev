@@ -83,6 +83,7 @@
 | `verify.plan` | verify | 起草/调整 plan。无 SIGNAL 则 AUTO，不请人（已 accepted 且未改用例 → 跳过，H4） |
 | `verify.run` | verify | 跑已 accepted 且勾选的 cases |
 | `ops.classify` | ops | 现象分类 |
+| `ops.instrument` | conventions/docs + evidence | 有界插桩通道：idev-coder 加带 IDEV-DBG 标记的临时日志并登记 instruments.yaml；with.phase=instrument|cleanup；收尾须 instrument.py check 全 removed |
 | `localdev.start` | — | 执行扩展根 `.idev/workflow-defaults.yaml` 的 `commands.start`。`{target}` 换服务名，缺省 `all`。工作目录用 `coding_root` 与 `products.<product>.dir`。没有这些键 → 预检 BLOCKED，不猜命令 |
 | `localdev.stop` | — | 执行扩展根 `commands.stop`。没有该键 → 预检 BLOCKED。目录与 start 相同 |
 | `localdev.approval_off` | — | 执行扩展根 `commands.approval_off`。没有该键 → 预检 BLOCKED。不要改产线路由或配置里的审批开关 |

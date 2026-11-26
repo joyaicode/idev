@@ -88,7 +88,7 @@ plan / report 所在的票目录由 `scripts/lib/doc_home.py --key task` 解析�
 
 `mode=test`：维度表每一维至少一条 case 或显式 `UNPROVEN`（写清缺基线/缺原型）。
 
-`mode=debug`：原现象至少红过一次；根因须能红/绿切换。对不上环境/产物则停，不写结论。修复循环的终止红线（失败签名连续 3 次 / 无有效变化）见 [conventions/evidence.md](../conventions/evidence.md) 第 5 步；命中强制升级人工，不叠补丁。
+`mode=debug`：原现象至少红过一次；根因须能红/绿切换。复现**默认自驱**：用例所需的本地环境自己起（`localdev.start` / `commands.lifecycle`），环境不可达才 `BLOCKED(env)` 请人。有插桩在桩时（`ops.instrument` 通道），复现采集的运行时日志落 `verify/evidence/<case-id>/`，作为对应假设的 `evidence`。对不上环境/产物则停，不写结论。修复循环的终止红线（失败签名连续 3 次 / 无有效变化）见 [conventions/evidence.md](../conventions/evidence.md) 第 5 步；命中强制升级人工，不叠补丁。
 
 ### 3. promote
 

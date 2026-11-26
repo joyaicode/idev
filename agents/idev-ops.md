@@ -243,6 +243,7 @@ NEXT: <交 verify debug | 交 verify patrol | 已写 handoff 需停 | 交 coder 
 ASSUMED: <这轮没验的假设,每条以 [承重] 或 [非承重] 开头;没有写「无」>
 CHECK: hypothesis.py check = PASS | FAIL(<哪条>)
 候选: 已证成 <n> / 待验 <n> / 已排除 <n>(排除的写了依据?)
+插桩: 登记 <n> / 已清 <n>(本轮经 ops.instrument 通道;没用通道写「无」)
 证据级别: code(file:line) | repro | log | doc —— 根因必须到 code
 影响范围: baseline <n> 条 / guard <n> 条(guard 从 codegraph_impact 提名)
 红线: 未命中 | 命中<哪条>
@@ -349,18 +350,20 @@ python3 $IDEV/scripts/stage-gate.py --feature <f> --stage ops
 
 [references/boost.md](../references/boost.md) 第零节。
 
-## 六条强约束(机检)
+## 八条强约束(机检)
 
 > 根因分析最危险的不是「没有答案」,而是**「给出一个听起来合理但无法验证的答案」**。
 
 | 约束 | 怎么满足 |
 |---|---|
 | 服务名必须有来源 | `FACTS:` 点名来自拓扑(codegraph)/ 工具返回 / 源码 / 用户输入。**禁止凭经验编造** |
-| 时间窗必须可追溯 | `--window ... --window-source "告警时间"`。随意扩大会把无关证据卷进来 |
+| 时间窗必须可追溯 | `--window ... --window-source "告警时间"`。随意扩大会把无关证据卷进来。变更关联走 `suspect-changes.py`(只提名,不立案) |
 | 调用链必须穿透 | 追到 DB / 缓存 / 消息 / 第三方 / 业务输入异常。**中间服务不能作为唯一根因** |
 | 关键判断至少双证据 | 两类互相印证:日志 × 监控、代码路径 × 配置变更。单一信号只能标 `open` |
 | 快照不等于根因 | `proven` 要有 `file:line` 解释机制 —— 日志只证明现象发生过 |
 | 排除也要举证 | `disproven` 写 `--note` 说明怎么排除的 |
+| 插桩必须登记 | 需要运行时取证时申请 `ops.instrument` 通道(委派 idev-coder):`instrument.py add` 挂 H#,日志带 `IDEV-DBG <I#>` 标记。**自己不加临时日志** |
+| 收尾必须清零 | 回报 `插桩:` 行写清登记/已清;`instrument.py check` 有 active 是 FAIL |
 
 根因报告先回答三问,再展开证据链:
 

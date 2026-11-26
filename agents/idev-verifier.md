@@ -98,6 +98,8 @@ is_background: false
 
 这几步**只跑命令,不改产品代码** —— 它们是为了让你的用例能跑起来、能被锁住覆盖。
 
+`mode=debug` 的复现**默认自驱**：先用 `localdev.start` 起环境再跑复现用例，环境不可达（命令键缺失、环境起不来）才 `BLOCKED(env)` 请人配合——不是默认请人。有插桩在桩时（`ops.instrument` 通道），复现采集的运行时日志落 `verify/evidence/<case-id>/`，交给对应假设当 `evidence`。
+
 | kind | 做什么 | 取值 |
 |---|---|---|
 | `localdev.start` | 起本地服务 | 扩展根 `commands.start`;`{target}` 换服务名,缺省 `all`;工作目录用 `coding_root` 与 `products.<product>.dir` |

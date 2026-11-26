@@ -14,6 +14,7 @@ is_background: false
 | 分组 | kind |
 |---|---|
 | 改代码 | `deliver.code_pass`、`review.fix`、`ui.playbook_sync`、`frontend.lint_fix` |
+| 有界插桩 | `ops.instrument`（phase=instrument 加桩 / phase=cleanup 拔桩） |
 | 构建 | `java.build` |
 | 提交 | `git.replace_check`、`git.sensitive_shield`、`git.sensitive_restore`、`git.commit_push` |
 
@@ -156,6 +157,7 @@ mkdir -p <票目录>/workflow/logs
 14. **命令失败不自己兜。** 退出码非 0 就是 `FAIL`,如实回报原文;**不要**改参数重试、换命令绕、或把失败解释成"环境问题"然后继续。禁止"基本成功""只是个警告"这类措辞。
 15. **一步一条命令。** 不要把后续步骤的命令一起跑了。
 16. **本步交付都对上之后再写 PASS。** 只做了一块、只试了一条路、或没有能打开的证据，按 `$IDEV/references/agents.md`「再派一个执行者」回报：缺的那块补上，未试路径放在 `BLOCKED` 里。重派时只改 `prior_failure` 点名的失败项。不同意这些条件，写 `BLOCKED(logic)`。没有新的执行结果时，不要在同一上下文里再审查一遍自己刚写的产物。
+17. **插桩只走 `ops.instrument` 通道。** phase=instrument：先 `instrument.py add --feature <f> --hypothesis <H#> --file <path:line> --stub <样子>` 登记（没有对应 H# 拒桩），日志里必须带 `IDEV-DBG <I#>` 标记；**只加日志，不改行为逻辑**。phase=cleanup：逐条移除临时日志，`instrument.py set --status removed` 清零。`instrument.py check --feature <f>` 退出非 0 不准报 PASS。回报 `INSTRUMENT:` 行列出本轮登记/移除的 I#，没动桩写「无」。
 
 ## 机检一览(回报缺这些字段会被打回)
 
@@ -176,6 +178,7 @@ mkdir -p <票目录>/workflow/logs
 | `read-before-change` | 改了没读过的文件 —— 盲改 |
 | `revert-anchor` | 有改动却没有 REVERT 锚点 —— 撤不回去 |
 | `red-first` | review.fix 没有 RED_FIRST —— 没见它红过就修 |
+| `instrument-registered` | ops.instrument 没有 INSTRUMENT 行 —— 动了桩不点名等于没登记 |
 | `java-hygiene` | `deliver.code_pass` / `review.fix` 改过的 Java 仍有 java.md 黄条（钻石 `<>`、显式方法类型实参、`valueOf`）。先改文件，再写总则 |
 | `s0-declared` | 缺 CHANGE_KIND / CANON_TRIGGER / TABLE_HIT |
 | `idea-declared` | 缺 IDEA_HITS 行 —— 写码时的念头命中零命中也要显式写 |
@@ -216,6 +219,7 @@ READ: <改之前读过的 file:symbol>
 CHANGED: <实际改的 file:symbol;无改动写「无」;**锚点用 file:方法名,行号只作辅助**——review 与 fix 之间同一文件常被平行改动,行号会漂,方法名不会>
 REVERT: <动手前的 base commit 或 stash ref;CHANGED 非空时必填>
 RED_FIRST: <仅 review.fix:修之前那条用例红过 + 日志路径>
+INSTRUMENT: <仅 ops.instrument:本轮登记/移除的 I# 列表;没动桩写「无」>
 ASSUMED: <这轮做了什么没验的假设,每条以 [承重] 或 [非承重] 开头;没有写「无」>
 HITS: §1 <n> 命中已改 / §2 已扫 / T# <列表或无>
 UNRELATED: <条数,未改>

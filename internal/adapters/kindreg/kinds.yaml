@@ -214,6 +214,14 @@ kinds:
     lease: verify
     verify: none
     requires: [artifact]
+  ops.instrument:
+    page: conventions/evidence.md
+    lands: "conventions/docs + evidence"
+    note: "有界插桩通道：idev-coder 加带 IDEV-DBG 标记的临时日志并登记 instruments.yaml；with.phase=instrument|cleanup；收尾须 instrument.py check 全 removed"
+    agent: idev-coder
+    lease: write
+    verify: none
+    requires_with: [phase]
 
   # --- local environment ----------------------------------------------------
   localdev.start:

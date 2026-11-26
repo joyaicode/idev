@@ -227,6 +227,10 @@ NOT_LOAD_BEARING = "[非承重]"
 # ops: 认产物不能只是声明。A feature defect sends the ticket back to deliver,
 # and that is only sound if the symptom was confirmed against *that* build.
 ARTIFACT_LINE = delegation_return.line_field("ARTIFACT", r"(MATCH|AHEAD|UNKNOWN)\b")
+# ops.instrument: the bounded channel is only bounded if the report names what
+# it registered or removed. `无` counts — an instrument phase that instrumented
+# nothing is a valid answer, an unreported one is not.
+INSTRUMENT_LINE = delegation_return.line_field("INSTRUMENT", r"(.+?)[^\S\n]*$")
 # 服务名必须有来源: from the topology, a tool result, or the user — never
 # from recall. A name produced from memory is the first link in a chain of
 # reasoning about a service that may not exist.
@@ -375,6 +379,20 @@ def check_accuracy(record: dict) -> dict[str, str]:
                 "PASS" if ARTIFACT_LINE.search(raw)
                 else "FAIL:no ARTIFACT: MATCH|AHEAD|UNKNOWN line (artifact-match.py)"
             )
+
+    if agent == "idev-coder" and kind == "ops.instrument":
+        # instrument-registered: the ledger is the contract. A report that
+        # neither names the I#s it touched nor says 无 leaves the conductor
+        # to re-run instrument.py by hand — which is the check this
+        # replaces.
+        im = INSTRUMENT_LINE.search(raw)
+        if im and (im.group(1).strip() or NONE_VALUE.match(im.group(1))):
+            out["instrument-registered"] = "PASS"
+        else:
+            out["instrument-registered"] = (
+                "FAIL:没有 INSTRUMENT 行 —— 列出本轮登记/移除的 I#"
+                "(instrument.py add/set),没有动桩就写「无」。"
+                "插桩通道的有界性靠台账,回报不点名等于没登记")
 
     if agent == "idev-deliver" and kind == "deliver.advance":
         # 两条 GATE 行是请签前的双门禁记录:check-feature(规约符合)与

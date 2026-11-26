@@ -98,9 +98,10 @@ def _has_ticket(path: Path) -> bool:
 
 
 # Review and root-cause intermediates. Not engineering documents.
-PROCESS_ACTIVITIES = frozenset({"report", "rootcause"})
+PROCESS_ACTIVITIES = frozenset({"report", "rootcause", "instrument"})
 PROCESS_KINDS = frozenset({
     "review.report", "ops.classify", "route.s4", "ui.fix_deposit",
+    "ops.instrument",
 })
 # The whole-repo review recipe has no deliverable ticket of its own.
 _PROCESS_ONLY = frozenset({"code-review"})

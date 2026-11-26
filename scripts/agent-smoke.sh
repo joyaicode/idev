@@ -739,6 +739,52 @@ expect 1 "case-before-next fires" -- \
 contains "case-before-next" "names case-before-next"
 expect 0 "list works" -- python3 "${S}/hypothesis.py" --repo "$TMP" list --feature "$FEATURE"
 
+say "5b instrument ledger (bounded runtime forensics)"
+# The ledger tools read git (sweep reconciles with git grep); give the temp
+# checkout a git history first — the same init section 8 uses.
+mkdir -p "$TMP/src"
+printf 'a\n' > "$TMP/src/A.java"
+git -C "$TMP" init -q >/dev/null 2>&1 || true
+git -C "$TMP" config user.email t@t >/dev/null 2>&1 || true
+git -C "$TMP" config user.name t >/dev/null 2>&1 || true
+git -C "$TMP" add -A >/dev/null 2>&1 || true
+git -C "$TMP" commit -qm "init" >/dev/null 2>&1 || true
+# add needs a live hypothesis: forensics serve a named suspicion
+expect 2 "add with no such hypothesis is refused" -- \
+  python3 "${S}/instrument.py" --repo "$TMP" add --feature "$FEATURE" \
+    --hypothesis H9 --file src/A.java:1 --stub "log"
+contains "no such hypothesis" "names the missing hypothesis"
+expect 0 "register I1 against H1" -- \
+  python3 "${S}/instrument.py" --repo "$TMP" add --feature "$FEATURE" \
+    --hypothesis H1 --file src/A.java:1 --stub "log value"
+contains "IDEV-DBG I1" "tells the coder the tag to write"
+# active instrument -> residue; the cleanup gate consumes this exit code
+expect 1 "check fails with residue while active" -- \
+  python3 "${S}/instrument.py" --repo "$TMP" check --feature "$FEATURE"
+contains "instrument-residue" "names instrument-residue"
+expect 0 "mark it removed" -- \
+  python3 "${S}/instrument.py" --repo "$TMP" set --feature "$FEATURE" \
+    --id I1 --status removed
+expect 0 "check passes when all removed" -- \
+  python3 "${S}/instrument.py" --repo "$TMP" check --feature "$FEATURE"
+# both directions of the reconciliation
+printf 'a\n// IDEV-DBG I2 rogue\n' > "$TMP/src/A.java"
+expect 1 "sweep catches an unregistered tag" -- \
+  python3 "${S}/instrument.py" --repo "$TMP" sweep --feature "$FEATURE"
+contains "unregistered-instrument" "names unregistered-instrument"
+git -C "$TMP" checkout -q -- src/A.java 2>/dev/null || printf 'a\n' > "$TMP/src/A.java"
+
+say "5c change-window attribution"
+expect 2 "an unsourced window is refused" -- \
+  python3 "${S}/suspect-changes.py" --repo "$TMP" \
+    --window "2026-01-01T00:00:00+08:00..2026-12-31T00:00:00+08:00" \
+    --window-source "随手写的"
+contains "window-without-source" "names window-without-source"
+expect 0 "a sourced window answers" -- \
+  python3 "${S}/suspect-changes.py" --repo "$TMP" \
+    --window "2026-01-01T00:00:00+08:00..2026-12-31T00:00:00+08:00" \
+    --window-source "告警时间"
+
 say "6 metrics"
 expect 0 "metrics over the temp checkout" -- python3 "${S}/agent-metrics.py" --repo "$TMP"
 contains "按 agent" "metrics has the per-agent table"

@@ -445,6 +445,23 @@ def check_correctness_runner(plan: dict, errors: list[str]) -> None:
         ok("every correctness case is runnable")
 
 
+def check_instruments_settled(repo: Path, feature: str, errors: list[str]) -> None:
+    """No active instrument survives the ops stage — the bounded channel is
+    only bounded if closing proves the tree is clean."""
+    import instrument
+
+    path = instrument.ledger_path(feature, repo)
+    if not path.is_file():
+        return  # nothing was ever instrumented; that is a pass
+    data = instrument.load(path, feature)
+    if instrument.check(data, repo, verbose=False) != 0:
+        fail("instrument residue: active or unregistered IDEV-DBG logs "
+             "(instrument.py check); remove them and set --status removed",
+             errors)
+    else:
+        ok("instrument ledger settled (nothing active)")
+
+
 def check_ledger_settled(repo: Path, feature: str, errors: list[str]) -> None:
     """resolved passes without a person only on a proven root cause and no open guess."""
     import hypothesis
@@ -1510,9 +1527,14 @@ def check_ops_stage(
     origin = scalar(ops, "defect_origin")
     if origin and origin not in ("req", "arch", "code"):
         fail("ops.defect_origin must be req|arch|code", errors)
+    # The instrument residue check runs for the whole ops stage, not just
+    # the resolved path: an active IDEV-DBG log is a fail no matter who
+    # would sign the close.
+    check_instruments_settled(repo, args.feature, errors)
     if scalar(ops, "resolved") == "true" and scalar(ops, "auto"):
         check_auto_record("ops", ops, tier, root, errors)
         check_ledger_settled(repo, args.feature, errors)
+        check_instruments_settled(repo, args.feature, errors)
     elif scalar(ops, "resolved") == "true":
         who = scalar(ops, "by")
         if agent_signoff(who):

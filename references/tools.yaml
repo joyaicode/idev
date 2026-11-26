@@ -34,6 +34,14 @@ tools:
     summary: 停问前判断这一步低效、不合理，还是较弱模型的补丁。调用时自己补 stop 或 scan。
     limit: 不改 Skill，不打分，不把草案当已落地。
     command: python3 scripts/process-eval.py
+  - id: instrument
+    summary: 插桩登记台账（有界运行时取证）。调用时自己补子命令和 --feature。
+    limit: 加桩先挂 H#；收尾全 removed 才过；check 有 active 即退出 1。
+    command: python3 scripts/instrument.py
+  - id: suspect-changes
+    summary: 变更窗归因：时间窗 × 变更记录（可选 × 产物差异交集）→ 嫌疑清单。
+    limit: 只提名不立案；--window-source 必填（问题发生/告警/数据更新时间）。
+    command: python3 scripts/suspect-changes.py
 groups:
   - id: evidence
     summary: 论证用的工具。配方写 tool_group 就会按这个顺序展开成步骤。

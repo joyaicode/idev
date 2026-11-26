@@ -36,8 +36,10 @@
 | `scripts/lessons.py` | 经验台账：六问必答 · 决策步可附 prefix · 候选→人确认+复现→权威 · 召回只给建议 |
 | `scripts/sediment.py` | 程序候选：两条不同结果+人确认才留下。事实仍走经验账。不执行脚本 |
 | `scripts/context-stage.py` | 两阶段读：薄目录再加载一个区间。两路来源 codegraph 与 lessons |
-| `references/rootcause-guards.md` | 根因六条强约束：来源/时间窗/穿透/双证据/快照/排除举证 |
+| `references/rootcause-guards.md` | 根因八条强约束：来源/时间窗/穿透/双证据/快照/排除举证/插桩登记/收尾清零 |
 | `scripts/artifact-match.py` | 运维:产物与源码是否同源（MATCH/AHEAD/UNKNOWN） |
+| `scripts/suspect-changes.py` | 运维:变更窗归因——时间窗 × 变更记录（× 产物差异交集）→ 嫌疑清单，只提名不立案 |
+| `scripts/instrument.py` | 运维:插桩台账——有界运行时取证，登记/双向对账/收尾清零 |
 | `scripts/realign.py` | 需求订正后查七类漂移，给出向前的重做顺序 |
 | `scripts/ui-evolve.py` | 编写阶段查剧本状态冲突，提 branch / reorder 方案（不改文件） |
 | `scripts/ui-playbook.py` | UI 剧本生命周期：create→read→change→restore→cleanup，实体打标 |

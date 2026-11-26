@@ -48,7 +48,7 @@ def test_inventory() -> None:
     for _name, kind in inv.items():
         by_type[kind] = by_type.get(kind, 0) + 1
     check("workflow count", by_type.get("workflow", 0), 14)
-    check("kind count", by_type.get("kind", 0), 31)
+    check("kind count", by_type.get("kind", 0), 32)
     check("agents present", all(a in inv for a in ("idev-coder", "idev-reviewer")), True)
     check("module rows", sorted(n for n, k in inv.items() if k == "module"),
           sorted(ci.module_skills(kernel)))

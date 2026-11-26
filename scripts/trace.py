@@ -1222,6 +1222,50 @@ def stage_of(text: str) -> str:
     return field(route, "stage") or ""
 
 
+def _instrument_observation(text: str, repo) -> None:
+    """INSTRUMENT / INSTRUMENT_CLEARED lines (observation only).
+
+    A round whose delegations include ops.instrument prints how many
+    instruments are still active — the trace is where a person sees the
+    channel is open before it is forgotten. Nothing here may fail the
+    append (merge_facts rule: a helper that could fail cannot run here).
+    """
+    try:
+        delegated = list(machine_items(text, "delegations"))
+    except Exception:
+        return
+    if not any(str(d.get("step") or "") for d in delegated):
+        # No step info in the delegations block — nothing to key on.
+        pass
+    feature = field(text, "feature")
+    if not feature or feature == "-" or repo is None:
+        return
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import instrument  # noqa: WPS433 — same lazy pattern as check-feature
+
+        for d in delegated:
+            if "instrument" not in str(d.get("step") or ""):
+                continue
+            path = instrument.ledger_path(feature, repo)
+            if not path.is_file():
+                print("INSTRUMENT %s ledger 不在——本步没落台账，查委派留痕" % feature)
+                return
+            data = instrument.load(path, feature)
+            items = [i for i in (data.get("items") or []) if isinstance(i, dict)]
+            active = [i for i in items if str(i.get("status")) == "active"]
+            if active:
+                print("INSTRUMENT %s active=%d —— 有界通道开着，收尾前必须清零"
+                      % (feature, len(active)))
+            else:
+                print("INSTRUMENT_CLEARED %s 全 removed" % feature)
+            return
+    except Exception:
+        # Observation only: an unreadable ledger is a finding for the
+        # cleanup gate, not for the trace append.
+        return
+
+
 def _previous_stage(feature: str, current: str) -> str:
     """The stage of the most recent earlier trace for this feature.
 
@@ -1564,6 +1608,11 @@ def cmd_append(path: str) -> int:
     if prev_stage and prev_stage != stage_of(text):
         print("STAGE_HANDOFF %s→%s 上一阶段已收口；新阶段在新会话里继续（record --new-session 消化）"
               % (prev_stage, stage_of(text)))
+    # Instrument observation (proposal 20261126): a round that delegated
+    # ops.instrument should be visible in the trace the same way a stage
+    # hop is — the bounded channel is only bounded while somebody can see
+    # that it is open. Read the ledger the same command reads.
+    _instrument_observation(text, product_repo())
     rounds, ctx = session_rounds()
     if rounds >= HANDOFF_ROUNDS:
         print(handoff_line(text, rounds, ctx))

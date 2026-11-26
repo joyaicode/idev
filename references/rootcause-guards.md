@@ -1,13 +1,13 @@
-# 根因分析的六条强约束
+# 根因分析的八条强约束
 
 > 根因分析最危险的不是「没有答案」,而是**「给出一个听起来合理但无法验证的答案」**。
 
-这页是那句话的机检版本。六条约束各自挡住一种「看起来对」的错法,
-全部由 `hypothesis.py check` 与 `delegation.py` 执行。
+这页是那句话的机检版本。八条约束各自挡住一种「看起来对」的错法,
+全部由 `hypothesis.py check` / `instrument.py check` 与 `delegation.py` 执行。
 
 ---
 
-## 一、六条
+## 一、八条
 
 | 约束 | 挡什么 | 机检 |
 |---|---|---|
@@ -17,6 +17,8 @@
 | **关键判断至少双证据** | 单一信号配上一个说得通的故事 | `proven-needs-two-sources` |
 | **快照不等于根因** | 现象发生过 ≠ 解释了为什么 | `proven-needs-code-evidence` |
 | **排除也要举证** | 排除了但没写依据,下一轮重走同一条路 | `disproven-needs-proof` |
+| **插桩必须登记** | 绕过台账加临时日志,取证通道变成无边界的改代码 | `unregistered-instrument` / `instrument-registered` |
+| **收尾必须清零** | 修完了,桩还留在代码里 | `instrument-residue` |
 
 ### 服务名必须有来源
 
@@ -35,6 +37,18 @@ python3 scripts/hypothesis.py set --feature <f> --id H1 \
 ```
 
 写了窗口却不说来源 → FAIL。**随意扩大时间窗**是把无关证据合理化的常见手法。
+
+窗口与变更记录的关联不靠手查：`suspect-changes.py --repo <仓根> --window <from>..<to>
+--window-source <上述三种之一>` 列出窗口内会进产物的变更文件（`--artifact` 给了产物路径
+再与产物差异取交集），每条附可照抄的 `hypothesis.py add` 建议行。**它只提名，不立案**：
+嫌疑文件仍要假设台账与红绿闭环，「动过」不证明「为什么」。
+
+### 插桩必须登记、收尾必须清零
+
+运行时取证走有界通道：`instrument.py add` 先挂到一条 H# 上（没有假设拒登），日志里带
+`IDEV-DBG <I#>` 标记，`sweep` 双向对账（未登记的标记、登记了却消失的桩都 FAIL）。
+修复验证后逐条移除并 `set --status removed`；`check` 有 active 即退出 1，收尾闸与
+`check-feature` 的 ops 段都吃这个结果。**没有登记的临时日志 = 未走通道的改代码。**
 
 ### 调用链必须穿透
 
@@ -140,7 +154,7 @@ python3 scripts/lessons.py retire --id L1 --why ...   # 过时就清
 ### 召回只给建议,不给答案
 
 `recall` 输出的形状是「出现 X 时先核对 Y,若 Z 则不适用」,不是「原因就是 Y」。
-用它的 Agent 仍要回到当前证据自己走一遍,六条强约束照常生效。
+用它的 Agent 仍要回到当前证据自己走一遍,八条强约束照常生效。
 
 **一条短路掉证据链的经验,比没有经验更糟。**
 

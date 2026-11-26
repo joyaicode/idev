@@ -25,6 +25,7 @@
         "verify.plan",
         "verify.run",
         "ops.classify",
+        "ops.instrument",
         "localdev.start",
         "localdev.stop",
         "localdev.approval_off",

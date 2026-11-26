@@ -59,12 +59,12 @@ parent: idev
 
 1. **认现场** — 人给 feature（或点头用分支名）+ 现象。缺环境/产物/可观察物就问，不要猜。
 2. **分类** — 按 [classify.md](references/classify.md) 写 `ops.yaml`（[ops.example.yaml](references/ops.example.yaml)）。`kind` 不是 `feature` / `patrol` 则 `handoff` 后**停**，打开对应 Skill。
-3. **取证** — 排查顺序按 [conventions/evidence.md](../conventions/evidence.md) 闭环-1「排查递进」：先查变更记录（有变更先解释变更），无变更再查云资源状态/事件与容器异常日志；日志只当线索，读源码锁异常源后沿上下文立下一条假设；依赖服务逐层下钻，每层一条假设。`kind=feature`：起草 verify `debug` plan（goal 抄基线）→ 人确认 → run。原现象至少红一次。  
+3. **取证** — 排查顺序按 [conventions/evidence.md](../conventions/evidence.md) 闭环-1「排查递进」：先查变更记录（有变更先解释变更），无变更再查云资源状态/事件与容器异常日志；日志只当线索，读源码锁异常源后沿上下文立下一条假设；依赖服务逐层下钻，每层一条假设。现象带时间窗时，变更关联走 `suspect-changes.py --repo <仓根> --window <from>..<to> --window-source <来源>`（只提名，不立案；提名的文件仍进假设台账）。`kind=feature`：起草 verify `debug` plan（goal 抄基线）→ 人确认 → run。原现象至少红一次。  
    `kind=patrol`：只重放 `doc_home.py --feature <feature> --key patrol` 输出的巡检包。
-4. **根因** — 锁定故障源 ≠ 查明根因：候选根因要有固定则红、消除则绿的用例钉死，用例不过继续向下挖。读代码之前先 `bash ~/.cursor/skills/idev/scripts/codegraph-sync.sh --repo <仓根> rootcause`。能红/绿切换才写进 report。对照密封基线 item。超出基线 → `baseline-conflict`。台账里有两条以上 `open` 假设时，先跑 `fanout.py assess --activity rootcause`。`FANOUT` 时每个 `idev-ops` 只查一个 id，只写 `verify/shards/rootcause-<id>.yaml`。另一片的结论不是证据。先完成的一片不取消其余。导体 `merge` 才改 `hypotheses.yaml`。只有一条 `open` 时不拆。
+4. **根因** — 锁定故障源 ≠ 查明根因：候选根因要有固定则红、消除则绿的用例钉死，用例不过继续向下挖。读代码之前先 `bash ~/.cursor/skills/idev/scripts/codegraph-sync.sh --repo <仓根> rootcause`。已有日志不够定位时，经 `ops.instrument` 有界通道取运行时证据（委派 idev-coder 加带 `IDEV-DBG <I#>` 标记的临时日志并登记 `instrument.py`；回报 `插桩:` 行）。能红/绿切换才写进 report。对照密封基线 item。超出基线 → `baseline-conflict`。台账里有两条以上 `open` 假设时，先跑 `fanout.py assess --activity rootcause`。`FANOUT` 时每个 `idev-ops` 只查一个 id，只写 `verify/shards/rootcause-<id>.yaml`。另一片的结论不是证据。先完成的一片不取消其余。导体 `merge` 才改 `hypotheses.yaml`。只有一条 `open` 时不拆。
 5. **回退** — 人写下 `defect_origin` 后，把 `deliver.yaml.stage` 回到 origin，作废其后 accepted / aligned，按 deliver 再向后走。
 6. **多角色镜头（lean-review，ops 票恒触发）：** `lean-review.py assess --feature <f> --stage ops` 打出的镜头（ops·SRE / dev；现象涉用户可感知时加 product）附进本次 `idev-ops` 委派包，同一上下文按镜头过；finding 进**假设台账**（`hypothesis.py add`，可证伪动作 + 证据路径），**不进 grill、不另派**。五律：引用尺（evidence.md 闭环 / 产线 pack 运维知识）/ 失败场景与条款出处 / 阻塞建议二分 / 零 finding 合法且要明说 / 旧 finding 不推定、修复者更换。
-7. **关闭** — `check-feature.sh <feature> ops`。P0：人写 `resolved: true` + `by:`。P1/P2：`hypothesis.py check` 绿、无 `open`、有 `proven` 时写 `resolved: true` + `auto: hypotheses.yaml`，不停；否则停问人。人没提提升 / 巡检包 / promote 则不问是否把本次 debug case 晋升巡检包。
+7. **关闭** — `check-feature.sh <feature> ops`。插桩清零：`instrument.py check --feature <f>` 有 active 或对不上即 FAIL，全 removed 才许关闭。P0：人写 `resolved: true` + `by:`。P1/P2：`hypothesis.py check` 绿、无 `open`、有 `proven`、插桩清零时写 `resolved: true` + `auto: hypotheses.yaml`，不停；否则停问人。人没提提升 / 巡检包 / promote 则不问是否把本次 debug case 晋升巡检包。
 
 `deliver.yaml.stage`：仅当当前已是 `done` 时才改成 `ops`；交付中途的现象就地 `debug`，不要跳阶段。关闭且无回退 → 回到 `done`。
 
