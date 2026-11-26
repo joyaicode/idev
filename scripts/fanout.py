@@ -508,6 +508,72 @@ def _source_path(path: str) -> bool:
     return Path(path).suffix.lower() in SOURCE_EXT
 
 
+# The five review axes (coding-tables §3.8), one independent deep-read each.
+# When a change touches one module only, module splitting cannot help — the
+# axes are the other natural boundary: five reviewers, one axis each, every
+# changed file in every scope. No axis×module cross product: the module shard
+# (all axes) and the axis shard (all modules) read the same file on the same
+# axis and would produce duplicate findings, and _merge_report renumbers but
+# never dedupes. The two dimensions are complementary, and the switch between
+# them (module count) is deterministic.
+LENS_AXES = {
+    "correctness": (
+        "正确性",
+        "coding.md 文首底线 1/3(每段有依据 / 关键路径失败条件)与 §2 逐条; "
+        "T8(吞异常)/T11/C7; T14/C20。"
+        "本片还承担机械扫描记账: 共享 PREP 扫描日志里每条 blocking / problems / lang 的 "
+        "file:line 都要写成 FINDING(其余轴片不写扫描行); lean-review 的 code 镜头清单也附本片。"
+    ),
+    "readability": (
+        "可读性",
+        "coding.md 底线 4「码如文字」与规范总则; C1/C5/C12; coding-tables §2.4 行数阈值。",
+    ),
+    "architecture": (
+        "架构",
+        "coding.md 底线 1/2/5; canon.md T#/A#; coding-tables §1/§3(两顶帽子)。"
+        "codegraph one-hop 影响面提示(波及而未改的调用方)归本片。",
+    ),
+    "security": (
+        "安全",
+        "coding-tables §3.8 第 5 条触发面(身份/输入/出站/密钥); security-and-hardening。",
+    ),
+    "performance": (
+        "性能",
+        "coding.md 底线 5; T9(无基线不优化)/T10; 栈指南的性能条目。",
+    ),
+}
+# Every lens shard carries the same contract tail.
+LENS_TAIL = (
+    "; 每条 FINDING 带一行「轴: <名>」; 只做本轴,另一片的结论不是证据; "
+    "零 finding 合法且要明说"
+)
+
+
+def _lens_shards(files: list[str]) -> list[dict]:
+    """One shard per review axis, over every changed source."""
+    shown = ", ".join(files[:40])
+    if len(files) > 40:
+        shown += f" (+{len(files) - 40} more)"
+    shards = []
+    for axis, (zh, rule) in LENS_AXES.items():
+        shards.append({
+            "id": f"lens-{axis}",
+            "agent": AGENTS["report"],
+            "writes": [f"review/shards/lens-{axis}.md"],
+            "scope": (
+                f"五轴之「{zh}」深读全部改动源: {shown}; "
+                f"write review/shards/lens-{axis}.md; "
+                f"尺: {rule}; "
+                "each formal finding is a ### FINDING block with 位置 / 根据 / 失败场景 / 修复建议; "
+                "files not opened go under ### UNPROVEN; do not write review.md; do not number I*"
+                f"{LENS_TAIL}"
+            ),
+            "units": files,
+            "dimension": "lens",
+        })
+    return shards
+
+
 def _changed_sources(repo: Path) -> list[str]:
     if not (repo / ".git").exists():
         return []
@@ -546,7 +612,14 @@ def _drafts(task: Path, shards: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 def assess_report(task: Path, repo: Path, cap: int) -> dict:
-    """Deep-read changed source by top-level module. The scan itself stays one command."""
+    """Deep-read changed source — by top-level module, or by review axis.
+
+    Two mutually exclusive waves: >= 2 modules keep the module split (each
+    shard walks all five axes over its module); a single module switches to
+    the lens split (five shards, one axis each, over every changed file) —
+    that is the case that used to be one reviewer doing five axes in one
+    pass, and it is the common big-change shape.
+    """
     groups: dict[str, list[str]] = {}
     order: list[str] = []
     for path in _changed_sources(repo):
@@ -557,8 +630,25 @@ def assess_report(task: Path, repo: Path, cap: int) -> dict:
             order.append(module)
             groups[module] = []
         groups[module].append(path)
-    if len(order) < 2:
-        return _serial("report", "fewer than two source modules changed")
+    if not order:
+        return _serial("report", "no changed sources to review")
+    if len(order) == 1:
+        # Single module (or all root): the axes are the split. The five
+        # axes always open (§3.8 必开), so a lens wave's effective cap is
+        # raised to fit them — `--cap` below 2 still collapses via _finish.
+        shards = _lens_shards(groups[order[0]])
+        drafted, pending = _drafts(task, shards)
+        if drafted and _signed_findings(task):
+            return _serial("report", "review.md is already signed; record the step, do not delegate")
+        result = _launch(
+            "report", pending, drafted, min(MAX_CAP, max(cap, len(LENS_AXES))),
+            {"review.md": _fingerprint(task / "review.md")},
+            "fewer than two lens drafts",
+        )
+        if result["decision"] == "FANOUT" and result.get("resume") != "merge":
+            root = kind_agents.kernel_root()
+            result["prep"] = [f"bash {root}/scripts/coding-scan.sh {repo}"]
+        return result
     shards = []
     for module in order:
         files = groups[module]
@@ -573,9 +663,11 @@ def assess_report(task: Path, repo: Path, cap: int) -> dict:
                 f"module {module}; deep-read only these changed sources: {shown}; "
                 f"write review/shards/{module}.md; "
                 "each formal finding is a ### FINDING block with 位置 / 根据 / 失败场景 / 修复建议; "
-                "files not opened go under ### UNPROVEN; do not write review.md; do not number I*"
+                "files not opened go under ### UNPROVEN; do not write review.md; do not number I*; "
+                "本片按五轴逐轴过该模块"
             ),
             "units": files,
+            "dimension": "module",
         })
     drafted, pending = _drafts(task, shards)
     if drafted and _signed_findings(task):

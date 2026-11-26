@@ -368,3 +368,55 @@ func clip(s string, n int) string {
 	}
 	return s[:n] + "…"
 }
+
+// Glob expands a file pattern. idev-reviewer's declared tool list names
+// Glob (the Claude Code spelling), and the definitions' whitelist is only
+// as good as the tools behind it — so the host provides it, read-only.
+type Glob struct{}
+
+// Name implements loop.Tool.
+func (t *Glob) Name() string { return "glob" }
+
+// Description implements loop.Tool.
+func (t *Glob) Description() string {
+	return "按通配符列出文件（如 src/**/*.java），返回匹配路径，上限 500 行。只列文件，不读内容。"
+}
+
+// ParametersJSON implements loop.Tool.
+func (t *Glob) ParametersJSON() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"pattern": {"type": "string", "description": "通配符模式，如 *.java 或 src/**/*.ts"}
+		},
+		"required": ["pattern"]
+	}`)
+}
+
+// ReadOnly implements loop.Tool.
+func (t *Glob) ReadOnly() bool { return true }
+
+// Execute implements loop.Tool.
+func (t *Glob) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	var in struct {
+		Pattern string `json:"pattern"`
+	}
+	if err := json.Unmarshal(args, &in); err != nil {
+		return "", fmt.Errorf("glob: args: %w", err)
+	}
+	if in.Pattern == "" {
+		return "", fmt.Errorf("glob: empty pattern")
+	}
+	matches, err := filepath.Glob(in.Pattern)
+	if err != nil {
+		return "", fmt.Errorf("glob: pattern: %w", err)
+	}
+	if len(matches) > 500 {
+		matches = matches[:500]
+		matches = append(matches, "… (limit 500 reached)")
+	}
+	if len(matches) == 0 {
+		return "no matches", nil
+	}
+	return strings.Join(matches, "\n") + "\n", nil
+}

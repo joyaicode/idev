@@ -206,6 +206,19 @@ class Accessors(unittest.TestCase):
         self.assertEqual(java_hygiene.missing(hits, "", shard="other"), [])
         self.assertTrue(java_hygiene.missing(hits, "", shard="mod"))
 
+    def test_lens_correctness_owes_every_blocking_hit(self) -> None:
+        # fanout's single-module axis split books the scan lines in the
+        # correctness shard: it owes every blocking hit, any module.
+        hits = java_hygiene.hits_in(SAMPLE, "mod/Sample.java", "8")
+        self.assertTrue(java_hygiene.missing(hits, "", shard="lens-correctness"))
+
+    def test_other_lens_shards_owe_no_scan_lines(self) -> None:
+        hits = java_hygiene.hits_in(SAMPLE, "mod/Sample.java", "8")
+        for axis in ("lens-readability", "lens-architecture", "lens-security",
+                     "lens-performance"):
+            self.assertEqual(java_hygiene.missing(hits, "", shard=axis), [],
+                             "axis %s must not owe scan lines" % axis)
+
 
 class Delegation(unittest.TestCase):
     def setUp(self) -> None:

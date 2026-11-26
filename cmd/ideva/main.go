@@ -76,6 +76,12 @@ func main() {
 }
 
 func run(args []string) int {
+	// `ideva fan ...` is the parallel wave executor — it needs the provider
+	// and session wiring below but none of the REPL scaffolding, so it is
+	// dispatched before the flag set parses anything else.
+	if len(args) > 0 && args[0] == "fan" {
+		return runFanDispatch(args[1:])
+	}
 	fs := flag.NewFlagSet("ideva", flag.ContinueOnError)
 	prompt := fs.String("p", "", "one-shot prompt: run once, print the answer, exit")
 	model := fs.String("model", os.Getenv("IDEVA_MODEL"), "model name (IDEVA_MODEL)")
@@ -191,6 +197,7 @@ func run(args []string) int {
 		"read":  &tools.Read{},
 		"write": &tools.Write{},
 		"grep":  &tools.Grep{},
+		"glob":  &tools.Glob{},
 	}
 	// Mount the control plane over MCP: idevd's tools become callable by
 	// the conductor (run/lease/baseline/delegation surfaces), prefixed so

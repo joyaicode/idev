@@ -47,8 +47,8 @@ steps:
   - id: review
     kind: review.report
     group: check
-    writes: ["review.md"]
-    label: 独立审查（只写 review.md）
+    writes: ["review.md", "review/shards/"]
+    label: 独立审查（写 review.md；可按模块/五轴分片写 review/shards/）
   - id: accept
     kind: verify.run
     group: check

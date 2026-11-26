@@ -5,7 +5,7 @@
 0
 -- output --
 DRIVE mode=auto source=session
-DIGEST match 6fca639c70d52ae6
+DIGEST match 1011d9594f1a0e9e
 PARALLEL check
 NEXT plan  kind=verify.plan  status=pending
 OPEN verify/SKILL.md
@@ -28,9 +28,10 @@ WITH {'mode': 'selftest'}
 NEXT review  kind=review.report  status=pending
 OPEN conventions/coding.md
 DELEGATE idev-reviewer
-LABEL 独立审查（只写 review.md）
+FANOUT_ASSESS report python3 scripts/fanout.py assess --feature demo --activity report
+LABEL 独立审查（写 review.md；可按模块/五轴分片写 review/shards/）
 GROUP check
-WRITES review.md
+WRITES review.md, review/shards/
 ---
 NEXT accept  kind=verify.run  status=pending
 OPEN verify/SKILL.md

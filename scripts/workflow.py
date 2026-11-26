@@ -1237,13 +1237,18 @@ def _fanout_activity(step: dict) -> str:
         mode = (step.get("with") or {}).get("mode")
         return "selftest" if mode == "selftest" else "run"
     if kind == "review.report":
-        # A step whose write set is already one review.md cannot also grow
-        # review/shards/. code-review leaves writes empty, so it can split.
+        # A step whose write set is one review.md (optionally plus the
+        # shards directory it may fan out into) can be assessed; anything
+        # else pinned in writes cannot also grow review/shards/. Products
+        # that want the fan keep this exact two-entry form (or no writes at
+        # all, like code-review) — a bare ["review.md"] stays a fence.
         writes = [str(w) for w in (step.get("writes") or []) if str(w).strip()]
-        if any(not item.startswith("review/shards/") for item in writes):
+        if any(item != "review.md" and not item.startswith("review/shards/")
+               for item in writes):
             return ""
         return "report"
     return ""
+
 
 
 def fanout_manifest(run_path: Path, activity: str, repo: Path | None) -> Path:
@@ -3966,6 +3971,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("step", help="delegate a step and print the brief the machine filled")
     p.add_argument("step")
     p.add_argument("--shard", default="", help="fanout shard id; the brief and the lease cover only that shard")
+    p.add_argument("--prep-log", dest="prep_log", default="",
+                   help="PREP run log (e.g. coding-scan output) to attach to the brief's 扫描: line")
     locate(p)
     p.set_defaults(func=cmd_step)
     p = sub.add_parser("land", help="take an agent's report: record it, then the verifier's turn or the step's record")

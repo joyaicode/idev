@@ -5,7 +5,7 @@
 0
 -- output --
 DRIVE mode=assisted source=default
-DIGEST match 6fca639c70d52ae6
+DIGEST match 1011d9594f1a0e9e
 NEXT fix  kind=review.fix  status=pending
 OPEN conventions/coding.md
 DELEGATE idev-coder

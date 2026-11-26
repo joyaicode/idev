@@ -6,7 +6,7 @@
 -- output --
 RUN $WORK/.idev/task/demo/workflow/run.yaml
 DRIVE mode=auto source=session
-DIGEST match 6fca639c70d52ae6
+DIGEST match 1011d9594f1a0e9e
 NEXT preflight  kind=preflight.inputs  status=pending
 OPEN scripts/s8-preflight.sh
 DELEGATE none; the conductor does this step

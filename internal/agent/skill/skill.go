@@ -128,6 +128,10 @@ var toolsLineRE = regexp.MustCompile(`(?m)^tools:\s*(.*)$`)
 // An empty `tools:` line means no narrowing — the kernel's own agents all
 // declare lists, but an undeclared one is not an error in the file format;
 // the host treats it as full access and that fact is visible here.
+// Names are lowercased: the definition files declare them capitalized
+// ("Read, Grep, Glob, Bash, Write" — the Claude Code spelling) while the
+// host's tool registry keys are lowercase, and this line is the only
+// bridge between the two spellings.
 func parseToolsLine(frontmatter string) []string {
 	m := toolsLineRE.FindStringSubmatch(frontmatter)
 	if m == nil {
@@ -136,7 +140,7 @@ func parseToolsLine(frontmatter string) []string {
 	parts := strings.Split(m[1], ",")
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
-		if t := strings.TrimSpace(p); t != "" {
+		if t := strings.ToLower(strings.TrimSpace(p)); t != "" {
 			out = append(out, t)
 		}
 	}

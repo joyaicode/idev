@@ -196,4 +196,12 @@ preamble 已给好 `IDEV` / `REPO` / `TICKET`(都是 `Path`)并把 idev 的 lib 
 
 ## 多角色镜头（lean-review --stage code，按需）
 
-触发命中（P0 / grounding.conflicts / assumptions / 人点名）时，导体把 `lean-review.py assess --stage code` 打出的镜头清单附进你的委派包：**dev**（异常处理与降级 / 无依据代码 / 哑对象，尺：coding.md 文首底线与 §2）、**test**（自测覆盖影响面 / 断言是否用户现象，尺：plan-schema + evidence.md 红绿判据）、**ops·SRE**（关键路径异常 / 回退可执行 / 观测面随行为变更，尺：canon A6）。同一上下文按镜头过，**不另派、不第二波**；每条 finding 引用尺原文 + 写失败场景，写 `review.md` 的 I*/P#，走既有 `review.fix`。零 finding 合法且要明说——为凑数提的问题在 review.fix 会被逐条核对，赔掉的是审查者的信用。五律全条目见 lean-review SCOPE 行：引用尺 / 失败场景与条款出处 / 阻塞建议二分 / 零 finding 合法 / 旧 finding 不推定、参与过修复的镜头本轮更换。
+触发命中（P0 / grounding.conflicts / assumptions / 人点名）时，导体把 `lean-review.py assess --stage code` 打出的镜头清单附进你的委派包：**dev**（异常处理与降级 / 无依据代码 / 哑对象，尺：coding.md 文首底线与 §2）、**test**（自测覆盖影响面 / 断言是否用户现象，尺：plan-schema + evidence.md 红绿判据）、**ops·SRE**（关键路径异常 / 回退可执行 / 观测面随行为变更，尺：canon A6）。同一上下文按镜头过，**不另派、不第二波**；每条 finding 引用尺原文 + 写失败场景，写 `review.md` 的 I*/P#，走既有 `review.fix`。零 finding 合法且要明说——为凑数提的问题在 review.fix 会被逐条核对，赔掉的是审查者的信用。五律全条目见 lean-review SCOPE 行：引用尺 / 失败场景与条款出处 / 阻塞建议二分 / 零 finding 合法 / 旧 finding 不推定、参与过修复的镜头本轮更换。**五轴分片时镜头清单附进 `lens-correctness` 片的委派包**（见下节），单 reviewer 语义不变。
+
+## 分片模式（FANOUT）
+
+`fanout.py assess --activity report` 打出 `FANOUT` 时你在一片里，契约比单 reviewer 多三条：
+
+- **只做本片的范围**：多模块波你是该模块五轴全过；五轴波（单模块）你只做委派包点名的那一轴——尺在 scope 里。`lens-correctness` 片额外承担机械扫描记账（共享 PREP 日志里每条 blocking / problems / lang `file:line` 写成 `### FINDING`），其余轴片不写扫描行。
+- **每条 FINDING 带一行「轴: <名>」**（或模块波写模块名）；merge 后出处保留。`零 finding` 合法且要明说——空轴回报「零 finding」是正常结果。
+- **只写 `review/shards/<id>.md`**，用 `### FINDING` / `### UNPROVEN` 块，不写 `review.md`、不编 `I*` 号——统一重编号在 `fanout.py merge`。**另一片的结论不是证据**：你看到的只是你那片的范围。

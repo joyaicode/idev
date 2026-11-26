@@ -54,7 +54,7 @@ YAGNI 的例外：预置与否看「重构距离」——把简单方案事后�
 3. 再扫 §1：该用的没用、不该用的用了，都是拒过。
 4. 逐条扫 §2：命中必须当轮改掉，只记账不算过。
 5. 若有重构：核对 §3 满足条件与「两顶帽子」；混做加功能 / 无护栏绿 = 拒过。
-6. 五轴 + 栈指南。把命中与纠正写入 `review.md`「编码规范」节（模板见 review.example）；写五轴 / 栈指南 / 增强扫描。黄条不新编号，`I*` 的根据写 java.md 那一行的提示名。
+6. 五轴 + 栈指南。把命中与纠正写入 `review.md`「编码规范」节（模板见 review.example）；写五轴 / 栈指南 / 增强扫描。黄条不新编号，`I*` 的根据写 java.md 那一行的提示名。审查分片（FANOUT）时五轴按片分担——单模块按轴各派一片，合并后仍是整份五轴结果；「轴: <名>」行随 FINDING 保留。
 7. 验收看同一次 `coding-scan.sh` 末尾的 `problems` 和 `lang`。两边都是退出码 0，且插件 `convention` 为 0，才算这层扫完。退出码 2 是 `UNPROVEN`（插件文件不在）。`java_hygiene.py` 的 0、`python3 -m compileall` 的 0、以及「工具没装就跳过」，都不够。Java 插件另外看未收进 `try (` 的流、没有调用的私有方法、至少两处调用都是同一字面量的私有形参。Python 插件看 `== None`、裸 `except:`、可变默认参数。Go 插件看循环里的 `time.Sleep`。返回值丢掉与否要类型，正则分不清剩余参数和错误，不报。Shell 插件看分词位置上没加引号的变量；引号、命令替换里的引号、heredoc、`[[ ]]`、`$(( ))`，以及写了 `shellcheck disable=SC2086` 的那一处不算。JS/Vue 插件看 `==` / `!=`（已经是 `===` / `!==` 的不算）、`var`、以及 `v-for` 缺少 `key`。五个插件共用 `scripts/plugin/canon_smells.py`，另看 §2 里形状可判的四条：`C22` 跨对象 getter 链（流式 / builder 链不算）、`C12` 函数名含 util / helper / manager / common / data / tmp、`C9` `if` 嵌套超两层（`} else if` 不算新层）、`C7` 吞掉失败的 `catch`（只认空块与 `return []` / `{}` / `false`；`null` / `None` 是「没找到」，不算）。Go 不查 `C7`（`if err != nil { return nil }` 是惯例），Python 不查 `C22`（没有 getter 惯例），Shell 只查 `C12`。`C2` / `C3` / `C25` 仍不进插件：它们的形状分不清正当写法，误报的代价高于漏报。前端已有的 `lint-fix` 仍要跑。`delegation.py` 的 `java-hygiene` 只对照正则子集打回漏记的 Java `file:line`。
 
 **例外（仅 S8 `review.report`）**：报告步只记账，标题用「待签收」，本步不改代码。待签收不是等人签收。`review.fix` 在 `accept_all_findings: true` 时改全部 `I*`；否则只改已签收 `I*`。全文 [workflow-code-review.md](../references/workflow-code-review.md) 与 [lite-change](../workflows/lite-change.yaml)。

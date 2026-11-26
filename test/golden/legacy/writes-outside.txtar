@@ -4,4 +4,4 @@
 -- exit --
 2
 -- output --
-BLOCKED review changed files outside its writes (review.md): verify/plan.yaml — revert them; this step writes only those paths
+BLOCKED review changed files outside its writes (review.md, review/shards/): verify/plan.yaml — revert them; this step writes only those paths

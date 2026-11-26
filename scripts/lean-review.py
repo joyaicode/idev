@@ -273,7 +273,7 @@ def assess(repo: Path, feature: str, stage: str) -> dict:
 WAVE_MERGE = {
     "req-review": "独立子代理（本阶段无既有审查波）；finding 转 grill.md 问句",
     "arch": "独立子代理（本阶段无既有审查波）；finding 转 grill.md ## arch 轮问句",
-    "code": "并入既有 idev-reviewer 波（同一波四件之一）：镜头清单附进 reviewer 委派包，同一上下文按镜头过，不另派子代理；finding 写 review.md I*/P#",
+    "code": "并入既有 idev-reviewer 波（同一波四件之一）：镜头清单附进 reviewer 委派包，同一上下文按镜头过，不另派子代理；finding 写 review.md I*/P#。五轴分片（单模块 FANOUT）时镜头清单附进 lens-correctness 片的委派包",
     "test": "并入既有 idev-verifier 波：镜头附进 verifier 委派包；finding 修维表 UNPROVEN 或补 case",
     "ops": "并入既有 idev-ops 委派：镜头附进 ops 委派包；finding 进假设台账",
 }

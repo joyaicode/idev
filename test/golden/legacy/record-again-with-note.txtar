@@ -5,7 +5,7 @@
 0
 -- output --
 DRIVE mode=auto source=session
-DIGEST match 6fca639c70d52ae6
+DIGEST match 1011d9594f1a0e9e
 NEXT scope-guard  kind=scope.baseline  status=pending
 OPEN scripts/scope-baseline.py
 DELEGATE none; the conductor does this step

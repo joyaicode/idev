@@ -569,15 +569,25 @@ def scan(repo: Path, level: str | None = None, everything: bool = False) -> tupl
 
 
 def missing(hits: list[Hit], review_text: str, shard: str = "") -> list[Hit]:
-    """Blocking hits whose file:line is not in the review. A shard only owes its module."""
+    """Blocking hits whose file:line is not in the review. A shard only owes its module.
+
+    Lens shards (fanout's single-module axis split) carry no module prefix:
+    lens-correctness is where the scan lines are booked, so it owes every
+    blocking hit; the other axes owe none. Module shards keep the prefix
+    filter.
+    """
     owed = []
     for hit in hits:
         if hit.rule not in BLOCKING_RULES:
             continue
         if shard:
-            first = hit.rel.split("/", 1)[0]
-            if first != shard and not hit.rel.startswith(shard + "/"):
-                continue
+            if shard.startswith("lens-"):
+                if shard != "lens-correctness":
+                    continue
+            else:
+                first = hit.rel.split("/", 1)[0]
+                if first != shard and not hit.rel.startswith(shard + "/"):
+                    continue
         if not hit.cited_in(review_text):
             owed.append(hit)
     return owed

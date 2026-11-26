@@ -178,13 +178,97 @@ class Assess(unittest.TestCase):
         self.assertEqual(again["decision"], "SERIAL")
         self.assertIn("record the step", again["reason"])
 
-    def test_one_changed_module_stays_serial(self) -> None:
+    def test_one_changed_module_splits_by_review_axis(self) -> None:
+        # The old behaviour (SERIAL on a single module) is what made the
+        # common big-change shape one reviewer doing five axes in one pass.
+        # One module now fans out by the five review axes instead.
         subprocess.run(["git", "init"], cwd=self.root, check=True, capture_output=True)
         directory = self.root / "mod-a"
         directory.mkdir()
         (directory / "A.java").write_text("class A {}\n", encoding="utf-8")
         result = fanout.assess("feat", "report", self.root)
+        self.assertEqual(result["decision"], "FANOUT")
+        self.assertEqual(sorted(s["id"] for s in result["shards"]),
+                         ["lens-architecture", "lens-correctness", "lens-performance",
+                          "lens-readability", "lens-security"])
+        writes = [s["writes"][0] for s in result["shards"]]
+        self.assertTrue(all(w.startswith("review/shards/lens-") for w in writes))
+        correctness = next(s for s in result["shards"] if s["id"] == "lens-correctness")
+        self.assertIn("机械扫描记账", correctness["scope"])
+        self.assertIn("零 finding 合法", correctness["scope"])
+        self.assertTrue(any("coding-scan.sh" in line for line in result["prep"]))
+
+    def test_lens_wave_honours_a_lower_cap(self) -> None:
+        # The five axes always open, so an explicit --cap below five is
+        # respected the other way: it cannot queue below the wave minimum
+        # either — the lens wave sizes itself to len(LENS_AXES), and only
+        # --cap below 2 (which collapses via _finish's <2 rule) goes SERIAL.
+        # Here cap=4 is below five: the wave still launches all five axes
+        # (min(MAX_CAP, max(cap, 5)) == 5), a cap >= 2 never truncates the
+        # axes. Queuing would drop an axis, and the axes are 必开.
+        subprocess.run(["git", "init"], cwd=self.root, check=True, capture_output=True)
+        directory = self.root / "mod-a"
+        directory.mkdir()
+        (directory / "A.java").write_text("class A {}\n", encoding="utf-8")
+        result = fanout.assess("feat", "report", self.root, cap=4)
+        self.assertEqual(result["decision"], "FANOUT")
+        launched = [s["id"] for s in result["shards"]]
+        self.assertEqual(len(launched), 5)
+        self.assertEqual(result.get("queued"), [])
+
+    def test_no_changed_sources_is_serial(self) -> None:
+        subprocess.run(["git", "init"], cwd=self.root, check=True, capture_output=True)
+        result = fanout.assess("feat", "report", self.root)
         self.assertEqual(result["decision"], "SERIAL")
+        self.assertIn("no changed sources", result["reason"])
+
+    def test_module_wave_now_names_the_axes(self) -> None:
+        subprocess.run(["git", "init"], cwd=self.root, check=True, capture_output=True)
+        for name in ("mod-a", "mod-b"):
+            directory = self.root / name
+            directory.mkdir()
+            (directory / "A.java").write_text("class A {}\n", encoding="utf-8")
+        result = fanout.assess("feat", "report", self.root)
+        self.assertEqual(result["decision"], "FANOUT")
+        for shard in result["shards"]:
+            self.assertIn("按五轴逐轴过", shard["scope"])
+            self.assertEqual(shard["dimension"], "module")
+
+    def test_lens_shards_merge_into_numbered_findings(self) -> None:
+        subprocess.run(["git", "init"], cwd=self.root, check=True, capture_output=True)
+        directory = self.root / "mod-a"
+        directory.mkdir()
+        (directory / "A.java").write_text("class A {}\n", encoding="utf-8")
+        result = fanout.assess("feat", "report", self.root)
+        for shard in result["shards"]:
+            path = self.task / shard["writes"][0]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                f"### FINDING\n位置: mod-a/A.java:run\n轴: {shard['id'].removeprefix('lens-')}\n"
+                "根据: 底线命中\n失败场景: 入参为空返回空\n修复建议: 立刻失败\n",
+                encoding="utf-8")
+        fanout.write_manifest("feat", result, self.root)
+        self.assertEqual(fanout.merge("feat", "report", self.root), 0)
+        text = (self.task / "review.md").read_text(encoding="utf-8")
+        self.assertIn("### I1 待签收", text)
+        self.assertIn("### I2 待签收", text)
+        # The axis line survives the merge — the finding's home stays visible.
+        self.assertIn("轴: correctness", text)
+
+    def test_signed_review_refuses_a_lens_resplit(self) -> None:
+        subprocess.run(["git", "init"], cwd=self.root, check=True, capture_output=True)
+        directory = self.root / "mod-a"
+        directory.mkdir()
+        (directory / "A.java").write_text("class A {}\n", encoding="utf-8")
+        first = fanout.assess("feat", "report", self.root)
+        shard = first["shards"][0]
+        path = self.task / shard["writes"][0]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("### FINDING\n位置: a\n轴: x\n", encoding="utf-8")
+        (self.task / "review.md").write_text("### I1 已签收\n", encoding="utf-8")
+        second = fanout.assess("feat", "report", self.root)
+        self.assertEqual(second["decision"], "SERIAL")
+        self.assertIn("already signed", second["reason"])
 
     def test_lease_glob_keeps_a_directory_inside_the_ticket(self) -> None:
         globs = fanout.lease_globs("docs/task/feat", ["verify/shards/plan-I1.yaml", "verify/checks/I1/"])

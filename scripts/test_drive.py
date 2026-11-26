@@ -285,6 +285,49 @@ class Drive(unittest.TestCase):
         self.assertNotIn("END BRIEF", out)
         self.assertTrue((task / "review.md").is_file())
 
+    def test_lite_change_review_step_is_assessed_by_default(self) -> None:
+        # The review step's writes now include review/shards/, so
+        # _fanout_activity admits it: drive reaches it and the conductor
+        # runs the assess instead of delegating a single reviewer blind.
+        import fanout
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        repo = Path(tmp.name) / "one"
+        repo.mkdir()
+        env = dict(os.environ, IDEV_BIN="off", IDEV_ENGINE="python", IDEV_RUN_WRITER="python",
+                   IDEV_DATA=str(Path(tmp.name) / "data"),
+                   PATH="/usr/bin" + os.pathsep + os.environ.get("PATH", ""), **GIT)
+        subprocess.run(["git", "init", "-q"], cwd=repo, check=True, env=env)
+        task = repo / ".idev" / "task" / "demo"
+        task.mkdir(parents=True)
+        (task / "deliver.yaml").write_text("stage: code\nrisk_tier: P1\n", encoding="utf-8")
+        (task / "baseline.yaml").write_text("sealed: true\ngoal: keep\nnon_goal: drop\n", encoding="utf-8")
+        (repo / "mod").mkdir()
+        (repo / "mod" / "A.java").write_text("class A {}\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=repo, check=True, env=env)
+        subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=repo, check=True, env=env)
+        # The working tree is what assess_report reads: leave the module
+        # dirty on top of the base commit.
+        (repo / "mod" / "A.java").write_text("class A { int x; }\n", encoding="utf-8")
+        import workflow as wf
+
+        recipe = safeyaml.mapping(KERNEL / "workflows" / "lite-change.yaml")
+        review = next(s for s in recipe["steps"] if s.get("id") == "review")
+        self.assertEqual(wf._fanout_activity(review), "report")
+        # review.md alone is also a legal review write set — the fence is
+        # about *other* paths, not about refusing to split. A bare
+        # ["review.md"] is exactly what most product recipes pin today.
+        fenced = dict(review, writes=["review.md"])
+        self.assertEqual(wf._fanout_activity(fenced), "report")
+        # Writing anywhere else keeps the step out of the assess.
+        other = dict(review, writes=["review.md", "src/"])
+        self.assertEqual(wf._fanout_activity(other), "")
+        # Single changed module -> the five-axis lens wave.
+        result = fanout.assess("demo", "report", repo)
+        self.assertEqual(result["decision"], "FANOUT")
+        self.assertEqual(len(result["shards"]), 5)
+        self.assertTrue(all(s["id"].startswith("lens-") for s in result["shards"]))
+
     def test_handoff_leaves_prep_for_the_conductor(self) -> None:
         import workflow
         tmp = tempfile.TemporaryDirectory()

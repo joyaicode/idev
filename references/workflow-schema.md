@@ -37,7 +37,7 @@
 | `with` | 可选参数（如 `mode: selftest`）。`shell.confirmed` 的 `with.command` 写已确认的那条命令；写 `status` 时读扩展根 `commands.status` |
 | `label` | 给人看的短名 |
 | `group` | 可选。同一 slug 的连续步骤同时开放。人闸和写租约不能进组。组内每步都要有 `writes` |
-| `writes` | 可选，只和 `group` 一起用。票内相对路径，组内两两不相交。`next` 打出 `WRITES`；这一步只写这些文件 |
+| `writes` | 可选，只和 `group` 一起用。票内相对路径，组内两两不相交。`next` 打出 `WRITES`；这一步只写这些文件。条目可以是尾带 `/` 的目录（如 `review/shards/`），含义是该目录下一切；`review.report` 的写集是 `review.md`（可含 `review/shards/`）或未钉死时进 fanout assess |
 | `slots` | 可选 slug 列表。配方写了 `params` 时，每个名字必须是其中一个。`next` 发现 `run.params` 里缺了或是空白，先打 `ASK slot a,b`，不打 `DELEGATE` / `COMMAND` / `TOOL`。用 `workflow.py param k=v` 写回当前开放步骤，再看 `next` |
 | `branch` | 可选。`pass` / `fail` 指向后面的步骤 id。带 `group` 的步骤不能写，落点若在组里必须是该组第一步。`record` 按刚记下的状态跳过去，中间未完成的步骤记 `SKIPPED`。落点已经记完则拒绝。`FAIL` 同时写 `branch_to`，这一步不再把 run 停成 `blocked` |
 | `react` | 可选。这一步是动态关节。没有它，配方行为与以前相同。`human.gate` 和带 `group` 的步骤不能写。`use` / `tool_group` 上不能写，要改成员就用 `adjust` |
