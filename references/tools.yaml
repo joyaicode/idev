@@ -42,6 +42,14 @@ tools:
     summary: 变更窗归因：时间窗 × 变更记录（可选 × 产物差异交集）→ 嫌疑清单。
     limit: 只提名不立案；--window-source 必填（问题发生/告警/数据更新时间）。
     command: python3 scripts/suspect-changes.py
+  - id: review-findings
+    summary: review.md 的 finding 台账：四态解析 / 锚点与驳回理由机检 / 一行统计。
+    limit: 只读 review.md，不改它；check 退出 1 = 有发现。
+    command: python3 scripts/review-findings.py
+  - id: review-lessons
+    summary: 已解决 finding → lessons 候选（六问齐才落，人 promote 才权威）。
+    limit: 不自动入库；六问缺项只打印不落账。
+    command: python3 scripts/review-lessons.py
 groups:
   - id: evidence
     summary: 论证用的工具。配方写 tool_group 就会按这个顺序展开成步骤。

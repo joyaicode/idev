@@ -147,6 +147,42 @@ def reviewer_citations(records, repo: Path | None) -> Counter:
     return counter
 
 
+def dismissed_citations(records, repo: Path | None) -> Counter:
+    """Rule numbers cited inside dismissed findings (已驳回 I* sections).
+
+    The acceptance-rate column: a rule the reviewer keeps citing and people
+    keep dismissing is a rule that needs rewriting, not more enforcement.
+    Uses review-findings.py's parser — one parser, not a second regex farm.
+    """
+    counter: Counter = Counter()
+    base = (repo or Path.cwd()).resolve()
+    for _path, record in records:
+        if str(record.get("kind", "")) != REVIEW_KIND:
+            continue
+        rel = delegation.report_evidence(record)
+        if not rel or rel == "-":
+            continue
+        target = Path(rel) if Path(rel).is_absolute() else base / rel
+        if not target.is_file():
+            continue
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "review_findings", Path(__file__).resolve().parent / "review-findings.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        try:
+            items = mod.parse(target.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+        audit = load_audit()
+        for item in items:
+            if item["status"] == "已驳回":
+                for num in set(audit.ID.findall(item["body"])):
+                    counter[num] += 1
+    return counter
+
+
 def collect(repo: Path, days: int | None):
     """Coder records and reviewer records from a checkout's delegations."""
     loaded = []
@@ -174,7 +210,8 @@ def collect(repo: Path, days: int | None):
     return coder, reviewer
 
 
-def matrix(kernel: Path, coder, review_cites: Counter):
+def matrix(kernel: Path, coder, review_cites: Counter,
+           dismissed: Counter | None = None):
     audit = load_audit()
     defined = audit.defined_ids(kernel)
     trigger = audit.trigger_ids(kernel)
@@ -202,6 +239,7 @@ def matrix(kernel: Path, coder, review_cites: Counter):
             target = delegation.S0_TABLE_HIT.search(str((record.get("report") or {}).get("raw", "")))
             for num in (hit_numbers(target.group(1)) if target else []):
                 hit_fail[num] += 1
+    dismissed = dismissed or Counter()
 
     rows = []
     for num in sorted(defined, key=lambda s: (s[0], int(s[1:]))):
@@ -214,6 +252,7 @@ def matrix(kernel: Path, coder, review_cites: Counter):
             "hits": table_hits.get(num, 0) + (trigger_declared.get(num, 0) if num.startswith("T") else 0),
             "cites": review_cites.get(num, 0),
             "hit_fail": hit_fail.get(num, 0),
+            "dismissed": dismissed.get(num, 0),
         })
     return rows, len(s0)
 
@@ -242,16 +281,18 @@ def main() -> int:
 
     kernel = args.kernel.resolve()
     repo = args.repo.resolve() if args.repo else None
-    coder: list = []
+    coder, reviewer = [], []
     review_cites: Counter = Counter()
+    dismissed: Counter = Counter()
     if repo:
         if not repo.is_dir():
             print(f"BLOCKED no such checkout: {repo}", file=sys.stderr)
             return 2
         coder, reviewer = collect(repo, args.days)
         review_cites = reviewer_citations(reviewer, repo)
+        dismissed = dismissed_citations(reviewer, repo)
 
-    rows, s0_total = matrix(kernel, coder, review_cites)
+    rows, s0_total = matrix(kernel, coder, review_cites, dismissed)
     if args.ids:
         wanted = {s.strip() for s in args.ids.split(",") if s.strip()}
         rows = [r for r in rows if r["id"] in wanted]
@@ -269,7 +310,7 @@ def main() -> int:
     if repo and s0_total < MIN_SAMPLE:
         print(f"# (§0 交代样本 {s0_total} < {MIN_SAMPLE},零命中的单条不下结论,只列事实)")
     print()
-    print("编号  定义 触发 点名 机检 | §0命中 | 引用 | hitFAIL")
+    print("编号  定义 触发 点名 机检 | §0命中 | 引用 | hitFAIL | 被驳回")
     for r in rows:
         print(
             tw.ljust(r["id"], 6)
@@ -280,6 +321,7 @@ def main() -> int:
             + "| " + tw.rjust(str(r["hits"]), 5) + " "
             + "| " + tw.rjust(str(r["cites"]), 4) + " "
             + "| " + tw.rjust(str(r["hit_fail"]), 6)
+            + "| " + tw.rjust(str(r["dismissed"]), 4)
         )
     print()
 

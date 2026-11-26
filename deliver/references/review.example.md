@@ -4,6 +4,17 @@ feature:
 baseline_revision:
 by:
 
+## I* 的四态
+
+每条发现 `I*` 的标题带状态，机检在 `review-findings.py`（锚点/驳回理由/复现）：
+
+- `### I1 待签收` — 报告产出时（reviewer 写）
+- `### I1 已签收` — 人点头后（reviewer 改标题）
+- `### I1 已解决` — review.fix 修掉且 verify 绿后（reviewer 复核改标题；coder 不改 review.md）
+- `### I1 已驳回` — 人判断不修（reviewer 改标题），**下一行必须写 `驳回: <为什么不修>`** —— 没有理由的驳回下一轮会重报
+
+一条统计：`review-findings.py stats --feature <f>` 打 `findings: <n> 签收 <n> 解决 <n> 驳回 <n> open <n>`。
+
 ## 少做（基线 item 未落地）
 
 - item:

@@ -74,6 +74,12 @@ review.report → human.gate → verify.plan → human.gate → review.fix → v
 
 只跑 `accepted == true` 的 cases。回写 status + evidence。写 `verify/report.md`。
 
+## 7. `digest`（review-lessons）
+
+`verify.run` 绿之后跑 `review-lessons.py digest --feature <f>`：把**已解决**的 `I*`（带锚点、带「修复:」行）转成 lessons 候选——六问齐才落，缺项只打印不落账（宁缺勿滥：一条猜出来的修复方式会变成下一轮的错误尺）。**不设 gate、不 FAIL**：digest 不了是合法结果。人 `lessons.py promote`（人 + 旁路复现）才权威——这是与 Bugbot 自动学规则的制度差异：候选与权威之间的闸不撤。
+
+`I*` 的四态与机检见 `deliver/references/review.example.md`（`review-findings.py check`：锚点 / 驳回理由 / 复现信号）。
+
 ## 不做
 
 - 不建 `deliver.yaml` / 不走 req-review 阶段机

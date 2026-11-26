@@ -49,8 +49,14 @@ AGENTS = {
     "code": "idev-coder",
     "fix": "idev-coder",
 }
-SIGNED_FINDING = re.compile(r"(?m)^### (I\d+) 已签收\b")
+# The four states an I* heading carries (review.example.md): 待签收 when the
+# report lands, 已签收 once a person nods, 已解决 once review.fix cleared it
+# and verify is green, 已驳回 when a person rules it out (with a why).
+SIGNED_FINDING = re.compile(r"(?m)^### (I\d+) (?:已签收|已解决)\b")
 PLAN_FINDING = re.compile(r"(?m)^### (I\d+) (?:已签收|待签收)\b")
+# 已解决 findings are already cleared — they count for neither a re-split
+# (the work is done) nor a pending fix. 已驳回 likewise, and it carries its
+# own reason line instead.
 SOURCE_EXT = {".java", ".vue", ".js", ".jsx", ".ts", ".tsx", ".yml", ".yaml", ".xml"}
 SKIP_DIR = {"target", "node_modules", "dist", ".git", "generatedverify"}
 DEFAULT_CAP = 4

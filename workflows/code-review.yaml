@@ -49,3 +49,6 @@ steps:
     with:
       mode: selftest
     label: 跑已勾选验收用例
+  - id: digest
+    tool: review-lessons
+    label: 已解决 finding 沉淀 lessons 候选（六问缺项不落，宁缺勿滥；无 gate，不 FAIL）

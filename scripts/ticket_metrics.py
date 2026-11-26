@@ -85,6 +85,30 @@ def _drive_auto_stats(repo: Path | None, feat: str) -> tuple[str, str]:
     return str(auto), str(overturned)
 
 
+def _finding_stats(repo: Path | None, feat: str) -> str:
+    """review.md finding counts in review-findings.py's one-line shape.
+
+    Pure derivation, one calculator: this reads the same review.md
+    review-findings.py stats parses — it must not grow a second parser.
+    """
+    if feat == "-" or repo is None:
+        return "n/a"
+    review = repo / ".idev" / "task" / feat / "review.md"
+    if not review.is_file():
+        return "0"
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "review_findings", Path(__file__).resolve().parent / "review-findings.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    items = mod.parse(review.read_text(encoding="utf-8", errors="replace"))
+    by = mod._count_by(items)
+    open_now = by.get("待签收", 0) + by.get("已签收", 0)
+    return f"{len(items)}(解决 {by.get('已解决', 0)}/驳回 {by.get('已驳回', 0)}/open {open_now})"
+
+
 def _gate_auto_stats(repo: Path | None, feat: str) -> str:
     """Count run steps the ticket passed on machine checks (status AUTO).
 
@@ -136,11 +160,11 @@ def main() -> int:
     print()
     print(
         "| feature | traces | 首次 trace | 最近 trace | 跨度(天) | S2 推进次数 | "
-        "reopen 次数 | 签字后被推翻次数 | auto 代决 | auto 被推翻 | 机检过闸 |"
+        "reopen 次数 | 签字后被推翻次数 | auto 代决 | auto 被推翻 | 机检过闸 | findings |"
     )
     print(
         "|---------|--------|-----------|-----------|---------|-------------|"
-        "-------------|------------------|-----------|------------|----------|"
+        "-------------|------------------|-----------|------------|----------|----------|"
     )
     for feat in sorted(per, key=lambda k: (k == "-", k)):
         e = per[feat]
@@ -151,15 +175,17 @@ def main() -> int:
         reopen, overturn = _deliver_reopen_overturn(repo, feat)
         auto_n, auto_ov = _drive_auto_stats(repo, feat)
         gate_auto = _gate_auto_stats(repo, feat)
+        findings = _finding_stats(repo, feat)
         print(
             f"| {feat} | {e['traces']} | {first} | {last} | {span} | {e['s2']} | "
-            f"{reopen} | {overturn} | {auto_n} | {auto_ov} | {gate_auto} |"
+            f"{reopen} | {overturn} | {auto_n} | {auto_ov} | {gate_auto} | {findings} |"
         )
     print()
     print("口径：S2=trace 中 route.scenario 为 S2 的条数；reopen=max(revisions[] 备注含「解除密封/reopen」条数, baseline_revision-1)；")
     print("被推翻=revisions[] 备注含「作废/推翻/回退/rewind」条数（仅有 last_rewind 时记 1，为下界）；无票 yaml / 未绑票 → n/a。")
     print("auto 代决=decisions.yaml 中 source: auto；auto 被推翻=其中 overturned: true（收紧 drive_mode 的依据）。")
     print("机检过闸=run.yaml 步骤 status: AUTO（GATE_AUTO，run 层机检代替人；周审计同口径观测）。")
+    print("findings=review.md 的 I* 四态计数（review-findings.py 同一解析器）。")
     return 0
 
 

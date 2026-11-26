@@ -40,6 +40,8 @@
 | `scripts/artifact-match.py` | 运维:产物与源码是否同源（MATCH/AHEAD/UNKNOWN） |
 | `scripts/suspect-changes.py` | 运维:变更窗归因——时间窗 × 变更记录（× 产物差异交集）→ 嫌疑清单，只提名不立案 |
 | `scripts/instrument.py` | 运维:插桩台账——有界运行时取证，登记/双向对账/收尾清零 |
+| `scripts/review-findings.py` | 审查:review.md 的 I* 四态机检与统计（锚点/驳回理由/复现） |
+| `scripts/review-lessons.py` | 审查:已解决 finding → lessons 候选（六问齐才落，人 promote 才权威） |
 | `scripts/realign.py` | 需求订正后查七类漂移，给出向前的重做顺序 |
 | `scripts/ui-evolve.py` | 编写阶段查剧本状态冲突，提 branch / reorder 方案（不改文件） |
 | `scripts/ui-playbook.py` | UI 剧本生命周期：create→read→change→restore→cleanup，实体打标 |

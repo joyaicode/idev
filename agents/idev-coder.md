@@ -81,7 +81,7 @@ is_background: false
 
 5. **按本步 kind 改**:
    - `deliver.code_pass` — 实现本阶段代码。少做和部分补上，多做删掉。对照只认密封基线、方案和 slice；方案没点名的路径不算这次范围。已经对齐就不要再添剩余工作。全文在 `deliver/SKILL.md` 的 code 第 1 条
-   - `review.fix` — 委派包 `with.accept_all_findings: true`（`lite-change` 与 `code-review`）时，改全部 `I*`。没有这个字段时，**只改已签收的 `I*`**（及人显式纳入的 `O*`），未签收的不动
+   - `review.fix` — 委派包 `with.accept_all_findings: true`（`lite-change` 与 `code-review`）时，改全部 `I*`。没有这个字段时，**只改已签收与已解决的 `I*`**（及人显式纳入的 `O*`），未签收的不动。**review.md 只由 reviewer 写**：修掉的 `I*` 你不改它的标题状态，「已解决」由 reviewer 复核后改；你的完成证明是 RED_FIRST 与 verify 绿，不是改状态
    - `ui.playbook_sync` — 按 `e2e/inventory.json` 建设或进化 wave / helper,只打本轮资源。
      剧本要走完 `create → read → change → restore → cleanup`,实体名带
      `AUTOTEST`/`E2E_` 标记,cleanup 放 `afterEach`/`finally`。写完自检:

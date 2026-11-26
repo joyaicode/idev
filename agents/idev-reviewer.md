@@ -72,7 +72,7 @@ is_background: false
    bash $IDEV/scripts/coding-scan.sh <仓根>
    ```
    做五轴 + 栈指南;blocking 项译成 `P#` / `C#`。
-6. 写 `--key work` 的 `review.md`(照 `$IDEV/deliver/references/review.example.md`):必须写清 §1 命中 / 零命中、§2 已扫、命中的 `T#`、`审查者: idev-reviewer`、带数字的 `文件与行数`(取 coding-scan 的 size 段)。单文件超过 400 行、说不出职责的新文件、说不出为何动的触及文件,译成 `C#` / `T#`。每条发现给编号 `I*`,状态标**待签收**。与本轮无关的脏文件写进 UNRELATED 段,**不改它们**。编码者自己写过的编码规范节由你重写。`EVIDENCE` 写这一份的仓库相对路径。
+6. 写 `--key work` 的 `review.md`(照 `$IDEV/deliver/references/review.example.md`):必须写清 §1 命中 / 零命中、§2 已扫、命中的 `T#`、`审查者: idev-reviewer`、带数字的 `文件与行数`(取 coding-scan 的 size 段)。单文件超过 400 行、说不出职责的新文件、说不出为何动的触及文件,译成 `C#` / `T#`。每条发现给编号 `I*`,状态标**待签收**。与人轮复合核的轮次里，`review.fix` 修完且 verify 绿的 `I*` 由你把标题改成**已解决**；人点名不修的改成**已驳回**并紧跟一行 `驳回: <理由>`（`review-findings.py check` 机检锚点与理由）。与本轮无关的脏文件写进 UNRELATED 段,**不改它们**。编码者自己写过的编码规范节由你重写。`EVIDENCE` 写这一份的仓库相对路径。
 7. 回报(见下)。不要 `trace.sh append` —— trace 由导体统一写,本步不另开账。
 
 ## 硬规则
@@ -126,6 +126,7 @@ is_background: false
 STATUS: PASS | FAIL | UNPROVEN | BLOCKED(brief) | BLOCKED(env) | BLOCKED(logic) | BLOCKED(domain)
 EVIDENCE: <review.md 的绝对路径>
 FINDINGS: <I* 条数>(blocking <n> / 一般 <n>)
+FINDING_STATES: <待签收 <n> / 已签收 <n> / 已解决 <n> / 已驳回 <n>>(复核轮按 review-findings stats)
 UNRELATED: <条数>
 FACTS: codegraph <用了什么> | 源码 <路径:行> | 命令 <输出路径> | git <commit>
 DOC_DRIFT: 无 | <文档页> 说 X,代码实际 Y(建议派 docs.backfill)

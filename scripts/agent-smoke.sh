@@ -785,6 +785,33 @@ expect 0 "a sourced window answers" -- \
     --window "2026-01-01T00:00:00+08:00..2026-12-31T00:00:00+08:00" \
     --window-source "告警时间"
 
+say "5d finding ledger and digest"
+# four states, the two machine findings, and the one-line stats
+cat > "${TMP}/.idev/task/${FEATURE}/review.md" <<'REVIEW'
+### I1 已驳回
+src/A.java:parse — 重复报
+REVIEW
+expect 1 "a dismissal without a reason fails" -- \
+  python3 "${S}/review-findings.py" --repo "$TMP" check --feature "$FEATURE"
+contains "dismissed-needs-why" "names dismissed-needs-why"
+cat > "${TMP}/.idev/task/${FEATURE}/review.md" <<'REVIEW'
+### I1 已解决
+src/A.java:parse — 空串返回空列表
+修复: 补 guard 直接失败
+结果: verify t-parse 绿
+REVIEW
+expect 0 "a resolved finding with anchor and fix passes" -- \
+  python3 "${S}/review-findings.py" --repo "$TMP" check --feature "$FEATURE"
+expect 0 "stats counts the states" -- \
+  python3 "${S}/review-findings.py" --repo "$TMP" stats --feature "$FEATURE"
+contains "解决 1" "stats reports resolved"
+expect 0 "digest lands a lessons candidate" -- \
+  python3 "${S}/review-lessons.py" --repo "$TMP" digest --feature "$FEATURE"
+contains "lessons candidate" "digest names the candidate"
+expect 0 "digest is idempotent" -- \
+  python3 "${S}/review-lessons.py" --repo "$TMP" digest --feature "$FEATURE"
+contains "SKIP" "second digest skips the same pair"
+
 say "6 metrics"
 expect 0 "metrics over the temp checkout" -- python3 "${S}/agent-metrics.py" --repo "$TMP"
 contains "按 agent" "metrics has the per-agent table"

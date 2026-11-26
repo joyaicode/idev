@@ -38,6 +38,9 @@ policy:
   on_fail: stop
   on_gate: stop
 steps:
+  - id: review
+    kind: review.report
+    label: push 前审查（review.md 已在且无待签收 I* → record SKIPPED --evidence review.md；否则出报告，待签收清零才继续）
   - id: replace-check
     kind: git.replace_check
     label: 检查 go.mod 本地 replace

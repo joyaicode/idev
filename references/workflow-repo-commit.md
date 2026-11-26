@@ -19,10 +19,14 @@
 ## 步骤顺序（硬）
 
 ```
-replace_check → lint_fix → java.build → sensitive_shield → human.gate → commit_push → sensitive_restore
+review → replace_check → lint_fix → java.build → sensitive_shield → human.gate → commit_push → sensitive_restore
 ```
 
 任一步 FAIL → 停。若已 `sensitive_shield` 尚未 restore：立刻 `sensitive_restore` 再报错（finally 语义）。
+
+## 0. `review.report`（push 前审查）
+
+推送前先过一遍审查，放行条件机检可判：`review.md` 已在且没有**待签收**的 `I*`（全部已解决 / 已驳回 / 无 I*）→ `record SKIPPED --evidence review.md`，不另派；不存在或有待签收 `I*` → 走完整 `review.report`（独立审查者出报告），清零待签收（修掉或人驳回）后才继续。`review-findings.py stats --feature <f>` 打的四态计数就是放行依据。这是把「审查」与「提交」两道防线接上：**推送出去的代码没有未经人眼的待签收发现**。
 
 ## 1. `git.replace_check`（Go 本地 replace）
 
