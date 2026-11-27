@@ -52,6 +52,51 @@ class DocForm(unittest.TestCase):
         )
         self.assertEqual(errors, [])
 
+    def test_an_unwritten_plan_does_not_demand_cases(self) -> None:
+        # Architecture has not produced plan.yaml yet — load_ticket returns
+        # {} for a missing file, and an empty mapping must not demand a case
+        # for every intent. (arch stage: the plan IS the next artifact.)
+        repo = Path(tempfile.mkdtemp())
+        root = repo / "ticket"
+        root.mkdir()
+        (root / "design.md").write_text(
+            "\n".join(
+                [
+                    "## 目标",
+                    "一句。",
+                    "## 方案",
+                    "无",
+                    "## 契约",
+                    "无",
+                    "## 影响面",
+                    "无",
+                    "## 回退",
+                    "无",
+                    "## 用例",
+                    "- alpha",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (root / "verify").mkdir()
+        errors: list[str] = []
+        cf.check_doc_form(
+            repo,
+            "nope",
+            root,
+            {"case_intents": [{"id": "alpha", "slice_id": "s", "baseline_item_id": "B1"}]},
+            {},  # plan.yaml not written yet
+            {"items": [{"id": "B1"}]},
+            errors,
+        )
+        self.assertNotIn(
+            "missing case for alpha", "\n".join(errors),
+            "an unwritten plan must not demand cases (arch writes them next)",
+        )
+        self.assertEqual(
+            [e for e in errors if e.startswith("missing case for")], [],
+        )
+
     def test_missing_heading_and_copied_goal_fail(self) -> None:
         repo = Path(tempfile.mkdtemp())
         root = repo / "ticket"

@@ -1237,7 +1237,9 @@ def check_doc_form(
             fail(f"design.md 用例节 missing case_intent {iid}", errors)
         elif iid:
             ok(f"design.md names {iid}")
-    if not isinstance(plan, dict):
+    # Missing plan.yaml loads as {}. Architecture has not written cases yet;
+    # the same empty mapping must not demand a case for every intent.
+    if not isinstance(plan, dict) or not plan:
         return
     cases = [item for item in (plan.get("cases") or []) if isinstance(item, dict)]
     for intent in intents:
