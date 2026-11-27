@@ -94,3 +94,7 @@
 - 语言选型表（C / C++ / shell / Perl / Tcl / Python / Java / Emacs Lisp）与 X 工具包对比（Tk / GTK / Qt / wxWindows）：环境事实，随栈变化。
 - 许可证谱系（MIT / BSD / Artistic / GPL / LGPL / MPL）与「何时需要律师」：法律，不进编码真源。
 - 书中案例（PDP-7 / Multics / sendmail.cf / TECO / Emacs / PostgreSQL / Freeciv / XFree86 / ascii / 明星表）：只作理解材料，不进真源。
+
+## 第二轮阶段融入（已提交）
+
+- ops/references/classify.md「可观察物的质量线」——「日志能定位到层」承接本书「沉默是金/最大惊奇」的输出克制判据（T11）。

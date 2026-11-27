@@ -17,6 +17,8 @@
 3. **产物** — 哪次发布、哪份包；禁止对着源码修、让用户在旧包上验收。
 4. **可观察物** — 一条请求/响应、一段日志、一个监控点。页面现象带上那次回执，先 `browser-program.py scene` 再 `advise`（[browser-program.md](../../references/browser-program.md)）。
 
+**可观察物的质量线**（出处见 canon §9 与 [evidence.md](../../conventions/evidence.md) 闭环 1）：日志要能定位到层（哪个服务、哪个动作，不能定位的日志列进假设台账当线索不当证据）；告警要带行动项（人会做什么——没有行动项的告警写进 ops.yaml 备注，提醒加监控的人补）；指标要对得上时间窗（`window-source` 三选一，来源写进假设）。
+
 ## 和基线的关系
 
 - 有密封 `baseline.yaml`：怀疑的 item 写入 `suspect_item_ids`。没有对应 item → 先问是不是 `baseline-conflict`，不要发明 item。

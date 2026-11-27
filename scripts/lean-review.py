@@ -140,8 +140,8 @@ LENSES = {
             "dimension-table",
         ),
         "ops": (
-            "假设是否可证伪、证据链断点、变更记录是否查过",
-            ("conventions/evidence.md 闭环与排查递进", "产线 pack 运维知识（缺失则尺=evidence.md）"),
+            "假设是否可证伪、证据链断点、变更记录是否查过、可观察物过没过质量线（日志定位到层/告警带行动项/指标对时间窗）",
+            ("conventions/evidence.md 闭环与排查递进", "ops/references/classify.md 可观察物质量线", "产线 pack 运维知识（缺失则尺=evidence.md）"),
             "hypothesis",
         ),
     },
