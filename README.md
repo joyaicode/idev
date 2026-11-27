@@ -42,6 +42,7 @@
 | `scripts/instrument.py` | 运维:插桩台账——有界运行时取证，登记/双向对账/收尾清零 |
 | `scripts/review-findings.py` | 审查:review.md 的 I* 四态机检与统计（锚点/驳回理由/复现） |
 | `scripts/review-lessons.py` | 审查:已解决 finding → lessons 候选（六问齐才落，人 promote 才权威） |
+| `scripts/ub_quality.py` | 质量:UncleBob 门 advisory——固定起点/函数清单/不恶化基线/结构重复（外接 crapper/dryer，$UB_MODE_HOME） |
 | `scripts/realign.py` | 需求订正后查七类漂移，给出向前的重做顺序 |
 | `scripts/ui-evolve.py` | 编写阶段查剧本状态冲突，提 branch / reorder 方案（不改文件） |
 | `scripts/ui-playbook.py` | UI 剧本生命周期：create→read→change→restore→cleanup，实体打标 |

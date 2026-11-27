@@ -38,7 +38,7 @@ is_background: false
    ```bash
    bash $IDEV/scripts/codegraph-sync.sh --repo <仓根> research
    ```
-   1. 先跑 `coding-scan.sh`。输出里 `java hygiene` 的每一条 **blocking** `file:line` **先写成 `I*`**,根据写 java.md 那一行的提示名。包括 `<>`、`Collections.<T>emptyMap()`、从未使用的 getter、模块已有 Lombok 时的手写 getter、`List.sort`、`Comparator.comparing`、循环里的 `Thread.sleep`、相同日志句子。没写完不要写总则、五轴、内聚、设计模式。漏记会被 `java-hygiene` 打回。`note` 只留 `Collectors.<T>toList()`，不打回
+   1. 先跑 `coding-scan.sh`。输出里 `java hygiene` 的每一条 **blocking** `file:line` **先写成 `I*`**,根据写 java.md 那一行的提示名。包括 `<>`、`Collections.<T>emptyMap()`、从未使用的 getter、模块已有 Lombok 时的手写 getter、`List.sort`、`Comparator.comparing`、循环里的 `Thread.sleep`、相同日志句子。没写完不要写总则、五轴、内聚、设计模式。漏记会被 `java-hygiene` 打回。`note` 只留 `Collectors.<T>toList()`，不打回。**ub-quality 段**（advisory，不挡退出码）：`CRAP-HIT` / `DUP-HIT` 建议写 `I*`（C1/P5/P17/R5）；`DEBT-WORSE`（把存量债务恶化）**必写**——详见 coding-tables §3.8「ub-quality 门」
    2. 先过 coding.md 文首**底线**,再扫**规范总则**五条(含 `coding-tables.md` §2.4 变更级粗筛:净增行去向 / 一文件一理由);命中译 `T#`/`P#`/`C#`/`F#`。把问题做复杂、关键路径没有异常处理或降级、无依据或绕路、平铺直叙、只有 get/set 的哑对象、说不出换来什么的文件和行,写成 `I*`
    3. 再扫 `coding-tables.md` §1:**该用的没用、不该用的用了,都是拒过**
    4. 逐条扫 §2:命中必须当轮改掉 —— 但本步是例外,见下

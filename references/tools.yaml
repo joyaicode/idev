@@ -50,6 +50,11 @@ tools:
     summary: 已解决 finding → lessons 候选（六问齐才落，人 promote 才权威）。
     limit: 不自动入库；六问缺项只打印不落账。
     command: python3 scripts/review-lessons.py
+  - id: ub-quality
+    summary: UncleBob 质量门 advisory：固定起点 / 函数清单 / 不恶化基线 / 结构重复（crapper CRAP + dryer）。
+    limit: 只提名不阻断（恒 exit 0）；外接工具缺席 UNPROVEN 不 FAIL；命中写 review.md I*（C1/P5/P17/R5）。
+    command: python3 scripts/ub_quality.py
+    inputs: [feature]
 groups:
   - id: evidence
     summary: 论证用的工具。配方写 tool_group 就会按这个顺序展开成步骤。

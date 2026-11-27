@@ -303,6 +303,21 @@ bash "${ROOT}/lang-scan.sh" "$REPO"
 lang_rc=$?
 set -e
 
+# ub-quality: the UncleBob advisory gate (crapper CRAP + dryer duplication,
+# fixed start point). Advisory like the symbol-diff neighbourhood above:
+# printed for the reviewer, never touches this script's exit code. The
+# snapshot inside is idempotent — first run fixes the feature's start
+# point, later runs (rework, new sessions) never reset it.
+if [ -n "${IDEV_FEATURE:-}" ]; then
+  echo "=== ub-quality ==="
+  set +e
+  python3 "${ROOT}/ub_quality.py" --repo "$REPO" check --feature "$IDEV_FEATURE"
+  set -e
+else
+  echo "=== ub-quality ==="
+  echo "  ub: UNPROVEN（未设 IDEV_FEATURE，无起点可判——工具与机制见 coding-tables §3.8）"
+fi
+
 echo "=== review.md must record ==="
 echo "  - 审查者: idev-reviewer"
 echo "  - 文件与行数: 触及 N 个文件，新增 M，最长 L 行"

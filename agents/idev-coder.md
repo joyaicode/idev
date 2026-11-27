@@ -130,7 +130,7 @@ mkdir -p <票目录>/workflow/logs
    ```bash
    bash $IDEV/scripts/coding-scan.sh <仓根>
    ```
-   blocking 译成 `P#`/`C#` **当轮**改。`java hygiene` 打出的黄条若落在本轮 `CHANGED` 的 Java 上，**当轮改掉**（`new ArrayList<String>()` 改成 `new ArrayList<>()`），不要留到审查里写成一段内聚。同一次扫描末尾的 `problems` 或 `lang` 退出码不是 0 就没做完；`java_hygiene` 的 0 不够，`python3 -m compileall` 的 0 也不够。这两层只跑 idev 自带插件，不安装 IntelliJ、JDK、ruff、golangci-lint、shellcheck、eslint 或 Node。插件不在时是 `UNPROVEN`。然后清废弃、对齐注释文档。前端走 `lint-fix`。黄条视为未完成。
+   blocking 译成 `P#`/`C#` **当轮**改。`java hygiene` 打出的黄条若落在本轮 `CHANGED` 的 Java 上，**当轮改掉**（`new ArrayList<String>()` 改成 `new ArrayList<>()`），不要留到审查里写成一段内聚。同一次扫描末尾的 `problems` 或 `lang` 退出码不是 0 就没做完；`java_hygiene` 的 0 不够，`python3 -m compileall` 的 0 也不够。这两层只跑 idev 自带插件，不安装 IntelliJ、JDK、ruff、golangci-lint、shellcheck、eslint 或 Node。插件不在时是 `UNPROVEN`。扫描设 `IDEV_FEATURE` 时首次运行会把起点落 `start-snapshot.yaml`（幂等，返工不重置——ub-quality 门对照它判「有没有把质量改坏」；`CRAP-HIT` 修法指 C1 拆函数 / P5 策略）。然后清废弃、对齐注释文档。前端走 `lint-fix`。黄条视为未完成。
 
 不要 `trace.sh append` —— trace 由导体统一写。
 

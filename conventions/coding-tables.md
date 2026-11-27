@@ -242,6 +242,19 @@ super-linter 是「仓内已有就跑」的例子，不是要新装的依赖。`
 | Java 深挖 | `~/.cursor/skills/124-java-secure-coding` 等 plinth |
 | Vue 语言尺 | `conventions/vue.md`；技能在 `skills/vue/`；`scripts/vue-skills.py` 按阶段列出 |
 
+### ub-quality 门（UncleBob 质量门，advisory）
+
+`scripts/ub_quality.py`（炼自 joy-dev ub-mode），随 coding-scan 跑在 problems/lang 之后，**不改退出码**。工具（crapper = CRAP 复杂度×覆盖率；dryer = 结构重复）外接安装：`$UB_MODE_HOME`（默认 `~/tools/unclebob`）下 `git clone github.com/unclebob/crapper` 与 `github.com/unclebob/dryer`；缺工具打 `ub: UNPROVEN` 不 FAIL——不为此新装（守 §3.7 边界，机制在插件里，工具是可选外设）。
+
+四个机制：
+
+1. **固定起点**：首次跑 coding-scan（设 `IDEV_FEATURE`）时把起点 commit 落 `<票>/start-snapshot.yaml`，幂等，返工/提交/换会话不重置——「本票有没有把质量改坏」需要一个不漂移的对照基点。
+2. **函数清单**：判定按函数（`rel:func`），对照起点逐个查。起点无此身份（含改名/搬移——签名对不上）按**新增函数**查：改名不重置债务。
+3. **不恶化基线**：起点已超阈的函数记 `DEBT`，只要求 CC 与 CRAP 均不高于基线（`DEBT-OK`）；恶化（`DEBT-WORSE`）时 reviewer 必写 `I*`。不要求本票清零存量债务。
+4. **绿测子集**：CRAP 依赖覆盖率，覆盖率来自绿测子集的真实报告；`failure.ignore` 类让红测试产出通过报告的开关是本门要拦的造假。
+
+阈值：CRAP < 13、结构相似度 < 0.82（照 ub-mode 原值）。命中翻译：`CRAP-HIT` → **C1**（拆函数）/**P5**（策略表）；`DUP-HIT` → 先过 **P17**（省略规则是否相反，不是重复）再 **R5**（真重复提取）。
+
 ---
 
 ## 4. 产品已锁对照
