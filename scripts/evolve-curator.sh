@@ -45,15 +45,27 @@ to_stale = []
 kept = []
 
 
+_CN_STATUS = {
+    "已落地": "landed", "落地": "landed",
+    "已归档": "archived", "归档": "archived",
+    "已拒绝": "rejected", "拒绝": "rejected", "已否决": "rejected",
+    "草稿": "draft", "待签核": "draft", "待确认": "draft",
+    "已取代": "superseded", "被取代": "superseded",
+}
+
+
 def status_of(text):
     # Proposals use either "status: X" or a markdown list "- status: X".
+    # Chinese fronts use "- 状态：X / **X**" (bsrs/sre batches); treat them
+    # as the same field or curator stamps stale over landed proposals.
     # Values may be followed by a note: "landed (2026-…)" / "rejected（…）".
-    m = re.search(r"(?m)^(?:-\s*)?status:\s*(\S+)", text)
+    m = re.search(r"(?m)^(?:[-*>]\s*|\*\*)?(?:status|状态)\s*[:：]\s*\**([^\s（(【（]*)", text)
     if not m:
         return "unknown"
-    raw = m.group(1).strip().strip("\"'`")
-    raw = re.split(r"[\s（(]", raw, 1)[0]
-    return raw.lower()
+    raw = m.group(1).strip().strip("\"'`*")
+    raw = re.split(r"[\s（(]", raw, maxsplit=1)[0]
+    raw = raw.lower()
+    return _CN_STATUS.get(raw, raw)
 
 
 def stamp_block(status, reason):
