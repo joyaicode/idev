@@ -144,6 +144,8 @@
 | Building Secure and Reliable Systems（Google 官方在线版 38 页：前言、五个部分、21 章、Conclusion / Appendix / Index / Editors） | `Building Secure and Reliable Systems-精读缺口.md` | T1–T6 8 10–14 · A1–A4 A6–A8 · F1 4–7 · C1 2 13 15 18 21 22 25 28 30 31 34 35 37 39 40 · P1 19 · R1 7 |
 | The Art of Agile Development, 2nd Edition（James Shore / Shane Warden，作者官网 70 页摘录版：四个部分与全部实践页） | `The Art of Agile Development 2nd Edition-精读缺口.md` | T1–T12 T14 · A1–A3 A5 A6 A8 · F5 · C6 7 26 28–31 · R1 4 7 |
 | Producing Open Source Software（Karl Fogel，官方在线版 71 页：前言、9 章、Further Resources、附录 A 与 CC BY-SA 4.0 许可证） | `Producing Open Source Software-精读缺口.md` | T2 4–7 11–13 · A1 2 4 6 · C5 14 26 28 29 31 · F5 · R1 3 4 7 |
+| 深入理解 AI Agent：设计原理与工程实践（李博杰与开源社区，开源书 Apache 2.0，GitHub bojieli/ai-agent-book `book/` 共约 8500 行：前言、10 章、后记与参考答案；多 Agent 精读批 5 路，逐章笔记在 `ai-agent-book-精读笔记/`） | `ai-agent-book-精读缺口.md` | T4 T9 T10 T11 T12 T13 · A4 · F2 F5 · C19 C23 · verify 四查 / evidence 信任表 / self-evolution 学习信号 / agents 路由与波次 |
+| 深入理解 AI Infra：量化分析与系统设计（李博杰与开源社区，开源书，GitHub bojieli/ai-infra-book `manuscripts/` 共约 11700 行：前言、12 章；多 Agent 精读批 6 路，逐章笔记在 `ai-infra-book-精读笔记/`） | `ai-infra-book-精读缺口.md` | T4 T9 T10 T11 T12 T13 · A4 A6 A7 · F2 · C19 C23 · req-quality §1/§3/§5 · experts arch/test/ops |
 
 ## 读一本书的流程
 

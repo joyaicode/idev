@@ -100,7 +100,7 @@
 | 产品仓 | 源码 | 只改 `include: true` 的路径 |
 | 规程 | 本技能与 conventions | 执行者不改 |
 
-知识和流程上的差别，用按需打开的页。权限和写隔离，用现在这五个执行者。拆任务留在导体；执行者收到的是已经拆好的一步。
+知识和流程上的差别，用按需打开的页。权限和写隔离，用现在这五个执行者。拆任务留在导体；执行者收到的是已经拆好的一步。执行者定义文件的 description 按路由条件写：承接哪些步骤、不承接什么、由谁在什么信号下调用，不写成能力罗列。
 
 留在书里、不进这一层：对同一段文本辩论或投票、为文风再拆执行者、无界子执行者、按赛马级联取消、每个执行者一个 worktree、跨组织的 Agent 协议、Agent 市场和社会模拟。
 
@@ -113,6 +113,7 @@
 - 迟到的结果对上原来的任务号或请求号。对不上就单独摆出，不并进当前结论。
 - 排着的几条更新都生效，不只最后一条。
 - 页面上的下一段，从现在的页面重新看起。上一张回执不能代替现在的页面。见 [browser-program.md](browser-program.md)。
+- 用户中途改了条件后，先前跑出的结果只当参考：条件影响到的取数或执行步骤从那一步重跑，不在旧结果上只改参数套用。
 
 留在书里：语音、机器人、虚拟身份、心跳、用另一个模型给事件分类、世界模型。
 
@@ -226,7 +227,7 @@
 
 `find_run()` 仍拒绝第二份活跃 run。人闸一次只开一步。写路径相交、空路径或 `**` 拒绝第二张写租约；不相交的 include 路径可以各持一张。配方里同一个 `group`、并且 `writes` 两两不相交的 verify 步骤，从第一个未完成成员到组尾同时开放：`next` 打出 `PARALLEL`，`record` 和 `delegate` 接受组内任一未完成步骤。`drive` 会为这一波每个执行者打出委派包，不要再 `delegate --open`。这是先订死写集再并行，对应 `conventions/canon.md` 对「先订接口再并行」的要求。`references/hitl-risk-tiers.md` 说的不内置并行 PR 阶段机仍然成立：组不是一条并行的合并流水线。
 
-自测、用例设计、用例执行、根因，以及写集还没钉死成一份 `review.md` 的审查，可以在**同一步**里按需拆开。审查步的 `next` **默认打 `FANOUT_ASSESS`**：写集是 `review.md`（可含 `review/shards/` 目录条目）或未钉死的 `review.report` 都会进 assess，先评估再决定派法；钉了其它路径的写集仍是围栏，不进。导体先跑 `scripts/fanout.py assess`。少于两片、写集相交、或同一个 Maven 模块没有 `runner.parallel: true`，输出 `SERIAL`，仍然只派一个 agent。用例起草在 `arch.yaml` 里还没有两条 `case_intent` 时，改看 `review.md` 里的 `I*`（待签收与已签收都算）：这些项就是分片，不必等这一步自己把 intent 写出来，也不等人签收。审查分片有两种形态：**多模块**按改动的顶层模块分片深读（每片五轴全过）；**单模块**（含 root）按五轴分片——`lens-correctness` / `lens-readability` / `lens-architecture` / `lens-security` / `lens-performance` 各一片独立深读，正确性片承担机械扫描记账（共享 PREP 日志的 `file:line` 都写成 FINDING）与 lean-review 的 code 镜头清单。`coding-scan.sh` 是 `PREP`，导体先跑完。输出 `FANOUT` 时，同一条消息把每个 `SHARD` 派出去（Cursor 用 Task，Claude Code 用 Agent 工具），并且对每一片执行 `workflow.py step <step> --shard <id>`。**代码路径**：`ideva fan --feature <f>` 走同一条链（assess → PREP → step --shard → 并行 delegate → land --shard → merge），租约与留痕全部走既有命令，`record` 仍归导体。那张租约只覆盖该片的 `WRITES`，不覆盖整棵票目录。`drive` 在没有 `PREP`，或 `PREP` 是内核脚本并且已经跑完时，已经打出每片委派包并领好租约。扫描日志在 `扫描:`。编译这类 `PREP` 仍由导体先跑。一片回来后 `land <step> --shard <id>`。最后一片记下且没有打回时，这次 `land` 已经跑过 merge。打开证据后再 `record` 这一次。不要对一个 `FANOUT` 步骤再打一张整票租约。每个委派包多三行：`分片`、`只写`、`范围`。分片只写 `WRITES` 里的路径。`verify/plan.yaml`、`arch.yaml`、`review.md` 和 `hypotheses.yaml` 只由导体的 `fanout.py merge` 改。assess 打出 `MERGE` 且没有 `SHARD` 时，草稿已经齐了，跑 merge，不要再派一个执行者去写这些总账。合并之后这一步只 `record` 一次。每一片的留痕用 `shard:`，文件落在 `delegations/<run_id>/<step>-<shard>-<attempt>.yaml`。另一片的结论不是证据。分片是互补工作，先完成的一片不取消其余。默认一轮 4 片，最多 8 片（单模块五轴波恒为 5 片），其余是 `QUEUED`，合并后再 assess。这仍然是一份 run。`deliver.code_pass` 和 `review.fix` 只在 `arch.yaml` 里 `include: true` 的路径分属至少两个顶层模块、且写集不相交时拆开；每片的写租约只覆盖该片路径，`merge` 不改产品源码，只核对 `arch.yaml` 指纹后由导体 `record` 一次。路径相交、空路径或 `**` 仍是 `SERIAL`，也拒绝第二张写租约。再派的条件见「再派一个执行者」。
+自测、用例设计、用例执行、根因，以及写集还没钉死成一份 `review.md` 的审查，可以在**同一步**里按需拆开。审查步的 `next` **默认打 `FANOUT_ASSESS`**：写集是 `review.md`（可含 `review/shards/` 目录条目）或未钉死的 `review.report` 都会进 assess，先评估再决定派法；钉了其它路径的写集仍是围栏，不进。导体先跑 `scripts/fanout.py assess`。少于两片、写集相交、或同一个 Maven 模块没有 `runner.parallel: true`，输出 `SERIAL`，仍然只派一个 agent。用例起草在 `arch.yaml` 里还没有两条 `case_intent` 时，改看 `review.md` 里的 `I*`（待签收与已签收都算）：这些项就是分片，不必等这一步自己把 intent 写出来，也不等人签收。审查分片有两种形态：**多模块**按改动的顶层模块分片深读（每片五轴全过）；**单模块**（含 root）按五轴分片——`lens-correctness` / `lens-readability` / `lens-architecture` / `lens-security` / `lens-performance` 各一片独立深读，正确性片承担机械扫描记账（共享 PREP 日志的 `file:line` 都写成 FINDING）与 lean-review 的 code 镜头清单。`coding-scan.sh` 是 `PREP`，导体先跑完。输出 `FANOUT` 时，同一条消息把每个 `SHARD` 派出去（Cursor 用 Task，Claude Code 用 Agent 工具），并且对每一片执行 `workflow.py step <step> --shard <id>`。**代码路径**：`ideva fan --feature <f>` 走同一条链（assess → PREP → step --shard → 并行 delegate → land --shard → merge），租约与留痕全部走既有命令，`record` 仍归导体。那张租约只覆盖该片的 `WRITES`，不覆盖整棵票目录。`drive` 在没有 `PREP`，或 `PREP` 是内核脚本并且已经跑完时，已经打出每片委派包并领好租约。扫描日志在 `扫描:`。编译这类 `PREP` 仍由导体先跑。一片回来后 `land <step> --shard <id>`。最后一片记下且没有打回时，这次 `land` 已经跑过 merge。打开证据后再 `record` 这一次。不要对一个 `FANOUT` 步骤再打一张整票租约。每个委派包多三行：`分片`、`只写`、`范围`。分片只写 `WRITES` 里的路径。`verify/plan.yaml`、`arch.yaml`、`review.md` 和 `hypotheses.yaml` 只由导体的 `fanout.py merge` 改。assess 打出 `MERGE` 且没有 `SHARD` 时，草稿已经齐了，跑 merge，不要再派一个执行者去写这些总账。合并之后这一步只 `record` 一次。每一片的留痕用 `shard:`，文件落在 `delegations/<run_id>/<step>-<shard>-<attempt>.yaml`。另一片的结论不是证据。分片是互补工作，先完成的一片不取消其余。默认一轮 4 片，最多 8 片（单模块五轴波恒为 5 片），其余是 `QUEUED`，合并后再 assess。这仍然是一份 run。`deliver.code_pass` 和 `review.fix` 只在 `arch.yaml` 里 `include: true` 的路径分属至少两个顶层模块、且写集不相交时拆开；每片的写租约只覆盖该片路径，`merge` 不改产品源码，只核对 `arch.yaml` 指纹后由导体 `record` 一次。路径相交、空路径或 `**` 仍是 `SERIAL`，也拒绝第二张写租约。再派的条件见「再派一个执行者」。同一波分片被取消或失败时，已跑完的片的留痕和耗时仍进 delegation timeline——轮末的消耗总账按「曾发生」计，不按「被采用」计。
 
 `conventions/evidence.md:4` 已经为此留了口子:「复杂问题可并行多个 Agent,但不能用『另一个 Agent 猜过了』代替证据。」—— 所以每个 agent 的回报都必须带证据路径,**agent 说过不算证据**。
 

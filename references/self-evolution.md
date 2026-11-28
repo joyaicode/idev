@@ -91,6 +91,8 @@ Nudge 话术示例：「这次踩到 X，要不要我按 evolve 写一条提案�
 - 距上次整理满 **3** 代（每次真实复盘 `--bump` 一代），把热集合以外的残留和已关闭提案折进摘要并删除
 - 摘要在 `.idev/memory.md`，纳入版本库。产品 `.gitignore` 使用 `.idev/*` 时要保留 `!.idev/memory.md`
 
+折进摘要的行只对照被折叠文件的原文写，不得在上一份摘要上再改写；否定、时间与适用条件保留，推论不写成确定结论。
+
 不碰 `docs/task/`、`.idev/task/`、`.idev/docs/`，不碰仍打开的提案，不碰 `marker.yaml`、`pack/`、`workflows/`、`handoff.yaml`、`extensions.yaml`、`checks/`、`strip-tokens.txt`、`memory.md`。`--days`、`--keep`、`--hot`、`--cites`、`--generations` 可改窗口。Curator 仍然只把超龄提案标成 `archived`，不直接删文件；已关闭提案等整理代次到了再摘要后删除。
 
 ### 删除预算
@@ -160,7 +162,7 @@ bash ~/.cursor/skills/idev/scripts/install-weekly-evolve.sh
 | 导体改内核自己、且没有当前产品 | `~/.cursor/skills/idev/state/proposals/` |
 | 仅 verify 导体契约 | `~/.cursor/skills/idev/verify/state/proposals/` |
 
-`evolve-review.sh` 跟当前会话走：产品仓写该工程 `.idev/proposals/` 与 `.idev/reviews/`；没有当前产品时才写内核 `state/proposals/`。verify 导体契约仍按 evolve.md，且只在改内核自己时进 `verify/state/proposals/`。
+`evolve-review.sh` 跟当前会话走：产品仓写该工程 `.idev/proposals/` 与 `.idev/reviews/`；没有当前产品时才写内核 `state/proposals/`。verify 导体契约仍按 evolve.md，且只在改内核自己时进 `verify/state/proposals/`。收紧或新增门禁、规则的提案，依据面还要附一条误拦对照：一条不该拦的任务在收紧后仍能通过的例子——只证明拦得住，不证明收得对。
 
 ## 与周审计的关系
 
@@ -215,7 +217,7 @@ bash ~/.cursor/skills/idev/scripts/install-weekly-evolve.sh
 - 证据位置：哪一条轨迹的哪一步
 - 失败类型
 
-缺一件，或证据不够判断，就留在轨迹里。总分、满意度和模型自评不作为学习信号。表达是否自然、语气是否舒服，同样留在轨迹里，不设量表。
+缺一件，或证据不够判断，就留在轨迹里。总分、满意度和模型自评不作为学习信号。表达是否自然、语气是否舒服，同样留在轨迹里，不设量表。委派或巡检里写了等待约定的，约定本身进留痕；事后拿实际发生的事对照过，才算可归因偏差进学习信号。
 
 ### 落点
 
@@ -230,7 +232,7 @@ bash ~/.cursor/skills/idev/scripts/install-weekly-evolve.sh
 
 能写成检查的，落在程序或门禁。只在某个范围成立的规则，放在对应 Skill。
 
-失败轨迹里最常见的动作，常常就是这次失败。归纳出来的句子先停在提案里。依据要能指出：失败证据、职责边界（谁能做哪一步）、必须保住的已有行为、先前被拒绝的改法。只给失败文本，得到的往往是「少做刚刚那一步」。触发这次失败的情形要变好，本来能过的情形保持原样。提案格式仍是 [evolve.md](../verify/references/evolve.md) 的「要改什么 / 不改什么 / 依据」。
+失败轨迹里最常见的动作，常常就是这次失败。归纳出来的句子先停在提案里。依据要能指出：失败证据、职责边界（谁能做哪一步）、必须保住的已有行为、先前被拒绝的改法。从一批轨迹或记录归纳出的规律，还要写明样本范围——哪些来源、多少条、时间窗、没覆盖到什么；范围说不清的结论停在记录里，不进提案。只给失败文本，得到的往往是「少做刚刚那一步」。触发这次失败的情形要变好，本来能过的情形保持原样。提案格式仍是 [evolve.md](../verify/references/evolve.md) 的「要改什么 / 不改什么 / 依据」。
 
 重写整页会丢掉少数但关键的条件，也会把互相制约的条件并成一句过宽的话。改已有的那一条，留下它的标识。
 

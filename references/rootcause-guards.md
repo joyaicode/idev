@@ -149,7 +149,7 @@ python3 scripts/lessons.py retire --id L1 --why ...   # 过时就清
 | `accept` | 可接受的下一步,至少一条 |
 | `forbid` | 禁止的下一步,至少一条 |
 
-`user-correction` 和 `failed-action` 没写 prefix 时,`check` 警告,不因此失败。纯事实不用为了消警告去编一组动作。
+`user-correction` 和 `failed-action` 没写 prefix 时,`check` 警告,不因此失败。纯事实不用为了消警告去编一组动作。判分口径分开:`accept` / `forbid` 只依 `before` 里当时可见的证据判,把只有事后才知道的信息写进 `accept`,`check` 拒绝时打 WARN,与 prefix 缺席同级。
 
 ### 召回只给建议,不给答案
 
